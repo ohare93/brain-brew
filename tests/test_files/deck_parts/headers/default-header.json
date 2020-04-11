@@ -1,0 +1,62 @@
+{
+    "__type__": "Deck",
+    "children": [],
+    "crowdanki_uuid": "16bef726-1426-11ea-a85d-d8cb8ac9abf0",
+    "deck_config_uuid": "3cc64d85-e410-11e9-960e-d8cb8ac9abf0",
+    "deck_configurations": [
+        {
+            "__type__": "DeckConfig",
+            "autoplay": true,
+            "crowdanki_uuid": "3cc64d85-e410-11e9-960e-d8cb8ac9abf0",
+            "currentValue": 120,
+            "dyn": false,
+            "lapse": {
+                "delays": [
+                    10,
+                    1440
+                ],
+                "leechAction": 1,
+                "leechFails": 8,
+                "minInt": 1,
+                "mult": 0.25
+            },
+            "maxLife": 120,
+            "maxTaken": 60,
+            "name": "LL Default",
+            "new": {
+                "bury": false,
+                "delays": [
+                    1,
+                    15
+                ],
+                "initialFactor": 2500,
+                "ints": [
+                    5,
+                    10,
+                    7
+                ],
+                "order": 0,
+                "perDay": 3,
+                "separate": true
+            },
+            "recover": 5,
+            "replayq": true,
+            "rev": {
+                "bury": true,
+                "ease4": 1.5,
+                "fuzz": 0.05,
+                "hardFactor": 1.2,
+                "ivlFct": 1.5,
+                "maxIvl": 36500,
+                "minSpace": 1,
+                "perDay": 70
+            },
+            "timer": 0
+        }
+    ],
+    "desc": "",
+    "dyn": 0,
+    "extendNew": 10,
+    "extendRev": 50,
+    "name": "LL::1. Vocab"
+}

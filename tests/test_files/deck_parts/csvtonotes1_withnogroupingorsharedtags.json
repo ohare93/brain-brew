@@ -1,0 +1,174 @@
+{
+    "_flags": {
+        "group_by_note_model": false,
+        "extract_shared_tags": false
+    },
+    "notes": [
+        {
+            "fields": [
+                "you",
+                "du"
+            ],
+            "guid": "AAAA",
+            "note_model": "LL Noun",
+            "tags": [
+                "funny"
+            ]
+        },
+        {
+            "fields": [
+                "healthy",
+                "rask"
+            ],
+            "guid": "BBBB",
+            "note_model": "LL Noun",
+            "tags": [
+                "tag2",
+                "tag3"
+            ]
+        },
+        {
+            "fields": [
+                "tired",
+                "træt"
+            ],
+            "guid": "CCCC",
+            "note_model": "LL Noun",
+            "tags": [
+                "besttag"
+            ]
+        },
+        {
+            "fields": [
+                "banana",
+                "en banan"
+            ],
+            "guid": "DDDD",
+            "note_model": "LL Noun",
+            "tags": [
+                ""
+            ]
+        },
+        {
+            "fields": [
+                "cat",
+                "en kat"
+            ],
+            "guid": "EEEE",
+            "note_model": "LL Noun",
+            "tags": [
+                ""
+            ]
+        },
+        {
+            "fields": [
+                "dog",
+                "en hund"
+            ],
+            "guid": "FFFF",
+            "note_model": "LL Noun",
+            "tags": [
+                ""
+            ]
+        },
+        {
+            "fields": [
+                "fish",
+                "en fisk"
+            ],
+            "guid": "GGGG",
+            "note_model": "LL Noun",
+            "tags": [
+                ""
+            ]
+        },
+        {
+            "fields": [
+                "bird",
+                "en fugl"
+            ],
+            "guid": "HHHH",
+            "note_model": "LL Noun",
+            "tags": [
+                ""
+            ]
+        },
+        {
+            "fields": [
+                "cow",
+                "en ko"
+            ],
+            "guid": "IIII",
+            "note_model": "LL Noun",
+            "tags": [
+                ""
+            ]
+        },
+        {
+            "fields": [
+                "pig",
+                "et svin"
+            ],
+            "guid": "JJJJ",
+            "note_model": "LL Noun",
+            "tags": [
+                ""
+            ]
+        },
+        {
+            "fields": [
+                "mouse",
+                "en mus"
+            ],
+            "guid": "KKKK",
+            "note_model": "LL Noun",
+            "tags": [
+                ""
+            ]
+        },
+        {
+            "fields": [
+                "horse",
+                "en hest"
+            ],
+            "guid": "LLLL",
+            "note_model": "LL Noun",
+            "tags": [
+                ""
+            ]
+        },
+        {
+            "fields": [
+                "to learn",
+                "at lære"
+            ],
+            "guid": "MMMM",
+            "note_model": "LL Noun",
+            "tags": [
+                ""
+            ]
+        },
+        {
+            "fields": [
+                "to eat",
+                "at spise"
+            ],
+            "guid": "NNNN",
+            "note_model": "LL Noun",
+            "tags": [
+                ""
+            ]
+        },
+        {
+            "fields": [
+                "to drink",
+                "at drikke"
+            ],
+            "guid": "OOOO",
+            "note_model": "LL Noun",
+            "tags": [
+                ""
+            ]
+        }
+    ]
+}

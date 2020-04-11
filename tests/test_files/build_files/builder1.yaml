@@ -1,0 +1,29 @@
+reverse: no
+tasks:
+  - generate_guids:
+
+      subconfig:
+        - build_tasks/csv/one_per_note_model/words.yaml
+        - build_tasks/csv/one_per_note_model/nouns.yaml
+        - build_tasks/csv/one_per_note_model/verbs.yaml
+        - build_tasks/csv/one_per_note_model/sentences.yaml
+
+  - csv_collection_to_deck_parts:
+      notes: csv_first_attempt.json
+
+      subconfig:
+        - build_tasks/csv/one_per_note_model/words.yaml
+        - build_tasks/csv/one_per_note_model/nouns.yaml
+        - build_tasks/csv/one_per_note_model/verbs.yaml
+        - build_tasks/csv/one_per_note_model/sentences.yaml
+
+  - csv_to_deck_parts:
+      notes: csv_first_attempt.json
+
+      subconfig: build_tasks/csv/one_per_note_model/words.yaml
+
+  - crowdanki_to_deck_parts:
+      subconfig: build_tasks/crowdanki/Danish_Esperanto.yaml
+
+      headers: default
+      notes: dan_esp_vocab.json

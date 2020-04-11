@@ -1,0 +1,194 @@
+{
+    "__type__": "Deck",
+    "crowdanki_uuid": "72ac74b8-0077-11ea-959e-d8cb8ac9abf0",
+    "deck_config_uuid": "3cc64d85-e410-11e9-960e-d8cb8ac9abf0",
+    "media_files": [],
+    "name": "LL::1. Vocab",
+    "note_models": [
+        {
+            "__type__": "NoteModel",
+            "crowdanki_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "flds": [
+                {
+                    "name": "Word"
+                },
+                {
+                    "name": "OtherWord"
+                }
+            ],
+            "name": "LL Word"
+        },
+        {
+            "__type__": "NoteModel",
+            "crowdanki_uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "flds": [
+                {
+                    "name": "Word"
+                },
+                {
+                    "name": "OtherWord"
+                }
+            ],
+            "name": "LL Verb"
+        },
+        {
+            "__type__": "NoteModel",
+            "crowdanki_uuid": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            "flds": [
+                {
+                    "name": "Word"
+                },
+                {
+                    "name": "OtherWord"
+                }
+            ],
+            "name": "LL Noun"
+        },
+        {
+            "__type__": "NoteModel",
+            "crowdanki_uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+            "flds": [
+                {
+                    "name": "Word"
+                },
+                {
+                    "name": "OtherWord"
+                }
+            ],
+            "name": "LL Sentence"
+        },
+        {
+            "__type__": "NoteModel",
+            "crowdanki_uuid": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+            "flds": [
+                {
+                    "name": "Word"
+                },
+                {
+                    "name": "OtherWord"
+                }
+            ],
+            "name": "Cloze"
+        }
+    ],
+    "notes": [
+        {
+            "__type__": "Note",
+            "data": "",
+            "fields": [
+                "testers",
+                ""
+            ],
+            "flags": 0,
+            "guid": "wpoGpMPjTD",
+            "note_model_uuid": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+            "tags": []
+        },
+        {
+            "__type__": "Note",
+            "data": "",
+            "fields": [
+                "banana",
+                "en banan",
+                "banano",
+                "<img src=\"All-About-Bananas-Nutrition-Facts-Health-Benefits-Recipes-and-More-RM-722x406.jpg\">",
+                "",
+                "[sound:pronunciation_da_banan.mp3]",
+                ""
+            ],
+            "flags": 0,
+            "guid": "sZGs^rTTEr",
+            "note_model_uuid": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            "tags": [
+                "LL::Grammar::Noun"
+            ]
+        },
+        {
+            "__type__": "Note",
+            "data": "",
+            "fields": [
+                "I don't understand",
+                "<img src=\".jpg (50)\">",
+                "y",
+                "y",
+                "jeg",
+                "forstår",
+                "ikke",
+                "",
+                "",
+                "mi ne",
+                "komprenas",
+                "",
+                "",
+                ""
+            ],
+            "flags": 0,
+            "guid": "x+JWF/d?][",
+            "note_model_uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+            "tags": [
+                "CardType::Sentence"
+            ]
+        },
+        {
+            "__type__": "Note",
+            "data": "",
+            "fields": [
+                "to learn",
+                "at lære",
+                "lerni",
+                "<img src=\".jpg (51)\">",
+                "",
+                "[sound:pronunciation_da_lære.mp3]",
+                "",
+                "lærer",
+                "lærte",
+                "har lært"
+            ],
+            "flags": 0,
+            "guid": "ONZwlFyCX1",
+            "note_model_uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "tags": [
+                "LL::Grammar::Verb"
+            ]
+        },
+        {
+            "__type__": "Note",
+            "data": "",
+            "fields": [
+                "you",
+                "du",
+                "vi",
+                "<img src=\"You1.gif\">",
+                "Singular, Subjective, 2nd Person",
+                "[sound:pronunciation_da_du.mp3]",
+                ""
+            ],
+            "flags": 0,
+            "guid": "uZFR2ToY#3",
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "tags": [
+                "LL::Grammar::Pronoun"
+            ]
+        },
+        {
+            "__type__": "Note",
+            "data": "",
+            "fields": [
+                "want",
+                "test",
+                "",
+                "",
+                "",
+                "",
+                ""
+            ],
+            "flags": 0,
+            "guid": "zlEirC^ya/",
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "tags": [
+                "LL::Grammar::Noun",
+                "LL::Grammar::Verb"
+            ]
+        }
+    ]
+}
