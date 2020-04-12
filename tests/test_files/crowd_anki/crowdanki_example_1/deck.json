@@ -1,13 +1,69 @@
 {
     "__type__": "Deck",
-    "crowdanki_uuid": "72ac74b8-0077-11ea-959e-d8cb8ac9abf0",
+    "children": [],
+    "crowdanki_uuid": "16bef726-1426-11ea-a85d-d8cb8ac9abf0",
     "deck_config_uuid": "3cc64d85-e410-11e9-960e-d8cb8ac9abf0",
-    "media_files": [],
+    "deck_configurations": [
+        {
+            "__type__": "DeckConfig",
+            "autoplay": true,
+            "crowdanki_uuid": "3cc64d85-e410-11e9-960e-d8cb8ac9abf0",
+            "currentValue": 120,
+            "dyn": false,
+            "lapse": {
+                "delays": [
+                    10,
+                    1440
+                ],
+                "leechAction": 1,
+                "leechFails": 8,
+                "minInt": 1,
+                "mult": 0.25
+            },
+            "maxLife": 120,
+            "maxTaken": 60,
+            "name": "LL Default",
+            "new": {
+                "bury": false,
+                "delays": [
+                    1,
+                    15
+                ],
+                "initialFactor": 2500,
+                "ints": [
+                    5,
+                    10,
+                    7
+                ],
+                "order": 0,
+                "perDay": 3,
+                "separate": true
+            },
+            "recover": 5,
+            "replayq": true,
+            "rev": {
+                "bury": true,
+                "ease4": 1.5,
+                "fuzz": 0.05,
+                "hardFactor": 1.2,
+                "ivlFct": 1.5,
+                "maxIvl": 36500,
+                "minSpace": 1,
+                "perDay": 70
+            },
+            "timer": 0
+        }
+    ],
+    "desc": "",
+    "dyn": 0,
+    "extendNew": 10,
+    "extendRev": 50,
     "name": "LL::1. Vocab",
     "note_models": [
         {
             "__type__": "NoteModel",
             "crowdanki_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "css": ".card {\n font-family: arial;\n font-size: 20px;\n text-align: center;\n color: black;\n background-color: white;\n}\n\n.card1,.card3, .card5 { background-color: #B60F2D; }\n.card2,.card4, .card6 { background-color: #2E9017; }\n.card7 { background: linear-gradient(90deg, #B60F2D 49.9%, #2E9017 50.1%); }\n\n.word {\n font-size:1.5em;\n}\n\n.pronunciation{\n color:blue;\n}\n\n.extrainfo{\n color:lightgrey;\n}",
             "flds": [
                 {
                     "name": "Word"
@@ -16,179 +72,351 @@
                     "name": "OtherWord"
                 }
             ],
-            "name": "LL Word"
-        },
-        {
-            "__type__": "NoteModel",
-            "crowdanki_uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            "flds": [
+            "latexPost": "\\end{document}",
+            "latexPre": "\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n",
+            "name": "Test Model",
+            "req": [
+                [
+                    0,
+                    "all",
+                    [
+                        1
+                    ]
+                ],
+                [
+                    1,
+                    "all",
+                    [
+                        2
+                    ]
+                ],
+                [
+                    2,
+                    "all",
+                    [
+                        1,
+                        3
+                    ]
+                ],
+                [
+                    3,
+                    "all",
+                    [
+                        2,
+                        3
+                    ]
+                ],
+                [
+                    4,
+                    "all",
+                    [
+                        1,
+                        3
+                    ]
+                ],
+                [
+                    5,
+                    "all",
+                    [
+                        2,
+                        3
+                    ]
+                ],
+                [
+                    6,
+                    "all",
+                    [
+                        1,
+                        2,
+                        3
+                    ]
+                ]
+            ],
+            "sortf": 0,
+            "tags": [
+                "Meta::InProgress"
+            ],
+            "tmpls": [
                 {
-                    "name": "Word"
+                    "afmt": "{{#X Word}}\n\t<span class=\"word\">{{X Word}}</span>\n{{/X Word}}\n\n<hr id=answer>\n\n{{Picture}}\n\n{{#X Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{X Pronunciation (Recording and/or IPA)}}</span>\n{{/X Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",
+                    "bafmt": "",
+                    "bqfmt": "",
+                    "did": null,
+                    "name": "X Comprehension",
+                    "ord": 0,
+                    "qfmt": "{{#X Word}}\n\t<span class=\"word\">{{text:X Word}}</span>\n{{/X Word}}"
                 },
                 {
-                    "name": "OtherWord"
-                }
-            ],
-            "name": "LL Verb"
-        },
-        {
-            "__type__": "NoteModel",
-            "crowdanki_uuid": "cccccccc-cccc-cccc-cccc-cccccccccccc",
-            "flds": [
-                {
-                    "name": "Word"
+                    "afmt": "{{#Y Word}}\n\t <span class=\"word\">{{Y Word}}</span>\n{{/Y Word}}\n\n<hr id=answer>\n\n{{Picture}}\n\n{{#Y Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{Y Pronunciation (Recording and/or IPA)}}</span>\n{{/Y Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",
+                    "bafmt": "",
+                    "bqfmt": "",
+                    "did": null,
+                    "name": "Y Comprehension",
+                    "ord": 1,
+                    "qfmt": "{{#Y Word}}\n\t<span class=\"word\">{{text:Y Word}}</span>\n{{/Y Word}}"
                 },
                 {
-                    "name": "OtherWord"
-                }
-            ],
-            "name": "LL Noun"
-        },
-        {
-            "__type__": "NoteModel",
-            "crowdanki_uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
-            "flds": [
-                {
-                    "name": "Word"
+                    "afmt": "{{FrontSide}}\n\n<hr id=answer>\n\n<span class=\"word\">{{X Word}}</span>\n\n{{#X Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{X Pronunciation (Recording and/or IPA)}}</span>\n{{/X Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",
+                    "bafmt": "",
+                    "bqfmt": "",
+                    "did": null,
+                    "name": "X Production",
+                    "ord": 2,
+                    "qfmt": "{{#X Word}}{{#Picture}}\n\t{{Picture}}\n{{/Picture}}{{/X Word}}"
                 },
                 {
-                    "name": "OtherWord"
-                }
-            ],
-            "name": "LL Sentence"
-        },
-        {
-            "__type__": "NoteModel",
-            "crowdanki_uuid": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
-            "flds": [
-                {
-                    "name": "Word"
+                    "afmt": "{{FrontSide}}\n\n<hr id=answer>\n\n <span class=\"word\">{{Y Word}}</span>\n\n{{#Y Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{Y Pronunciation (Recording and/or IPA)}}</span>\n{{/Y Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",
+                    "bafmt": "",
+                    "bqfmt": "",
+                    "did": null,
+                    "name": "Y Production",
+                    "ord": 3,
+                    "qfmt": "{{#Y Word}}{{#Picture}}\n\t{{Picture}}\n{{/Picture}}{{/Y Word}}"
                 },
                 {
-                    "name": "OtherWord"
+                    "afmt": "{{FrontSide}}\n\n{{#X Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{X Pronunciation (Recording and/or IPA)}}</span>\n{{/X Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",
+                    "bafmt": "",
+                    "bqfmt": "",
+                    "did": null,
+                    "name": "X Spelling",
+                    "ord": 4,
+                    "qfmt": "{{#X Word}}\n\t<br>Spell this word:<br>\n\n\t<span class=\"word\">{{type:X Word}}</span>\n\n\t<br>{{Picture}}\n{{/X Word}}"
+                },
+                {
+                    "afmt": "{{FrontSide}}\n\n{{#Y Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{Y Pronunciation (Recording and/or IPA)}}</span>\n{{/Y Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",
+                    "bafmt": "",
+                    "bqfmt": "",
+                    "did": null,
+                    "name": "Y Spelling",
+                    "ord": 5,
+                    "qfmt": "{{#Y Word}}\n\t<br>Spell this word:<br>\n\n\t<span class=\"word\">{{type:Y Word}}</span>\n\n\t<br>{{Picture}}\n{{/Y Word}}"
+                },
+                {
+                    "afmt": "{{FrontSide}}\n\n<hr id=answer>\n\n<div class=\"word\">{{text:X Word}}</div>\n<div class=\"word\">{{text:Y Word}}</div>\n\n{{#X Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{X Pronunciation (Recording and/or IPA)}}</span>\n{{/X Pronunciation (Recording and/or IPA)}}\n\n{{#Y Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{Y Pronunciation (Recording and/or IPA)}}</span>\n{{/Y Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",
+                    "bafmt": "",
+                    "bqfmt": "",
+                    "did": null,
+                    "name": "X and Y Production",
+                    "ord": 6,
+                    "qfmt": "{{#X Word}}\n{{#Y Word}}\n\t{{Picture}}\n{{/Y Word}}\n{{/X Word}}\n"
                 }
             ],
-            "name": "Cloze"
+            "type": 0,
+            "vers": []
         }
     ],
     "notes": [
         {
-            "__type__": "Note",
-            "data": "",
-            "fields": [
-                "testers",
-                ""
-            ],
-            "flags": 0,
-            "guid": "wpoGpMPjTD",
-            "note_model_uuid": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
-            "tags": []
-        },
-        {
-            "__type__": "Note",
-            "data": "",
-            "fields": [
-                "banana",
-                "en banan",
-                "banano",
-                "<img src=\"All-About-Bananas-Nutrition-Facts-Health-Benefits-Recipes-and-More-RM-722x406.jpg\">",
-                "",
-                "[sound:pronunciation_da_banan.mp3]",
-                ""
-            ],
-            "flags": 0,
-            "guid": "sZGs^rTTEr",
-            "note_model_uuid": "cccccccc-cccc-cccc-cccc-cccccccccccc",
-            "tags": [
-                "LL::Grammar::Noun"
-            ]
-        },
-        {
-            "__type__": "Note",
-            "data": "",
-            "fields": [
-                "I don't understand",
-                "<img src=\".jpg (50)\">",
-                "y",
-                "y",
-                "jeg",
-                "forstår",
-                "ikke",
-                "",
-                "",
-                "mi ne",
-                "komprenas",
-                "",
-                "",
-                ""
-            ],
-            "flags": 0,
-            "guid": "x+JWF/d?][",
-            "note_model_uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
-            "tags": [
-                "CardType::Sentence"
-            ]
-        },
-        {
-            "__type__": "Note",
-            "data": "",
-            "fields": [
-                "to learn",
-                "at lære",
-                "lerni",
-                "<img src=\".jpg (51)\">",
-                "",
-                "[sound:pronunciation_da_lære.mp3]",
-                "",
-                "lærer",
-                "lærte",
-                "har lært"
-            ],
-            "flags": 0,
-            "guid": "ONZwlFyCX1",
-            "note_model_uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            "tags": [
-                "LL::Grammar::Verb"
-            ]
-        },
-        {
-            "__type__": "Note",
-            "data": "",
             "fields": [
                 "you",
-                "du",
-                "vi",
-                "<img src=\"You1.gif\">",
-                "Singular, Subjective, 2nd Person",
-                "[sound:pronunciation_da_du.mp3]",
-                ""
+                "du"
             ],
-            "flags": 0,
-            "guid": "uZFR2ToY#3",
-            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "guid": "AAAA",
             "tags": [
-                "LL::Grammar::Pronoun"
-            ]
-        },
-        {
+                "funny"
+            ],
             "__type__": "Note",
             "data": "",
+            "flags": 0,
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        },
+        {
             "fields": [
-                "want",
-                "test",
-                "",
-                "",
-                "",
-                "",
+                "healthy",
+                "rask"
+            ],
+            "guid": "BBBB",
+            "tags": [
+                "tag2",
+                "tag3"
+            ],
+            "__type__": "Note",
+            "data": "",
+            "flags": 0,
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        },
+        {
+            "fields": [
+                "tired",
+                "træt"
+            ],
+            "guid": "CCCC",
+            "tags": [
+                "besttag"
+            ],
+            "__type__": "Note",
+            "data": "",
+            "flags": 0,
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        },
+        {
+            "fields": [
+                "banana",
+                "en banan"
+            ],
+            "guid": "DDDD",
+            "tags": [
                 ""
             ],
+            "__type__": "Note",
+            "data": "",
             "flags": 0,
-            "guid": "zlEirC^ya/",
-            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        },
+        {
+            "fields": [
+                "cat",
+                "en kat"
+            ],
+            "guid": "EEEE",
             "tags": [
-                "LL::Grammar::Noun",
-                "LL::Grammar::Verb"
-            ]
+                ""
+            ],
+            "__type__": "Note",
+            "data": "",
+            "flags": 0,
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        },
+        {
+            "fields": [
+                "dog",
+                "en hund"
+            ],
+            "guid": "FFFF",
+            "tags": [
+                ""
+            ],
+            "__type__": "Note",
+            "data": "",
+            "flags": 0,
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        },
+        {
+            "fields": [
+                "fish",
+                "en fisk"
+            ],
+            "guid": "GGGG",
+            "tags": [
+                ""
+            ],
+            "__type__": "Note",
+            "data": "",
+            "flags": 0,
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        },
+        {
+            "fields": [
+                "bird",
+                "en fugl"
+            ],
+            "guid": "HHHH",
+            "tags": [
+                ""
+            ],
+            "__type__": "Note",
+            "data": "",
+            "flags": 0,
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        },
+        {
+            "fields": [
+                "cow",
+                "en ko"
+            ],
+            "guid": "IIII",
+            "tags": [
+                ""
+            ],
+            "__type__": "Note",
+            "data": "",
+            "flags": 0,
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        },
+        {
+            "fields": [
+                "pig",
+                "et svin"
+            ],
+            "guid": "JJJJ",
+            "tags": [
+                ""
+            ],
+            "__type__": "Note",
+            "data": "",
+            "flags": 0,
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        },
+        {
+            "fields": [
+                "mouse",
+                "en mus"
+            ],
+            "guid": "KKKK",
+            "tags": [
+                ""
+            ],
+            "__type__": "Note",
+            "data": "",
+            "flags": 0,
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        },
+        {
+            "fields": [
+                "horse",
+                "en hest"
+            ],
+            "guid": "LLLL",
+            "tags": [
+                ""
+            ],
+            "__type__": "Note",
+            "data": "",
+            "flags": 0,
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        },
+        {
+            "fields": [
+                "to learn",
+                "at lære"
+            ],
+            "guid": "MMMM",
+            "tags": [
+                ""
+            ],
+            "__type__": "Note",
+            "data": "",
+            "flags": 0,
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        },
+        {
+            "fields": [
+                "to eat",
+                "at spise"
+            ],
+            "guid": "NNNN",
+            "tags": [
+                ""
+            ],
+            "__type__": "Note",
+            "data": "",
+            "flags": 0,
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        },
+        {
+            "fields": [
+                "to drink",
+                "at drikke"
+            ],
+            "guid": "OOOO",
+            "tags": [
+                ""
+            ],
+            "__type__": "Note",
+            "data": "",
+            "flags": 0,
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
         }
-    ]
+    ],
+    "media_files": []
 }

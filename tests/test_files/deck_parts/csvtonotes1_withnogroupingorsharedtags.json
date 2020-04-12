@@ -10,7 +10,7 @@
                 "du"
             ],
             "guid": "AAAA",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 "funny"
             ]
@@ -21,7 +21,7 @@
                 "rask"
             ],
             "guid": "BBBB",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 "tag2",
                 "tag3"
@@ -33,7 +33,7 @@
                 "træt"
             ],
             "guid": "CCCC",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 "besttag"
             ]
@@ -44,7 +44,7 @@
                 "en banan"
             ],
             "guid": "DDDD",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 ""
             ]
@@ -55,7 +55,7 @@
                 "en kat"
             ],
             "guid": "EEEE",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 ""
             ]
@@ -66,7 +66,7 @@
                 "en hund"
             ],
             "guid": "FFFF",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 ""
             ]
@@ -77,7 +77,7 @@
                 "en fisk"
             ],
             "guid": "GGGG",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 ""
             ]
@@ -88,7 +88,7 @@
                 "en fugl"
             ],
             "guid": "HHHH",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 ""
             ]
@@ -99,7 +99,7 @@
                 "en ko"
             ],
             "guid": "IIII",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 ""
             ]
@@ -110,7 +110,7 @@
                 "et svin"
             ],
             "guid": "JJJJ",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 ""
             ]
@@ -121,7 +121,7 @@
                 "en mus"
             ],
             "guid": "KKKK",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 ""
             ]
@@ -132,7 +132,7 @@
                 "en hest"
             ],
             "guid": "LLLL",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 ""
             ]
@@ -143,7 +143,7 @@
                 "at lære"
             ],
             "guid": "MMMM",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 ""
             ]
@@ -154,7 +154,7 @@
                 "at spise"
             ],
             "guid": "NNNN",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 ""
             ]
@@ -165,7 +165,7 @@
                 "at drikke"
             ],
             "guid": "OOOO",
-            "note_model": "LL Noun",
+            "note_model": "Test Model",
             "tags": [
                 ""
             ]

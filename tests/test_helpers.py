@@ -12,9 +12,9 @@ from brain_brew.representation.json.deck_part_notes import DeckPartNotes
 from tests.test_files import TestFiles
 
 
-def debug_write_to_target_json(data, target_location):
-    target = JsonFile(target_location, data_override=data)
-    target.write_file()
+def debug_write_to_target_json(data, json: JsonFile):
+    json.set_data(data)
+    json.write_file()
 
 
 def setup_temp_file_in_folder(file_suffix):
@@ -24,47 +24,47 @@ def setup_temp_file_in_folder(file_suffix):
     return temp_dir, temp_file
 
 
-def get_global_config(note_model_loc: str = "", group_by_note_model=True, extract_shared_tags=False) -> GlobalConfig:
-    config = GlobalConfig.get_instance(override=GlobalConfig({
-        ConfigKeys.DECK_PARTS.value: {
-            "headers": "",
-            "note_models": note_model_loc,
-            "notes": "",
+# def get_global_config(note_model_loc: str = "", group_by_note_model=True, extract_shared_tags=False) -> GlobalConfig:
+#     config = GlobalConfig.get_instance(override=GlobalConfig({
+#         ConfigKeys.DECK_PARTS.value: {
+#             "headers": "",
+#             "note_models": note_model_loc,
+#             "notes": "",
+#
+#             ConfigKeys.DECK_PARTS_NOTES_STRUCTURE.value: {
+#                 NoteFlagKeys.GROUP_BY_NOTE_MODEL.value: group_by_note_model,
+#                 NoteFlagKeys.EXTRACT_SHARED_TAGS.value: extract_shared_tags
+#             }
+#         },
+#         ConfigKeys.FLAGS.value: {
+#
+#         }
+#     }))
+#
+#     return config
 
-            ConfigKeys.DECK_PARTS_NOTES_STRUCTURE.value: {
-                NoteFlagKeys.GROUP_BY_NOTE_MODEL.value: group_by_note_model,
-                NoteFlagKeys.EXTRACT_SHARED_TAGS.value: extract_shared_tags
-            }
-        },
-        ConfigKeys.FLAGS.value: {
 
-        }
-    }))
-
-    return config
+# @pytest.fixture()
+# def global_config():
+#     return GlobalConfig.get_instance(override=GlobalConfig({
+#         ConfigKeys.DECK_PARTS.value: {
+#             "headers": "",
+#             "note_models": "",
+#             "notes": "",
+#
+#             ConfigKeys.DECK_PARTS_NOTES_STRUCTURE.value: {
+#                 NoteFlagKeys.GROUP_BY_NOTE_MODEL.value: False,
+#                 NoteFlagKeys.EXTRACT_SHARED_TAGS.value: False
+#             }
+#         },
+#         ConfigKeys.FLAGS.value: {
+#
+#         }
+#     }))
 
 
 @pytest.fixture()
 def global_config():
-    return GlobalConfig.get_instance(override=GlobalConfig({
-        ConfigKeys.DECK_PARTS.value: {
-            "headers": "",
-            "note_models": "",
-            "notes": "",
-
-            ConfigKeys.DECK_PARTS_NOTES_STRUCTURE.value: {
-                NoteFlagKeys.GROUP_BY_NOTE_MODEL.value: False,
-                NoteFlagKeys.EXTRACT_SHARED_TAGS.value: False
-            }
-        },
-        ConfigKeys.FLAGS.value: {
-
-        }
-    }))
-
-
-@pytest.fixture()
-def global_config_with_mock_dp_folder():
     return GlobalConfig.get_instance(override=GlobalConfig({
         ConfigKeys.DECK_PARTS.value: {
             "headers": TestFiles.Headers.LOC,

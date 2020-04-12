@@ -1,3 +1,5 @@
+import pytest
+
 from brain_brew.representation.json.json_file import JsonFile
 from tests.test_files import TestFiles
 
@@ -8,7 +10,7 @@ def test_constructor():
 
     assert isinstance(file, JsonFile)
     assert file.file_location == file_location
-    assert len(file.get_data().keys()) == 7
+    assert len(file.get_data().keys()) == 13
 
 
 def test_to_filename_json():
@@ -27,3 +29,11 @@ def test_configure_file_location():
     assert expected == JsonFile.get_json_file_location("folder/", "read-this-file.json")
     assert expected == JsonFile.get_json_file_location("", "folder/read this file")
     assert expected == JsonFile.get_json_file_location("", "folder/read-this-file.json")
+
+
+@pytest.fixture()
+def temp_json_file(tmpdir) -> JsonFile:
+    file = tmpdir.mkdir("json").join("file.json")
+    file.write("{}")
+
+    return JsonFile(file.strpath)

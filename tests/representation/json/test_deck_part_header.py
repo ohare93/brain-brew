@@ -1,6 +1,7 @@
 import pytest
 
 from brain_brew.representation.json.deck_part_header import DeckPartHeader
+from brain_brew.representation.json.json_file import JsonFile
 from tests.test_files import TestFiles
 from tests.test_helpers import global_config
 
@@ -8,13 +9,13 @@ from tests.test_helpers import global_config
 class TestConstructor:
     @pytest.mark.parametrize("header_name", [
         TestFiles.Headers.FIRST,
-        TestFiles.Headers.FIRST_FULL,
+        TestFiles.Headers.FIRST_COMPLETE,
     ])
     def test_runs(self, header_name, global_config):
         file = DeckPartHeader(header_name)
 
         assert isinstance(file, DeckPartHeader)
-        assert file.file_location == TestFiles.Headers.FIRST_FULL
+        assert file.file_location == TestFiles.Headers.LOC + TestFiles.Headers.FIRST_COMPLETE
         assert len(file.get_data().keys()) == 10
 
     def test_config_location_override(self, global_config):
@@ -35,4 +36,12 @@ class TestConstructor:
 
 @pytest.fixture()
 def dp_headers_test1(global_config):
-    return DeckPartHeader.create(TestFiles.Headers.FIRST_FULL)
+    return DeckPartHeader.create(TestFiles.Headers.FIRST_COMPLETE)
+
+
+@pytest.fixture()
+def temp_dp_headers_file(tmpdir) -> DeckPartHeader:
+    file = tmpdir.mkdir("headers").join("file.json")
+    file.write("{}")
+
+    return DeckPartHeader(file.strpath, read_now=False)

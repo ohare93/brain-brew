@@ -12,7 +12,7 @@
     ],
     "latexPost": "\\end{document}",
     "latexPre": "\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n",
-    "name": "LL Noun",
+    "name": "Test Model",
     "req": [
         [
             0,

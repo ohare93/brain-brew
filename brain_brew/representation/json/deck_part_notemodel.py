@@ -27,9 +27,10 @@ class DeckPartNoteModel(JsonFile):
             read_now=read_now, data_override=data_override
         )
 
-        self.name = self._data[CANoteModelKeys.NAME.value]
-        self.id = self._data[CANoteModelKeys.ID.value]
-        self.fields = self.read_fields()
+        if read_now or data_override:
+            self.name = self._data[CANoteModelKeys.NAME.value]
+            self.id = self._data[CANoteModelKeys.ID.value]
+            self.fields = self.read_fields()
 
     def read_fields(self) -> List[str]:
         return [field[CANoteModelKeys.NAME.value] for field in self._data[CANoteModelKeys.FIELDS.value]]

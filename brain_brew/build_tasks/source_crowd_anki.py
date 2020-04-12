@@ -63,6 +63,9 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
 
         return SourceCrowdAnki(config_data, read_now=read_now)
 
+    def extract_media(self):
+        raise NotImplementedError
+
     def notes_to_deck_parts(self, notes_json, note_models_id_name_dict):
         for note in notes_json:
             for key in self.useless_note_keys:
@@ -81,28 +84,10 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
 
         return notes_json
 
-    def extract_media(self):
-        raise NotImplementedError
-
-    def notes_to_source(self, note_models_dict_id_name):
-        res_notes = self.notes.get_data(deep_copy=True)[DeckPartNoteKeys.NOTES.value]
-
-        for note in res_notes:
-            for key in self.useless_note_keys:
-                note[key] = blank_str_if_none(self.useless_note_keys[key])
-
-            # Todo: what if not here?
-            note[CANoteKeys.NOTE_MODEL.value] = note_models_dict_id_name[
-                note[DeckPartNoteKeys.NOTE_MODEL.value]
-            ]
-            del note[DeckPartNoteKeys.NOTE_MODEL.value]
-
-        return res_notes
-
     def source_to_deck_parts(self):
         logging.debug("--- Running: CrowdAnki Source to DeckParts ---")
 
-        source_data = self.crowd_anki_export.get_data()
+        source_data = self.crowd_anki_export.get_data(deep_copy=True)
 
         # Headers
         header_keys_to_ignore = {CAKeys.NOTE_MODELS.value, CAKeys.NOTES.value, CAKeys.MEDIA_FILES.value}
@@ -125,6 +110,21 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
         self.notes.set_data(notes_data)
 
         logging.info(f"CrowdAnki - Source to Deck parts: \t# of Notes: {len(notes_json)}")
+
+    def notes_to_source(self, note_models_dict_id_name):
+        res_notes = self.notes.get_data(deep_copy=True)[DeckPartNoteKeys.NOTES.value]
+
+        for note in res_notes:
+            for key in self.useless_note_keys:
+                note[key] = blank_str_if_none(self.useless_note_keys[key])
+
+            # Todo: what if not here?
+            note[CANoteKeys.NOTE_MODEL.value] = note_models_dict_id_name[
+                note[DeckPartNoteKeys.NOTE_MODEL.value]
+            ]
+            del note[DeckPartNoteKeys.NOTE_MODEL.value]
+
+        return res_notes
 
     def deck_parts_to_source(self):
         logging.debug("--- Running: CrowdAnki DeckParts to Source ---")

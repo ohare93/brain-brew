@@ -11,7 +11,7 @@ def setup_source(file_name, read_now=False) -> SourceCsv:
         {
             "notes": "",
             "csv": file_name,
-            "note_model": TestFiles.NoteModels.LL_NOUN_FULL,
+            "note_model": TestFiles.NoteModels.TEST_COMPLETE,
             "columns": {
                 "guid": "guid",
                 "tags": "tags",

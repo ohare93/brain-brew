@@ -1,6 +1,7 @@
 import pytest
 
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
+from brain_brew.representation.json.json_file import JsonFile
 from tests.test_files import TestFiles
 
 
@@ -15,7 +16,7 @@ class TestConstructor:
         assert isinstance(file, CrowdAnkiExport)
         assert file.folder_location == TestFiles.CrowdAnkiExport.TEST1_FOLDER
         assert file.file_location == TestFiles.CrowdAnkiExport.TEST1_JSON
-        assert len(file.get_data().keys()) == 7
+        assert len(file.get_data().keys()) == 13
 
 
 class TestFindJsonFileInFolder:
@@ -36,5 +37,14 @@ class TestFindJsonFileInFolder:
 
 
 @pytest.fixture()
-def ca_export_test1():
+def ca_export_test1() -> CrowdAnkiExport:
     return CrowdAnkiExport.create(TestFiles.CrowdAnkiExport.TEST1_FOLDER)
+
+
+@pytest.fixture()
+def temp_ca_export_file(tmpdir) -> CrowdAnkiExport:
+    folder = tmpdir.mkdir("ca_export")
+    file = folder.join("file.json")
+    file.write("{}")
+
+    return CrowdAnkiExport(folder.strpath, read_now=False)
