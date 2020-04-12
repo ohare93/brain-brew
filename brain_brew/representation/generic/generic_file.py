@@ -1,6 +1,8 @@
 from enum import Enum
 from pathlib import Path
 
+from brain_brew.representation.configuration.global_config import GlobalConfig
+
 
 class GenericFile:
     class DataState(Enum):
@@ -8,7 +10,7 @@ class GenericFile:
         READ_IN_DATA = 1
         DATA_SET = 2
 
-    _data: object = None
+    _data = None
     file_location: str
 
     file_exists: bool
@@ -58,3 +60,20 @@ class GenericFile:
     @classmethod
     def formatted_file_location(cls, location):
         return location
+
+    @staticmethod
+    def sort_data(data, sort_by_keys, reverse_sort, case_insensitive_sort=None):
+        if case_insensitive_sort is not None:
+            case_insensitive_sort = GlobalConfig.get_instance().flags.sort_case_insensitive
+
+        if sort_by_keys:
+            if case_insensitive_sort:
+                def sort_method(i): return tuple((i[column] == "", i[column].lower()) for column in sort_by_keys)
+            else:
+                def sort_method(i): return tuple((i[column] == "", i[column]) for column in sort_by_keys)
+
+            return sorted(data, key=sort_method, reverse=reverse_sort)
+        elif reverse_sort:
+            return list(reversed(data))
+
+        return data

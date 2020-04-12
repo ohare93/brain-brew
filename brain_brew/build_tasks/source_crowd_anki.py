@@ -79,9 +79,6 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
             else:
                 raise KeyError(f"Unknown NoteModel '{note[CANoteKeys.NOTE_MODEL.value]}'")
 
-            if CANoteKeys.NOTE_MODEL.value in note:
-                logging.error("Could not find matching note model for ", note)
-
         return notes_json
 
     def source_to_deck_parts(self):
@@ -118,10 +115,7 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
             for key in self.useless_note_keys:
                 note[key] = blank_str_if_none(self.useless_note_keys[key])
 
-            # Todo: what if not here?
-            note[CANoteKeys.NOTE_MODEL.value] = note_models_dict_id_name[
-                note[DeckPartNoteKeys.NOTE_MODEL.value]
-            ]
+            note[CANoteKeys.NOTE_MODEL.value] = note_models_dict_id_name[note[DeckPartNoteKeys.NOTE_MODEL.value]]
             del note[DeckPartNoteKeys.NOTE_MODEL.value]
 
         return res_notes

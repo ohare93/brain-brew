@@ -3,7 +3,7 @@ import pytest
 from brain_brew.build_tasks.source_csv import SourceCsv
 from brain_brew.representation.generic.csv_file import CsvFile
 from tests.test_files import TestFiles
-from tests.test_helpers import *
+from tests.test_helpers import global_config
 
 
 def setup_source(file_name, read_now=False) -> SourceCsv:
@@ -24,9 +24,9 @@ def setup_source(file_name, read_now=False) -> SourceCsv:
         read_now=read_now
     )
 
-#
+
 # class TestConstructor:
-#     def test_runs(self):
+#     def test_runs(self, global_config):
 #         global_config = get_global_config()
 #         deck_parts = get_header_model_notes_mock(
 #             deck_part_notes=JsonFile(TestFiles.UnfinishedData.FIRST_SET)
@@ -36,7 +36,7 @@ def setup_source(file_name, read_now=False) -> SourceCsv:
 #         source = setup_source(temp_dir.name, deck_parts)
 #
 #         assert isinstance(source, SourceCsv)
-#
+
 #
 # class TestSourceToDeckParts:
 #     @pytest.mark.parametrize("csv, unfinished_data", [

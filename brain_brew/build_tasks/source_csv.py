@@ -126,10 +126,6 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
 
         return csv_data
 
-    def write_to_source(self, csv_data):
-        self.csv_file.set_data(csv_data)
-        self.csv_file.write_file()
-
     def check_for_required_fields(self):
         missing = []
         for req in self.required_fields_definitions:
@@ -222,19 +218,6 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
 
         return csv_data
 
-    def sort_data(self, csv_data):  # TODO: move this to the csv file, to be called by the file-manager
-        if self.sort_by_columns:
-            if self.global_config.flags.sort_case_insensitive:
-                def sort_method(i): return tuple(i[column].lower() for column in self.sort_by_columns)
-            else:
-                def sort_method(i): return tuple(i[column] for column in self.sort_by_columns)
-
-            return sorted(csv_data, key=sort_method, reverse=self.reverse_sort)
-        elif self.reverse_sort:
-            return csv_data.reverse()
-
-        return csv_data
-
     def source_to_deck_parts(self):
         logging.info("--- Running: CSV Mapping Source to DeckParts ---")
 
@@ -248,6 +231,5 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
 
         csv_data = self.notes_to_source()
 
-        sorted_csv_data = self.sort_data(csv_data)
-
-        self.csv_file.set_data(sorted_csv_data)
+        sorted_data = self.csv_file.sort_data(csv_data, self.sort_by_columns, self.reverse_sort)
+        self.csv_file.set_data(sorted_data)

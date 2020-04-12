@@ -55,7 +55,11 @@ class DeckPartNotes(JsonFile):
         self._data = self.remove_notes_structure()
         self.read_note_config()
 
-        self.sort_notes()
+        self._data[DeckPartNoteKeys.NOTES.value] = self.sort_data(
+            self._data[DeckPartNoteKeys.NOTES.value],
+            self.global_config.flags.note_sort_order,
+            self.global_config.flags.reverse_sort
+        )
 
     def read_note_config(self):
         self.flags.group_by_note_model = \
@@ -78,24 +82,6 @@ class DeckPartNotes(JsonFile):
     def get_all_known_note_model_names(self):
         model_set = {note[DeckPartNoteKeys.NOTE_MODEL.value] for note in self._data[DeckPartNoteKeys.NOTES.value]}
         return sorted(list(model_set))
-
-    def sort_notes(self):
-        if not self.global_config.flags.note_sort_order:
-            return
-
-        notes: list = self._data[DeckPartNoteKeys.NOTES.value]
-
-        if self.global_config.flags.sort_case_insensitive:
-            def sort_method(i): return tuple(i[c].lower() for c in self.global_config.flags.note_sort_order)
-        else:
-            def sort_method(i): return tuple(i[c] for c in self.global_config.flags.note_sort_order)
-
-        notes = sorted(notes, key=sort_method)
-
-        if self.global_config.flags.reverse_sort:
-            notes = list(reversed(notes))
-
-        self._data[DeckPartNoteKeys.NOTES.value] = notes
 
     def implement_note_structure(self):
         """

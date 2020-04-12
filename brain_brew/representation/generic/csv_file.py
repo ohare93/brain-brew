@@ -26,6 +26,8 @@ class CsvFile(GenericFile):
             for row in csv_reader:
                 self._data.append({key.lower(): row[key] for key in row})
 
+        self.data_state = GenericFile.DataState.READ_IN_DATA
+
     def write_file(self):
         with open(self.file_location, mode='w') as csv_file:
             csv_writer = csv.DictWriter(csv_file, fieldnames=self.column_headers)
@@ -39,9 +41,10 @@ class CsvFile(GenericFile):
 
     def set_data(self, data_override):
         super().set_data(data_override)
+        self.column_headers = list(data_override[0].keys()) if data_override else []
 
-    # def get_data(self):
-    #     return self._data
+    def get_data(self):
+        return self._data
 
     def get_relevant_data(self, relevant_columns: List[str]):
         if not relevant_columns:
@@ -73,4 +76,3 @@ class CsvFile(GenericFile):
     @classmethod
     def formatted_file_location(cls, location):
         return cls.to_filename_csv(location)
-
