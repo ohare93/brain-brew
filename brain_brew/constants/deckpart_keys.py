@@ -7,7 +7,6 @@ class DeckPartNoteKeys(Enum):
     FIELDS = "fields"
     GUID = "guid"
     NOTE_MODEL = "note_model"
-    # NOTE_MODEL_GROUPED = "_sharednotemodel"
     TAGS = "tags"
     SHARED_TAGS = "_shared_tags"
     FLAGS = "_flags"

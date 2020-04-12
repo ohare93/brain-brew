@@ -4,7 +4,6 @@ from typing import List
 from brain_brew.build_tasks.build_task_generic import BuildTaskEnum, BuildTaskGeneric, BuildConfigKeys
 from brain_brew.build_tasks.source_csv import SourceCsv
 from brain_brew.representation.configuration.yaml_file import YamlFile, ConfigKey
-from brain_brew.constants.deckpart_keys import DeckPartNoteKeys, DeckPartNoteFlags
 from brain_brew.representation.json.deck_part_notes import DeckPartNotes
 
 
@@ -12,8 +11,10 @@ class SourceCsvCollection(YamlFile, BuildTaskGeneric):
     @staticmethod
     def get_build_keys():
         return [
-            BuildTaskEnum("deck_parts_to_csv_collection", SourceCsvCollection, "deck_parts_to_source", "source_to_deck_parts"),
-            BuildTaskEnum("csv_collection_to_deck_parts", SourceCsvCollection, "source_to_deck_parts", "deck_parts_to_source"),
+            BuildTaskEnum("deck_parts_to_csv_collection", SourceCsvCollection,
+                          "deck_parts_to_source", "source_to_deck_parts"),
+            BuildTaskEnum("csv_collection_to_deck_parts", SourceCsvCollection, "source_to_deck_parts",
+                          "deck_parts_to_source"),
         ]
 
     config_entry = {}
@@ -57,7 +58,7 @@ class SourceCsvCollection(YamlFile, BuildTaskGeneric):
 
         self.notes.set_data(source_data)
 
-        logging.info(f"Finished Csv Collection - Source to Deckparts:")
+        logging.info(f"Finished Csv Collection - Source to Deck parts:")
 
     def deck_parts_to_source(self):
         logging.info("--- Running: CSV Collection DeckParts to Source ---")

@@ -1,10 +1,7 @@
-import logging
 from dataclasses import dataclass, field
-import inspect
 
 from brain_brew.constants.deckpart_keys import NoteFlagKeys, DeckPartNoteFlags
 from brain_brew.constants.global_config_keys import *
-from brain_brew.helper.helperfunctions import *
 from brain_brew.representation.configuration.yaml_file import YamlFile, ConfigKey
 
 
@@ -45,7 +42,7 @@ class GlobalConfig(YamlFile):
             ConfigKeys.NOTE_SORT_ORDER.value: ConfigKey(False, list, None),
             ConfigKeys.SORT_CASE_INSENSITIVE.value: ConfigKey(False, bool, None),
             ConfigKeys.REVERSE_SORT.value: ConfigKey(False, bool, None)
-    })
+        })
     }
     subconfig_filter = None
 
@@ -73,9 +70,9 @@ class GlobalConfig(YamlFile):
         global_config_name = "_config.yaml"
         global_config_filepath = f"{global_config_name}"
 
-        gbconfigyaml = YamlFile.read_file(global_config_filepath)
+        gb_config_yaml = YamlFile.read_file(global_config_filepath)
 
-        return GlobalConfig(gbconfigyaml)
+        return GlobalConfig(gb_config_yaml)
 
     @classmethod
     def get_instance(cls, override=None):

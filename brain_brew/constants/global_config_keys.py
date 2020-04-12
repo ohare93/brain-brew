@@ -9,11 +9,3 @@ class ConfigKeys(Enum):
     NOTE_SORT_ORDER = "note_sort_order"
     REVERSE_SORT = "reverse_sort"
     SORT_CASE_INSENSITIVE = "sort_case_insensitive"
-
-
-class ConfigDeckPartKeys(Enum):
-    HEADERS = "headers"
-    NOTEMODELS = "note_models"
-    NOTES = "notes"
-
-

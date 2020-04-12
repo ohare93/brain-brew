@@ -1,5 +1,4 @@
 import logging
-from collections import namedtuple
 from enum import Enum
 
 from brain_brew.build_tasks.build_task_generic import BuildTaskEnum
@@ -37,7 +36,7 @@ class Builder(YamlFile):
     def __init__(self, config_data, global_config, other_args, read_now=True):
         self.file_manager = FileManager.get_instance()
 
-        self.BUILD_TASK_DEFINITIONS = {build_task.keyname: build_task
+        self.BUILD_TASK_DEFINITIONS = {build_task.key_name: build_task
                                        for source in self.KNOWN_BUILD_TASK_CLASSES
                                        for build_task in source.get_build_keys()
                                        }

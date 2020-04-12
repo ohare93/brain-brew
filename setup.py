@@ -15,7 +15,8 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     entry_points={
         'console_scripts': [
-            'brain_brew = brain_brew.main:main'
+            'brain_brew = brain_brew.main:main',
+            'brain-brew = brain_brew.main:main',
         ]
     },
     classifiers=[

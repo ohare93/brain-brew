@@ -2,11 +2,11 @@ import logging
 from enum import Enum
 
 from brain_brew.build_tasks.build_task_generic import BuildTaskEnum, BuildTaskGeneric, BuildConfigKeys
-from brain_brew.constants.deckpart_keys import DeckPartNoteKeys, DeckPartNoteFlags
+from brain_brew.constants.crowdanki_keys import CAKeys
+from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.helper.helperfunctions import blank_str_if_none
 from brain_brew.representation.configuration.yaml_file import ConfigKey, YamlFile
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
-from brain_brew.constants.crowdanki_keys import CAKeys
 from brain_brew.representation.json.deck_part_header import DeckPartHeader
 from brain_brew.representation.json.deck_part_notemodel import CANoteModelKeys, DeckPartNoteModel
 from brain_brew.representation.json.deck_part_notes import CANoteKeys, DeckPartNotes
@@ -77,7 +77,7 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
                 raise KeyError(f"Unknown NoteModel '{note[CANoteKeys.NOTE_MODEL.value]}'")
 
             if CANoteKeys.NOTE_MODEL.value in note:
-                logging.error("Could not find matching notemodel for ", note)
+                logging.error("Could not find matching note model for ", note)
 
         return notes_json
 
@@ -124,7 +124,7 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
 
         self.notes.set_data(notes_data)
 
-        logging.info(f"CrowdAnki - Source to Deckparts: \t# of Notes: {len(notes_json)}")
+        logging.info(f"CrowdAnki - Source to Deck parts: \t# of Notes: {len(notes_json)}")
 
     def deck_parts_to_source(self):
         logging.debug("--- Running: CrowdAnki DeckParts to Source ---")

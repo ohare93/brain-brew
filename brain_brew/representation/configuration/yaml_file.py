@@ -1,14 +1,11 @@
 from collections import namedtuple
-from enum import Enum
 from pathlib import Path
-from typing import List, Dict
 
 import yaml
 
 from brain_brew.build_tasks.build_task_generic import BuildConfigKeys
 
-
-ConfigKey = namedtuple("configkey", "required entry_type children")
+ConfigKey = namedtuple("ConfigKey", "required entry_type children")
 
 
 class YamlFile:
@@ -74,21 +71,19 @@ class YamlFile:
         raise KeyError(error_message)
 
     def setup_config_with_subconfig_replacement(self, config_entry: dict):
-        SUBCONFIG = BuildConfigKeys.SUBCONFIG.value
-
-        if SUBCONFIG not in config_entry:
+        if BuildConfigKeys.SUBCONFIG.value not in config_entry:
             self.config_entry = config_entry
             return
 
-        sub = config_entry[SUBCONFIG]
+        sub = config_entry[BuildConfigKeys.SUBCONFIG.value]
 
         clone = config_entry.copy()
-        clone.pop(SUBCONFIG)
+        clone.pop(BuildConfigKeys.SUBCONFIG.value)
 
-        def verify_and_read_sub(sub: str, keep_only_keys):
-            if not isinstance(sub, str):
-                raise TypeError(f"Unknown type in {SUBCONFIG}")
-            data = YamlFile.read_file(sub)
+        def verify_and_read_sub(sub_to_verify: str, keep_only_keys):
+            if not isinstance(sub_to_verify, str):
+                raise TypeError(f"Unknown type in {BuildConfigKeys.SUBCONFIG.value}")
+            data = YamlFile.read_file(sub_to_verify)
             if keep_only_keys is not None:
                 return {k: data[k] for k in data if k in keep_only_keys}
             return data
@@ -100,9 +95,9 @@ class YamlFile:
             replacement_list = []
             for s in sub:
                 replacement_list.append(verify_and_read_sub(s, self.subconfig_filter))
-            replacement_sub = {SUBCONFIG: replacement_list}
+            replacement_sub = {BuildConfigKeys.SUBCONFIG.value: replacement_list}
             clone = {**clone, **replacement_sub}
         else:
-            raise TypeError(f"{SUBCONFIG} is the wrong type: {type(sub)}")
+            raise TypeError(f"{BuildConfigKeys.SUBCONFIG.value} is the wrong type: {type(sub)}")
 
         self.config_entry = clone

@@ -35,8 +35,8 @@ class FieldMapping:
     value: str
     field_name: str
 
-    def __init__(self, type: FieldMappingType, field_name: str, value: str):
-        self.type = type
+    def __init__(self, field_type: FieldMappingType, field_name: str, value: str):
+        self.type = field_type
         self.field_name = field_name.lower()
 
         if self.type == FieldMapping.FieldMappingType.COLUMN:
@@ -97,12 +97,12 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
         personal_fields = self.get_config(CsvKeys.PERSONAL_FIELDS, [])
 
         self.columns = [FieldMapping(
-                                type=FieldMapping.FieldMappingType.COLUMN,
+                                field_type=FieldMapping.FieldMappingType.COLUMN,
                                 field_name=field,
                                 value=columns[field]) for field in columns]
 
         self.personal_fields = [FieldMapping(
-                                type=FieldMapping.FieldMappingType.PERSONAL_FIELD,
+                                field_type=FieldMapping.FieldMappingType.PERSONAL_FIELD,
                                 field_name=field,
                                 value="") for field in personal_fields]
 
@@ -137,7 +137,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
                 missing.append(req)
 
         if missing:
-            raise KeyError(f"""Notemodel "{self.note_model.name}" to Csv config error: \
+            raise KeyError(f"""Note model "{self.note_model.name}" to Csv config error: \
                                Definitions for fields {missing} are required.""", self.csv_file.file_location)
 
     def check_fields_align_with_note_type(self):
@@ -158,7 +158,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
 
         if error_in_config:
             raise KeyError(
-                f"""Notemodel "{self.note_model.name}" to Csv config error. It expected {self.note_model.fields} \
+                f"""Note model "{self.note_model.name}" to Csv config error. It expected {self.note_model.fields} \
                     but was missing: {missing}, and got extra: {extra} """)
 
     def notes_to_deck_parts(self):
@@ -225,9 +225,9 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
     def sort_data(self, csv_data):  # TODO: move this to the csv file, to be called by the file-manager
         if self.sort_by_columns:
             if self.global_config.flags.sort_case_insensitive:
-                sort_method = lambda i: tuple(i[column].lower() for column in self.sort_by_columns)
+                def sort_method(i): return tuple(i[column].lower() for column in self.sort_by_columns)
             else:
-                sort_method = lambda i: tuple(i[column] for column in self.sort_by_columns)
+                def sort_method(i): return tuple(i[column] for column in self.sort_by_columns)
 
             return sorted(csv_data, key=sort_method, reverse=self.reverse_sort)
         elif self.reverse_sort:
@@ -241,7 +241,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
         notes_data = self.notes_to_deck_parts()
         self.notes.set_data(notes_data)
 
-        logging.info(f"Csv - Source to Deckparts: # of Notes: {len(notes_data)}")
+        logging.info(f"Csv - Source to Deck parts: # of Notes: {len(notes_data)}")
 
     def deck_parts_to_source(self):
         logging.info("--- Running: CSV Mapping DeckParts to Source ---")

@@ -1,4 +1,3 @@
-from brain_brew.file_manager import FileManager
 from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.json.json_file import JsonFile
 

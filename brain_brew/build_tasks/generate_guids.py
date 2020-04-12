@@ -28,7 +28,8 @@ class GenerateGuids(BuildTaskGeneric, YamlFile):
         # if source_type != "csv":
         #     raise TypeError(f"Wrong type of source given to GenerateGuids task. Expected csv but got {source_type}")
         #
-        # csv_collection_config = self.config_entry[BuildConfigKeys.SOURCE.value][BuildConfigKeys.SOURCE_CONFIG_FILE.value]
+        # csv_collection_config =
+        #       self.config_entry[BuildConfigKeys.SOURCE.value][BuildConfigKeys.SOURCE_CONFIG_FILE.value]
         # self.csv_collection = SourceCsvCollection.from_yaml(csv_collection_config, read_now=read_now)
 
     def execute(self):

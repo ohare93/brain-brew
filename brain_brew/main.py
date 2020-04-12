@@ -1,14 +1,13 @@
-import os
-import sys
 import logging
+
+from brain_brew.argument_reader import ArgumentReader
+from brain_brew.builder import Builder
+from brain_brew.representation.configuration.global_config import GlobalConfig
+from brain_brew.representation.configuration.yaml_file import YamlFile
+
 
 # sys.path.append(os.path.join(os.path.dirname(__file__), "dist"))
 # sys.path.append(os.path.dirname(__file__))
-
-from brain_brew.builder import Builder
-from brain_brew.representation.configuration.global_config import GlobalConfig
-from brain_brew.argument_reader import ArgumentReader
-from brain_brew.representation.configuration.yaml_file import YamlFile
 
 
 def main():

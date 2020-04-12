@@ -58,8 +58,10 @@ class DeckPartNotes(JsonFile):
         self.sort_notes()
 
     def read_note_config(self):
-        self.flags.group_by_note_model = self._data[DeckPartNoteKeys.FLAGS.value][NoteFlagKeys.GROUP_BY_NOTE_MODEL.value]
-        self.flags.extract_shared_tags = self._data[DeckPartNoteKeys.FLAGS.value][NoteFlagKeys.EXTRACT_SHARED_TAGS.value]
+        self.flags.group_by_note_model = \
+            self._data[DeckPartNoteKeys.FLAGS.value][NoteFlagKeys.GROUP_BY_NOTE_MODEL.value]
+        self.flags.extract_shared_tags = \
+            self._data[DeckPartNoteKeys.FLAGS.value][NoteFlagKeys.EXTRACT_SHARED_TAGS.value]
 
     def verify_data(self):
         errors = []
@@ -84,9 +86,9 @@ class DeckPartNotes(JsonFile):
         notes: list = self._data[DeckPartNoteKeys.NOTES.value]
 
         if self.global_config.flags.sort_case_insensitive:
-            sort_method = lambda i: tuple((i[c] == "", i[c].lower()) for c in self.global_config.flags.note_sort_order)
+            def sort_method(i): return tuple(i[c].lower() for c in self.global_config.flags.note_sort_order)
         else:
-            sort_method = lambda i: tuple((i[c] == "", i[c]) for c in self.global_config.flags.note_sort_order)
+            def sort_method(i): return tuple(i[c] for c in self.global_config.flags.note_sort_order)
 
         notes = sorted(notes, key=sort_method)
 
@@ -121,28 +123,13 @@ class DeckPartNotes(JsonFile):
             structured_notes[DeckPartNoteKeys.NOTES.value] = self._data
 
         if self.global_config.deck_part_notes_flags.extract_shared_tags:
-            def extract_shared_tags(notes):
-                shared_tags = notes[0][DeckPartNoteKeys.TAGS.value]
-
-                for note in notes:
-                    shared_tags = [tag for tag in note[DeckPartNoteKeys.TAGS.value] if tag in shared_tags]
-                    if not shared_tags:
-                        break
-
-                if shared_tags:
-                    for note in notes:
-                        for tag in shared_tags:
-                            note[DeckPartNoteKeys.TAGS.value].remove(tag)
-
-                return shared_tags
-
             if self.global_config.deck_part_notes_flags.group_by_note_model:
                 for name in structured_notes:
-                    structured_notes[name][DeckPartNoteKeys.SHARED_TAGS.value] = extract_shared_tags(
+                    structured_notes[name][DeckPartNoteKeys.SHARED_TAGS.value] = self.extract_shared_tags(
                         structured_notes[name][DeckPartNoteKeys.NOTES.value]
                     )
             else:
-                structured_notes[DeckPartNoteKeys.SHARED_TAGS.value] = extract_shared_tags(
+                structured_notes[DeckPartNoteKeys.SHARED_TAGS.value] = self.extract_shared_tags(
                     structured_notes[DeckPartNoteKeys.NOTES.value]
                 )
 
@@ -152,6 +139,22 @@ class DeckPartNotes(JsonFile):
 
         return final_structure
 
+    @staticmethod
+    def extract_shared_tags(notes):
+        shared_tags = notes[0][DeckPartNoteKeys.TAGS.value]
+
+        for note in notes:
+            shared_tags = [tag for tag in note[DeckPartNoteKeys.TAGS.value] if tag in shared_tags]
+            if not shared_tags:
+                break
+
+        if shared_tags:
+            for note in notes:
+                for tag in shared_tags:
+                    note[DeckPartNoteKeys.TAGS.value].remove(tag)
+
+        return shared_tags
+
     def remove_notes_structure(self):
         """
         :return: notes with their global config structure removed
@@ -159,23 +162,15 @@ class DeckPartNotes(JsonFile):
         if not self.flags.any_enabled():
             return self._data
 
-        unstructured_notes = self._data.copy()
+        unstructured_notes = self.get_data(deep_copy=True)
 
         if self.flags.extract_shared_tags:
-            def resolve_shared_tags(toplevel):
-                sharedtags = toplevel[DeckPartNoteKeys.SHARED_TAGS.value]
-                if sharedtags:
-                    for note in toplevel[DeckPartNoteKeys.NOTES.value]:
-                        note[DeckPartNoteKeys.TAGS.value] += sharedtags
-
-                del toplevel[DeckPartNoteKeys.SHARED_TAGS.value]
-
             if self.flags.group_by_note_model:
                 for group in unstructured_notes:
                     if group[0] != "_":
-                        resolve_shared_tags(unstructured_notes[group])
+                        self.spread_out_shared_tags(unstructured_notes[group])
             else:
-                resolve_shared_tags(unstructured_notes)
+                self.spread_out_shared_tags(unstructured_notes)
 
             unstructured_notes[DeckPartNoteKeys.FLAGS.value][NoteFlagKeys.EXTRACT_SHARED_TAGS.value] = False
 
@@ -187,10 +182,19 @@ class DeckPartNotes(JsonFile):
                         note[DeckPartNoteKeys.NOTE_MODEL.value] = group
                         ungrouped_notes.append(note)
 
-            toplevel = {group: unstructured_notes[group] for group in unstructured_notes if group[0] == "_"}
-            toplevel.setdefault(DeckPartNoteKeys.NOTES.value, ungrouped_notes)
-            unstructured_notes = toplevel
+            top_level_ungrouped = {group: unstructured_notes[group] for group in unstructured_notes if group[0] == "_"}
+            top_level_ungrouped.setdefault(DeckPartNoteKeys.NOTES.value, ungrouped_notes)
+            unstructured_notes = top_level_ungrouped
 
             unstructured_notes[DeckPartNoteKeys.FLAGS.value][NoteFlagKeys.GROUP_BY_NOTE_MODEL.value] = False
 
         return unstructured_notes
+
+    @staticmethod
+    def spread_out_shared_tags(top_level):
+        shared_tags = top_level[DeckPartNoteKeys.SHARED_TAGS.value]
+        if shared_tags:
+            for note in top_level[DeckPartNoteKeys.NOTES.value]:
+                note[DeckPartNoteKeys.TAGS.value] += shared_tags
+
+        del top_level[DeckPartNoteKeys.SHARED_TAGS.value]
