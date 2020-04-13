@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="Brain-Brew",
-    version="0.0.1",
+    version="0.0.2",
     author="Jordan Munch O'Hare",
     author_email="ohare93@gmail.com",
     description="Automated Anki flashcard creation and extraction to/from Csv ",
@@ -25,4 +25,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
+    install_requires=[
+        'PyYAML'
+    ]
 )
