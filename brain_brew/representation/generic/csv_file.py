@@ -43,6 +43,9 @@ class CsvFile(GenericFile):
         super().set_data(data_override)
         self.column_headers = list(data_override[0].keys()) if data_override else []
 
+    def set_relevant_data(self, data_set):
+        known_guids = {guid for guid in self._data}
+
     def get_data(self):
         return self._data
 

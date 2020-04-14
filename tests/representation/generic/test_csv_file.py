@@ -11,6 +11,21 @@ def csv_test1():
 
 
 @pytest.fixture()
+def csv_test1_split1():
+    return CsvFile(TestFiles.CsvFiles.TEST1_SPLIT1)
+
+
+@pytest.fixture()
+def csv_test1_split2():
+    return CsvFile(TestFiles.CsvFiles.TEST1_SPLIT2)
+
+
+@pytest.fixture()
+def csv_test2():
+    return CsvFile(TestFiles.CsvFiles.TEST2)
+
+
+@pytest.fixture()
 def csv_not_read_initially_test():
     return CsvFile(TestFiles.CsvFiles.TEST1, read_now=False)
 
@@ -20,7 +35,7 @@ def temp_csv_test1(tmpdir, csv_test1) -> CsvFile:
     file = tmpdir.mkdir("json").join("file.csv")
     file.write("blank")
 
-    return CsvFile(file.strpath, data_override=csv_test1.get_data())
+    return CsvFile.create(file.strpath, data_override=csv_test1.get_data())
 
 
 class TestConstructor:

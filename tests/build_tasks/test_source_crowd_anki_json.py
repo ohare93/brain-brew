@@ -44,21 +44,26 @@ class TestConstructor:
             assert passed_file == file
             assert read_now == read_file_now
 
-        with patch.object(DeckPartHeader, "create", assert_dp_header), \
-             patch.object(DeckPartNotes, "create", assert_dp_notes), \
-             patch.object(CrowdAnkiExport, "create", assert_ca_export):
+        with patch.object(DeckPartHeader, "create", side_effect=assert_dp_header) as mock_header, \
+                patch.object(DeckPartNotes, "create", side_effect=assert_dp_notes) as mock_notes, \
+                patch.object(CrowdAnkiExport, "create", side_effect=assert_ca_export) as ca_export:
+
             source = SourceCrowdAnki(config, read_now=read_file_now)
 
             assert isinstance(source, SourceCrowdAnki)
             assert source.should_handle_media == media
             assert source.useless_note_keys == useless_note_keys
 
+            assert mock_header.call_count == 1
+            assert mock_notes.call_count == 1
+            assert ca_export.call_count == 1
+
 
 @pytest.fixture()
 def source_crowd_anki_test1(global_config) -> SourceCrowdAnki:
-    with patch.object(DeckPartHeader, "create", lambda x, read_now: None), \
-         patch.object(DeckPartNotes, "create", lambda x, read_now: None), \
-         patch.object(CrowdAnkiExport, "create", lambda x, read_now: None):
+    with patch.object(DeckPartHeader, "create", return_value=None) as mock_header, \
+         patch.object(DeckPartNotes, "create", return_value=None) as mock_notes, \
+         patch.object(CrowdAnkiExport, "create", return_value=None) as mock_ca_export:
 
         source = SourceCrowdAnki(
             setup_ca_config("", False, {"__type__": "Note", "data": None, "flags": 0}, "", "")
@@ -87,11 +92,13 @@ class TestSourceToDeckParts:
             assert data_override == dp_note_model_test1.get_data()
             return dp_note_model_test1
 
-        with patch.object(DeckPartNoteModel, "create", assert_note_model):
+        with patch.object(DeckPartNoteModel, "create", side_effect=assert_note_model) as mock_nm:
             source_crowd_anki_test1.source_to_deck_parts()
 
             assert source_crowd_anki_test1.headers.get_data() == dp_headers_test1.get_data()
             assert source_crowd_anki_test1.notes.get_data() == dp_notes_test1.get_data()
+
+            assert mock_nm.call_count == 1
 
 
 class TestDeckPartsToSource:

@@ -6,20 +6,15 @@ from tests.test_files import TestFiles
 from tests.test_helpers import global_config, note_models_mock
 
 
-@pytest.fixture()
-def dp_note_test1(global_config) -> DeckPartNotes:
-    return DeckPartNotes(TestFiles.NoteFiles.NO_GROUPING_OR_SHARED_TAGS)
-
-
 class TestConstructor:
     @pytest.mark.parametrize("file_to_read", [
-        TestFiles.NoteFiles.WITH_SHARED_TAGS_EMPTY_AND_GROUPING,
-        TestFiles.NoteFiles.WITH_SHARED_TAGS,
-        TestFiles.NoteFiles.WITH_GROUPING,
-        TestFiles.NoteFiles.NO_GROUPING_OR_SHARED_TAGS,
+        TestFiles.NoteFiles.TEST1_WITH_SHARED_TAGS_EMPTY_AND_GROUPING,
+        TestFiles.NoteFiles.TEST1_WITH_SHARED_TAGS,
+        TestFiles.NoteFiles.TEST1_WITH_GROUPING,
+        TestFiles.NoteFiles.TEST1_NO_GROUPING_OR_SHARED_TAGS,
     ])
-    def test_runs_and_unstructures_data(self, file_to_read, global_config, dp_note_test1):
-        expected_result = dp_note_test1.get_data()
+    def test_runs_and_unstructures_data(self, file_to_read, global_config, dp_notes_test1):
+        expected_result = dp_notes_test1.get_data()
         notes = DeckPartNotes(file_to_read)
 
         assert isinstance(notes, DeckPartNotes)
@@ -28,7 +23,12 @@ class TestConstructor:
 
 @pytest.fixture()
 def dp_notes_test1(global_config) -> DeckPartNotes:
-    return DeckPartNotes.create(TestFiles.NoteFiles.WITH_SHARED_TAGS_EMPTY_AND_GROUPING)
+    return DeckPartNotes.create(TestFiles.NoteFiles.TEST1_WITH_SHARED_TAGS_EMPTY_AND_GROUPING)
+
+
+@pytest.fixture()
+def dp_notes_test2(global_config) -> DeckPartNotes:
+    return DeckPartNotes.create(TestFiles.NoteFiles.TEST2_WITH_SHARED_TAGS_AND_GROUPING)
 
 
 @pytest.fixture()

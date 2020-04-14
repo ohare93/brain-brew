@@ -39,12 +39,6 @@ class SourceCsvCollection(YamlFile, BuildTaskGeneric):
             csv_entry.setdefault(BuildConfigKeys.NOTES.value, notes_filename)
             self.source_csvs.append(SourceCsv(csv_entry, read_now=read_now))
 
-    @classmethod
-    def from_yaml(cls, yaml_file_name, read_now=True):
-        config_data = YamlFile.read_file(yaml_file_name)
-
-        return SourceCsvCollection(config_data, read_now=read_now)
-
     def source_to_deck_parts(self):
         logging.info("--- Running: CSV Collection Source to DeckParts ---")
 
@@ -63,5 +57,5 @@ class SourceCsvCollection(YamlFile, BuildTaskGeneric):
     def deck_parts_to_source(self):
         logging.info("--- Running: CSV Collection DeckParts to Source ---")
 
-        for csv in self.source_csvs:
+        for csv in self.source_csvs:  # TODO: Make this gather the data and spread it out to the right files
             csv.deck_parts_to_source()

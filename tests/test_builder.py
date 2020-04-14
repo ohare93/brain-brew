@@ -13,12 +13,16 @@ from tests.test_helpers import global_config
 class TestConstructor:
     def test_runs(self, global_config):
 
-        with patch.object(SourceCsvCollection, "__init__", lambda x, y, z: None), \
-             patch.object(SourceCsv, "__init__", lambda x, y, z: None), \
-             patch.object(GenerateGuids, "__init__", lambda x, y, z: None), \
-             patch.object(SourceCrowdAnki, "__init__", lambda x, y, z: None):
+        with patch.object(SourceCsvCollection, "__init__", return_value=None) as mock_csv_col, \
+             patch.object(SourceCsv, "__init__", return_value=None) as mock_csv, \
+             patch.object(GenerateGuids, "__init__", return_value=None) as mock_gen_guids, \
+             patch.object(SourceCrowdAnki, "__init__", return_value=None) as mock_ca:
 
             data = YamlFile.read_file(TestFiles.BuildConfig.ONE_OF_EACH_TYPE)
             builder = Builder(data, global_config, None, read_now=False)
 
             assert len(builder.build_tasks) == 4
+            assert mock_csv_col.call_count == 1
+            assert mock_csv.call_count == 1
+            assert mock_gen_guids.call_count == 1
+            assert mock_ca.call_count == 1

@@ -5,7 +5,6 @@ from typing import List
 from brain_brew.build_tasks.build_task_generic import BuildTaskEnum, BuildTaskGeneric, BuildConfigKeys
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.helper.helperfunctions import single_item_to_list
-from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.configuration.yaml_file import ConfigKey, YamlFile
 from brain_brew.representation.generic.csv_file import CsvFile
 from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
@@ -66,8 +65,6 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
     }
     subconfig_filter = None
 
-    global_config: GlobalConfig
-
     notes: DeckPartNotes
 
     csv_file: CsvFile
@@ -83,12 +80,9 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
         self.setup_config_with_subconfig_replacement(config_data)
         self.verify_config_entry()
 
-        self.global_config = GlobalConfig.get_instance()
-
-        self.notes = DeckPartNotes.create(self.get_config(BuildConfigKeys.NOTES))
-
+        self.notes = DeckPartNotes.create(self.get_config(BuildConfigKeys.NOTES), read_now=read_now)
         self.csv_file = CsvFile.create(self.config_entry[CsvKeys.CSV_FILE.value], read_now=read_now)
-        self.note_model = DeckPartNoteModel.create(self.get_config(CsvKeys.NOTE_MODEL))
+        self.note_model = DeckPartNoteModel.create(self.get_config(CsvKeys.NOTE_MODEL), read_now=read_now)
 
         self.sort_by_columns = single_item_to_list(self.get_config(CsvKeys.SORT_BY_COLUMNS, []))
         self.reverse_sort = self.get_config(CsvKeys.REVERSE_SORT, False)
@@ -178,7 +172,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
             DeckPartNoteKeys.NOTE_MODEL.value: ""
         }
 
-        # Get Guid, Tags, NoteTypeName
+        # Get Guid, Tags, NoteTypeName, Fields
         for row in csv_rows:
             note = top_level_note_structure.copy()
 
@@ -231,5 +225,5 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
 
         csv_data = self.notes_to_source()
 
-        sorted_data = self.csv_file.sort_data(csv_data, self.sort_by_columns, self.reverse_sort)
+        sorted_data = self.csv_file.sort_data(csv_data, self.sort_by_columns, self.reverse_sort)  # TODO: Move
         self.csv_file.set_data(sorted_data)
