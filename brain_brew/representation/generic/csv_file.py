@@ -1,14 +1,21 @@
 import csv
+import logging
 import re
-from typing import List
+from enum import Enum
+from typing import List, Dict
 
 from brain_brew.helper.helperfunctions import list_of_str_to_lowercase
 from brain_brew.representation.generic.generic_file import GenericFile
 
 
+class CsvKeys(Enum):
+    GUID = "guid"
+    TAGS = "tags"
+
+
 class CsvFile(GenericFile):
     file_location: str = ""
-    _data: list = []
+    _data: Dict[str, dict] = {}
 
     column_headers: list = []
 
@@ -16,7 +23,7 @@ class CsvFile(GenericFile):
         super(CsvFile, self).__init__(file, read_now=read_now, data_override=data_override)
 
     def read_file(self):
-        self._data = []
+        self._data = {}
 
         with open(self.file_location, mode='r') as csv_file:
             csv_reader = csv.DictReader(csv_file)
@@ -24,7 +31,7 @@ class CsvFile(GenericFile):
             self.column_headers = list_of_str_to_lowercase(csv_reader.fieldnames)
 
             for row in csv_reader:
-                self._data.append({key.lower(): row[key] for key in row})
+                self._data.setdefault(row[CsvKeys.GUID.value], {key.lower(): row[key] for key in row})
 
         self.data_state = GenericFile.DataState.READ_IN_DATA
 
@@ -34,17 +41,29 @@ class CsvFile(GenericFile):
 
             csv_writer.writeheader()
 
-            for row in self._data:
+            for row in self._data.values():
                 csv_writer.writerow(row)
 
         self.file_exists = True
 
-    def set_data(self, data_override):
+    def set_data(self, data_override: Dict[str, dict]):
         super().set_data(data_override)
-        self.column_headers = list(data_override[0].keys()) if data_override else []
+        any_entry = next(iter(data_override.values()))
+        self.column_headers = list(any_entry.keys()) if data_override else []
 
-    def set_relevant_data(self, data_set):
-        known_guids = {guid for guid in self._data}
+    def set_relevant_data(self, data_set: Dict[str, dict]):
+        changed, added = 0, 0
+        for guid in data_set:
+            if guid in self._data.keys():
+                changed += 1
+                for key in data_set[guid]:
+                    self._data[guid].setdefault(key, data_set[guid][key])
+            else:
+                added += 1
+                self._data.setdefault(guid, data_set[guid])
+
+        self.data_state = GenericFile.DataState.DATA_SET
+        print(f"Set csv data; changed {changed}, added {added}")
 
     def get_data(self):
         return self._data
@@ -65,9 +84,10 @@ class CsvFile(GenericFile):
         if not irrelevant_columns:
             return self._data
 
-        relevant_data = []
-        for row in self._data:
-            relevant_data.append({key: row[key] for key in row if key not in irrelevant_columns})
+        relevant_data = {}
+        for guid in self._data:
+            relevant_data.setdefault(guid, {key: self._data[guid][key] for key in self._data[guid]
+                                            if key not in irrelevant_columns})
 
         return relevant_data
 
@@ -79,3 +99,9 @@ class CsvFile(GenericFile):
     @classmethod
     def formatted_file_location(cls, location):
         return cls.to_filename_csv(location)
+
+    def sort_data(self, sort_by_keys, reverse_sort, case_insensitive_sort=None):
+
+        sorted = self._sort_data(list(self._data.values()), sort_by_keys, reverse_sort, case_insensitive_sort)
+
+        self._data = {row[CsvKeys.GUID.value]: {key: row[key] for key in row} for row in sorted}

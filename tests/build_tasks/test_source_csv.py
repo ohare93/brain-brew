@@ -149,7 +149,7 @@ class TestDeckPartsToSource:
         def assert_format(source_data):
             assert source_data == csv_test1.get_relevant_data(self.relevant_columns)
 
-        with patch.object(CsvFile, "set_data", side_effect=assert_format) as mock_set_data:
+        with patch.object(CsvFile, "set_relevant_data", side_effect=assert_format) as mock_set_data:
             csv_source_test1.deck_parts_to_source()
             assert mock_set_data.call_count == 1
 
@@ -157,7 +157,7 @@ class TestDeckPartsToSource:
         def assert_format(source_data):
             assert source_data == csv_test2.get_relevant_data(self.relevant_columns)
 
-        with patch.object(CsvFile, "set_data", side_effect=assert_format) as mock_set_data:
+        with patch.object(CsvFile, "set_relevant_data", side_effect=assert_format) as mock_set_data:
             csv_source_test2.deck_parts_to_source()
             assert mock_set_data.call_count == 1
 

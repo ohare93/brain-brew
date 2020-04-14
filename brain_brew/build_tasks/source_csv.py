@@ -1,17 +1,17 @@
 import logging
 from enum import Enum
-from typing import List
+from typing import List, Dict
 
 from brain_brew.build_tasks.build_task_generic import BuildTaskEnum, BuildTaskGeneric, BuildConfigKeys
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.helper.helperfunctions import single_item_to_list
 from brain_brew.representation.configuration.yaml_file import ConfigKey, YamlFile
-from brain_brew.representation.generic.csv_file import CsvFile
+from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
 from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
 from brain_brew.representation.json.deck_part_notes import DeckPartNotes
 
 
-class CsvKeys(Enum):
+class SourceCsvKeys(Enum):
     CSV_FILE = "csv"
     NOTE_MODEL = "note_model"
     SORT_BY_COLUMNS = "sort_by_columns"
@@ -56,12 +56,12 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
     expected_keys = {
         BuildConfigKeys.NOTES.value: ConfigKey(True, str, None),
 
-        CsvKeys.CSV_FILE.value: ConfigKey(True, str, None),
-        CsvKeys.NOTE_MODEL.value: ConfigKey(True, str, None),
-        CsvKeys.SORT_BY_COLUMNS.value: ConfigKey(False, (list, str), None),
-        CsvKeys.REVERSE_SORT.value: ConfigKey(False, bool, None),
-        CsvKeys.COLUMNS.value: ConfigKey(True, dict, None),
-        CsvKeys.PERSONAL_FIELDS.value: ConfigKey(False, list, None)
+        SourceCsvKeys.CSV_FILE.value: ConfigKey(True, str, None),
+        SourceCsvKeys.NOTE_MODEL.value: ConfigKey(True, str, None),
+        SourceCsvKeys.SORT_BY_COLUMNS.value: ConfigKey(False, (list, str), None),
+        SourceCsvKeys.REVERSE_SORT.value: ConfigKey(False, bool, None),
+        SourceCsvKeys.COLUMNS.value: ConfigKey(True, dict, None),
+        SourceCsvKeys.PERSONAL_FIELDS.value: ConfigKey(False, list, None)
     }
     subconfig_filter = None
 
@@ -74,21 +74,21 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
     sort_by_columns: list
     reverse_sort: bool
 
-    required_fields_definitions = ['guid', 'tags']
+    required_fields_definitions = [CsvKeys.GUID.value, CsvKeys.TAGS.value]
 
     def __init__(self, config_data: dict, read_now=True):
         self.setup_config_with_subconfig_replacement(config_data)
         self.verify_config_entry()
 
         self.notes = DeckPartNotes.create(self.get_config(BuildConfigKeys.NOTES), read_now=read_now)
-        self.csv_file = CsvFile.create(self.config_entry[CsvKeys.CSV_FILE.value], read_now=read_now)
-        self.note_model = DeckPartNoteModel.create(self.get_config(CsvKeys.NOTE_MODEL), read_now=read_now)
+        self.csv_file = CsvFile.create(self.config_entry[SourceCsvKeys.CSV_FILE.value], read_now=read_now)
+        self.note_model = DeckPartNoteModel.create(self.get_config(SourceCsvKeys.NOTE_MODEL), read_now=read_now)
 
-        self.sort_by_columns = single_item_to_list(self.get_config(CsvKeys.SORT_BY_COLUMNS, []))
-        self.reverse_sort = self.get_config(CsvKeys.REVERSE_SORT, False)
+        self.sort_by_columns = single_item_to_list(self.get_config(SourceCsvKeys.SORT_BY_COLUMNS, []))
+        self.reverse_sort = self.get_config(SourceCsvKeys.REVERSE_SORT, False)
 
-        columns = self.get_config(CsvKeys.COLUMNS)
-        personal_fields = self.get_config(CsvKeys.PERSONAL_FIELDS, [])
+        columns = self.get_config(SourceCsvKeys.COLUMNS)
+        personal_fields = self.get_config(SourceCsvKeys.PERSONAL_FIELDS, [])
 
         self.columns = [FieldMapping(
                                 field_type=FieldMapping.FieldMappingType.COLUMN,
@@ -110,7 +110,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
         columns = [field.field_name for field in self.columns]
         csv_data = self.csv_file.get_relevant_data(columns)
 
-        for row in csv_data:
+        for row in csv_data.values():
             for pf in self.personal_fields:
                 row.setdefault(pf.field_name, False)
             for column in self.columns:
@@ -156,7 +156,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
         self.check_for_required_fields()
         self.check_fields_align_with_note_type()
 
-        csv_rows = self.get_data()
+        csv_rows = self.get_data().values()
 
         # TODO: Derivatives
         # Check again if fields align for each possible derivative type
@@ -188,27 +188,27 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
 
         return notes_json
 
-    def notes_to_source(self) -> List[dict]:
+    def notes_to_source(self) -> Dict[str, dict]:
 
         self.check_for_required_fields()
         self.check_fields_align_with_note_type()  # TODO: will begin failing when derivatives are added; add override
 
         notes_data = self.notes.get_data(deep_copy=True)[DeckPartNoteKeys.NOTES.value]
 
-        csv_data: List[dict] = []
+        csv_data: Dict[str, dict] = {}
         for note in notes_data:
             if note[DeckPartNoteKeys.NOTE_MODEL.value] != self.note_model.name:
                 continue
             # TODO: Add derivatives here
 
             row = self.note_model.zip_field_to_data(note[DeckPartNoteKeys.FIELDS.value])
-            row[DeckPartNoteKeys.GUID.value] = note[DeckPartNoteKeys.GUID.value]
-            row[DeckPartNoteKeys.TAGS.value] = ", ".join(note[DeckPartNoteKeys.TAGS.value])
+            row[CsvKeys.GUID.value] = note[DeckPartNoteKeys.GUID.value]
+            row[CsvKeys.TAGS.value] = ", ".join(note[DeckPartNoteKeys.TAGS.value])
 
             formatted_row = {field_map.field_name: row[key]
                              for key in row.keys() for field_map in self.columns if key == field_map.value}
 
-            csv_data.append(formatted_row)
+            csv_data.setdefault(row[CsvKeys.GUID.value], formatted_row)
 
         return csv_data
 
@@ -225,5 +225,5 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
 
         csv_data = self.notes_to_source()
 
-        sorted_data = self.csv_file.sort_data(csv_data, self.sort_by_columns, self.reverse_sort)  # TODO: Move
-        self.csv_file.set_data(sorted_data)
+        self.csv_file.set_relevant_data(csv_data)
+        self.csv_file.sort_data(self.sort_by_columns, self.reverse_sort)  # TODO: Move

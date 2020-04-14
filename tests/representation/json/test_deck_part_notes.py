@@ -48,10 +48,11 @@ class TestSortData:
         # (["tags"], False, "tags", [(0, "besttag"), (1, "funny"), (2, "tag2, tag3"), (13, ""), (14, "")]),
     ])
     def test_sort(self, dp_notes_test1: DeckPartNotes, keys, reverse, result_column, expected_results):
-        sorted_data = dp_notes_test1.sort_data(
-            dp_notes_test1.get_data()[DeckPartNoteKeys.NOTES.value],
+        dp_notes_test1.sort_data(
             keys, reverse, False
         )
+
+        sorted_data = dp_notes_test1.get_data()[DeckPartNoteKeys.NOTES.value]
 
         for result in expected_results:
             assert sorted_data[result[0]][result_column] == result[1]

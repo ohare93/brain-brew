@@ -50,7 +50,7 @@ class TestConstructor:
         ["X", "Field name with spaces", "", "MorphMan_FocusMorph"],
     ])
     def test_data_override(self, column_headers):
-        data_override = [{key: num for key in column_headers} for num in range(0, 5)]
+        data_override = {"AAAA": {key: num for key in column_headers} for num in range(0, 5)}
         csv = CsvFile("file", data_override=data_override)
 
         assert csv.column_headers == column_headers
@@ -61,17 +61,17 @@ class TestGetRelevantData:
         relevant_columns = ["guid", "english", "danish"]
         data = csv_test1.get_relevant_data(relevant_columns)
 
-        for row in data:
-            assert len(row) == 3
+        for guid in data:
+            assert len(data[guid]) == 3
             for column in relevant_columns:
-                assert column in row
+                assert column in data[guid]
 
     def test_capitilisation_ignored(self, csv_test1):
         relevant_columns = ["GUID", "English", "DaNiSh"]
         data = csv_test1.get_relevant_data(relevant_columns)
 
-        assert isinstance(data, list)
-        assert list(data[0].keys()) == ["guid", "english", "danish"]
+        assert isinstance(data, dict)
+        assert list(data['AAAA'].keys()) == ["guid", "english", "danish"]
         assert len(data) == 15
 
     def test_nothing_relevant_no_data(self, csv_test1):
@@ -90,9 +90,12 @@ class TestGetRelevantData:
         assert expected == CsvFile.to_filename_csv("read          this        file")
 
 
+class SetRelevantData:
+    pass
+
 class TestReadFile:
     def test_runs(self, csv_not_read_initially_test: CsvFile):
-        assert csv_not_read_initially_test.get_data() == []
+        assert csv_not_read_initially_test.get_data() == {}
         assert csv_not_read_initially_test.column_headers == []
         assert csv_not_read_initially_test.file_location == TestFiles.CsvFiles.TEST1
         assert csv_not_read_initially_test.data_state == GenericFile.DataState.NOTHING_READ_OR_SET
@@ -123,7 +126,9 @@ class TestSortData:
         (["esperanto", "guid"], False, "guid", [(7, "BBBB"), (14, "LLLL")]),
     ])
     def test_sort(self, csv_test1: CsvFile, columns, reverse, result_column, expected_results):
-        sorted_data = csv_test1.sort_data(csv_test1.get_data(), columns, reverse, False)
+        csv_test1.sort_data(columns, reverse, False)
+
+        sorted_data = list(csv_test1.get_data().values())
 
         for result in expected_results:
             assert sorted_data[result[0]][result_column] == result[1]

@@ -1,5 +1,5 @@
 from brain_brew.build_tasks.build_task_generic import BuildTaskGeneric, BuildConfigKeys, BuildTaskEnum
-from brain_brew.build_tasks.source_csv import CsvKeys
+from brain_brew.build_tasks.source_csv import SourceCsvKeys
 from brain_brew.build_tasks.source_csv_collection import SourceCsvCollection
 from brain_brew.representation.configuration.yaml_file import YamlFile, ConfigKey
 
@@ -13,7 +13,7 @@ class GenerateGuids(BuildTaskGeneric, YamlFile):
 
     config_entry = {}
     expected_keys = {
-        CsvKeys.CSV_FILE.value: ConfigKey(False, (str, list), None),
+        SourceCsvKeys.CSV_FILE.value: ConfigKey(False, (str, list), None),
         BuildConfigKeys.SUBCONFIG.value: ConfigKey(False, list, None)
     }
     subconfig_filter = ["csv"]

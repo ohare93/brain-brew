@@ -55,8 +55,7 @@ class DeckPartNotes(JsonFile):
         self._data = self.remove_notes_structure()
         self.read_note_config()
 
-        self._data[DeckPartNoteKeys.NOTES.value] = self.sort_data(
-            self._data[DeckPartNoteKeys.NOTES.value],
+        self.sort_data(
             self.global_config.flags.note_sort_order,
             self.global_config.flags.reverse_sort
         )
@@ -184,3 +183,9 @@ class DeckPartNotes(JsonFile):
                 note[DeckPartNoteKeys.TAGS.value] += shared_tags
 
         del top_level[DeckPartNoteKeys.SHARED_TAGS.value]
+
+    def sort_data(self, sort_by_keys, reverse_sort, case_insensitive_sort=None):
+
+        sorted = self._sort_data(self._data[DeckPartNoteKeys.NOTES.value], sort_by_keys, reverse_sort, case_insensitive_sort)
+
+        self._data[DeckPartNoteKeys.NOTES.value] = sorted
