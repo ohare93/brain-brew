@@ -34,5 +34,7 @@ class FileManager:
 
         for location, file in self.known_files_dict.items():
             if file.data_state == GenericFile.DataState.DATA_SET:
+                print(f"Wrote to {file.file_location}")
                 file.write_file()
                 file.data_state = GenericFile.DataState.READ_IN_DATA
+

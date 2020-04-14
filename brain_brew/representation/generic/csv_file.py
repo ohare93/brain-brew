@@ -52,18 +52,24 @@ class CsvFile(GenericFile):
         self.column_headers = list(any_entry.keys()) if data_override else []
 
     def set_relevant_data(self, data_set: Dict[str, dict]):
-        changed, added = 0, 0
+        unchanged, changed, added = 0, 0, 0
         for guid in data_set:
             if guid in self._data.keys():
-                changed += 1
+                changed_row = False
                 for key in data_set[guid]:
-                    self._data[guid].setdefault(key, data_set[guid][key])
+                    if self._data[guid][key] != data_set[guid][key]:
+                        self._data[guid][key] = data_set[guid][key]
+                        changed_row = True
+                if changed_row:
+                    changed += 1
+                else:
+                    unchanged += 1
             else:
                 added += 1
                 self._data.setdefault(guid, data_set[guid])
 
         self.data_state = GenericFile.DataState.DATA_SET
-        print(f"Set csv data; changed {changed}, added {added}")
+        print(f"Set csv data; changed {changed}, added {added}, while {unchanged} are unchanged")
 
     def get_data(self):
         return self._data
