@@ -16,7 +16,7 @@ def main():
 
     # Read in Global Config File
     global_config = GlobalConfig.get_default()
-    file_manager = FileManager.get_instance()
+    file_manager = FileManager()
 
     # Read in Arguments
     argument_reader = ArgumentReader()
@@ -26,7 +26,3 @@ def main():
     # Run chosen Builder
     builder = Builder(builder_config, global_config, other_arguments)
     builder.execute()
-
-
-if __name__ == "__main__":
-    main()
