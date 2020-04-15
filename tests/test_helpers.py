@@ -3,13 +3,10 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 import pytest
 
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys, NoteFlagKeys
-from brain_brew.constants.global_config_keys import ConfigKeys
-from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.json.json_file import JsonFile
 from brain_brew.representation.json.deck_part_header import DeckPartHeader
 from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel, CANoteModelKeys
 from brain_brew.representation.json.deck_part_notes import DeckPartNotes
-from tests.test_files import TestFiles
 
 
 def debug_write_to_target_json(data, json: JsonFile):
@@ -61,25 +58,6 @@ def setup_temp_file_in_folder(file_suffix):
 #
 #         }
 #     }))
-
-
-@pytest.fixture()
-def global_config():
-    return GlobalConfig.get_instance(override=GlobalConfig({
-        ConfigKeys.DECK_PARTS.value: {
-            "headers": TestFiles.Headers.LOC,
-            "note_models": TestFiles.NoteModels.LOC,
-            "notes": TestFiles.NoteFiles.LOC,
-
-            ConfigKeys.DECK_PARTS_NOTES_STRUCTURE.value: {
-                NoteFlagKeys.GROUP_BY_NOTE_MODEL.value: False,
-                NoteFlagKeys.EXTRACT_SHARED_TAGS.value: False
-            }
-        },
-        ConfigKeys.FLAGS.value: {
-
-        }
-    }))
 
 
 def make_deck_part_header_mock(data):

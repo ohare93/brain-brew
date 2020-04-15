@@ -7,13 +7,24 @@ from brain_brew.representation.generic.generic_file import GenericFile
 class FileManager:
     __instance = None
 
-    known_files_dict: Dict[str, GenericFile] = {}
+    known_files_dict: Dict[str, GenericFile]
 
-    @classmethod
-    def get_instance(cls, override=None):
-        if override:
-            cls.__instance = override
-        return cls.__instance or cls()
+    def __init__(self):
+        if FileManager.__instance is None:
+            FileManager.__instance = self
+        else:
+            raise Exception("Multiple FileManagers created")
+
+        self.known_files_dict = {}
+
+    @staticmethod
+    def get_instance():
+        return FileManager.__instance
+
+    @staticmethod
+    def clear_instance():
+        if FileManager.__instance:
+            FileManager.__instance = None
 
     def file_if_exists(self, file_location):
         if file_location in self.known_files_dict.keys():

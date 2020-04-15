@@ -6,7 +6,7 @@ from brain_brew.build_tasks.source_csv import SourceCsv
 from brain_brew.build_tasks.source_csv_collection import SourceCsvCollection
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.representation.json.deck_part_notes import DeckPartNotes
-from tests.test_helpers import global_config
+from tests.representation.configuration.test_global_config import global_config
 from tests.test_files import TestFiles
 from tests.representation.generic.test_csv_file import csv_test1, csv_test2, csv_test1_split1, csv_test1_split2
 from tests.representation.json.test_deck_part_notes import dp_notes_test1, dp_notes_test2

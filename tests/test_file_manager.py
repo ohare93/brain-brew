@@ -1,0 +1,28 @@
+import pytest
+
+from brain_brew.file_manager import FileManager
+
+
+class TestSingletonConstructor:
+    def test_runs(self):
+        fm = get_new_file_manager()
+        assert isinstance(fm, FileManager)
+
+    def test_returns_existing_singleton(self):
+        fm = get_new_file_manager()
+        fm.known_files_dict = {'test': None}
+        fm2 = FileManager.get_instance()
+
+        assert fm2.known_files_dict == {'test': None}
+        assert fm2 == fm
+
+    def test_raises_error(self):
+        with pytest.raises(Exception):
+            FileManager()
+            FileManager()
+
+
+def get_new_file_manager():
+    FileManager.clear_instance()
+    return FileManager()
+

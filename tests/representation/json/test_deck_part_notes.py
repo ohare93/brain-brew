@@ -3,7 +3,8 @@ import pytest
 from brain_brew.representation.json.json_file import JsonFile
 from brain_brew.representation.json.deck_part_notes import DeckPartNotes, DeckPartNoteKeys
 from tests.test_files import TestFiles
-from tests.test_helpers import global_config, note_models_mock
+from tests.test_helpers import note_models_mock
+from tests.representation.configuration.test_global_config import global_config
 
 
 class TestConstructor:

@@ -1,6 +1,8 @@
+from unittest.mock import patch
+
 import pytest
 
-from brain_brew.representation.generic.csv_file import CsvFile
+from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
 from brain_brew.representation.generic.generic_file import GenericFile
 from tests.test_files import TestFiles
 
@@ -31,8 +33,13 @@ def csv_test3():
 
 
 @pytest.fixture()
-def csv_not_read_initially_test():
+def csv_test1_not_read_initially_test():
     return CsvFile(TestFiles.CsvFiles.TEST1, read_now=False)
+
+
+@pytest.fixture()
+def csv_test2_missing_guids():
+    return CsvFile(TestFiles.CsvFiles.TEST2_MISSING_GUIDS, read_now=False)
 
 
 @pytest.fixture()
@@ -129,17 +136,28 @@ class TestSetRelevantData:
 
 
 class TestReadFile:
-    def test_runs(self, csv_not_read_initially_test: CsvFile):
-        assert csv_not_read_initially_test.get_data() == {}
-        assert csv_not_read_initially_test.column_headers == []
-        assert csv_not_read_initially_test.file_location == TestFiles.CsvFiles.TEST1
-        assert csv_not_read_initially_test.data_state == GenericFile.DataState.NOTHING_READ_OR_SET
+    def test_runs(self, csv_test1_not_read_initially_test):
+        assert csv_test1_not_read_initially_test.get_data() == {}
+        assert csv_test1_not_read_initially_test.column_headers == []
+        assert csv_test1_not_read_initially_test.file_location == TestFiles.CsvFiles.TEST1
+        assert csv_test1_not_read_initially_test.data_state == GenericFile.DataState.NOTHING_READ_OR_SET
 
-        csv_not_read_initially_test.read_file()
+        csv_test1_not_read_initially_test.read_file()
 
-        assert len(csv_not_read_initially_test.get_data()) == 15
-        assert "guid" in csv_not_read_initially_test.column_headers
-        assert csv_not_read_initially_test.data_state == GenericFile.DataState.READ_IN_DATA
+        assert len(csv_test1_not_read_initially_test.get_data()) == 15
+        assert "guid" in csv_test1_not_read_initially_test.column_headers
+        assert csv_test1_not_read_initially_test.data_state == GenericFile.DataState.READ_IN_DATA
+
+    def test_when_missing_guids(self, csv_test2_missing_guids):
+        with patch("brain_brew.representation.generic.csv_file.generate_anki_guid") as mock_guid:
+            mock_guid.return_value = "test"
+
+            csv_test2_missing_guids.read_file()
+
+            assert csv_test2_missing_guids.data_state == CsvFile.DataState.DATA_SET
+            assert mock_guid.call_count == 9
+            for row in csv_test2_missing_guids.get_data().values():
+                assert row[CsvKeys.GUID.value] == "test"
 
 
 class TestWriteFile:

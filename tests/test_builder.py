@@ -6,7 +6,7 @@ from brain_brew.build_tasks.source_csv_collection import SourceCsvCollection
 from brain_brew.builder import Builder
 from brain_brew.representation.configuration.yaml_file import YamlFile
 from tests.test_files import TestFiles
-from tests.test_helpers import global_config
+from tests.representation.configuration.test_global_config import global_config
 
 
 class TestConstructor:

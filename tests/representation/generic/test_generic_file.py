@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import MagicMock
 
 from brain_brew.representation.generic.generic_file import GenericFile
+from tests.test_file_manager import get_new_file_manager
 from tests.test_files import TestFiles
 
 
@@ -28,3 +29,25 @@ class TestConstructor:
 
         assert isinstance(file, GenericFile)
         assert file._data == override_data
+
+
+class TestCreateFileWithFileManager:
+    def test_runs(self):
+        fm = get_new_file_manager()
+        assert len(fm.known_files_dict) == 0
+
+        first = GenericFile.create("test1", read_now=False)
+
+        assert isinstance(first, GenericFile)
+        assert len(fm.known_files_dict) == 1
+        assert fm.known_files_dict["test1"]
+
+    def test_returns_existing_object(self):
+        fm = get_new_file_manager()
+        assert len(fm.known_files_dict) == 0
+
+        first = GenericFile.create("test1", read_now=False)
+        second = GenericFile.create("test1", read_now=False)
+
+        assert first == second
+        assert len(fm.known_files_dict) == 1

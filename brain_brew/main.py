@@ -2,6 +2,7 @@ import logging
 
 from brain_brew.argument_reader import ArgumentReader
 from brain_brew.builder import Builder
+from brain_brew.file_manager import FileManager
 from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.configuration.yaml_file import YamlFile
 
@@ -14,7 +15,8 @@ def main():
     logging.basicConfig(level=logging.DEBUG)
 
     # Read in Global Config File
-    global_config = GlobalConfig.get_instance()
+    global_config = GlobalConfig.get_default()
+    file_manager = FileManager.get_instance()
 
     # Read in Arguments
     argument_reader = ArgumentReader()

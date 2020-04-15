@@ -32,6 +32,7 @@ class TestFiles:
         TEST1_SPLIT1 = LOC + "test1_split1.csv"
         TEST1_SPLIT2 = LOC + "test1_split2.csv"
         TEST2 = LOC + "test2.csv"
+        TEST2_MISSING_GUIDS = LOC + "test2_missing_guids.csv"
         TEST3 = LOC + "test3.csv"
 
     class CrowdAnkiExport:

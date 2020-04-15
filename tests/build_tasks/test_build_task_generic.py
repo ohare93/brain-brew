@@ -1,7 +1,7 @@
 import pytest
 
 from brain_brew.build_tasks.build_task_generic import BuildTaskGeneric
-from tests.test_helpers import global_config
+from tests.representation.configuration.test_global_config import global_config
 
 
 class TestSplitTags:

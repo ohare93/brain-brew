@@ -50,6 +50,11 @@ class GlobalConfig(YamlFile):
     subconfig_filter = None
 
     def __init__(self, config_data: dict):
+        if GlobalConfig.__instance is None:
+            GlobalConfig.__instance = self
+        else:
+            raise Exception("Multiple GlobalConfigs created")
+
         self.setup_config_with_subconfig_replacement(config_data)
         self.verify_config_entry()
 
@@ -78,7 +83,10 @@ class GlobalConfig(YamlFile):
         return GlobalConfig(gb_config_yaml)
 
     @classmethod
-    def get_instance(cls, override=None):
-        if override:
-            cls.__instance = override
-        return cls.__instance or cls.get_default()
+    def get_instance(cls):
+        return cls.__instance
+
+    @classmethod
+    def clear_instance(cls):
+        if cls.__instance:
+            cls.__instance = None
