@@ -1,11 +1,12 @@
+import logging
+import re
 from typing import List
 
+from brain_brew.file_manager import FileManager
 from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.json.json_file import JsonFile
 from brain_brew.constants.deckpart_keys import *
-from enum import Enum
-
-from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
+from brain_brew.representation.media.deck_part_media_file import DeckPartMediaFile
 
 
 class CANoteKeys(Enum):
@@ -18,9 +19,11 @@ class CANoteKeys(Enum):
 
 class DeckPartNotes(JsonFile):
     _data: dict = {}
-    global_config: GlobalConfig = None
-    note_models: List[DeckPartNoteModel]
     flags: DeckPartNoteFlags
+    referenced_media_files: List[DeckPartMediaFile]
+
+    global_config: GlobalConfig
+    file_manager: FileManager
 
     @classmethod
     def formatted_file_location(cls, location):
@@ -28,7 +31,9 @@ class DeckPartNotes(JsonFile):
 
     def __init__(self, location, read_now=True, data_override=None):
         self.global_config = GlobalConfig.get_instance()
+        self.file_manager = FileManager.get_instance()
         self.flags = DeckPartNoteFlags()
+        self.referenced_media_files = []
         super().__init__(
             self.formatted_file_location(location),
             read_now=read_now, data_override=data_override
@@ -59,6 +64,8 @@ class DeckPartNotes(JsonFile):
             self.global_config.flags.note_sort_order,
             self.global_config.flags.reverse_sort
         )
+
+        self.find_all_media_references()
 
     def read_note_config(self):
         self.flags.group_by_note_model = \
@@ -189,3 +196,25 @@ class DeckPartNotes(JsonFile):
         sorted = self._sort_data(self._data[DeckPartNoteKeys.NOTES.value], sort_by_keys, reverse_sort, case_insensitive_sort)
 
         self._data[DeckPartNoteKeys.NOTES.value] = sorted
+
+    def find_all_media_references(self):
+        unknown_references = []
+        self.referenced_media_files.clear()
+
+        for note in self._data[DeckPartNoteKeys.NOTES.value]:
+            for field in note[DeckPartNoteKeys.FIELDS.value]:
+                files_found = re.findall('<img.*?src="(.*?)"[^\>]+>', field)
+                if files_found:
+                    for filename in files_found:
+                        file = self.file_manager.media_file_if_exists(filename)
+                        if file:
+                            if file not in self.referenced_media_files:
+                                self.referenced_media_files.append(file)
+                        else:
+                            unknown_references.append(filename)
+
+        if len(unknown_references) > 0:
+            logging.error(f"Found {len(unknown_references)} unreferenced media files in {self.file_location}: ["
+                          f"{', '.join(unknown_references)}]")
+
+        logging.info(f"Found {len(self.referenced_media_files)} referenced media files")

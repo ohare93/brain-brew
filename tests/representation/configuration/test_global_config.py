@@ -33,9 +33,10 @@ def global_config():
     GlobalConfig.clear_instance()
     return GlobalConfig({
         ConfigKeys.DECK_PARTS.value: {
-            "headers": TestFiles.Headers.LOC,
-            "note_models": TestFiles.NoteModels.LOC,
-            "notes": TestFiles.NoteFiles.LOC,
+            ConfigKeys.HEADERS.value: TestFiles.Headers.LOC,
+            ConfigKeys.NOTE_MODELS.value: TestFiles.NoteModels.LOC,
+            ConfigKeys.NOTES.value: TestFiles.NoteFiles.LOC,
+            ConfigKeys.MEDIA_FILES.value: TestFiles.MediaFiles.LOC,
 
             ConfigKeys.DECK_PARTS_NOTES_STRUCTURE.value: {
                 NoteFlagKeys.GROUP_BY_NOTE_MODEL.value: False,

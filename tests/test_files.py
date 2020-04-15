@@ -46,3 +46,6 @@ class TestFiles:
         LOC = "tests/test_files/build_files/"
 
         ONE_OF_EACH_TYPE = LOC + "builder1.yaml"
+
+    class MediaFiles:
+        LOC = "tests/test_files/media_files/"

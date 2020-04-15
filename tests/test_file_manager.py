@@ -3,6 +3,11 @@ import pytest
 from brain_brew.file_manager import FileManager
 
 
+def get_new_file_manager():
+    FileManager.clear_instance()
+    return FileManager()
+
+
 class TestSingletonConstructor:
     def test_runs(self):
         fm = get_new_file_manager()
@@ -22,7 +27,8 @@ class TestSingletonConstructor:
             FileManager()
 
 
-def get_new_file_manager():
-    FileManager.clear_instance()
-    return FileManager()
+class TestFindMediaFiles:
+    def test_finds(self):
+        fm = get_new_file_manager()
 
+        assert len(fm.known_media_files_dict) == 2

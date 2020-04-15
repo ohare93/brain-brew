@@ -10,6 +10,7 @@ class DeckPartConfig:
     headers: str
     note_models: str
     notes: str
+    media_files: str
 
 
 class GlobalConfig(YamlFile):
@@ -32,9 +33,10 @@ class GlobalConfig(YamlFile):
     expected_keys = {
         ConfigKeys.AUTHORS.value: ConfigKey(False, list, None),
         ConfigKeys.DECK_PARTS.value: ConfigKey(True, dict, {
-            "headers": ConfigKey(True, str, None),
-            "note_models": ConfigKey(True, str, None),
-            "notes": ConfigKey(True, str, None),
+            ConfigKeys.HEADERS.value: ConfigKey(True, str, None),
+            ConfigKeys.NOTE_MODELS.value: ConfigKey(True, str, None),
+            ConfigKeys.NOTES.value: ConfigKey(True, str, None),
+            ConfigKeys.MEDIA_FILES.value: ConfigKey(True, str, None),
 
             ConfigKeys.DECK_PARTS_NOTES_STRUCTURE.value: ConfigKey(True, dict, {
                 flag.value: ConfigKey(False, bool, None) for flag in NoteFlagKeys
@@ -60,7 +62,10 @@ class GlobalConfig(YamlFile):
 
         self.authors = self.get_config(ConfigKeys.AUTHORS, {})
         dp = self.get_config(ConfigKeys.DECK_PARTS)
-        self.deck_parts = DeckPartConfig(dp["headers"], dp["note_models"], dp["notes"])
+        self.deck_parts = DeckPartConfig(
+            dp[ConfigKeys.HEADERS.value], dp[ConfigKeys.NOTE_MODELS.value],
+            dp[ConfigKeys.NOTES.value], dp[ConfigKeys.MEDIA_FILES.value]
+        )
 
         self.flags = GlobalConfig.ConfigFlags()
         flag_keys = self.get_config(ConfigKeys.FLAGS, {})
