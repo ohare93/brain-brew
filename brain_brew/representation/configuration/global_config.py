@@ -18,13 +18,15 @@ class GlobalConfig(YamlFile):
     @dataclass
     class ConfigFlags:
         note_sort_order: list = field(default_factory=list)
-        reverse_sort: bool = False
         sort_case_insensitive: bool = False
+        reverse_sort: bool = False
+        join_values_with: str = " "
 
     authors: object
     deck_parts: DeckPartConfig
     flags: ConfigFlags
     deck_part_notes_flags: DeckPartNoteFlags
+    join_values_with: str
 
     config_entry = {}
     expected_keys = {
@@ -41,7 +43,8 @@ class GlobalConfig(YamlFile):
         ConfigKeys.FLAGS.value: ConfigKey(False, dict, {
             ConfigKeys.NOTE_SORT_ORDER.value: ConfigKey(False, list, None),
             ConfigKeys.SORT_CASE_INSENSITIVE.value: ConfigKey(False, bool, None),
-            ConfigKeys.REVERSE_SORT.value: ConfigKey(False, bool, None)
+            ConfigKeys.REVERSE_SORT.value: ConfigKey(False, bool, None),
+            ConfigKeys.JOIN_VALUES_WITH.value: ConfigKey(False, str, None),
         })
     }
     subconfig_filter = None

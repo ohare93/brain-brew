@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from brain_brew.build_tasks.build_task_generic import BuildConfigKeys
+from brain_brew.constants.build_config_keys import BuildConfigKeys
 from brain_brew.build_tasks.source_crowd_anki import SourceCrowdAnki, CrowdAnkiKeys
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from tests.test_files import TestFiles

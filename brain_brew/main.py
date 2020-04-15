@@ -11,8 +11,7 @@ from brain_brew.representation.configuration.yaml_file import YamlFile
 
 
 def main():
-    logging.basicConfig(filename='log.txt', level=logging.DEBUG)
-    print("Running Main")
+    logging.basicConfig(level=logging.DEBUG)
 
     # Read in Global Config File
     global_config = GlobalConfig.get_instance()

@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from brain_brew.build_tasks.build_task_generic import BuildConfigKeys
+from brain_brew.constants.build_config_keys import BuildConfigKeys
 from brain_brew.build_tasks.source_csv import SourceCsv
 from brain_brew.build_tasks.source_csv_collection import SourceCsvCollection
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys

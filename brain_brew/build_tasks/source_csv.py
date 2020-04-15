@@ -2,9 +2,10 @@ import logging
 from enum import Enum
 from typing import List, Dict
 
-from brain_brew.build_tasks.build_task_generic import BuildTaskEnum, BuildTaskGeneric, BuildConfigKeys
+from brain_brew.build_tasks.build_task_generic import BuildTaskGeneric
+from brain_brew.constants.build_config_keys import BuildTaskEnum, BuildConfigKeys
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
-from brain_brew.helper.helperfunctions import single_item_to_list
+from brain_brew.utils import single_item_to_list
 from brain_brew.representation.configuration.yaml_file import ConfigKey, YamlFile
 from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
 from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
@@ -180,7 +181,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
 
             note[DeckPartNoteKeys.NOTE_MODEL.value] = row_nm.name
             note[DeckPartNoteKeys.GUID.value] = row[DeckPartNoteKeys.GUID.value]
-            note[DeckPartNoteKeys.TAGS.value] = [entry.strip() for entry in row[DeckPartNoteKeys.TAGS.value].split(",")]
+            note[DeckPartNoteKeys.TAGS.value] = self.split_tags(row[DeckPartNoteKeys.TAGS.value])
 
             note[DeckPartNoteKeys.FIELDS.value] = [row[field.lower()] for field in row_nm.fields]
 
@@ -203,7 +204,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
 
             row = self.note_model.zip_field_to_data(note[DeckPartNoteKeys.FIELDS.value])
             row[CsvKeys.GUID.value] = note[DeckPartNoteKeys.GUID.value]
-            row[CsvKeys.TAGS.value] = ", ".join(note[DeckPartNoteKeys.TAGS.value])
+            row[CsvKeys.TAGS.value] = self.join_tags(note[DeckPartNoteKeys.TAGS.value])
 
             formatted_row = {field_map.field_name: row[key]
                              for key in row.keys() for field_map in self.columns if key == field_map.value}
@@ -213,16 +214,10 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
         return csv_data
 
     def source_to_deck_parts(self):
-        logging.info("--- Running: CSV Mapping Source to DeckParts ---")
-
         notes_data = self.notes_to_deck_parts()
         self.notes.set_data(notes_data)
 
-        logging.info(f"Csv - Source to Deck parts: # of Notes: {len(notes_data)}")
-
     def deck_parts_to_source(self):
-        logging.info("--- Running: CSV Mapping DeckParts to Source ---")
-
         csv_data = self.notes_to_source()
 
         self.csv_file.set_relevant_data(csv_data)

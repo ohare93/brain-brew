@@ -4,7 +4,7 @@ import re
 from enum import Enum
 from typing import List, Dict
 
-from brain_brew.helper.helperfunctions import list_of_str_to_lowercase
+from brain_brew.utils import list_of_str_to_lowercase, generate_anki_guid
 from brain_brew.representation.generic.generic_file import GenericFile
 
 
@@ -24,6 +24,7 @@ class CsvFile(GenericFile):
 
     def read_file(self):
         self._data = {}
+        guids_generated = 0
 
         with open(self.file_location, mode='r') as csv_file:
             csv_reader = csv.DictReader(csv_file)
@@ -31,9 +32,17 @@ class CsvFile(GenericFile):
             self.column_headers = list_of_str_to_lowercase(csv_reader.fieldnames)
 
             for row in csv_reader:
-                self._data.setdefault(row[CsvKeys.GUID.value], {key.lower(): row[key] for key in row})
+                guid = row[CsvKeys.GUID.value]
+                if not guid:
+                    guid = row[CsvKeys.GUID.value] = generate_anki_guid()
+                    guids_generated += 1
+                self._data.setdefault(guid, {key.lower(): row[key] for key in row})
 
-        self.data_state = GenericFile.DataState.READ_IN_DATA
+        if guids_generated > 0:
+            self.data_state = GenericFile.DataState.DATA_SET
+            logging.info(f"Generated {guids_generated} guids in {self.file_location}")
+        else:
+            self.data_state = GenericFile.DataState.READ_IN_DATA
 
     def write_file(self):
         with open(self.file_location, mode='w') as csv_file:
@@ -70,7 +79,7 @@ class CsvFile(GenericFile):
 
         if changed > 0 or added > 0:
             self.data_state = GenericFile.DataState.DATA_SET
-        print(f"Set csv data; changed {changed}, added {added}, while {unchanged} were identical")
+        logging.info(f"Set {self.file_location} data; changed {changed}, added {added}, while {unchanged} were identical")
 
     def get_data(self, deep_copy=False) -> Dict[str, dict]:
         return super().get_data(deep_copy=deep_copy)

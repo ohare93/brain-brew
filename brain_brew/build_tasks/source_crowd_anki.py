@@ -1,10 +1,11 @@
 import logging
 from enum import Enum
 
-from brain_brew.build_tasks.build_task_generic import BuildTaskEnum, BuildTaskGeneric, BuildConfigKeys
+from brain_brew.build_tasks.build_task_generic import BuildTaskGeneric
+from brain_brew.constants.build_config_keys import BuildTaskEnum, BuildConfigKeys
 from brain_brew.constants.crowdanki_keys import CAKeys
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
-from brain_brew.helper.helperfunctions import blank_str_if_none
+from brain_brew.utils import blank_str_if_none
 from brain_brew.representation.configuration.yaml_file import ConfigKey, YamlFile
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.deck_part_header import DeckPartHeader
@@ -82,8 +83,6 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
         return notes_json
 
     def source_to_deck_parts(self):
-        logging.debug("--- Running: CrowdAnki Source to DeckParts ---")
-
         source_data = self.crowd_anki_export.get_data(deep_copy=True)
 
         # Headers
@@ -106,8 +105,6 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
 
         self.notes.set_data(notes_data)
 
-        logging.info(f"CrowdAnki - Source to Deck parts: \t# of Notes: {len(notes_json)}")
-
     def notes_to_source(self, note_models_dict_id_name):
         res_notes = self.notes.get_data(deep_copy=True)[DeckPartNoteKeys.NOTES.value]
 
@@ -121,8 +118,6 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
         return res_notes
 
     def deck_parts_to_source(self):
-        logging.debug("--- Running: CrowdAnki DeckParts to Source ---")
-
         ca_json = {}
 
         # Headers

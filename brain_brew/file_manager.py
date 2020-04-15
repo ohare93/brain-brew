@@ -1,3 +1,4 @@
+import logging
 from typing import Dict
 
 from brain_brew.representation.generic.generic_file import GenericFile
@@ -30,11 +31,11 @@ class FileManager:
             if not file.file_exists:
                 files_to_create.append(location)
 
-        print(f"Will create {len(files_to_create)} new files: ", files_to_create)
+        # logging.info(f"Will create {len(files_to_create)} new files: ", files_to_create)
 
         for location, file in self.known_files_dict.items():
             if file.data_state == GenericFile.DataState.DATA_SET:
-                print(f"Wrote to {file.file_location}")
+                logging.info(f"Wrote to {file.file_location}")
                 file.write_file()
                 file.data_state = GenericFile.DataState.READ_IN_DATA
 

@@ -1,13 +1,12 @@
 import logging
 from enum import Enum
 
-from brain_brew.build_tasks.build_task_generic import BuildTaskEnum
-from brain_brew.build_tasks.generate_guids import GenerateGuids
+from brain_brew.constants.build_config_keys import BuildTaskEnum
 from brain_brew.build_tasks.source_crowd_anki import SourceCrowdAnki
 from brain_brew.build_tasks.source_csv import SourceCsv
 from brain_brew.build_tasks.source_csv_collection import SourceCsvCollection
 from brain_brew.file_manager import FileManager
-from brain_brew.helper.helperfunctions import single_item_to_list
+from brain_brew.utils import single_item_to_list
 from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.configuration.yaml_file import YamlFile, ConfigKey
 
@@ -28,7 +27,7 @@ class Builder(YamlFile):
     global_config: GlobalConfig
 
     BUILD_TASK_DEFINITIONS: dict
-    KNOWN_BUILD_TASK_CLASSES = [SourceCrowdAnki, SourceCsv, SourceCsvCollection, GenerateGuids]
+    KNOWN_BUILD_TASK_CLASSES = [SourceCrowdAnki, SourceCsv, SourceCsvCollection]
 
     build_tasks = []
     file_manager: FileManager
@@ -70,13 +69,7 @@ class Builder(YamlFile):
             self.build_tasks = list(reversed(self.build_tasks))
 
     def execute(self):
-        logging.debug("Begin Builder Execute")
-
         for (source, task_to_execute) in self.build_tasks:
             getattr(source, task_to_execute)()
 
         self.file_manager.write_to_all()
-
-        logging.debug("End Builder Execute")
-
-

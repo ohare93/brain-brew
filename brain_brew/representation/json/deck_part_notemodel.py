@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List
 
-from brain_brew.helper.helperfunctions import list_of_str_to_lowercase
+from brain_brew.utils import list_of_str_to_lowercase
 from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.json.json_file import JsonFile
 

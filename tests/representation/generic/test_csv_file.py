@@ -156,7 +156,7 @@ class TestSortData:
         (["guid"], True, "guid", [(14, "AAAA"), (13, "BBBB"), (12, "CCCC"), (0, "OOOO")]),
         (["english"], False, "english", [(0, "banana"), (1, "bird"), (2, "cat"), (14, "you")]),
         (["english"], True, "english", [(14, "banana"), (13, "bird"), (12, "cat"), (0, "you")]),
-        (["tags"], False, "tags", [(0, "besttag"), (1, "funny"), (2, "tag2, tag3"), (13, ""), (14, "")]),
+        (["tags"], False, "tags", [(0, "besttag"), (1, "funny"), (2, "tag2 tag3"), (13, ""), (14, "")]),
         (["esperanto", "english"], False, "esperanto", [(0, "banano"), (1, "birdo"), (6, "vi"), (14, "")]),
         (["esperanto", "guid"], False, "guid", [(7, "BBBB"), (14, "LLLL")]),
     ])

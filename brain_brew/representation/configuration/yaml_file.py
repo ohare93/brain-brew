@@ -3,7 +3,7 @@ from pathlib import Path
 
 import yaml
 
-from brain_brew.build_tasks.build_task_generic import BuildConfigKeys
+from brain_brew.constants.build_config_keys import BuildConfigKeys
 
 ConfigKey = namedtuple("ConfigKey", "required entry_type children")
 

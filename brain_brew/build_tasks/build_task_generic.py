@@ -1,16 +1,13 @@
-from collections import namedtuple
-from enum import Enum
+import re
 
-# TODO: Make this a class
-BuildTaskEnum = namedtuple("BuildTaskEnum", "key_name source_type task_to_execute reverse_task_to_execute")
-
-
-class BuildConfigKeys(Enum):
-    SUBCONFIG = "subconfig"
-
-    NOTES = "notes"
-    HEADERS = "headers"
+from brain_brew.representation.configuration.global_config import GlobalConfig
 
 
 class BuildTaskGeneric:
-    pass
+    @staticmethod
+    def split_tags(tags_value: str) -> list:
+        return [entry.strip() for entry in re.split(';\s*|,\s*|\s+', tags_value)]
+
+    @staticmethod
+    def join_tags(tags_list: list) -> str:
+        return GlobalConfig.get_instance().flags.join_values_with.join(tags_list)
