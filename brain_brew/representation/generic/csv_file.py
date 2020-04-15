@@ -68,11 +68,12 @@ class CsvFile(GenericFile):
                 added += 1
                 self._data.setdefault(guid, data_set[guid])
 
-        self.data_state = GenericFile.DataState.DATA_SET
-        print(f"Set csv data; changed {changed}, added {added}, while {unchanged} are unchanged")
+        if changed > 0 or added > 0:
+            self.data_state = GenericFile.DataState.DATA_SET
+        print(f"Set csv data; changed {changed}, added {added}, while {unchanged} were identical")
 
-    def get_data(self):
-        return self._data
+    def get_data(self, deep_copy=False) -> Dict[str, dict]:
+        return super().get_data(deep_copy=deep_copy)
 
     def get_relevant_data(self, relevant_columns: List[str]):
         if not relevant_columns:

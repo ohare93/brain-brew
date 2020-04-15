@@ -1,4 +1,3 @@
-import copy
 import json
 import re
 
@@ -16,8 +15,8 @@ class JsonFile(GenericFile):
     def set_data(self, data_override):
         super().set_data(data_override)
 
-    def get_data(self, deep_copy=False) -> dict:
-        return copy.deepcopy(self._data) if deep_copy else self._data
+    def get_data(self, deep_copy: bool = False) -> dict:
+        return super().get_data(deep_copy=deep_copy)
 
     def pretty_print(self):
         return json.dumps(self._data, indent=4)

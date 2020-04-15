@@ -26,6 +26,11 @@ def csv_test2():
 
 
 @pytest.fixture()
+def csv_test3():
+    return CsvFile(TestFiles.CsvFiles.TEST3)
+
+
+@pytest.fixture()
 def csv_not_read_initially_test():
     return CsvFile(TestFiles.CsvFiles.TEST1, read_now=False)
 
@@ -90,8 +95,38 @@ class TestGetRelevantData:
         assert expected == CsvFile.to_filename_csv("read          this        file")
 
 
-class SetRelevantData:
-    pass
+class TestSetRelevantData:
+    def test_no_change(self, csv_test1: CsvFile, csv_test1_split1: CsvFile):
+        assert csv_test1.data_state == GenericFile.DataState.READ_IN_DATA
+
+        previous_data = csv_test1.get_data(deep_copy=True)
+        csv_test1.set_relevant_data(csv_test1_split1.get_data())
+
+        assert previous_data == csv_test1.get_data()
+        assert csv_test1.data_state == GenericFile.DataState.READ_IN_DATA
+
+    def test_change_but_no_extra(self, csv_test1, csv_test2):
+        assert csv_test1.data_state == GenericFile.DataState.READ_IN_DATA
+        previous_data = csv_test1.get_data(deep_copy=True)
+        assert len(previous_data) == 15
+
+        csv_test1.set_relevant_data(csv_test2.get_data())
+
+        assert previous_data != csv_test1.get_data()
+        assert len(csv_test1.get_data()) == 15
+        assert csv_test1.data_state == GenericFile.DataState.DATA_SET
+
+    def test_change_extra_row(self, csv_test1, csv_test3):
+        assert csv_test1.data_state == GenericFile.DataState.READ_IN_DATA
+        previous_data = csv_test1.get_data(deep_copy=True)
+        assert len(previous_data) == 15
+
+        csv_test1.set_relevant_data(csv_test3.get_data())
+
+        assert previous_data != csv_test1.get_data()
+        assert len(csv_test1.get_data()) == 16
+        assert csv_test1.data_state == GenericFile.DataState.DATA_SET
+
 
 class TestReadFile:
     def test_runs(self, csv_not_read_initially_test: CsvFile):

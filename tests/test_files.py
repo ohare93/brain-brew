@@ -29,9 +29,10 @@ class TestFiles:
         LOC = "tests/test_files/csv/"
 
         TEST1 = LOC + "test1.csv"
-        TEST2 = LOC + "test2.csv"
         TEST1_SPLIT1 = LOC + "test1_split1.csv"
         TEST1_SPLIT2 = LOC + "test1_split2.csv"
+        TEST2 = LOC + "test2.csv"
+        TEST3 = LOC + "test3.csv"
 
     class CrowdAnkiExport:
         LOC = "tests/test_files/crowd_anki/"

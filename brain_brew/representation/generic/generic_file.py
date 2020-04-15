@@ -1,3 +1,4 @@
+import copy
 from enum import Enum
 from pathlib import Path
 
@@ -34,8 +35,8 @@ class GenericFile:
         self.data_state = GenericFile.DataState.DATA_SET
         self._data = data_override
 
-    def get_data(self):
-        raise NotImplemented
+    def get_data(self, deep_copy: bool = False):
+        return copy.deepcopy(self._data) if deep_copy else self._data
 
     def read_file(self):
         raise NotImplemented
