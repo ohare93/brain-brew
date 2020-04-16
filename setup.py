@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="Brain-Brew",
-    version="0.1.0",
+    version="0.1.1",
     author="Jordan Munch O'Hare",
     author_email="ohare93@gmail.com",
     description="Automated Anki flashcard creation and extraction to/from Csv ",
