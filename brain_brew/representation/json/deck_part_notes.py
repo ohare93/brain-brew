@@ -6,7 +6,7 @@ from brain_brew.file_manager import FileManager
 from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.json.json_file import JsonFile
 from brain_brew.constants.deckpart_keys import *
-from brain_brew.representation.media.deck_part_media_file import DeckPartMediaFile
+from brain_brew.representation.generic.media_file import MediaFile
 
 
 class CANoteKeys(Enum):
@@ -20,7 +20,7 @@ class CANoteKeys(Enum):
 class DeckPartNotes(JsonFile):
     _data: dict = {}
     flags: DeckPartNoteFlags
-    referenced_media_files: List[DeckPartMediaFile]
+    referenced_media_files: List[MediaFile]
 
     global_config: GlobalConfig
     file_manager: FileManager
@@ -193,7 +193,8 @@ class DeckPartNotes(JsonFile):
 
     def sort_data(self, sort_by_keys, reverse_sort, case_insensitive_sort=None):
 
-        sorted = self._sort_data(self._data[DeckPartNoteKeys.NOTES.value], sort_by_keys, reverse_sort, case_insensitive_sort)
+        sorted = self._sort_data(self._data[DeckPartNoteKeys.NOTES.value], sort_by_keys, reverse_sort,
+                                 case_insensitive_sort)
 
         self._data[DeckPartNoteKeys.NOTES.value] = sorted
 
@@ -203,7 +204,7 @@ class DeckPartNotes(JsonFile):
 
         for note in self._data[DeckPartNoteKeys.NOTES.value]:
             for field in note[DeckPartNoteKeys.FIELDS.value]:
-                files_found = re.findall('<img.*?src="(.*?)"[^\>]+>', field)
+                files_found = self.find_media_in_field(field)
                 if files_found:
                     for filename in files_found:
                         file = self.file_manager.media_file_if_exists(filename)
@@ -218,3 +219,13 @@ class DeckPartNotes(JsonFile):
                           f"{', '.join(unknown_references)}]")
 
         logging.info(f"Found {len(self.referenced_media_files)} referenced media files")
+
+    @staticmethod
+    def find_media_in_field(field_value):
+        if not isinstance(field_value, str):
+            return []
+
+        images = re.findall(r'<\s*?img.*?src="(.*?)"[^>]*?>', field_value)
+        audio = re.findall(r'\[sound:(.*?)\]', field_value)
+
+        return images + audio

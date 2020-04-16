@@ -140,7 +140,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
 
         if missing:
             s1 = sorted([field.field_name for field in self.personal_fields])
-            s2 = sorted(missing)
+            s2 = sorted(missing)  # TODO: remove personal fields from the error message
             if s1 != s2:
                 error_in_config = True
 

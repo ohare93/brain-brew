@@ -5,6 +5,8 @@ from brain_brew.build_tasks.build_task_generic import BuildTaskGeneric
 from brain_brew.constants.build_config_keys import BuildTaskEnum, BuildConfigKeys
 from brain_brew.constants.crowdanki_keys import CAKeys
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
+from brain_brew.file_manager import FileManager
+from brain_brew.representation.generic.media_file import MediaFile
 from brain_brew.utils import blank_str_if_none
 from brain_brew.representation.configuration.yaml_file import ConfigKey, YamlFile
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
@@ -39,6 +41,7 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
         CrowdAnkiKeys.USELESS_NOTE_KEYS.value: ConfigKey(True, dict, None)
     }
     subconfig_filter = None
+    file_manager: FileManager
 
     headers: DeckPartHeader
     notes: DeckPartNotes
@@ -50,6 +53,8 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
     def __init__(self, config_data: dict, read_now=True):
         self.setup_config_with_subconfig_replacement(config_data)
         self.verify_config_entry()
+
+        self.file_manager = FileManager.get_instance()
 
         self.headers = DeckPartHeader.create(self.config_entry[BuildConfigKeys.HEADERS.value], read_now=read_now)
         self.notes = DeckPartNotes.create(self.config_entry[BuildConfigKeys.NOTES.value], read_now=read_now)
@@ -99,6 +104,14 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
 
         note_models_id_name_dict = {model.id: model.name for model in note_models}
 
+        # Media
+        for filename, file in self.crowd_anki_export.known_media.items():
+            dp_media_file = self.file_manager.media_file_if_exists(filename)
+            if dp_media_file:
+                dp_media_file.set_override(file.source_loc)
+            else:
+                self.file_manager.new_media_file(filename, file.source_loc)
+
         # Notes
         notes_json = source_data[CAKeys.NOTES.value]
         notes_data = self.notes_to_deck_parts(notes_json, note_models_id_name_dict)
@@ -123,6 +136,20 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
         # Headers
         ca_json.update(self.headers.get_data())
 
+        # Media
+        media_files = self.notes.referenced_media_files
+        ca_json.setdefault(CAKeys.MEDIA_FILES.value, list(sorted([file.filename for file in media_files])))
+
+        for file in media_files:
+            filename = file.filename
+            if filename in self.crowd_anki_export.known_media:
+                self.crowd_anki_export.known_media[filename].set_override(file.source_loc)
+            else:
+                self.crowd_anki_export.known_media.setdefault(
+                    filename, MediaFile(self.crowd_anki_export.media_loc + filename,
+                                        filename, MediaFile.ManagementType.TO_BE_CLONED, file.source_loc)
+                )
+
         # Note Models
         note_models = [DeckPartNoteModel.create(name) for name in self.notes.get_all_known_note_model_names()]
 
@@ -132,9 +159,5 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
 
         # Notes
         ca_json.setdefault(CAKeys.NOTES.value, self.notes_to_source(note_models_dict_id_name))
-
-        # Media Files
-        media_files = []
-        ca_json.setdefault(CAKeys.MEDIA_FILES.value, media_files)
 
         self.crowd_anki_export.set_data(ca_json)

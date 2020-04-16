@@ -1,5 +1,8 @@
+import os
+import pathlib
 import string
 import random
+import re
 
 
 def blank_str_if_none(s):
@@ -14,6 +17,20 @@ def single_item_to_list(item):
     if isinstance(item, list):
         return item
     return [item]
+
+
+def filename_from_full_path(full_path):
+    return re.findall('[^\\/:*?"<>|\r\n]+$', full_path)[0]
+
+
+def find_all_files_in_directory(directory, recursive=False):
+    found_files = []
+    for path, dirs, files in os.walk(directory):
+        for file in files:
+            found_files.append(os.path.join(path, file))
+        if not recursive:
+            return found_files
+    return found_files
 
 
 def generate_anki_guid() -> str:

@@ -1,11 +1,12 @@
 import glob
 import logging
-import re
+import pathlib
 from typing import Dict
 
 from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.generic.generic_file import GenericFile
-from brain_brew.representation.media.deck_part_media_file import DeckPartMediaFile
+from brain_brew.representation.generic.media_file import MediaFile
+from brain_brew.utils import filename_from_full_path, find_all_files_in_directory
 
 
 class FileManager:
@@ -13,7 +14,7 @@ class FileManager:
     global_config: GlobalConfig
 
     known_files_dict: Dict[str, GenericFile]
-    known_media_files_dict: Dict[str, DeckPartMediaFile]
+    known_media_files_dict: Dict[str, MediaFile]
 
     def __init__(self):
         if FileManager.__instance is None:
@@ -25,7 +26,7 @@ class FileManager:
 
         self.known_files_dict = {}
 
-        self.find_all_media_files()
+        self.find_all_deck_part_media_files()
 
     @staticmethod
     def get_instance():
@@ -41,26 +42,33 @@ class FileManager:
             return self.known_files_dict[file_location]
         return None
 
-    def media_file_if_exists(self, file_location) -> DeckPartMediaFile:
-        if file_location in self.known_media_files_dict.keys():
-            return self.known_media_files_dict[file_location]
-        return None
-
-    def register_file(self, file_location, file):
-        if file_location in self.known_files_dict:
+    def register_file(self, full_path, file):
+        if full_path in self.known_files_dict:
             raise FileExistsError("File already known to FileManager, cannot be registered twice")
-        self.known_files_dict.setdefault(file_location, file)
+        self.known_files_dict.setdefault(full_path, file)
 
-    def find_all_media_files(self):
+    def media_file_if_exists(self, filename) -> MediaFile:
+        if filename in self.known_media_files_dict.keys():
+            return self.known_media_files_dict[filename]
+        return None
+    
+    def _register_media_file(self, file: MediaFile):
+        if file.filename not in self.known_media_files_dict:
+            self.known_media_files_dict.setdefault(file.filename, file)
+        else:
+            logging.error(f"Duplicate media file '{file.filename}' in both '{file.source_loc}'"
+                          f" and '{self.known_media_files_dict[file.filename].source_loc}'")
+
+    def new_media_file(self, filename, source_loc):
+        self._register_media_file(MediaFile(self.global_config.deck_parts.media_files + filename,
+                                            filename, MediaFile.ManagementType.TO_BE_CLONED, source_loc))
+
+    def find_all_deck_part_media_files(self):
         self.known_media_files_dict = {}
 
-        for full_path in glob.iglob(self.global_config.deck_parts.media_files + '**/*.*', recursive=True):
-            filename = re.findall('[^\\/:*?"<>|\r\n]+$', full_path)[0]
-            if filename not in self.known_media_files_dict:
-                self.known_media_files_dict.setdefault(filename, DeckPartMediaFile(full_path, filename))
-            else:
-                logging.error(f"Duplicate media file '{filename}' in both '{full_path}'"
-                              f" and '{self.known_media_files_dict[filename]}'")
+        for full_path in find_all_files_in_directory(self.global_config.deck_parts.media_files, recursive=True):
+            filename = filename_from_full_path(full_path)
+            self._register_media_file(MediaFile(full_path, filename))
 
         logging.debug(f"Media files found: {len(self.known_media_files_dict)}")
 
@@ -78,3 +86,5 @@ class FileManager:
                 file.write_file()
                 file.data_state = GenericFile.DataState.READ_IN_DATA
 
+        for filename, media_file in self.known_media_files_dict.items():
+            media_file.write()

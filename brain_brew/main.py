@@ -26,3 +26,7 @@ def main():
     # Run chosen Builder
     builder = Builder(builder_config, global_config, other_arguments)
     builder.execute()
+
+
+if __name__ == "__main__":
+    main()
