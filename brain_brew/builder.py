@@ -1,14 +1,12 @@
-import logging
 from enum import Enum
 
 from brain_brew.constants.build_config_keys import BuildTaskEnum
 from brain_brew.build_tasks.source_crowd_anki import SourceCrowdAnki
 from brain_brew.build_tasks.source_csv import SourceCsv
-from brain_brew.build_tasks.source_csv_collection import SourceCsvCollection
 from brain_brew.file_manager import FileManager
 from brain_brew.utils import single_item_to_list
 from brain_brew.representation.configuration.global_config import GlobalConfig
-from brain_brew.representation.configuration.yaml_file import YamlFile, ConfigKey
+from brain_brew.representation.generic.yaml_file import YamlFile, ConfigKey
 
 
 class BuilderKeys(Enum):
@@ -27,7 +25,7 @@ class Builder(YamlFile):
     global_config: GlobalConfig
 
     BUILD_TASK_DEFINITIONS: dict
-    KNOWN_BUILD_TASK_CLASSES = [SourceCrowdAnki, SourceCsv, SourceCsvCollection]
+    KNOWN_BUILD_TASK_CLASSES = [SourceCrowdAnki, SourceCsv]
 
     build_tasks = []
     file_manager: FileManager

@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 from brain_brew.constants.deckpart_keys import NoteFlagKeys, DeckPartNoteFlags
 from brain_brew.constants.global_config_keys import *
-from brain_brew.representation.configuration.yaml_file import YamlFile, ConfigKey
+from brain_brew.representation.generic.yaml_file import YamlFile, ConfigKey
 
 
 @dataclass
