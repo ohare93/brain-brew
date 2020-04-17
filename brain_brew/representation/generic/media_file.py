@@ -25,7 +25,7 @@ class MediaFile:
         self.man_type = MediaFile.ManagementType.OVERRIDDEN
         self.source_loc = source_loc
 
-    def write(self):
+    def copy_source_to_target(self):
         if self.should_write():
             # TODO: If ManagementType.OVERRIDDEN check if override necessary
             shutil.copy2(self.source_loc, self.target_loc)

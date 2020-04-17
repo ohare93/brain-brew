@@ -87,4 +87,4 @@ class FileManager:
                 file.data_state = GenericFile.DataState.READ_IN_DATA
 
         for filename, media_file in self.known_media_files_dict.items():
-            media_file.write()
+            media_file.copy_source_to_target()

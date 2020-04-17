@@ -56,4 +56,4 @@ class CrowdAnkiExport(JsonFile):
     def write_file(self, data_override=None):
         super().write_file(data_override)
         for filename, media_file in self.known_media.items():
-            media_file.write()
+            media_file.copy_source_to_target()
