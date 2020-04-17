@@ -164,6 +164,9 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
         return csv_data
 
     def source_to_deck_parts(self):
+        for csv_map in self.csv_file_mappings:
+            csv_map.get_data()
+
         notes_data = self.notes_to_deck_parts()
         self.notes.set_data(notes_data)
 

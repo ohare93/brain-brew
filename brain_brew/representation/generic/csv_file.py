@@ -33,7 +33,7 @@ class CsvFile(GenericFile):
             for row in csv_reader:
                 self._data.append({key.lower(): row[key] for key in row})
 
-        self.data_state = GenericFile.DataState.DATA_SET
+        self.data_state = GenericFile.DataState.READ_IN_DATA
 
     def write_file(self):
         with open(self.file_location, mode='w') as csv_file:
@@ -53,29 +53,6 @@ class CsvFile(GenericFile):
 
     def get_data(self, deep_copy=False) -> List[dict]:
         return super().get_data(deep_copy=deep_copy)
-
-    def get_relevant_data(self, relevant_columns: List[str]):
-        if not relevant_columns:
-            return []
-
-        # TODO: check if any relevant_columns are not in the csv, raise error
-
-        relevant_columns = list_of_str_to_lowercase(relevant_columns)
-        irrelevant_columns = []
-
-        for column in self.column_headers:
-            if column not in relevant_columns:
-                irrelevant_columns.append(column)
-
-        if not irrelevant_columns:
-            return self._data
-
-        relevant_data = {}
-        for guid in self._data:
-            relevant_data.setdefault(guid, {key: self._data[guid][key] for key in self._data[guid]
-                                            if key not in irrelevant_columns})
-
-        return relevant_data
 
     @staticmethod
     def to_filename_csv(filename: str) -> str:
