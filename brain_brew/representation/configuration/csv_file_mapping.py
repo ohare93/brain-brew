@@ -2,6 +2,8 @@ import logging
 from enum import Enum
 from typing import Dict, List
 
+from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
+from brain_brew.interfaces.verifiable import Verifiable
 from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
 from brain_brew.representation.generic.yaml_file import YamlFile, ConfigKey
 from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
@@ -16,7 +18,7 @@ class CsvFileMappingKeys(Enum):
     DERIVATIVES = "derivatives"
 
 
-class CsvFileMapping(YamlFile):
+class CsvFileMapping(YamlFile, Verifiable):
     config_entry = {}
     expected_keys = {
         CsvFileMappingKeys.CSV_FILE.value: ConfigKey(True, str, None),
@@ -33,7 +35,7 @@ class CsvFileMapping(YamlFile):
     sort_by_columns: list
     reverse_sort: bool
 
-    note_model: DeckPartNoteModel
+    note_model_name: str
     derivatives: List['CsvFileMapping']
 
     parent_mapping: 'CsvFileMapping'
@@ -49,9 +51,12 @@ class CsvFileMapping(YamlFile):
         self.sort_by_columns = single_item_to_list(self.get_config(CsvFileMappingKeys.SORT_BY_COLUMNS, []))
         self.reverse_sort = self.get_config(CsvFileMappingKeys.REVERSE_SORT, False)
 
-        self.note_model = DeckPartNoteModel.create(self.get_config(CsvFileMappingKeys.NOTE_MODEL), read_now=read_now)
+        self.note_model_name = self.get_config(CsvFileMappingKeys.NOTE_MODEL)
         self.derivatives = [CsvFileMapping(config, read_now=read_now)
                             for config in self.get_config(CsvFileMappingKeys.DERIVATIVES, [])]
+
+    def verify_contents(self):
+        pass  # TODO: fill this in
 
     def get_available_columns(self):
         return self.csv_file.column_headers + self.get_derivative_columns()
@@ -100,18 +105,25 @@ class CsvFileMapping(YamlFile):
 
             der_match_errors = []
             for der_row in der.build_data():
+                # Find matching row to pair data with
                 found_match = False
                 for row in data_in_progress:
                     if all([der_row[c] == row[c] for c in overlapping_cols]):
                         for der_col in der_cols:
                             row[der_col] = der_row[der_col]
                         found_match = True
+                        # Set Note Model to matching Derivative Note Model
+                        row.setdefault(DeckPartNoteKeys.NOTE_MODEL.value, der.note_model_name)
                         break
                 if not found_match:
                     der_match_errors.append(ValueError(f"Cannot match derivative row {der_row} to parent"))
 
             if der_match_errors:
                 raise Exception(der_match_errors)
+
+            # Set Note Model if not already set
+            for row in data_in_progress:
+                row.setdefault(DeckPartNoteKeys.NOTE_MODEL.value, self.note_model_name)
 
         return data_in_progress
 
@@ -137,24 +149,3 @@ class CsvFileMapping(YamlFile):
             # TODO: Call derivatives
         logging.info(f"Set {self.csv_file.file_location} data; changed {changed}, added {added}, while {unchanged} were identical")
 
-    def get_relevant_data(self, relevant_columns: List[str]):
-        if not relevant_columns:
-            return []
-
-        cols = self.get_available_columns()
-        relevant_columns = list_of_str_to_lowercase(relevant_columns)
-
-        errors = [KeyError(f"Missing column {rel_col}") for rel_col in relevant_columns if rel_col not in cols]
-        if errors:
-            raise Exception(errors)
-
-        irrelevant_columns = [column for column in cols if column not in relevant_columns]
-        if not irrelevant_columns:
-            return self.compiled_data
-
-        relevant_data = {}
-        for guid in self.compiled_data:
-            relevant_data.setdefault(guid, {key: self.compiled_data[guid][key] for key in self.compiled_data[guid]
-                                            if key not in irrelevant_columns})
-
-        return relevant_data

@@ -4,6 +4,7 @@ from typing import List, Dict
 from brain_brew.build_tasks.build_task_generic import BuildTaskGeneric
 from brain_brew.constants.build_config_keys import BuildTaskEnum, BuildConfigKeys
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
+from brain_brew.interfaces.verifiable import Verifiable
 from brain_brew.representation.configuration.csv_file_mapping import CsvFileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 from brain_brew.utils import single_item_to_list
@@ -19,7 +20,7 @@ class SourceCsvKeys(Enum):
     CSV_MAPPINGS = "csv_file_mappings"
 
 
-class SourceCsv(YamlFile, BuildTaskGeneric):
+class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
     @staticmethod
     def get_build_keys():
         return [
@@ -36,7 +37,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
     subconfig_filter = None
 
     notes: DeckPartNotes
-    note_model_mappings: List[NoteModelMapping]
+    note_model_mappings: Dict[str, NoteModelMapping]
     csv_file_mappings: List[CsvFileMapping]
 
     def __init__(self, config_data: dict, read_now=True):
@@ -45,8 +46,9 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
 
         self.notes = DeckPartNotes.create(self.get_config(BuildConfigKeys.NOTES), read_now=read_now)
 
-        self.note_model_mappings = [NoteModelMapping(config, read_now=read_now)
+        nm_mappings = [NoteModelMapping(config, read_now=read_now)
                                     for config in self.get_config(SourceCsvKeys.NOTE_MODEL_MAPPINGS)]
+        self.note_model_mappings = {mapping.note_model.name: mapping for mapping in nm_mappings}
 
         self.csv_file_mappings = [CsvFileMapping(config, read_now=read_now)
                                   for config in self.get_config(SourceCsvKeys.CSV_MAPPINGS)]
@@ -57,63 +59,29 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
 
         return SourceCsv(config_data, read_now=read_now)
 
-    def get_data(self):
-        columns = [field.field_name for field in self.columns]
-        csv_data = self.csv_file.get_relevant_data(columns)
+    def verify_contents(self):
+        errors = []
 
-        for row in csv_data.values():
-            for pf in self.personal_fields:
-                row.setdefault(pf.field_name, False)
-            for column in self.columns:
-                row[column.value] = row.pop(column.field_name)
+        for nm in self.note_model_mappings.values():
+            try:
+                nm.verify_contents()
+            except KeyError as e:
+                errors.append(e)
 
-        # TODO: Insert FieldMappings with Default values
+        for cfm in self.csv_file_mappings:
+            try:
+                cfm.verify_contents()
+            except KeyError as e:
+                errors.append(e)
 
-        return csv_data
-
-    def check_for_required_fields(self):
-        missing = []
-        for req in self.required_fields_definitions:
-            if req not in [field.value for field in self.columns]:
-                missing.append(req)
-
-        if missing:
-            raise KeyError(f"""Note model "{self.note_model.name}" to Csv config error: \
-                               Definitions for fields {missing} are required.""", self.csv_file.file_location)
-
-    def check_fields_align_with_note_type(self):
-        error_in_config = False
-        # Check NoteType Columns
-        missing, extra = self.note_model.check_field_overlap(
-            [field.value for field in self.columns if field.value not in self.required_fields_definitions]
-        )
-
-        if missing:
-            s1 = sorted([field.field_name for field in self.personal_fields])
-            s2 = sorted(missing)  # TODO: remove personal fields from the error message
-            if s1 != s2:
-                error_in_config = True
-
-        if extra:
-            error_in_config = True
-
-        if error_in_config:
-            raise KeyError(
-                f"""Note model "{self.note_model.name}" to Csv config error. It expected {self.note_model.fields} \
-                    but was missing: {missing}, and got extra: {extra} """)
+        if errors:
+            raise Exception(errors)
 
     def notes_to_deck_parts(self):
-
-        self.check_for_required_fields()
-        self.check_fields_align_with_note_type()
-
-        csv_rows = self.get_data().values()
-
-        # TODO: Derivatives
-        # Check again if fields align for each possible derivative type
-
-        for row in csv_rows:
-            row.setdefault(DeckPartNoteKeys.NOTE_MODEL.value, self.note_model)
+        csv_data_by_guid: Dict[str, dict] = {}
+        for csv_map in self.csv_file_mappings:
+            csv_data_by_guid = {**csv_data_by_guid, **csv_map.get_data()}
+        csv_rows: List[dict] = list(csv_data_by_guid.values())
 
         notes_json = []
         top_level_note_structure = {
@@ -127,23 +95,19 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
         for row in csv_rows:
             note = top_level_note_structure.copy()
 
-            row_nm: DeckPartNoteModel = row[DeckPartNoteKeys.NOTE_MODEL.value]
+            row_nm: str = row.pop(DeckPartNoteKeys.NOTE_MODEL.value)
 
-            note[DeckPartNoteKeys.NOTE_MODEL.value] = row_nm.name
-            note[DeckPartNoteKeys.GUID.value] = row[DeckPartNoteKeys.GUID.value]
-            note[DeckPartNoteKeys.TAGS.value] = self.split_tags(row[DeckPartNoteKeys.TAGS.value])
+            note[DeckPartNoteKeys.FIELDS.value] = self.note_model_mappings[row_nm].filter_row_through_map(row)
 
-            note[DeckPartNoteKeys.FIELDS.value] = [row[field.lower()] for field in row_nm.fields]
+            note[DeckPartNoteKeys.NOTE_MODEL.value] = row_nm
+            note[DeckPartNoteKeys.GUID.value] = note[DeckPartNoteKeys.FIELDS.value].pop(DeckPartNoteKeys.GUID.value)
+            note[DeckPartNoteKeys.TAGS.value] = self.split_tags(note[DeckPartNoteKeys.FIELDS.value].pop(DeckPartNoteKeys.TAGS.value))
 
             notes_json.append(note)
 
         return notes_json
 
     def notes_to_source(self) -> Dict[str, dict]:
-
-        self.check_for_required_fields()
-        self.check_fields_align_with_note_type()  # TODO: will begin failing when derivatives are added; add override
-
         notes_data = self.notes.get_data(deep_copy=True)[DeckPartNoteKeys.NOTES.value]
 
         csv_data: Dict[str, dict] = {}
@@ -164,9 +128,6 @@ class SourceCsv(YamlFile, BuildTaskGeneric):
         return csv_data
 
     def source_to_deck_parts(self):
-        for csv_map in self.csv_file_mappings:
-            csv_map.get_data()
-
         notes_data = self.notes_to_deck_parts()
         self.notes.set_data(notes_data)
 
