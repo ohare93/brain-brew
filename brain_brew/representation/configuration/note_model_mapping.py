@@ -99,7 +99,7 @@ class NoteModelMapping(YamlFile, Verifiable):
         if errors:
             raise Exception(errors)
 
-    def filter_row_through_map(self, row):
+    def csv_row_map_to_note_fields(self, row: dict) -> dict:
         relevant_row_data = self.get_relevant_data(row)
 
         for pf in self.personal_fields:  # Add in Personal Fields
@@ -108,6 +108,20 @@ class NoteModelMapping(YamlFile, Verifiable):
             relevant_row_data[column.value] = relevant_row_data.pop(column.field_name)
 
         # TODO: Insert FieldMappings with Default values
+
+        return relevant_row_data
+
+    def csv_headers_map_to_note_fields(self, row: list) -> list:
+        return list(self.csv_row_map_to_note_fields({row_name: "" for row_name in row}).keys())
+
+    def note_fields_map_to_csv_row(self, row):
+        for column in self.columns:  # Rename from Note Type Field to Csv Column
+            row[column.field_name] = row.pop(column.value)
+
+        for pf in self.personal_fields:  # Remove Personal Fields
+            del row[pf.field_name]
+
+        relevant_row_data = self.get_relevant_data(row)
 
         return relevant_row_data
 
@@ -129,3 +143,6 @@ class NoteModelMapping(YamlFile, Verifiable):
         relevant_data = {key: row[key] for key in row if key not in irrelevant_columns}
 
         return relevant_data
+
+    def field_values_in_note_model_order(self, fields_from_csv):
+        return [fields_from_csv[field] for field in self.note_model.fields_lowercase]

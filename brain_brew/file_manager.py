@@ -1,8 +1,9 @@
 import glob
 import logging
 import pathlib
-from typing import Dict
+from typing import Dict, List
 
+from brain_brew.interfaces.writes_file import WritesFile
 from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.generic.generic_file import GenericFile
 from brain_brew.representation.generic.media_file import MediaFile
@@ -16,6 +17,8 @@ class FileManager:
     known_files_dict: Dict[str, GenericFile]
     known_media_files_dict: Dict[str, MediaFile]
 
+    write_files_at_end: List[WritesFile]
+
     def __init__(self):
         if FileManager.__instance is None:
             FileManager.__instance = self
@@ -25,11 +28,12 @@ class FileManager:
         self.global_config = GlobalConfig.get_instance()
 
         self.known_files_dict = {}
+        self.write_files_at_end = []
 
         self.find_all_deck_part_media_files()
 
     @staticmethod
-    def get_instance():
+    def get_instance() -> 'FileManager':
         return FileManager.__instance
 
     @staticmethod
@@ -59,6 +63,9 @@ class FileManager:
             logging.error(f"Duplicate media file '{file.filename}' in both '{file.source_loc}'"
                           f" and '{self.known_media_files_dict[file.filename].source_loc}'")
 
+    def register_write_file_for_end(self, file: WritesFile):
+        self.write_files_at_end.append(file)
+
     def new_media_file(self, filename, source_loc):
         self._register_media_file(MediaFile(self.global_config.deck_parts.media_files + filename,
                                             filename, MediaFile.ManagementType.TO_BE_CLONED, source_loc))
@@ -79,6 +86,9 @@ class FileManager:
                 files_to_create.append(location)
 
         # logging.info(f"Will create {len(files_to_create)} new files: ", files_to_create)
+
+        for write_file in self.write_files_at_end:
+            write_file.write_file_on_close()
 
         for location, file in self.known_files_dict.items():
             if file.data_state == GenericFile.DataState.DATA_SET:

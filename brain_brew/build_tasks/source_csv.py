@@ -69,10 +69,28 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
                 errors.append(e)
 
         for cfm in self.csv_file_mappings:
+            # Check all necessary key values are present
             try:
                 cfm.verify_contents()
             except KeyError as e:
                 errors.append(e)
+
+            # Check all references notemodels have a mapping
+            for csv_map in self.csv_file_mappings:
+                for nm in csv_map.get_used_note_model_names():
+                    if nm not in self.note_model_mappings.keys():
+                        errors.append(f"Missing Note Model Map for {nm}")
+
+        # Check each of the Csvs (or their derivatives) contain all the necessary columns for their stated note model
+        for cfm in self.csv_file_mappings:
+            note_model_names = cfm.get_used_note_model_names()
+            available_columns = cfm.get_available_columns()
+
+            referenced_note_models_maps = [value for key, value in self.note_model_mappings.items() if key in note_model_names]
+            for nm_map in referenced_note_models_maps:
+                missing_columns = [col for col in nm_map.note_model.fields_lowercase if col not in nm_map.csv_headers_map_to_note_fields(available_columns)]
+                if missing_columns:
+                    errors.append(KeyError(f"Csvs are missing columns from {nm_map.note_model.name}", missing_columns))
 
         if errors:
             raise Exception(errors)
@@ -80,7 +98,8 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
     def notes_to_deck_parts(self):
         csv_data_by_guid: Dict[str, dict] = {}
         for csv_map in self.csv_file_mappings:
-            csv_data_by_guid = {**csv_data_by_guid, **csv_map.get_data()}
+            csv_map.compile_data()
+            csv_data_by_guid = {**csv_data_by_guid, **csv_map.compiled_data}
         csv_rows: List[dict] = list(csv_data_by_guid.values())
 
         notes_json = []
@@ -95,13 +114,15 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
         for row in csv_rows:
             note = top_level_note_structure.copy()
 
-            row_nm: str = row.pop(DeckPartNoteKeys.NOTE_MODEL.value)
+            row_nm: NoteModelMapping = self.note_model_mappings[row[DeckPartNoteKeys.NOTE_MODEL.value]]
 
-            note[DeckPartNoteKeys.FIELDS.value] = self.note_model_mappings[row_nm].filter_row_through_map(row)
+            filtered_fields = row_nm.csv_row_map_to_note_fields(row)
 
-            note[DeckPartNoteKeys.NOTE_MODEL.value] = row_nm
-            note[DeckPartNoteKeys.GUID.value] = note[DeckPartNoteKeys.FIELDS.value].pop(DeckPartNoteKeys.GUID.value)
-            note[DeckPartNoteKeys.TAGS.value] = self.split_tags(note[DeckPartNoteKeys.FIELDS.value].pop(DeckPartNoteKeys.TAGS.value))
+            note[DeckPartNoteKeys.NOTE_MODEL.value] = row_nm.note_model.name
+            note[DeckPartNoteKeys.GUID.value] = filtered_fields.pop(DeckPartNoteKeys.GUID.value)
+            note[DeckPartNoteKeys.TAGS.value] = self.split_tags(filtered_fields.pop(DeckPartNoteKeys.TAGS.value))
+
+            note[DeckPartNoteKeys.FIELDS.value] = row_nm.field_values_in_note_model_order(filtered_fields)
 
             notes_json.append(note)
 
@@ -109,23 +130,30 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
 
     def notes_to_source(self) -> Dict[str, dict]:
         notes_data = self.notes.get_data(deep_copy=True)[DeckPartNoteKeys.NOTES.value]
+        self.verify_notes_match_note_model_mappings(notes_data)
 
         csv_data: Dict[str, dict] = {}
         for note in notes_data:
-            if note[DeckPartNoteKeys.NOTE_MODEL.value] != self.note_model.name:
-                continue
-            # TODO: Add derivatives here
 
-            row = self.note_model.zip_field_to_data(note[DeckPartNoteKeys.FIELDS.value])
+            nm_name = note[DeckPartNoteKeys.NOTE_MODEL.value]
+            row = self.note_model_mappings[nm_name].note_model.zip_field_to_data(note[DeckPartNoteKeys.FIELDS.value])
             row[CsvKeys.GUID.value] = note[DeckPartNoteKeys.GUID.value]
             row[CsvKeys.TAGS.value] = self.join_tags(note[DeckPartNoteKeys.TAGS.value])
 
-            formatted_row = {field_map.field_name: row[key]
-                             for key in row.keys() for field_map in self.columns if key == field_map.value}
+            formatted_row = self.note_model_mappings[nm_name].note_fields_map_to_csv_row(row)
 
             csv_data.setdefault(row[CsvKeys.GUID.value], formatted_row)
 
         return csv_data
+
+    def verify_notes_match_note_model_mappings(self, notes):
+        note_models_used = {note[DeckPartNoteKeys.NOTE_MODEL.value] for note in notes}
+        errors = [TypeError(f"Unknown note model type '{model}' in notes '{self.notes.file_location}. "
+                            f"Add {SourceCsvKeys.NOTE_MODEL_MAPPINGS.value} for that model.")
+                  for model in note_models_used if model not in self.note_model_mappings.keys()]
+
+        if errors:
+            raise Exception(errors)
 
     def source_to_deck_parts(self):
         notes_data = self.notes_to_deck_parts()
@@ -134,5 +162,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
     def deck_parts_to_source(self):
         csv_data = self.notes_to_source()
 
-        self.csv_file.set_relevant_data(csv_data)
-        self.csv_file.sort_data(self.sort_by_columns, self.reverse_sort)  # TODO: Move
+        for cfm in self.csv_file_mappings:
+            cfm.compile_data()
+            cfm.set_relevant_data(csv_data)
+

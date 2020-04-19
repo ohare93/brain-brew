@@ -191,10 +191,9 @@ class DeckPartNotes(JsonFile):
 
         del top_level[DeckPartNoteKeys.SHARED_TAGS.value]
 
-    def sort_data(self, sort_by_keys, reverse_sort, case_insensitive_sort=None):
+    def sort_data(self, sort_by_keys, reverse_sort):
 
-        sorted = self._sort_data(self._data[DeckPartNoteKeys.NOTES.value], sort_by_keys, reverse_sort,
-                                 case_insensitive_sort)
+        sorted = self._sort_data(self._data[DeckPartNoteKeys.NOTES.value], sort_by_keys, reverse_sort)
 
         self._data[DeckPartNoteKeys.NOTES.value] = sorted
 

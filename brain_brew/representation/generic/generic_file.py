@@ -64,7 +64,7 @@ class GenericFile:
 
     @staticmethod
     def _sort_data(data, sort_by_keys, reverse_sort, case_insensitive_sort=None):
-        if case_insensitive_sort is not None:
+        if case_insensitive_sort is None:
             case_insensitive_sort = GlobalConfig.get_instance().flags.sort_case_insensitive
 
         if sort_by_keys:
