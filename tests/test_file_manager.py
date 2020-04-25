@@ -1,6 +1,7 @@
 import pytest
 
 from brain_brew.file_manager import FileManager
+from tests.representation.configuration.test_global_config import global_config
 
 
 def get_new_file_manager():
@@ -9,7 +10,7 @@ def get_new_file_manager():
 
 
 class TestSingletonConstructor:
-    def test_runs(self):
+    def test_runs(self, global_config):
         fm = get_new_file_manager()
         assert isinstance(fm, FileManager)
 

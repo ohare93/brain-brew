@@ -137,7 +137,7 @@ class TestSetRelevantData:
 
 class TestReadFile:
     def test_runs(self, csv_test1_not_read_initially_test):
-        assert csv_test1_not_read_initially_test.get_data() == {}
+        assert csv_test1_not_read_initially_test.get_data() == []
         assert csv_test1_not_read_initially_test.column_headers == []
         assert csv_test1_not_read_initially_test.file_location == TestFiles.CsvFiles.TEST1
         assert csv_test1_not_read_initially_test.data_state == GenericFile.DataState.NOTHING_READ_OR_SET
@@ -156,7 +156,7 @@ class TestReadFile:
 
             assert csv_test2_missing_guids.data_state == CsvFile.DataState.DATA_SET
             assert mock_guid.call_count == 9
-            for row in csv_test2_missing_guids.get_data().values():
+            for row in csv_test2_missing_guids.get_data():
                 assert row[CsvKeys.GUID.value] == "test"
 
 
@@ -179,9 +179,9 @@ class TestSortData:
         (["esperanto", "guid"], False, "guid", [(7, "BBBB"), (14, "LLLL")]),
     ])
     def test_sort(self, csv_test1: CsvFile, columns, reverse, result_column, expected_results):
-        csv_test1.sort_data(columns, reverse, False)
+        csv_test1.sort_data(columns, reverse)
 
-        sorted_data = list(csv_test1.get_data().values())
+        sorted_data = csv_test1.get_data()
 
         for result in expected_results:
             assert sorted_data[result[0]][result_column] == result[1]

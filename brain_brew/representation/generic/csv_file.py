@@ -48,6 +48,10 @@ class CsvFile(GenericFile):
 
         self.file_exists = True
 
+    def set_data(self, data_override: List[dict]):
+        super().set_data(data_override)
+        self.column_headers = list(data_override[0].keys()) if data_override else []
+
     def set_data_from_superset(self, superset: List[dict], column_header_override=None):
         if column_header_override:
             self.column_headers = column_header_override
