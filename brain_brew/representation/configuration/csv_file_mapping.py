@@ -28,7 +28,7 @@ class CsvFileMappingDerivative(YamlFile):
         CsvFileMappingKeys.REVERSE_SORT.value: ConfigKey(False, bool, None),
         CsvFileMappingKeys.DERIVATIVES.value: ConfigKey(False, list, None),
 
-        CsvFileMappingKeys.NOTE_MODEL.value: ConfigKey(False, str, None),
+        CsvFileMappingKeys.NOTE_MODEL.value: ConfigKey(False, str, None),  # Optional on Derivatives
     }
     subconfig_filter = None
 
@@ -54,8 +54,13 @@ class CsvFileMappingDerivative(YamlFile):
 
         self.note_model_name = self.get_config(CsvFileMappingKeys.NOTE_MODEL, "")
         self.note_model_name = None if self.note_model_name == "" else self.note_model_name
-        self.derivatives = [CsvFileMappingDerivative(config, read_now=read_now)
+
+        self.derivatives = [CsvFileMappingDerivative.create_derivative(config, read_now=read_now)
                             for config in self.get_config(CsvFileMappingKeys.DERIVATIVES, [])]
+
+    @classmethod
+    def create_derivative(cls, config_data, read_now=True):
+        return cls(config_data, read_now=read_now)
 
     def get_available_columns(self):
         return self.csv_file.column_headers + [col for der in self.derivatives for col in der.get_available_columns()]
@@ -118,7 +123,7 @@ class CsvFileMapping(CsvFileMappingDerivative, Verifiable, WritesFile):
         CsvFileMappingKeys.REVERSE_SORT.value: ConfigKey(False, bool, None),
         CsvFileMappingKeys.DERIVATIVES.value: ConfigKey(False, list, None),
 
-        CsvFileMappingKeys.NOTE_MODEL.value: ConfigKey(True, str, None),
+        CsvFileMappingKeys.NOTE_MODEL.value: ConfigKey(True, str, None),  # Required on top level
     }
 
     data_set_has_changed: bool

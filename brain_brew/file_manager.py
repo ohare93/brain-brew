@@ -1,7 +1,7 @@
 import glob
 import logging
 import pathlib
-from typing import Dict, List
+from typing import Dict, List, Union
 
 from brain_brew.interfaces.writes_file import WritesFile
 from brain_brew.representation.configuration.global_config import GlobalConfig
@@ -41,7 +41,7 @@ class FileManager:
         if FileManager.__instance:
             FileManager.__instance = None
 
-    def file_if_exists(self, file_location) -> GenericFile:
+    def file_if_exists(self, file_location) -> Union[GenericFile, None]:
         if file_location in self.known_files_dict.keys():
             return self.known_files_dict[file_location]
         return None
@@ -51,7 +51,7 @@ class FileManager:
             raise FileExistsError("File already known to FileManager, cannot be registered twice")
         self.known_files_dict.setdefault(full_path, file)
 
-    def media_file_if_exists(self, filename) -> MediaFile:
+    def media_file_if_exists(self, filename) -> Union[MediaFile, None]:
         if filename in self.known_media_files_dict.keys():
             return self.known_media_files_dict[filename]
         return None

@@ -37,7 +37,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
     subconfig_filter = None
 
     notes: DeckPartNotes
-    note_model_mappings: Dict[str, NoteModelMapping]
+    note_model_mappings_dict: Dict[str, NoteModelMapping]
     csv_file_mappings: List[CsvFileMapping]
 
     def __init__(self, config_data: dict, read_now=True):
@@ -46,9 +46,12 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
 
         self.notes = DeckPartNotes.create(self.get_config(BuildConfigKeys.NOTES), read_now=read_now)
 
-        nm_mappings = [NoteModelMapping(config, read_now=read_now)
-                                    for config in self.get_config(SourceCsvKeys.NOTE_MODEL_MAPPINGS)]
-        self.note_model_mappings = {mapping.note_model.name: mapping for mapping in nm_mappings}
+        nm_mapping = [NoteModelMapping(config, read_now=read_now)
+                                                         for config in
+                                                         self.get_config(SourceCsvKeys.NOTE_MODEL_MAPPINGS)
+                                                         ]
+        self.note_model_mappings_dict = {mapping.note_model.name: mapping
+                                         for mapping in nm_mapping}
 
         self.csv_file_mappings = [CsvFileMapping(config, read_now=read_now)
                                   for config in self.get_config(SourceCsvKeys.CSV_MAPPINGS)]
@@ -62,7 +65,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
     def verify_contents(self):
         errors = []
 
-        for nm in self.note_model_mappings.values():
+        for nm in self.note_model_mappings_dict.values():
             try:
                 nm.verify_contents()
             except KeyError as e:
@@ -78,7 +81,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
             # Check all references notemodels have a mapping
             for csv_map in self.csv_file_mappings:
                 for nm in csv_map.get_used_note_model_names():
-                    if nm not in self.note_model_mappings.keys():
+                    if nm not in self.note_model_mappings_dict.keys():
                         errors.append(f"Missing Note Model Map for {nm}")
 
         # Check each of the Csvs (or their derivatives) contain all the necessary columns for their stated note model
@@ -86,9 +89,11 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
             note_model_names = cfm.get_used_note_model_names()
             available_columns = cfm.get_available_columns()
 
-            referenced_note_models_maps = [value for key, value in self.note_model_mappings.items() if key in note_model_names]
+            referenced_note_models_maps = [value for key, value in self.note_model_mappings_dict.items() if
+                                           key in note_model_names]
             for nm_map in referenced_note_models_maps:
-                missing_columns = [col for col in nm_map.note_model.fields_lowercase if col not in nm_map.csv_headers_map_to_note_fields(available_columns)]
+                missing_columns = [col for col in nm_map.note_model.fields_lowercase if
+                                   col not in nm_map.csv_headers_map_to_note_fields(available_columns)]
                 if missing_columns:
                     errors.append(KeyError(f"Csvs are missing columns from {nm_map.note_model.name}", missing_columns))
 
@@ -114,7 +119,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
         for row in csv_rows:
             note = top_level_note_structure.copy()
 
-            row_nm: NoteModelMapping = self.note_model_mappings[row[DeckPartNoteKeys.NOTE_MODEL.value]]
+            row_nm: NoteModelMapping = self.note_model_mappings_dict[row[DeckPartNoteKeys.NOTE_MODEL.value]]
 
             filtered_fields = row_nm.csv_row_map_to_note_fields(row)
 
@@ -134,13 +139,13 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
 
         csv_data: Dict[str, dict] = {}
         for note in notes_data:
-
             nm_name = note[DeckPartNoteKeys.NOTE_MODEL.value]
-            row = self.note_model_mappings[nm_name].note_model.zip_field_to_data(note[DeckPartNoteKeys.FIELDS.value])
+            row = self.note_model_mappings_dict[nm_name].note_model.zip_field_to_data(
+                note[DeckPartNoteKeys.FIELDS.value])
             row[CsvKeys.GUID.value] = note[DeckPartNoteKeys.GUID.value]
             row[CsvKeys.TAGS.value] = self.join_tags(note[DeckPartNoteKeys.TAGS.value])
 
-            formatted_row = self.note_model_mappings[nm_name].note_fields_map_to_csv_row(row)
+            formatted_row = self.note_model_mappings_dict[nm_name].note_fields_map_to_csv_row(row)
 
             csv_data.setdefault(row[CsvKeys.GUID.value], formatted_row)
 
@@ -150,7 +155,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
         note_models_used = {note[DeckPartNoteKeys.NOTE_MODEL.value] for note in notes}
         errors = [TypeError(f"Unknown note model type '{model}' in notes '{self.notes.file_location}. "
                             f"Add {SourceCsvKeys.NOTE_MODEL_MAPPINGS.value} for that model.")
-                  for model in note_models_used if model not in self.note_model_mappings.keys()]
+                  for model in note_models_used if model not in self.note_model_mappings_dict.keys()]
 
         if errors:
             raise Exception(errors)
@@ -165,4 +170,3 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
         for cfm in self.csv_file_mappings:
             cfm.compile_data()
             cfm.set_relevant_data(csv_data)
-

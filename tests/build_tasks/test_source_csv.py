@@ -1,10 +1,14 @@
-from unittest.mock import patch
+from typing import List
+from unittest.mock import patch, MagicMock
 
 import pytest
 
-from brain_brew.build_tasks.source_csv import SourceCsv
+from brain_brew.build_tasks.source_csv import SourceCsv, SourceCsvKeys
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
+from brain_brew.representation.configuration.csv_file_mapping import CsvFileMapping
+from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 from brain_brew.representation.generic.csv_file import CsvFile
+from brain_brew.representation.generic.generic_file import GenericFile
 from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
 from brain_brew.representation.json.deck_part_notes import DeckPartNotes
 from tests.test_files import TestFiles
@@ -12,45 +16,32 @@ from tests.representation.configuration.test_global_config import global_config
 from tests.representation.generic.test_csv_file import csv_test1, csv_test2, csv_test1_split1, csv_test1_split2
 from tests.representation.json.test_deck_part_notes import dp_notes_test1, dp_notes_test2
 from tests.representation.json.test_deck_part_note_model import dp_note_model_test1
+from tests.representation.configuration.test_note_model_mapping import nmm_test1, setup_nmm_config
+from tests.representation.configuration.test_csv_file_mapping import csv_file_mapping1, csv_file_mapping2, \
+    setup_csv_fm_config
 
 
-def setup_csv_source_config(notes: str, note_model: str, csv: str, sort_by_columns: list,
-                            reverse_sort: bool, personal_fields: list, columns: dict):
+def setup_source_csv_config(notes: str, nmm: list, csv_mappings: list):
     return {
-        "notes": notes,
-        "csv": csv,
-        "note_model": note_model,
-        "sort_by_columns": sort_by_columns,
-        "reverse_sort": reverse_sort,
-        "columns": columns,
-        "personal_fields": personal_fields
+        SourceCsvKeys.NOTES.value: notes,
+        SourceCsvKeys.NOTE_MODEL_MAPPINGS.value: nmm,
+        SourceCsvKeys.CSV_MAPPINGS.value: csv_mappings
     }
 
 
-def get_csv_default(dp_note_model_test1) -> SourceCsv:
-    config = setup_csv_source_config("", "", "", [], False, [],
-                                     {"guid": "guid", "tags": "tags", "english": "word", "danish": "otherword"})
+def get_csv_default(notes: DeckPartNotes, nmm: List[NoteModelMapping], csv_maps: List[CsvFileMapping]) -> SourceCsv:
+    csv_source = SourceCsv(setup_source_csv_config("", [], []), read_now=False)
 
-    csv_source = SourceCsv(config, read_now=False)
-    csv_source.note_model = dp_note_model_test1
+    csv_source.notes = notes
+    csv_source.note_model_mappings_dict = {nm_map.note_model.name: nm_map for nm_map in nmm}
+    csv_source.csv_file_mappings = csv_maps
+
     return csv_source
 
 
-@pytest.fixture(name="csv_source_default")
-def csv_source_default(dp_note_model_test1) -> SourceCsv:
-    return get_csv_default(dp_note_model_test1)
-
-
-@pytest.fixture(name="csv_source_default2")
-def csv_source_default2(dp_note_model_test1) -> SourceCsv:
-    return get_csv_default(dp_note_model_test1)
-
-
 @pytest.fixture()
-def csv_source_test1(csv_source_default, csv_test1, dp_notes_test1) -> SourceCsv:
-    csv_source_default.csv_file = csv_test1
-    csv_source_default.notes = dp_notes_test1
-    return csv_source_default
+def csv_source_test1(dp_notes_test1, nmm_test1, csv_file_mapping1) -> SourceCsv:
+    return get_csv_default(dp_notes_test1, [nmm_test1], [csv_file_mapping1])
 
 
 @pytest.fixture()
@@ -68,10 +59,8 @@ def csv_source_test1_split2(csv_source_default2, csv_test1_split2, dp_notes_test
 
 
 @pytest.fixture()
-def csv_source_test2(csv_source_default, csv_test2, dp_notes_test2) -> SourceCsv:
-    csv_source_default.csv_file = csv_test2
-    csv_source_default.notes = dp_notes_test2
-    return csv_source_default
+def csv_source_test2(dp_notes_test2, nmm_test1, csv_file_mapping2) -> SourceCsv:
+    return get_csv_default(dp_notes_test2, [nmm_test1], [csv_file_mapping2])
 
 
 # @pytest.fixture()
@@ -81,88 +70,77 @@ def csv_source_test2(csv_source_default, csv_test2, dp_notes_test2) -> SourceCsv
 
 
 class TestConstructor:
-    @pytest.mark.parametrize("read_file_now, notes, note_model, csv, sort_by_columns, reverse_sort, personal_fields, columns", [
-        (False, "notes.json", "note_model.json", "first.csv", ["guid"], False, ["x"],
-            {"guid": "guid", "tags": "tags", "english": "word", "danish": "otherword"}),
-        (True, "othernotes.json", "model_model.json", "second.csv", ["guid", "note_model_name"], True, [],
-         {"guid": "guid", "tags": "tags"}),
-        (False, "notes.json", "note_model-json", "first.csv", ["guid"], False, ["x"],
-             {"guid": "guid", "tags": "tags", "english": "word", "danish": "otherword"})
+    def test_runs(self):
+        source_csv = get_csv_default(None, [], [])
+        assert isinstance(source_csv, SourceCsv)
+
+    @pytest.mark.parametrize("notes, model, columns, personal_fields, csv_file", [
+        ("notes.json", "Test Model", {"a": "b"}, ["extra"], "file.csv")
     ])
-    def test_runs(self, read_file_now, notes, note_model, csv, sort_by_columns, reverse_sort, personal_fields, columns):
-        config = setup_csv_source_config(notes, note_model, csv, sort_by_columns,
-                                         reverse_sort, personal_fields, columns)
+    def test_calls_correctly(self, notes, model, columns, personal_fields, csv_file, nmm_test1):
+        nmm_config = [setup_nmm_config(model, columns, personal_fields)]
+        csv_config = [setup_csv_fm_config(csv_file, note_model_name=model)]
 
-        def assert_dp_note_model(passed_file, read_now):
-            assert passed_file == note_model
-            assert read_now == read_file_now
+        def assert_csv(config, read_now):
+            assert config in csv_config
+            assert read_now is False
 
-        def assert_dp_notes(passed_file, read_now):
-            assert passed_file == notes
-            assert read_now == read_file_now
+        def assert_nmm(config, read_now):
+            assert config in nmm_config
+            assert read_now is False
 
-        def assert_csv(passed_file, read_now):
-            assert passed_file == csv
-            assert read_now == read_file_now
+        def assert_dpn(config, read_now):
+            assert config == notes
+            assert read_now is False
 
-        with patch.object(DeckPartNoteModel, "create", side_effect=assert_dp_note_model) as mock_nm, \
-             patch.object(DeckPartNotes, "create", side_effect=assert_dp_notes) as mock_notes, \
-             patch.object(CsvFile, "create", side_effect=assert_csv) as mock_csv:
+        with patch.object(CsvFileMapping, "__init__", side_effect=assert_csv), \
+                patch.object(NoteModelMapping, "__init__", side_effect=assert_nmm), \
+                patch.object(NoteModelMapping, "note_model"), \
+                patch.object(DeckPartNotes, "create", side_effect=assert_dpn):
 
-            source_csv = SourceCsv(config, read_now=read_file_now)
+            #nmm_mock.return_value = False
 
-            assert isinstance(source_csv, SourceCsv)
-            assert len(source_csv.columns) == len(columns)
-            assert len(source_csv.personal_fields) == len(personal_fields)
-            assert source_csv.reverse_sort == reverse_sort
-            assert source_csv.sort_by_columns == sort_by_columns
+            source_csv = SourceCsv(setup_source_csv_config(
+                notes,
+                nmm_config,
+                csv_config
+            ), read_now=False)
 
-            assert mock_nm.call_count == 1
-            assert mock_notes.call_count == 1
-            assert mock_csv.call_count == 1
 
     # def test_missing_non_required_columns
 
 
 class TestSourceToDeckParts:
-    def test_runs_first(self, csv_source_test1: SourceCsv, dp_notes_test1: DeckPartNotes):
+    def test_runs_first(self, csv_source_test1, dp_notes_test1, csv_source_test2, dp_notes_test2):
+        self.run_s2dp(csv_source_test1, dp_notes_test1)
+        self.run_s2dp(csv_source_test2, dp_notes_test2)
+
+    @staticmethod
+    def run_s2dp(csv_source: SourceCsv, dp_notes: DeckPartNotes):
         def assert_format(notes_data):
-            assert notes_data == dp_notes_test1.get_data()[DeckPartNoteKeys.NOTES.value]
+            assert notes_data == dp_notes.get_data()[DeckPartNoteKeys.NOTES.value]
 
         with patch.object(DeckPartNotes, "set_data", side_effect=assert_format) as mock_set_data:
-            csv_source_test1.source_to_deck_parts()
-            assert mock_set_data.call_count == 1
-
-    def test_runs_second(self, csv_source_test2: SourceCsv, dp_notes_test2: DeckPartNotes):
-        def assert_format(notes_data):
-            assert notes_data == dp_notes_test2.get_data()[DeckPartNoteKeys.NOTES.value]
-
-        with patch.object(DeckPartNotes, "set_data", side_effect=assert_format) as mock_set_data:
-            csv_source_test2.source_to_deck_parts()
+            csv_source.source_to_deck_parts()
             assert mock_set_data.call_count == 1
 
 
 class TestDeckPartsToSource:
-    relevant_columns = ["english", "danish", "guid", "tags"]
+    def test_runs_with_no_change(self, csv_source_test1, csv_test1, csv_source_test2, csv_test2):
 
-    def test_runs_first(self, csv_source_test1: SourceCsv, csv_test1: CsvFile):
+        self.run_dpts(csv_source_test1, csv_test1)
+        self.run_dpts(csv_source_test2, csv_test2)
+
+    @staticmethod
+    def run_dpts(csv_source: SourceCsv, csv_file: CsvFile):
         def assert_format(source_data):
-            assert source_data == csv_test1.get_relevant_data(self.relevant_columns)
+            assert source_data == csv_file.get_data()
 
-        with patch.object(CsvFile, "set_relevant_data", side_effect=assert_format) as mock_set_data:
-            csv_source_test1.deck_parts_to_source()
+        with patch.object(GenericFile, "set_data", side_effect=assert_format) as mock_set_data:
+            csv_source.deck_parts_to_source()
+            assert csv_source.csv_file_mappings[0].data_set_has_changed is False
+
+            csv_source.csv_file_mappings[0].data_set_has_changed = True
+            csv_source.csv_file_mappings[0].write_file_on_close()
             assert mock_set_data.call_count == 1
 
-    def test_runs_second(self, csv_source_test2: SourceCsv, csv_test2: CsvFile):
-        def assert_format(source_data):
-            assert source_data == csv_test2.get_relevant_data(self.relevant_columns)
-
-        with patch.object(CsvFile, "set_relevant_data", side_effect=assert_format) as mock_set_data:
-            csv_source_test2.deck_parts_to_source()
-            assert mock_set_data.call_count == 1
-
-
-# TODO: Tests still remaining
-#  - Sorting
-#  - Incorrect values return appropriate errors
-#  - The rest of the functions in SourceCsv, not just the data transformers

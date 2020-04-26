@@ -48,7 +48,7 @@ class CsvFile(GenericFile):
 
         self.file_exists = True
 
-    def set_data(self, data_override: List[dict]):
+    def set_data(self, data_override):
         super().set_data(data_override)
         self.column_headers = list(data_override[0].keys()) if data_override else []
 

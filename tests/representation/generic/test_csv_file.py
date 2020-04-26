@@ -39,7 +39,7 @@ def csv_test1_not_read_initially_test():
 
 @pytest.fixture()
 def csv_test2_missing_guids():
-    return CsvFile(TestFiles.CsvFiles.TEST2_MISSING_GUIDS, read_now=False)
+    return CsvFile(TestFiles.CsvFiles.TEST2_MISSING_GUIDS)
 
 
 @pytest.fixture()
@@ -62,77 +62,19 @@ class TestConstructor:
         ["X", "Field name with spaces", "", "MorphMan_FocusMorph"],
     ])
     def test_data_override(self, column_headers):
-        data_override = {"AAAA": {key: num for key in column_headers} for num in range(0, 5)}
+        data_override = [{key: "value" for key in column_headers}]
         csv = CsvFile("file", data_override=data_override)
 
         assert csv.column_headers == column_headers
 
 
-class TestGetRelevantData:
-    def test_data_correct(self, csv_test1):
-        relevant_columns = ["guid", "english", "danish"]
-        data = csv_test1.get_relevant_data(relevant_columns)
+def test_to_filename_csv():
+    expected = "read-this-file.csv"
 
-        for guid in data:
-            assert len(data[guid]) == 3
-            for column in relevant_columns:
-                assert column in data[guid]
-
-    def test_capitilisation_ignored(self, csv_test1):
-        relevant_columns = ["GUID", "English", "DaNiSh"]
-        data = csv_test1.get_relevant_data(relevant_columns)
-
-        assert isinstance(data, dict)
-        assert list(data['AAAA'].keys()) == ["guid", "english", "danish"]
-        assert len(data) == 15
-
-    def test_nothing_relevant_no_data(self, csv_test1):
-        relevant_columns = []
-        data = csv_test1.get_relevant_data(relevant_columns)
-
-        assert isinstance(data, list)
-        assert len(data) == 0
-
-    def test_to_filename_csv(self):
-        expected = "read-this-file.csv"
-
-        assert expected == CsvFile.to_filename_csv("read this file")
-        assert expected == CsvFile.to_filename_csv("read-this-file")
-        assert expected == CsvFile.to_filename_csv("read-this-file.csv")
-        assert expected == CsvFile.to_filename_csv("read          this        file")
-
-
-class TestSetRelevantData:
-    def test_no_change(self, csv_test1: CsvFile, csv_test1_split1: CsvFile):
-        assert csv_test1.data_state == GenericFile.DataState.READ_IN_DATA
-
-        previous_data = csv_test1.get_data(deep_copy=True)
-        csv_test1.set_relevant_data(csv_test1_split1.get_data())
-
-        assert previous_data == csv_test1.get_data()
-        assert csv_test1.data_state == GenericFile.DataState.READ_IN_DATA
-
-    def test_change_but_no_extra(self, csv_test1, csv_test2):
-        assert csv_test1.data_state == GenericFile.DataState.READ_IN_DATA
-        previous_data = csv_test1.get_data(deep_copy=True)
-        assert len(previous_data) == 15
-
-        csv_test1.set_relevant_data(csv_test2.get_data())
-
-        assert previous_data != csv_test1.get_data()
-        assert len(csv_test1.get_data()) == 15
-        assert csv_test1.data_state == GenericFile.DataState.DATA_SET
-
-    def test_change_extra_row(self, csv_test1, csv_test3):
-        assert csv_test1.data_state == GenericFile.DataState.READ_IN_DATA
-        previous_data = csv_test1.get_data(deep_copy=True)
-        assert len(previous_data) == 15
-
-        csv_test1.set_relevant_data(csv_test3.get_data())
-
-        assert previous_data != csv_test1.get_data()
-        assert len(csv_test1.get_data()) == 16
-        assert csv_test1.data_state == GenericFile.DataState.DATA_SET
+    assert expected == CsvFile.to_filename_csv("read this file")
+    assert expected == CsvFile.to_filename_csv("read-this-file")
+    assert expected == CsvFile.to_filename_csv("read-this-file.csv")
+    assert expected == CsvFile.to_filename_csv("read          this        file")
 
 
 class TestReadFile:
@@ -147,17 +89,6 @@ class TestReadFile:
         assert len(csv_test1_not_read_initially_test.get_data()) == 15
         assert "guid" in csv_test1_not_read_initially_test.column_headers
         assert csv_test1_not_read_initially_test.data_state == GenericFile.DataState.READ_IN_DATA
-
-    def test_when_missing_guids(self, csv_test2_missing_guids):
-        with patch("brain_brew.representation.generic.csv_file.generate_anki_guid") as mock_guid:
-            mock_guid.return_value = "test"
-
-            csv_test2_missing_guids.read_file()
-
-            assert csv_test2_missing_guids.data_state == CsvFile.DataState.DATA_SET
-            assert mock_guid.call_count == 9
-            for row in csv_test2_missing_guids.get_data():
-                assert row[CsvKeys.GUID.value] == "test"
 
 
 class TestWriteFile:

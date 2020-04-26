@@ -47,7 +47,7 @@ class NoteModelMapping(YamlFile, Verifiable):
     }
     subconfig_filter = None
 
-    note_model: DeckPartNoteModel
+    note_model: DeckPartNoteModel = None
     columns: List[FieldMapping]
     personal_fields: List[FieldMapping]
 
