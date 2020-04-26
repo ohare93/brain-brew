@@ -50,7 +50,7 @@ class TestSortData:
     ])
     def test_sort(self, dp_notes_test1: DeckPartNotes, keys, reverse, result_column, expected_results):
         dp_notes_test1.sort_data(
-            keys, reverse, False
+            keys, reverse
         )
 
         sorted_data = dp_notes_test1.get_data()[DeckPartNoteKeys.NOTES.value]

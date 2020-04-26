@@ -1,4 +1,3 @@
-import logging
 from enum import Enum
 
 from brain_brew.build_tasks.build_task_generic import BuildTaskGeneric
@@ -8,7 +7,7 @@ from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.file_manager import FileManager
 from brain_brew.representation.generic.media_file import MediaFile
 from brain_brew.utils import blank_str_if_none
-from brain_brew.representation.configuration.yaml_file import ConfigKey, YamlFile
+from brain_brew.representation.generic.yaml_file import ConfigKey, YamlFile
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.deck_part_header import DeckPartHeader
 from brain_brew.representation.json.deck_part_notemodel import CANoteModelKeys, DeckPartNoteModel
@@ -68,9 +67,6 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
         config_data = YamlFile.read_file(yaml_file_name)
 
         return SourceCrowdAnki(config_data, read_now=read_now)
-
-    def extract_media(self):
-        raise NotImplementedError
 
     def notes_to_deck_parts(self, notes_json, note_models_id_name_dict):
         for note in notes_json:

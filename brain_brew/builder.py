@@ -1,14 +1,13 @@
-import logging
 from enum import Enum
 
 from brain_brew.constants.build_config_keys import BuildTaskEnum
 from brain_brew.build_tasks.source_crowd_anki import SourceCrowdAnki
 from brain_brew.build_tasks.source_csv import SourceCsv
-from brain_brew.build_tasks.source_csv_collection import SourceCsvCollection
 from brain_brew.file_manager import FileManager
+from brain_brew.interfaces.verifiable import Verifiable
 from brain_brew.utils import single_item_to_list
 from brain_brew.representation.configuration.global_config import GlobalConfig
-from brain_brew.representation.configuration.yaml_file import YamlFile, ConfigKey
+from brain_brew.representation.generic.yaml_file import YamlFile, ConfigKey
 
 
 class BuilderKeys(Enum):
@@ -27,7 +26,7 @@ class Builder(YamlFile):
     global_config: GlobalConfig
 
     BUILD_TASK_DEFINITIONS: dict
-    KNOWN_BUILD_TASK_CLASSES = [SourceCrowdAnki, SourceCsv, SourceCsvCollection]
+    KNOWN_BUILD_TASK_CLASSES = [SourceCrowdAnki, SourceCsv]
 
     build_tasks = []
     file_manager: FileManager
@@ -67,6 +66,11 @@ class Builder(YamlFile):
 
         if self.reverse_run_direction:
             self.build_tasks = list(reversed(self.build_tasks))
+
+        # Verify tasks
+        for source, task_to_execute in self.build_tasks:
+            if isinstance(source, Verifiable):
+                source.verify_contents()
 
     def execute(self):
         for (source, task_to_execute) in self.build_tasks:

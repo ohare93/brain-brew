@@ -3,16 +3,27 @@ tasks:
   - csv_collection_to_deck_parts:
       notes: csv_first_attempt.json
 
-      subconfig:
-        - build_tasks/csv/one_per_note_model/words.yaml
-        - build_tasks/csv/one_per_note_model/nouns.yaml
-        - build_tasks/csv/one_per_note_model/verbs.yaml
-        - build_tasks/csv/one_per_note_model/sentences.yaml
+      note_model_mappings:
+        - note_model: LL Word
+          csv_columns_to_fields:
+            guid: guid
+            tags: tags
+            english: Word
+            danish: X Word
+          personal_fields: []
 
-  - csv_to_deck_parts:
-      notes: csv_first_attempt.json
+      csv_file_mappings:
+        - csv: source/vocab/main.csv
+          note_model: LL Word
+          sort_by_columns: [english]
+          reverse_sort: no
 
-      subconfig: build_tasks/csv/one_per_note_model/words.yaml
+          derivatives:
+            - csv: source/vocab/derivatives/danish/danish_verbs.csv
+              note_model: LL Verb
+            - csv: source/vocab/derivatives/danish/danish_nouns.csv
+              note_model: LL Noun
+
 
   - crowdanki_to_deck_parts:
       subconfig: build_tasks/crowdanki/Danish_Esperanto.yaml
