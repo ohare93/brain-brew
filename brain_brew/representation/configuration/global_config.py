@@ -80,10 +80,12 @@ class GlobalConfig(YamlFile):
 
     @classmethod
     def get_default(cls):
-        global_config_name = "_config.yaml"
-        global_config_filepath = f"{global_config_name}"
+        global_config_name = "brain_brew_config.yaml"
+        return cls.from_yaml(global_config_name)
 
-        gb_config_yaml = YamlFile.read_file(global_config_filepath)
+    @classmethod
+    def from_yaml(cls, yaml_file):
+        gb_config_yaml = YamlFile.read_file(yaml_file)
 
         return GlobalConfig(gb_config_yaml)
 

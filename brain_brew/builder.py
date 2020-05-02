@@ -31,7 +31,7 @@ class Builder(YamlFile):
     build_tasks = []
     file_manager: FileManager
 
-    def __init__(self, config_data, global_config, other_args, read_now=True):
+    def __init__(self, config_data, global_config, read_now=True):
         self.file_manager = FileManager.get_instance()
 
         self.BUILD_TASK_DEFINITIONS = {build_task.key_name: build_task

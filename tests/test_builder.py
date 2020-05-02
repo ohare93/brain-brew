@@ -16,7 +16,7 @@ class TestConstructor:
                 patch.object(SourceCrowdAnki, "__init__", return_value=None) as mock_ca:
 
             data = YamlFile.read_file(TestFiles.BuildConfig.ONE_OF_EACH_TYPE)
-            builder = Builder(data, global_config, None, read_now=False)
+            builder = Builder(data, global_config, read_now=False)
 
             assert len(builder.build_tasks) == 2
             assert mock_csv.call_count == 1
