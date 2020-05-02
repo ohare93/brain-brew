@@ -30,7 +30,8 @@ class BBArgumentReader(ArgumentParser):
             "-r", "--reversed",
             action="store_true",
             dest="run_reversed",
-            default=False
+            default=False,
+            help="Run the builder file in reverse"
         )
 
     def get_parsed(self, override_args=None):
