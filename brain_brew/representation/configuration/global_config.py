@@ -23,7 +23,6 @@ class GlobalConfig(YamlFile):
         reverse_sort: bool = False
         join_values_with: str = " "
 
-    authors: object
     deck_parts: DeckPartConfig
     flags: ConfigFlags
     deck_part_notes_flags: DeckPartNoteFlags
@@ -31,7 +30,6 @@ class GlobalConfig(YamlFile):
 
     config_entry = {}
     expected_keys = {
-        ConfigKeys.AUTHORS.value: ConfigKey(False, list, None),
         ConfigKeys.DECK_PARTS.value: ConfigKey(True, dict, {
             ConfigKeys.HEADERS.value: ConfigKey(True, str, None),
             ConfigKeys.NOTE_MODELS.value: ConfigKey(True, str, None),
@@ -60,7 +58,6 @@ class GlobalConfig(YamlFile):
         self.setup_config_with_subconfig_replacement(config_data)
         self.verify_config_entry()
 
-        self.authors = self.get_config(ConfigKeys.AUTHORS, {})
         dp = self.get_config(ConfigKeys.DECK_PARTS)
         self.deck_parts = DeckPartConfig(
             dp[ConfigKeys.HEADERS.value], dp[ConfigKeys.NOTE_MODELS.value],

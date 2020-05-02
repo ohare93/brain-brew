@@ -27,12 +27,16 @@ class TestArguments:
         with pytest.raises(SystemExit):
             parsed_args = arg_reader_test1.get_parsed(arguments)
 
-    @pytest.mark.parametrize("arguments, builder_file, config_file", [
-        (["test_builder.yaml"], "test_builder.yaml", None),
-        (["test_builder.yaml", "--config", "other_config.yaml"], "test_builder.yaml", "other_config.yaml"),
+    @pytest.mark.parametrize("arguments, builder_file, config_file, run_reversed", [
+        (["test_builder.yaml"], "test_builder.yaml", None, False),
+        (["test_builder.yaml", "--reversed"], "test_builder.yaml", None, True),
+        (["test_builder.yaml", "-r"], "test_builder.yaml", None, True),
+        (["test_builder.yaml", "--config", "other_config.yaml"], "test_builder.yaml", "other_config.yaml", False),
+        (["test_builder.yaml", "--config", "other_config.yaml", "-r"], "test_builder.yaml", "other_config.yaml", True),
     ])
-    def test_correct_arguments(self, arg_reader_test1, arguments, builder_file, config_file):
+    def test_correct_arguments(self, arg_reader_test1, arguments, builder_file, config_file, run_reversed):
         parsed_args = arg_reader_test1.parse_args(arguments)
 
         assert parsed_args.builder_file == builder_file
         assert parsed_args.config_file == config_file
+        assert parsed_args.run_reversed == run_reversed

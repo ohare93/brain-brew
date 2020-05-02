@@ -16,7 +16,7 @@ def main():
 
     # Read in Arguments
     argument_reader = BBArgumentReader()
-    builder_file_name, global_config_file = argument_reader.get_parsed()
+    builder_file_name, global_config_file, run_reversed = argument_reader.get_parsed()
     builder_config = YamlFile.read_file(builder_file_name)
 
     # Read in Global Config File
@@ -24,7 +24,7 @@ def main():
     file_manager = FileManager()
 
     # Run chosen Builder
-    builder = Builder(builder_config, global_config)
+    builder = Builder(builder_config, global_config, run_reversed=run_reversed)
     builder.execute()
 
 

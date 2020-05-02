@@ -31,7 +31,7 @@ class Builder(YamlFile):
     build_tasks = []
     file_manager: FileManager
 
-    def __init__(self, config_data, global_config, read_now=True):
+    def __init__(self, config_data, global_config, run_reversed=False, read_now=True):
         self.file_manager = FileManager.get_instance()
 
         self.BUILD_TASK_DEFINITIONS = {build_task.key_name: build_task
@@ -44,7 +44,7 @@ class Builder(YamlFile):
 
         self.global_config = global_config
 
-        self.reverse_run_direction = self.get_config(BuilderKeys.REVERSE_RUN_DIRECTION, False)
+        self.reverse_run_direction = run_reversed or self.get_config(BuilderKeys.REVERSE_RUN_DIRECTION, False)
 
         # Tasks
         for key in self.config_entry[BuilderKeys.TASKS.value]:
