@@ -255,9 +255,7 @@
                 "en banan"
             ],
             "guid": "DDDD",
-            "tags": [
-                ""
-            ],
+            "tags": [],
             "__type__": "Note",
             "data": "",
             "flags": 0,
@@ -269,9 +267,7 @@
                 "en kat"
             ],
             "guid": "EEEE",
-            "tags": [
-                ""
-            ],
+            "tags": [],
             "__type__": "Note",
             "data": "",
             "flags": 0,
@@ -283,9 +279,7 @@
                 "en hund"
             ],
             "guid": "FFFF",
-            "tags": [
-                ""
-            ],
+            "tags": [],
             "__type__": "Note",
             "data": "",
             "flags": 0,
@@ -297,9 +291,7 @@
                 "en fisk"
             ],
             "guid": "GGGG",
-            "tags": [
-                ""
-            ],
+            "tags": [],
             "__type__": "Note",
             "data": "",
             "flags": 0,
@@ -311,9 +303,7 @@
                 "en fugl"
             ],
             "guid": "HHHH",
-            "tags": [
-                ""
-            ],
+            "tags": [],
             "__type__": "Note",
             "data": "",
             "flags": 0,
@@ -325,9 +315,7 @@
                 "en ko"
             ],
             "guid": "IIII",
-            "tags": [
-                ""
-            ],
+            "tags": [],
             "__type__": "Note",
             "data": "",
             "flags": 0,
@@ -339,9 +327,7 @@
                 "et svin"
             ],
             "guid": "JJJJ",
-            "tags": [
-                ""
-            ],
+            "tags": [],
             "__type__": "Note",
             "data": "",
             "flags": 0,
@@ -353,9 +339,7 @@
                 "en mus"
             ],
             "guid": "KKKK",
-            "tags": [
-                ""
-            ],
+            "tags": [],
             "__type__": "Note",
             "data": "",
             "flags": 0,
@@ -367,9 +351,7 @@
                 "en hest"
             ],
             "guid": "LLLL",
-            "tags": [
-                ""
-            ],
+            "tags": [],
             "__type__": "Note",
             "data": "",
             "flags": 0,
@@ -381,9 +363,7 @@
                 "at lære"
             ],
             "guid": "MMMM",
-            "tags": [
-                ""
-            ],
+            "tags": [],
             "__type__": "Note",
             "data": "",
             "flags": 0,
@@ -395,9 +375,7 @@
                 "at spise"
             ],
             "guid": "NNNN",
-            "tags": [
-                ""
-            ],
+            "tags": [],
             "__type__": "Note",
             "data": "",
             "flags": 0,
@@ -409,9 +387,7 @@
                 "at drikke"
             ],
             "guid": "OOOO",
-            "tags": [
-                ""
-            ],
+            "tags": [],
             "__type__": "Note",
             "data": "",
             "flags": 0,

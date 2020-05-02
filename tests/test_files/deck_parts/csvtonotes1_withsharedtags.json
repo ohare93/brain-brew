@@ -46,9 +46,7 @@
             ],
             "guid": "DDDD",
             "note_model": "Test Model",
-            "tags": [
-                ""
-            ]
+            "tags": []
         },
         {
             "fields": [
@@ -57,9 +55,7 @@
             ],
             "guid": "EEEE",
             "note_model": "Test Model",
-            "tags": [
-                ""
-            ]
+            "tags": []
         },
         {
             "fields": [
@@ -68,9 +64,7 @@
             ],
             "guid": "FFFF",
             "note_model": "Test Model",
-            "tags": [
-                ""
-            ]
+            "tags": []
         },
         {
             "fields": [
@@ -79,9 +73,7 @@
             ],
             "guid": "GGGG",
             "note_model": "Test Model",
-            "tags": [
-                ""
-            ]
+            "tags": []
         },
         {
             "fields": [
@@ -90,9 +82,7 @@
             ],
             "guid": "HHHH",
             "note_model": "Test Model",
-            "tags": [
-                ""
-            ]
+            "tags": []
         },
         {
             "fields": [
@@ -101,9 +91,7 @@
             ],
             "guid": "IIII",
             "note_model": "Test Model",
-            "tags": [
-                ""
-            ]
+            "tags": []
         },
         {
             "fields": [
@@ -112,9 +100,7 @@
             ],
             "guid": "JJJJ",
             "note_model": "Test Model",
-            "tags": [
-                ""
-            ]
+            "tags": []
         },
         {
             "fields": [
@@ -123,9 +109,7 @@
             ],
             "guid": "KKKK",
             "note_model": "Test Model",
-            "tags": [
-                ""
-            ]
+            "tags": []
         },
         {
             "fields": [
@@ -134,9 +118,7 @@
             ],
             "guid": "LLLL",
             "note_model": "Test Model",
-            "tags": [
-                ""
-            ]
+            "tags": []
         },
         {
             "fields": [
@@ -145,9 +127,7 @@
             ],
             "guid": "MMMM",
             "note_model": "Test Model",
-            "tags": [
-                ""
-            ]
+            "tags": []
         },
         {
             "fields": [
@@ -156,9 +136,7 @@
             ],
             "guid": "NNNN",
             "note_model": "Test Model",
-            "tags": [
-                ""
-            ]
+            "tags": []
         },
         {
             "fields": [
@@ -167,9 +145,7 @@
             ],
             "guid": "OOOO",
             "note_model": "Test Model",
-            "tags": [
-                ""
-            ]
+            "tags": []
         }
     ]
 }

@@ -192,10 +192,9 @@ class DeckPartNotes(JsonFile):
         del top_level[DeckPartNoteKeys.SHARED_TAGS.value]
 
     def sort_data(self, sort_by_keys, reverse_sort):
+        sorted_data = self._sort_data(self._data[DeckPartNoteKeys.NOTES.value], sort_by_keys, reverse_sort)
 
-        sorted = self._sort_data(self._data[DeckPartNoteKeys.NOTES.value], sort_by_keys, reverse_sort)
-
-        self._data[DeckPartNoteKeys.NOTES.value] = sorted
+        self._data[DeckPartNoteKeys.NOTES.value] = sorted_data
 
     def find_all_media_references(self):
         unknown_references = []

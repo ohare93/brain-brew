@@ -43,9 +43,7 @@
                     "en banan"
                 ],
                 "guid": "DDDD",
-                "tags": [
-                    ""
-                ]
+                "tags": []
             },
             {
                 "fields": [
@@ -53,9 +51,7 @@
                     "en kat"
                 ],
                 "guid": "EEEE",
-                "tags": [
-                    ""
-                ]
+                "tags": []
             },
             {
                 "fields": [
@@ -63,9 +59,7 @@
                     "en hund"
                 ],
                 "guid": "FFFF",
-                "tags": [
-                    ""
-                ]
+                "tags": []
             },
             {
                 "fields": [
@@ -73,9 +67,7 @@
                     "en fisk"
                 ],
                 "guid": "GGGG",
-                "tags": [
-                    ""
-                ]
+                "tags": []
             },
             {
                 "fields": [
@@ -83,9 +75,7 @@
                     "en fugl"
                 ],
                 "guid": "HHHH",
-                "tags": [
-                    ""
-                ]
+                "tags": []
             },
             {
                 "fields": [
@@ -93,9 +83,7 @@
                     "en ko"
                 ],
                 "guid": "IIII",
-                "tags": [
-                    ""
-                ]
+                "tags": []
             },
             {
                 "fields": [
@@ -103,9 +91,7 @@
                     "et svin"
                 ],
                 "guid": "JJJJ",
-                "tags": [
-                    ""
-                ]
+                "tags": []
             },
             {
                 "fields": [
@@ -113,9 +99,7 @@
                     "en mus"
                 ],
                 "guid": "KKKK",
-                "tags": [
-                    ""
-                ]
+                "tags": []
             },
             {
                 "fields": [
@@ -123,9 +107,7 @@
                     "en hest"
                 ],
                 "guid": "LLLL",
-                "tags": [
-                    ""
-                ]
+                "tags": []
             },
             {
                 "fields": [
@@ -133,9 +115,7 @@
                     "at lære"
                 ],
                 "guid": "MMMM",
-                "tags": [
-                    ""
-                ]
+                "tags": []
             },
             {
                 "fields": [
@@ -143,9 +123,7 @@
                     "at spise"
                 ],
                 "guid": "NNNN",
-                "tags": [
-                    ""
-                ]
+                "tags": []
             },
             {
                 "fields": [
@@ -153,9 +131,7 @@
                     "at drikke"
                 ],
                 "guid": "OOOO",
-                "tags": [
-                    ""
-                ]
+                "tags": []
             }
         ]
     }
