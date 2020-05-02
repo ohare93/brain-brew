@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from enum import Enum
 
 from brain_brew.build_tasks.build_task_generic import BuildTaskGeneric
@@ -124,7 +125,7 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
             note[CANoteKeys.NOTE_MODEL.value] = note_models_dict_id_name[note[DeckPartNoteKeys.NOTE_MODEL.value]]
             del note[DeckPartNoteKeys.NOTE_MODEL.value]
 
-        return res_notes
+        return [OrderedDict(sorted(note.items())) for note in res_notes]
 
     def deck_parts_to_source(self):
         ca_json = {}
@@ -156,4 +157,6 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
         # Notes
         ca_json.setdefault(CAKeys.NOTES.value, self.notes_to_source(note_models_dict_id_name))
 
-        self.crowd_anki_export.set_data(ca_json)
+        ordered_keys = OrderedDict(sorted(ca_json.items()))
+
+        self.crowd_anki_export.set_data(ordered_keys)
