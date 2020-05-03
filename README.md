@@ -3,11 +3,13 @@
 <a title="Buy me a cuppa tea" href="https://ko-fi.com/brainbrew"><img src="https://img.shields.io/badge/ko--fi-contribute-%23579ebd.svg"></a>
 <a title="Support a fellow Weekend Warrior on Patreon" href="https://www.patreon.com/jmohare?fan_landing=true"><img src="https://img.shields.io/badge/patreon-support-%23f96854.svg"></a>
 
-Brain Brew is a flashcard manipulation tool designed to allow users to convert their cards from/to many different formats to suit their own needs.
+Brain Brew is an open-source flashcard manipulation tool designed to allow users to convert their Anki flashcards to/from many different formats to suit their own needs.
+The goal is to facilitate collaboration and maximize user choice, with a powerful tool that minimizes effort.
 [CrowdAnki](https://github.com/Stvad/CrowdAnki) Exports and Csv(s) are the only supported file types as of now, but there will be more to come.
 
 :exclamation: See the [Brain Brew Starter Project](https://github.com/ohare93/brain-brew-starter) for a working clone-able Git repo.
 
+Or you can install the latest version of [Brain Brew on PyPi.org](https://pypi.org/project/Brain-Brew/).
 
 # The Why
 
@@ -18,7 +20,7 @@ Brain Brew was made in an effort to solve some of the following issues with curr
 Have some personal notes on your cards? Used some images randomly taken from the internet? 
 That usually means you cannot share your deck entirely, without having to go to the effort of removing the offending material and/or managing two separate copies.
 
-#### Pick One: Source Control or Anki Editing
+#### Having to Pick Between Source Control or Anki Editing
 
 Putting your cards into a source control system brings a lot of benefits. 
 You can see any changes that occur, go back in time should an mistake be discovered, and collaborate with others.
@@ -38,7 +40,7 @@ A user should not have to pick between these fantastic work flows and the usage 
 #### Lack of Formatting Choice
 
 Csvs are great for editing data, but can only go so far by themselves. Having all the data inside one csv leaves a lot to be desired and can result in eventual problems.
-When one gets as many columns as the *this* (from [Ultimate Geography](https://github.com/axelboc/anki-ultimate-geography/)) then it becomes a nightmare to manage:
+When one gets as many columns as *this* (from [Ultimate Geography](https://github.com/axelboc/anki-ultimate-geography/)) then it becomes a nightmare to manage:
 
 |guid|Country|Country:de|Country:es|Country:fr|Country:nb|"Country info"|"Country info:de"|"Country info:es"|"Country info:fr"|"Country info:nb"|Capital|Capital:de|Capital:es|Capital:fr|Capital:nb|"Capital info"|"Capital info:de"|"Capital info:es"|"Capital info:fr"|"Capital info:nb"|"Capital hint"|"Capital hint:de"|"Capital hint:es"|"Capital hint:fr"|"Capital hint:nb"|Flag|"Flag similarity"|"Flag similarity:de"|"Flag similarity:es"|"Flag similarity:fr"|"Flag similarity:nb"|Map|tags|
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
@@ -49,7 +51,7 @@ Then there's having too many rows in one csv for it to be properly managed.
 
 
 # Features of Brain Brew
-### Multi directional card syncing
+### Multi-directional Card Syncing
 Make a changes in a your source file and sync those into your Anki collection.
 
 Make changes inside Anki and pull those back into the source.
@@ -57,7 +59,7 @@ Make changes inside Anki and pull those back into the source.
 Any user of your shared deck can make a change inside Anki and at some later point export their deck (or just part of it) using CrowdAnki.
 Then the source file can be updated with their changes and a new CrowdAnki Export for all users to import can be generated with one run of Brain Brew.
 
-### Modular configuration files 
+### Modular Configuration Files 
 Yaml config files are what drive the conversion of Brain Brew, allowing users to easily change the functionality as they wish.
 
 <!--
@@ -187,7 +189,7 @@ Full support for Personal Fields included in CrowdAnki. Including the ability to
 * Yaml
 * Google Sheets
 
-#### Note Model Generation
+#### Note Model Generation / Syncing
 Two way Note Model building, so that users can change the Note Model somewhere other than Anki.
 
 #### Deck Header Removal
