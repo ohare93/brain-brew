@@ -13,9 +13,17 @@ class CANoteModelKeys(Enum):
 
 
 class DeckPartNoteModel(JsonFile):
-    name: str
-    id: str
-    fields: List[str]
+    @property
+    def name(self) -> str:
+        return self._data[CANoteModelKeys.NAME.value]
+
+    @property
+    def id(self) -> str:
+        return self._data[CANoteModelKeys.ID.value]
+
+    @property
+    def fields(self) -> List[str]:
+        return [field['name'] for field in self._data[CANoteModelKeys.FIELDS.value]]
 
     @property
     def fields_lowercase(self):
@@ -30,14 +38,6 @@ class DeckPartNoteModel(JsonFile):
             self.formatted_file_location(location),
             read_now=read_now, data_override=data_override
         )
-
-        if read_now or data_override:
-            self.name = self._data[CANoteModelKeys.NAME.value]
-            self.id = self._data[CANoteModelKeys.ID.value]
-            self.fields = self.read_fields()
-
-    def read_fields(self) -> List[str]:
-        return [field[CANoteModelKeys.NAME.value] for field in self._data[CANoteModelKeys.FIELDS.value]]
 
     def check_field_overlap(self, fields_to_check: List[str]):
         fields_to_check = list_of_str_to_lowercase(fields_to_check)
