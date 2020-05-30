@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from unittest.mock import patch
 
 import pytest
 
@@ -24,8 +25,12 @@ class TestArguments:
         ([])
     ])
     def test_broken_arguments(self, arg_reader_test1, arguments):
+        def raise_exit(message):
+            raise SystemExit
+
         with pytest.raises(SystemExit):
-            parsed_args = arg_reader_test1.get_parsed(arguments)
+            with patch.object(BBArgumentReader, "error", side_effect=raise_exit):
+                parsed_args = arg_reader_test1.get_parsed(arguments)
 
     @pytest.mark.parametrize("arguments, builder_file, config_file, run_reversed", [
         (["test_builder.yaml"], "test_builder.yaml", None, False),

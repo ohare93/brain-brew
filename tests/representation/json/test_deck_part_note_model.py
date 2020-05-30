@@ -44,7 +44,7 @@ def dp_note_model_test1(global_config) -> DeckPartNoteModel:
 
 def test_read_fields(dp_note_model_test1):
     expected = ["Word", "OtherWord"]
-    assert dp_note_model_test1.read_fields() == expected
+    assert dp_note_model_test1.fields == expected
 
 
 @pytest.mark.parametrize("fields", ([
