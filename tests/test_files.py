@@ -49,3 +49,8 @@ class TestFiles:
 
     class MediaFiles:
         LOC = "tests/test_files/media_files/"
+
+    class YamlNotes:
+        LOC = "tests/test_files/yaml/note/"
+
+        TEST1 = LOC + "note1.yaml"
