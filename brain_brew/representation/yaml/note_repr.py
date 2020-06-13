@@ -1,19 +1,24 @@
-from brain_brew.representation.yaml.my_yaml import yaml
+from brain_brew.representation.yaml.my_yaml import yaml_dump, yaml_load
 import json
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
+
+FIELDS = 'fields'
+GUID = 'guid'
+TAGS = 'tags'
+NOTE_MODEL = 'note_model'
 
 
 @dataclass
 class OverwritableNoteData:
-    note_model: str
-    tags: List[str]
+    note_model: Optional[str]
+    tags: Optional[List[str]]
 
     def encode_overwritable(self, json_dict):
-        if self.tags is not None and self.tags != []:
-            json_dict.setdefault("tags", self.tags)
         if self.note_model is not None:
-            json_dict.setdefault("note_model", self.note_model)
+            json_dict.setdefault(NOTE_MODEL, self.note_model)
+        if self.tags is not None and self.tags != []:
+            json_dict.setdefault(TAGS, self.tags)
         return json_dict
 
 
@@ -25,19 +30,20 @@ class Note(OverwritableNoteData):
     @classmethod
     def from_dict(cls, data: dict):
         return cls(
-            fields=data.get("fields"),
-            guid=data.get("guid"),
-            note_model=data.get("note_model", None),
-            tags=data.get("tags", None)
+            fields=data.get(FIELDS),
+            guid=data.get(GUID),
+            note_model=data.get(NOTE_MODEL, None),
+            tags=data.get(TAGS, None)
         )
 
     def encode(self):
-        json_dict = {"guid": self.guid, "fields": self.fields}
+        json_dict = {FIELDS: self.fields, GUID: self.guid}
         super().encode_overwritable(json_dict)
         return json_dict
 
     def dump_to_yaml(self, file):
-        yaml.dump(self.encode(), file)
+        with open(file, 'w') as fp:
+            yaml_dump.dump(self.encode(), fp)
 
 
 @dataclass
@@ -48,17 +54,19 @@ class NoteGrouping(OverwritableNoteData):
     def from_dict(cls, data):
         return cls(
             notes=list(map(Note.from_dict, data.get("notes"))),
-            note_model=data.get("note_model", None),
-            tags=data.get("tags", None)
+            note_model=data.get(NOTE_MODEL, None),
+            tags=data.get(TAGS, None)
         )
 
     def encode(self):
-        json_dict = {"notes": [note.encode() for note in self.notes]}
+        json_dict = {}
         super().encode_overwritable(json_dict)
+        json_dict.setdefault("notes", [note.encode() for note in self.notes])
         return json_dict
 
     def dump_to_yaml(self, file):
-        yaml.dump(self.encode(), file)
+        with open(file, 'w') as fp:
+            yaml_dump.dump(self.encode(), fp)
 
 # @dataclass
 # class DeckPartNoteModel:
