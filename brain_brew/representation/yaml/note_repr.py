@@ -8,6 +8,7 @@ GUID = 'guid'
 TAGS = 'tags'
 NOTE_MODEL = 'note_model'
 NOTES = "notes"
+NOTE_GROUPINGS = "note_groupings"
 
 
 @dataclass
@@ -71,18 +72,18 @@ class NoteGrouping(GroupableNoteData):
 
 
 @dataclass
-class DeckPartNoteModel:
+class DeckPartNotes:
     note_groupings: List[NoteGrouping]
 
     @classmethod
-    def from_list(cls, data: List[dict]):
+    def from_dict(cls, data: dict):
         return cls(
-            note_groupings=list(map(NoteGrouping.from_dict, data))
+            note_groupings=list(map(NoteGrouping.from_dict, data.get(NOTE_GROUPINGS)))
         )
 
-    def encode(self) -> List[dict]:
-        data_list = [note_grouping.encode() for note_grouping in self.note_groupings]
-        return data_list
+    def encode(self) -> dict:
+        data_dict = {NOTE_GROUPINGS: [note_grouping.encode() for note_grouping in self.note_groupings]}
+        return data_dict
 
     def dump_to_yaml(self, file):
         with open(file, 'w') as fp:
