@@ -9,29 +9,30 @@ import pytest
 
 from brain_brew.representation.yaml.note_repr import Note, NoteGrouping
 
-note_values_that_should_work = {
+working_notes = {
     "test1": {"fields": ['first'], "guid": "12345", "note_model": "model_name", "tags": ['noun', 'other']},
     "test2": {"fields": ['english', 'german'], "guid": "sdfhfghsvsdv", "note_model": "LL Test", "tags": ['marked']},
     "no_note_model": {"fields": ['first'], "guid": "12345", "tags": ['noun', 'other']},
     "no_tags1": {"fields": ['first'], "guid": "12345", "note_model": "model_name"},
-    "no_tags2": {"fields": ['first'], "guid": "12345", "note_model": "model_name", "tags": []}
+    "no_tags2": {"fields": ['first'], "guid": "12345", "note_model": "model_name", "tags": []},
+    "no_model_or_tags": {"fields": ['first'], "guid": "12345"}
 }
 
-note_groupings_that_should_work = {
-    "nothing_grouped": {"notes": [note_values_that_should_work["test1"], note_values_that_should_work["test2"]]},
-    "note_model_grouped": {
-        "notes": [note_values_that_should_work["no_note_model"], note_values_that_should_work["no_note_model"]],
-        "note_model": "model_name"}
+working_note_groupings = {
+    "nothing_grouped": {"notes": [working_notes["test1"], working_notes["test2"]]},
+    "note_model_grouped": {"notes": [working_notes["no_note_model"], working_notes["no_note_model"]], "note_model": "model_name"},
+    "tags_grouped": {"notes": [working_notes["no_tags1"], working_notes["no_tags2"]], "tags": ["noun", "other"]},
+    "model_and_tags_grouped": {"notes": [working_notes["no_model_or_tags"], working_notes["no_model_or_tags"]], "note_model": "model_name", "tags": ["noun", "other"]}
 }
 
 
 ########### Notes
-@pytest.fixture(params=note_values_that_should_work.values())
+@pytest.fixture(params=working_notes.values())
 def note_fixtures(request):
     return Note.from_dict(request.param)
 
 # Note Groupings
-@pytest.fixture(params=note_groupings_that_should_work.values())
+@pytest.fixture(params=working_note_groupings.values())
 def note_grouping_fixtures(request):
     return NoteGrouping.from_dict(request.param)
 
@@ -57,7 +58,7 @@ class TestConstructor:
 
     class TestNoteGrouping:
         def test_constructor(self):
-            note_grouping = NoteGrouping(notes=[Note.from_dict(note_values_that_should_work["test1"])], note_model=None, tags=None)
+            note_grouping = NoteGrouping(notes=[Note.from_dict(working_notes["test1"])], note_model=None, tags=None)
 
             assert isinstance(note_grouping, NoteGrouping)
             assert isinstance(note_grouping.notes, List)
@@ -74,7 +75,7 @@ class TestDumpToYaml:
             file = folder.join("test.yaml")
             file.write("test")
 
-            note = Note.from_dict(note_values_that_should_work[note_name])
+            note = Note.from_dict(working_notes[note_name])
             note.dump_to_yaml(str(file))
 
             assert file.read() == ystring
@@ -82,12 +83,12 @@ class TestDumpToYaml:
         def test_all1(self, tmpdir):
             ystring = dedent('''\
             fields:
-                - first
+              - first
             guid: '12345'
             note_model: model_name
             tags:
-                - noun
-                - other
+              - noun
+              - other
             ''')
 
             self._assert_dump_to_yaml(tmpdir, ystring, "test1")
@@ -95,12 +96,12 @@ class TestDumpToYaml:
         def test_all2(self, tmpdir):
             ystring = dedent('''\
             fields:
-                - english
-                - german
+              - english
+              - german
             guid: sdfhfghsvsdv
             note_model: LL Test
             tags:
-                - marked
+              - marked
             ''')
 
             self._assert_dump_to_yaml(tmpdir, ystring, "test2")
@@ -108,11 +109,11 @@ class TestDumpToYaml:
         def test_no_note_model(self, tmpdir):
             ystring = dedent('''\
             fields:
-                - first
+              - first
             guid: '12345'
             tags:
-                - noun
-                - other
+              - noun
+              - other
             ''')
 
             self._assert_dump_to_yaml(tmpdir, ystring, "no_note_model")
@@ -121,7 +122,7 @@ class TestDumpToYaml:
             for num, note in enumerate(["no_tags1", "no_tags2"]):
                 ystring = dedent('''\
                 fields:
-                    - first
+                  - first
                 guid: '12345'
                 note_model: model_name
                 ''')
@@ -135,7 +136,7 @@ class TestDumpToYaml:
             file = folder.join("test.yaml")
             file.write("test")
 
-            note = NoteGrouping.from_dict(note_groupings_that_should_work[note_grouping_name])
+            note = NoteGrouping.from_dict(working_note_groupings[note_grouping_name])
             note.dump_to_yaml(str(file))
 
             assert file.read() == ystring
@@ -143,20 +144,20 @@ class TestDumpToYaml:
         def test_nothing_grouped(self, tmpdir):
             ystring = dedent('''\
             notes:
-                - fields:
-                      - first
-                  guid: '12345'
-                  note_model: model_name
-                  tags:
-                      - noun
-                      - other
-                - fields:
-                      - english
-                      - german
-                  guid: sdfhfghsvsdv
-                  note_model: LL Test
-                  tags:
-                      - marked
+              - fields:
+                  - first
+                guid: '12345'
+                note_model: model_name
+                tags:
+                  - noun
+                  - other
+              - fields:
+                  - english
+                  - german
+                guid: sdfhfghsvsdv
+                note_model: LL Test
+                tags:
+                  - marked
             ''')
 
             self._assert_dump_to_yaml(tmpdir, ystring, "nothing_grouped")
@@ -165,18 +166,53 @@ class TestDumpToYaml:
             ystring = dedent('''\
             note_model: model_name
             notes:
-                - fields:
-                      - first
-                  guid: '12345'
-                  tags:
-                      - noun
-                      - other
-                - fields:
-                      - first
-                  guid: '12345'
-                  tags:
-                      - noun
-                      - other
+              - fields:
+                  - first
+                guid: '12345'
+                tags:
+                  - noun
+                  - other
+              - fields:
+                  - first
+                guid: '12345'
+                tags:
+                  - noun
+                  - other
             ''')
 
             self._assert_dump_to_yaml(tmpdir, ystring, "note_model_grouped")
+
+        def test_note_tags_grouped(self, tmpdir):
+            ystring = dedent('''\
+            tags:
+              - noun
+              - other
+            notes:
+              - fields:
+                  - first
+                guid: '12345'
+                note_model: model_name
+              - fields:
+                  - first
+                guid: '12345'
+                note_model: model_name
+            ''')
+
+            self._assert_dump_to_yaml(tmpdir, ystring, "tags_grouped")
+
+        def test_note_model_and_tags_grouped(self, tmpdir):
+            ystring = dedent('''\
+            note_model: model_name
+            tags:
+              - noun
+              - other
+            notes:
+              - fields:
+                  - first
+                guid: '12345'
+              - fields:
+                  - first
+                guid: '12345'
+            ''')
+
+            self._assert_dump_to_yaml(tmpdir, ystring, "model_and_tags_grouped")
