@@ -14,6 +14,7 @@ working_notes = {
     "test1": {FIELDS: ['first'], GUID: "12345", NOTE_MODEL: "model_name", TAGS: ['noun', 'other']},
     "test2": {FIELDS: ['english', 'german'], GUID: "sdfhfghsvsdv", NOTE_MODEL: "LL Test", TAGS: ['marked']},
     "no_note_model": {FIELDS: ['first'], GUID: "12345", TAGS: ['noun', 'other']},
+    "no_note_model2": {FIELDS: ['second'], GUID: "67890", TAGS: ['noun', 'other']},
     "no_tags1": {FIELDS: ['first'], GUID: "12345", NOTE_MODEL: "model_name"},
     "no_tags2": {FIELDS: ['first'], GUID: "12345", NOTE_MODEL: "model_name", TAGS: []},
     "no_model_or_tags": {FIELDS: ['first'], GUID: "12345"}
@@ -21,8 +22,9 @@ working_notes = {
 
 working_note_groupings = {
     "nothing_grouped": {NOTES: [working_notes["test1"], working_notes["test2"]]},
-    "note_model_grouped": {NOTES: [working_notes["no_note_model"], working_notes["no_note_model"]], NOTE_MODEL: "model_name"},
+    "note_model_grouped": {NOTES: [working_notes["no_note_model"], working_notes["no_note_model2"]], NOTE_MODEL: "model_name"},
     "tags_grouped": {NOTES: [working_notes["no_tags1"], working_notes["no_tags2"]], TAGS: ["noun", "other"]},
+    "tags_grouped_as_addition": {NOTES: [working_notes["test1"], working_notes["test2"]], TAGS: ["test", "recent"]},
     "model_and_tags_grouped": {NOTES: [working_notes["no_model_or_tags"], working_notes["no_model_or_tags"]], NOTE_MODEL: "model_name", TAGS: ["noun", "other"]}
 }
 
@@ -185,8 +187,8 @@ class TestDumpToYaml:
                   - noun
                   - other
               - {FIELDS}:
-                  - first
-                {GUID}: '12345'
+                  - second
+                {GUID}: '67890'
                 {TAGS}:
                   - noun
                   - other
@@ -271,3 +273,45 @@ class TestDumpToYaml:
             ''')
 
             self._assert_dump_to_yaml(tmpdir, ystring, ["model_and_tags_grouped", "nothing_grouped"])
+
+
+class TestFunctionality:
+    class TestNoteGrouping:
+        class TestGetAllNotes:
+            def test_nothing_grouped(self):
+                group = NoteGrouping.from_dict(working_note_groupings["nothing_grouped"])
+                notes = group.get_all_notes()
+                assert len(notes) == 2
+
+            def test_model_grouped(self):
+                group = NoteGrouping.from_dict(working_note_groupings["note_model_grouped"])
+                assert group.note_model == "model_name"
+                assert all([note.note_model is None for note in group.notes])
+
+                notes = group.get_all_notes()
+                assert {note.note_model for note in notes} == {"model_name"}
+
+            def test_tags_grouped(self):
+                group = NoteGrouping.from_dict(working_note_groupings["tags_grouped"])
+                assert group.tags == ["noun", "other"]
+                assert all([note.tags is None or note.tags == [] for note in group.notes])
+
+                notes = group.get_all_notes()
+                assert all([note.tags == ["noun", "other"] for note in notes])
+
+            def test_tags_grouped_as_addition(self):
+                group = NoteGrouping.from_dict(working_note_groupings["tags_grouped_as_addition"])
+                assert group.tags == ["test", "recent"]
+                assert all([note.tags is not None for note in group.notes])
+
+                notes = group.get_all_notes()
+                assert notes[0].tags == ['noun', 'other', "test", "recent"]
+                assert notes[1].tags == ['marked', "test", "recent"]
+
+            def test_no_tags(self):
+                group = NoteGrouping.from_dict(working_note_groupings["tags_grouped"])
+                group.tags = None
+                assert all([note.tags is None or note.tags == [] for note in group.notes])
+
+                notes = group.get_all_notes()
+                assert all([note.tags == [] for note in notes])

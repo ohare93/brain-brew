@@ -145,7 +145,7 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
             row[CsvKeys.GUID.value] = note[DeckPartNoteKeys.GUID.value]
             row[CsvKeys.TAGS.value] = self.join_tags(note[DeckPartNoteKeys.TAGS.value])
 
-            formatted_row = self.note_model_mappings_dict[nm_name].note_fields_map_to_csv_row(row)
+            formatted_row = self.note_model_mappings_dict[nm_name].note_fields_map_to_csv_row(row)  # TODO: Do not edit data, make copy
 
             csv_data.setdefault(row[CsvKeys.GUID.value], formatted_row)
 

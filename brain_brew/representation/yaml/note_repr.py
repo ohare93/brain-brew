@@ -70,6 +70,29 @@ class NoteGrouping(GroupableNoteData):
         with open(file, 'w') as fp:
             yaml_dump.dump(self.encode(), fp)
 
+    def verify_groupings(self):
+        if self.note_model is not None:
+            modelErrors = ValueError(f"NoteGrouping for 'note_model' {self.note_model} has notes with 'note_model'. "
+                                     f"Please remove one of these.") if any([note.note_model for note in self.notes]) else None
+
+    def get_all_notes(self) -> List[Note]:
+        def join_tags(n_tags):
+            if self.tags is None and n_tags is None:
+                return []
+            elif self.tags is None:
+                return n_tags
+            elif n_tags is None:
+                return self.tags
+            else:
+                return [*n_tags, *self.tags]
+
+        return [Note(
+                    note_model=self.note_model if self.note_model is not None else n.note_model,
+                    tags=join_tags(n.tags),
+                    fields=n.fields,
+                    guid=n.guid
+               ) for n in self.notes]
+
 
 @dataclass
 class DeckPartNotes:
@@ -88,3 +111,5 @@ class DeckPartNotes:
     def dump_to_yaml(self, file):
         with open(file, 'w') as fp:
             yaml_dump.dump(self.encode(), fp)
+
+
