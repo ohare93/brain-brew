@@ -1,7 +1,9 @@
 from brain_brew.representation.yaml.my_yaml import yaml_dump, yaml_load
 import json
 from dataclasses import dataclass
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Set
+
+from brain_brew.utils import find_media_in_field
 
 FIELDS = 'fields'
 GUID = 'guid'
@@ -9,6 +11,7 @@ TAGS = 'tags'
 NOTE_MODEL = 'note_model'
 NOTES = "notes"
 NOTE_GROUPINGS = "note_groupings"
+MEDIA_REFERENCES = "media_references"
 
 
 @dataclass
@@ -28,6 +31,7 @@ class GroupableNoteData:
 class Note(GroupableNoteData):
     fields: List[str]
     guid: str
+    media_references: Optional[Set[str]]
 
     @classmethod
     def from_dict(cls, data: dict):
@@ -35,7 +39,8 @@ class Note(GroupableNoteData):
             fields=data.get(FIELDS),
             guid=data.get(GUID),
             note_model=data.get(NOTE_MODEL, None),
-            tags=data.get(TAGS, None)
+            tags=data.get(TAGS, None),
+            media_references=data.get(MEDIA_REFERENCES, None)
         )
 
     def encode(self) -> dict:
@@ -46,6 +51,9 @@ class Note(GroupableNoteData):
     def dump_to_yaml(self, file):
         with open(file, 'w') as fp:
             yaml_dump.dump(self.encode(), fp)
+
+    def get_media_references(self) -> Set[str]:
+        return {entry for field in self.fields for entry in find_media_in_field(field)}
 
 
 @dataclass
@@ -70,6 +78,10 @@ class NoteGrouping(GroupableNoteData):
         with open(file, 'w') as fp:
             yaml_dump.dump(self.encode(), fp)
 
+    # TODO: Extract Shared Tags and Note Models
+    # TODO: Sort notes
+    # TODO: Set data
+
     def verify_groupings(self):
         errors = []
         if self.note_model is not None:
@@ -78,7 +90,10 @@ class NoteGrouping(GroupableNoteData):
                                          f" Please remove one of these."))
         return errors
 
-    def get_all_notes(self) -> List[Note]:
+    def get_all_known_note_model_names(self) -> set:
+        return {self.note_model} if self.note_model else {note.note_model for note in self.notes}
+
+    def get_all_notes_copy(self) -> List[Note]:
         def join_tags(n_tags):
             if self.tags is None and n_tags is None:
                 return []
@@ -93,7 +108,8 @@ class NoteGrouping(GroupableNoteData):
                     note_model=self.note_model if self.note_model is not None else n.note_model,
                     tags=join_tags(n.tags),
                     fields=n.fields,
-                    guid=n.guid
+                    guid=n.guid,
+                    media_references=n.media_references or n.get_media_references()
                ) for n in self.notes]
 
 
@@ -115,4 +131,5 @@ class DeckPartNotes:
         with open(file, 'w') as fp:
             yaml_dump.dump(self.encode(), fp)
 
-
+    def get_all_known_note_model_names(self):
+        return {nms for group in self.note_groupings for nms in group.get_all_known_note_model_names()}

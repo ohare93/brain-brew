@@ -3,6 +3,7 @@ import pathlib
 import string
 import random
 import re
+from typing import List
 
 
 def blank_str_if_none(s):
@@ -21,6 +22,16 @@ def single_item_to_list(item):
 
 def filename_from_full_path(full_path):
     return re.findall('[^\\/:*?"<>|\r\n]+$', full_path)[0]
+
+
+def find_media_in_field(field_value: str) -> List[str]:
+    if not field_value:
+        return []
+
+    images = re.findall(r'<\s*?img.*?src="(.*?)"[^>]*?>', field_value)
+    audio = re.findall(r'\[sound:(.*?)\]', field_value)
+
+    return images + audio
 
 
 def find_all_files_in_directory(directory, recursive=False):

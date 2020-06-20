@@ -7,6 +7,7 @@ from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.json.json_file import JsonFile
 from brain_brew.constants.deckpart_keys import *
 from brain_brew.representation.generic.media_file import MediaFile
+from brain_brew.utils import find_media_in_field
 
 
 class CANoteKeys(Enum):
@@ -202,7 +203,7 @@ class DeckPartNotes(JsonFile):
 
         for note in self._data[DeckPartNoteKeys.NOTES.value]:
             for field in note[DeckPartNoteKeys.FIELDS.value]:
-                files_found = self.find_media_in_field(field)
+                files_found = find_media_in_field(field)
                 if files_found:
                     for filename in files_found:
                         file = self.file_manager.media_file_if_exists(filename)
@@ -218,12 +219,3 @@ class DeckPartNotes(JsonFile):
 
         logging.info(f"Found {len(self.referenced_media_files)} referenced media files")
 
-    @staticmethod
-    def find_media_in_field(field_value):
-        if not isinstance(field_value, str):
-            return []
-
-        images = re.findall(r'<\s*?img.*?src="(.*?)"[^>]*?>', field_value)
-        audio = re.findall(r'\[sound:(.*?)\]', field_value)
-
-        return images + audio
