@@ -71,9 +71,12 @@ class NoteGrouping(GroupableNoteData):
             yaml_dump.dump(self.encode(), fp)
 
     def verify_groupings(self):
+        errors = []
         if self.note_model is not None:
-            modelErrors = ValueError(f"NoteGrouping for 'note_model' {self.note_model} has notes with 'note_model'. "
-                                     f"Please remove one of these.") if any([note.note_model for note in self.notes]) else None
+            if any([note.note_model for note in self.notes]):
+                errors.append(ValueError(f"NoteGrouping for 'note_model' {self.note_model} has notes with 'note_model'."
+                                         f" Please remove one of these."))
+        return errors
 
     def get_all_notes(self) -> List[Note]:
         def join_tags(n_tags):
