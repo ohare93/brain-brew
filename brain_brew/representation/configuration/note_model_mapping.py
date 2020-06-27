@@ -1,5 +1,6 @@
+from dataclasses import dataclass
 from enum import Enum
-from typing import List
+from typing import List, Union, Dict
 
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.interfaces.verifiable import Verifiable
@@ -8,10 +9,9 @@ from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
 from brain_brew.utils import list_of_str_to_lowercase
 
 
-class NoteModelMappingKeys(Enum):
-    NOTE_MODEL = "note_model"
-    COLUMNS = "csv_columns_to_fields"
-    PERSONAL_FIELDS = "personal_fields"
+NOTE_MODEL = "note_model"
+COLUMNS = "csv_columns_to_fields"
+PERSONAL_FIELDS = "personal_fields"
 
 
 class FieldMapping:
@@ -38,39 +38,34 @@ class FieldMapping:
             self.value = value
 
 
-class NoteModelMapping(YamlFile, Verifiable):
-    config_entry = {}
-    expected_keys = {
-        NoteModelMappingKeys.NOTE_MODEL.value: ConfigKey(True, str, None),
-        NoteModelMappingKeys.COLUMNS.value: ConfigKey(True, dict, None),
-        NoteModelMappingKeys.PERSONAL_FIELDS.value: ConfigKey(False, list, None),
-    }
-    subconfig_filter = None
+@dataclass
+class NoteModelMappingRepresentation:
+    note_model: str  # TODO: Union[str, list]
+    columns_to_fields: Dict[str, str]
+    personal_fields: List[str]
 
-    note_model: DeckPartNoteModel = None
+
+@dataclass
+class NoteModelMapping(Verifiable):
+    note_model: DeckPartNoteModel
     columns: List[FieldMapping]
     personal_fields: List[FieldMapping]
 
     required_fields_definitions = [DeckPartNoteKeys.GUID.value, DeckPartNoteKeys.TAGS.value]
 
-    def __init__(self, config_data: dict, read_now=True):
-        self.setup_config_with_subconfig_replacement(config_data)
-        self.verify_config_entry()
-
-        columns = self.get_config(NoteModelMappingKeys.COLUMNS)
-        personal_fields = self.get_config(NoteModelMappingKeys.PERSONAL_FIELDS, [])
-
-        self.columns = [FieldMapping(
-            field_type=FieldMapping.FieldMappingType.COLUMN,
-            field_name=field,
-            value=columns[field]) for field in columns]
-
-        self.personal_fields = [FieldMapping(
-            field_type=FieldMapping.FieldMappingType.PERSONAL_FIELD,
-            field_name=field,
-            value="") for field in personal_fields]
-
-        self.note_model = DeckPartNoteModel.create(self.get_config(NoteModelMappingKeys.NOTE_MODEL), read_now=read_now)
+    @classmethod
+    def from_dict(cls, data: NoteModelMappingRepresentation):
+        return cls(
+            columns=[FieldMapping(
+                field_type=FieldMapping.FieldMappingType.COLUMN,
+                field_name=field,
+                value=key) for key, field in data.columns_to_fields.items()],
+            personal_fields=[FieldMapping(
+                field_type=FieldMapping.FieldMappingType.PERSONAL_FIELD,
+                field_name=field,
+                value="") for field in data.personal_fields],
+            note_model=DeckPartNoteModel.create(data.note_model, read_now=True)  # TODO: Fix read_now
+        )
 
     def verify_contents(self):
         errors = []

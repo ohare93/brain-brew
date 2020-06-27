@@ -1,72 +1,65 @@
 import logging
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Optional, Union
 
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.interfaces.verifiable import Verifiable
 from brain_brew.interfaces.writes_file import WritesFile
 from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
-from brain_brew.representation.generic.generic_file import GenericFile
 from brain_brew.representation.generic.yaml_file import YamlFile, ConfigKey
-from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
-from brain_brew.utils import single_item_to_list, generate_anki_guid, list_of_str_to_lowercase
+from brain_brew.utils import single_item_to_list, generate_anki_guid
 
 
-class CsvFileMappingKeys(Enum):
-    CSV_FILE = "csv"
-    NOTE_MODEL = "note_model"
-    SORT_BY_COLUMNS = "sort_by_columns"
-    REVERSE_SORT = "reverse_sort"
-    DERIVATIVES = "derivatives"
+FILE = "csv"
+NOTE_MODEL = "note_model"
+SORT_BY_COLUMNS = "sort_by_columns"
+REVERSE_SORT = "reverse_sort"
+DERIVATIVES = "derivatives"
 
 
-class CsvFileMappingDerivative(YamlFile):
-    config_entry = {}
-    expected_keys = {
-        CsvFileMappingKeys.CSV_FILE.value: ConfigKey(True, str, None),
-        CsvFileMappingKeys.SORT_BY_COLUMNS.value: ConfigKey(False, (list, str), None),
-        CsvFileMappingKeys.REVERSE_SORT.value: ConfigKey(False, bool, None),
-        CsvFileMappingKeys.DERIVATIVES.value: ConfigKey(False, list, None),
+@dataclass
+class CsvFileMappingDerivative:
+    csv_file: CsvFile = field(init=False)
+    compiled_data: Dict[str, dict] = field(init=False)
 
-        CsvFileMappingKeys.NOTE_MODEL.value: ConfigKey(False, str, None),  # Optional on Derivatives
-    }
-    subconfig_filter = None
+    file: str
+    note_model: Optional[str]
 
-    csv_file: CsvFile
-    compiled_data: Dict[str, dict]
+    sort_by_columns: Optional[Union[list, str]]
+    reverse_sort: Optional[bool]
 
-    sort_by_columns: list
-    reverse_sort: bool
-
-    note_model_name: str
-    derivatives: List['CsvFileMappingDerivative']
-
-    def __init__(self, config_data, read_now=True):
-        super().__init__()
-
-        self.setup_config_with_subconfig_replacement(config_data)
-        self.verify_config_entry()
-
-        self.csv_file = CsvFile.create(self.get_config(CsvFileMappingKeys.CSV_FILE), read_now=read_now)
-
-        self.sort_by_columns = single_item_to_list(self.get_config(CsvFileMappingKeys.SORT_BY_COLUMNS, []))
-        self.reverse_sort = self.get_config(CsvFileMappingKeys.REVERSE_SORT, False)
-
-        self.note_model_name = self.get_config(CsvFileMappingKeys.NOTE_MODEL, "")
-        self.note_model_name = None if self.note_model_name == "" else self.note_model_name
-
-        self.derivatives = [CsvFileMappingDerivative.create_derivative(config, read_now=read_now)
-                            for config in self.get_config(CsvFileMappingKeys.DERIVATIVES, [])]
+    derivatives: Optional[List['CsvFileMappingDerivative']]
 
     @classmethod
-    def create_derivative(cls, config_data, read_now=True):
-        return cls(config_data, read_now=read_now)
+    def from_dict(cls, data: dict):
+        return cls(
+            file=data.get(FILE, None),
+            note_model=data.get(NOTE_MODEL, None),
+            sort_by_columns=data.get(SORT_BY_COLUMNS, None),
+            reverse_sort=data.get(REVERSE_SORT, None),
+            derivatives=list(map(cls.from_dict, data.get(DERIVATIVES, None)))
+        )
+
+    def __post_init__(self):
+        self.csv_file = CsvFile.create(self.file, read_now=True)  # TODO: Fix Read Now
+
+        if self.note_model == "":
+            self.note_model = None
+
+        self.sort_by_columns = single_item_to_list(self.sort_by_columns)
+
+        if self.reverse_sort is None:
+            self.reverse_sort = False
+
+        if self.derivatives is None:
+            self.derivatives = []
 
     def get_available_columns(self):
         return self.csv_file.column_headers + [col for der in self.derivatives for col in der.get_available_columns()]
 
     def get_used_note_model_names(self) -> List[str]:
-        nm = [self.note_model_name] if self.note_model_name is not None else []
+        nm = [self.note_model] if self.note_model is not None else []
         return nm + [name for der in self.derivatives for name in der.get_used_note_model_names()]
 
     def _build_data_recursive(self) -> List[dict]:
@@ -97,8 +90,8 @@ class CsvFileMappingDerivative(YamlFile):
                             row[der_col] = der_row[der_col]
                         found_match = True
                         # Set Note Model to matching Derivative Note Model
-                        if der.note_model_name is not None:
-                            row.setdefault(DeckPartNoteKeys.NOTE_MODEL.value, der.note_model_name)
+                        if der.note_model is not None:
+                            row.setdefault(DeckPartNoteKeys.NOTE_MODEL.value, der.note_model)
                         break
                 if not found_match:
                     der_match_errors.append(ValueError(f"Cannot match derivative row {der_row} to parent"))
@@ -116,24 +109,15 @@ class CsvFileMappingDerivative(YamlFile):
             der.write_to_csv(data_to_set)
 
 
+@dataclass
 class CsvFileMapping(CsvFileMappingDerivative, Verifiable, WritesFile):
-    expected_keys = {
-        CsvFileMappingKeys.CSV_FILE.value: ConfigKey(True, str, None),
-        CsvFileMappingKeys.SORT_BY_COLUMNS.value: ConfigKey(False, (list, str), None),
-        CsvFileMappingKeys.REVERSE_SORT.value: ConfigKey(False, bool, None),
-        CsvFileMappingKeys.DERIVATIVES.value: ConfigKey(False, list, None),
+    note_model: str  # Override Optional on Parent
 
-        CsvFileMappingKeys.NOTE_MODEL.value: ConfigKey(True, str, None),  # Required on top level
-    }
-
-    data_set_has_changed: bool
-
-    def __init__(self, config_data, read_now=True):
-        super().__init__(config_data, read_now=read_now)
+    data_set_has_changed: bool = field(init=False, default=False)
 
     def verify_contents(self):
-        if self.note_model_name is None:
-            raise KeyError(f"Top level Csv Mapping requires key {CsvFileMappingKeys.NOTE_MODEL.value}")
+        if self.note_model is "":
+            raise KeyError(f"Top level Csv Mapping requires key {NOTE_MODEL}")
 
     def compile_data(self):
         self.compiled_data = {}
@@ -142,9 +126,9 @@ class CsvFileMapping(CsvFileMappingDerivative, Verifiable, WritesFile):
         data_in_progress = self._build_data_recursive()
 
         # Set Note Model if not already set
-        if self.note_model_name is not None:
+        if self.note_model is not None:
             for row in data_in_progress:
-                row.setdefault(DeckPartNoteKeys.NOTE_MODEL.value, self.note_model_name)
+                row.setdefault(DeckPartNoteKeys.NOTE_MODEL.value, self.note_model)
 
         # Fill in Guid if no Guid
         guids_generated = 0

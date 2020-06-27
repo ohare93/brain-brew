@@ -17,6 +17,8 @@ def list_of_str_to_lowercase(list_of_strings):
 def single_item_to_list(item):
     if isinstance(item, list):
         return item
+    if item is None:
+        return []
     return [item]
 
 

@@ -1,5 +1,4 @@
 from brain_brew.representation.yaml.my_yaml import yaml_dump, yaml_load
-import json
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Set
 

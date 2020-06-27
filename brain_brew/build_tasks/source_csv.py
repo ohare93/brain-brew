@@ -47,11 +47,9 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
         self.notes = DeckPartNotes.create(self.get_config(BuildConfigKeys.NOTES), read_now=read_now)
 
         nm_mapping = [NoteModelMapping(config, read_now=read_now)
-                                                         for config in
-                                                         self.get_config(SourceCsvKeys.NOTE_MODEL_MAPPINGS)
-                                                         ]
-        self.note_model_mappings_dict = {mapping.note_model.name: mapping
-                                         for mapping in nm_mapping}
+                      for config in self.get_config(SourceCsvKeys.NOTE_MODEL_MAPPINGS)]
+
+        self.note_model_mappings_dict = {mapping.note_model.name: mapping for mapping in nm_mapping}
 
         self.csv_file_mappings = [CsvFileMapping(config, read_now=read_now)
                                   for config in self.get_config(SourceCsvKeys.CSV_MAPPINGS)]
