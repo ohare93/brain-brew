@@ -3,8 +3,8 @@ from unittest.mock import patch
 
 import pytest
 
-from brain_brew.representation.configuration.note_model_mapping import NoteModelMappingKeys, NoteModelMapping, \
-    FieldMapping
+from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping, FieldMapping, \
+    NOTE_MODEL, COLUMNS, PERSONAL_FIELDS
 from brain_brew.representation.generic.csv_file import CsvFile
 from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
 from tests.representation.configuration.test_global_config import global_config
@@ -14,9 +14,9 @@ from tests.representation.generic.test_csv_file import csv_test1
 
 def setup_nmm_config(note_model: str, field_mappings: Dict[str, str], personal_fields: List[str]):
     return {
-        NoteModelMappingKeys.NOTE_MODEL.value: note_model,
-        NoteModelMappingKeys.COLUMNS.value: field_mappings,
-        NoteModelMappingKeys.PERSONAL_FIELDS.value: personal_fields
+        NOTE_MODEL: note_model,
+        COLUMNS: field_mappings,
+        PERSONAL_FIELDS: personal_fields
     }
 
 

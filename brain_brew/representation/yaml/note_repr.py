@@ -30,7 +30,7 @@ class GroupableNoteData:
 class Note(GroupableNoteData):
     fields: List[str]
     guid: str
-    media_references: Optional[Set[str]]
+    # media_references: Optional[Set[str]]
 
     @classmethod
     def from_dict(cls, data: dict):
@@ -38,8 +38,7 @@ class Note(GroupableNoteData):
             fields=data.get(FIELDS),
             guid=data.get(GUID),
             note_model=data.get(NOTE_MODEL, None),
-            tags=data.get(TAGS, None),
-            media_references=data.get(MEDIA_REFERENCES, None)
+            tags=data.get(TAGS, None)
         )
 
     def encode(self) -> dict:
@@ -108,7 +107,7 @@ class NoteGrouping(GroupableNoteData):
                     tags=join_tags(n.tags),
                     fields=n.fields,
                     guid=n.guid,
-                    media_references=n.media_references or n.get_media_references()
+                    # media_references=n.media_references or n.get_media_references()
                ) for n in self.notes]
 
 

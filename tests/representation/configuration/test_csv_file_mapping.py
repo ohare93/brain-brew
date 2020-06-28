@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 import pytest
 
-from brain_brew.representation.configuration.csv_file_mapping import CsvFileMappingKeys, CsvFileMappingDerivative, \
-    CsvFileMapping
+from brain_brew.representation.configuration.csv_file_mapping import CsvFileMappingDerivative, CsvFileMapping, \
+    SORT_BY_COLUMNS, REVERSE_SORT, NOTE_MODEL, DERIVATIVES, FILE
 from brain_brew.representation.generic.csv_file import CsvFile
 from tests.test_file_manager import get_new_file_manager
 from tests.representation.configuration.test_global_config import global_config
@@ -15,16 +15,16 @@ from tests.representation.generic.test_csv_file import csv_test1, csv_test2, csv
 def setup_csv_fm_config(csv: str, sort_by_columns: List[str] = None, reverse_sort: bool = None,
                         note_model_name: str = None, derivatives: List[dict] = None):
     cfm: dict = {
-        CsvFileMappingKeys.CSV_FILE.value: csv
+        FILE: csv
     }
     if sort_by_columns is not None:
-        cfm.setdefault(CsvFileMappingKeys.SORT_BY_COLUMNS.value, sort_by_columns)
+        cfm.setdefault(SORT_BY_COLUMNS, sort_by_columns)
     if reverse_sort is not None:
-        cfm.setdefault(CsvFileMappingKeys.REVERSE_SORT.value, reverse_sort)
+        cfm.setdefault(REVERSE_SORT, reverse_sort)
     if note_model_name is not None:
-        cfm.setdefault(CsvFileMappingKeys.NOTE_MODEL.value, note_model_name)
+        cfm.setdefault(NOTE_MODEL, note_model_name)
     if derivatives is not None:
-        cfm.setdefault(CsvFileMappingKeys.DERIVATIVES.value, derivatives)
+        cfm.setdefault(DERIVATIVES, derivatives)
 
     return cfm
 

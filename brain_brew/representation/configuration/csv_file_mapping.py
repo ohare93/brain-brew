@@ -20,40 +20,43 @@ DERIVATIVES = "derivatives"
 
 @dataclass
 class CsvFileMappingDerivative:
-    csv_file: CsvFile = field(init=False)
+    @dataclass(init=False)
+    class Representation:
+        file: str
+        note_model: Optional[str]
+        sort_by_columns: Optional[Union[list, str]]
+        reverse_sort: Optional[bool]
+        derivatives: Optional[List['CsvFileMappingDerivative.Representation']]
+
+        def __init__(self, file, note_model=None, sort_by_columns=None, reverse_sort=None, derivatives=None):
+            self.file = file
+            self.note_model = note_model
+            self.sort_by_columns = sort_by_columns
+            self.reverse_sort = reverse_sort
+            self.derivatives = list(map(CsvFileMappingDerivative.Representation.from_dict, derivatives)) if derivatives is not None else []
+
+        @classmethod
+        def from_dict(cls, data: dict):
+            return cls(**data)
+
     compiled_data: Dict[str, dict] = field(init=False)
 
-    file: str
+    csv_file: CsvFile
+
     note_model: Optional[str]
-
-    sort_by_columns: Optional[Union[list, str]]
+    sort_by_columns: Optional[list]
     reverse_sort: Optional[bool]
-
     derivatives: Optional[List['CsvFileMappingDerivative']]
 
     @classmethod
-    def from_dict(cls, data: dict):
+    def from_repr(cls, data: Representation):
         return cls(
-            file=data.get(FILE, None),
-            note_model=data.get(NOTE_MODEL, None),
-            sort_by_columns=data.get(SORT_BY_COLUMNS, None),
-            reverse_sort=data.get(REVERSE_SORT, None),
-            derivatives=list(map(cls.from_dict, data.get(DERIVATIVES, None)))
+            csv_file=CsvFile.create(data.file, True),   # TODO: Fix Read Now
+            note_model=None if not data.note_model.strip() else data.note_model.strip(),
+            sort_by_columns=single_item_to_list(data.sort_by_columns),
+            reverse_sort=data.reverse_sort or False,
+            derivatives=list(map(cls.from_repr, data.derivatives)) if data.derivatives is not None else []
         )
-
-    def __post_init__(self):
-        self.csv_file = CsvFile.create(self.file, read_now=True)  # TODO: Fix Read Now
-
-        if self.note_model == "":
-            self.note_model = None
-
-        self.sort_by_columns = single_item_to_list(self.sort_by_columns)
-
-        if self.reverse_sort is None:
-            self.reverse_sort = False
-
-        if self.derivatives is None:
-            self.derivatives = []
 
     def get_available_columns(self):
         return self.csv_file.column_headers + [col for der in self.derivatives for col in der.get_available_columns()]

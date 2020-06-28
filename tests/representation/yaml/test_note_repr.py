@@ -55,14 +55,14 @@ class TestConstructor:
             (["test", "blah", "<img src=\"animal.jpg\">"], "1234567890x", "model_name", ["noun"], {"animal.jpg"}),
         ])
         def test_constructor(self, fields: List[str], guid: str, note_model: str, tags: List[str], media: Set[str]):
-            note = Note(fields=fields, guid=guid, note_model=note_model, tags=tags, media_references=media)
+            note = Note(fields=fields, guid=guid, note_model=note_model, tags=tags)
 
             assert isinstance(note, Note)
             assert note.fields == fields
             assert note.guid == guid
             assert note.note_model == note_model
             assert note.tags == tags
-            assert note.media_references == media
+            # assert note.media_references == media
 
         def test_from_dict(self, note_fixtures):
             assert isinstance(note_fixtures, Note)
@@ -296,7 +296,7 @@ class TestFunctionality:
                 (["<img src=\"animal.jpg\">", "[sound:test.mp3]", "[sound:test.mp3]"], 2),
             ])
             def test_all(self, fields, expected_count):
-                note = Note(fields=fields, note_model=None, guid="", tags=None, media_references=None)
+                note = Note(fields=fields, note_model=None, guid="", tags=None,)
                 media_found = note.get_media_references()
                 assert isinstance(media_found, Set)
                 assert len(media_found) == expected_count
@@ -363,3 +363,4 @@ class TestFunctionality:
 
                 notes = group.get_all_notes_copy()
                 assert all([note.tags == [] for note in notes])
+

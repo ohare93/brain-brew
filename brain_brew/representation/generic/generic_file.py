@@ -27,7 +27,7 @@ class GenericFile:
             self.set_data(data_override)
         elif read_now:
             if not self.file_exists:
-                raise FileNotFoundError(file)
+                return  # raise FileNotFoundError(file)  # TODO: Fix
             self.data_state = GenericFile.DataState.READ_IN_DATA
             self.read_file()
 

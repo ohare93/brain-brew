@@ -39,14 +39,17 @@ class FieldMapping:
 
 
 @dataclass
-class NoteModelMappingRepresentation:
-    note_model: str  # TODO: Union[str, list]
-    columns_to_fields: Dict[str, str]
-    personal_fields: List[str]
-
-
-@dataclass
 class NoteModelMapping(Verifiable):
+    @dataclass
+    class Representation:
+        note_model: str  # TODO: Union[str, list]
+        columns_to_fields: Dict[str, str]
+        personal_fields: List[str]
+
+        @classmethod
+        def from_dict(cls, data: dict):
+            return cls(**data)
+
     note_model: DeckPartNoteModel
     columns: List[FieldMapping]
     personal_fields: List[FieldMapping]
@@ -54,7 +57,7 @@ class NoteModelMapping(Verifiable):
     required_fields_definitions = [DeckPartNoteKeys.GUID.value, DeckPartNoteKeys.TAGS.value]
 
     @classmethod
-    def from_dict(cls, data: NoteModelMappingRepresentation):
+    def from_repr(cls, data: Representation):
         return cls(
             columns=[FieldMapping(
                 field_type=FieldMapping.FieldMappingType.COLUMN,
