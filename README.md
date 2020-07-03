@@ -52,7 +52,7 @@ Then there's having too many rows in one csv for it to be properly managed.
 
 # Features of Brain Brew
 ### Multi-directional Card Syncing
-Make a changes in a your source file and sync those into your Anki collection.
+Make changes in your source file and sync those into your Anki collection.
 
 Make changes inside Anki and pull those back into the source.
 
@@ -176,7 +176,7 @@ See the [Brain Brew Starter Project](https://github.com/ohare93/brain-brew-start
 
 # Limitations
 * Note Models cannot yet be generated, and are very ugly and hard to manage
-* Deck headers are terrible, and I hope to remove them entirely as a necessary Deck Part my making a PR in CrowdAnki
+* Deck headers are terrible, and I hope to remove them entirely as a necessary Deck Part by making a PR in CrowdAnki
 
 
 # Planned Work
