@@ -2,7 +2,7 @@ from textwrap import dedent
 from unittest.mock import patch
 
 from brain_brew.file_manager import FileManager
-from brain_brew.representation.deck_part_transformers.tr_notes_csv_collection import TrNotesCsvCollection
+from brain_brew.representation.deck_part_transformers.tr_notes_csv_collection import TrCsvCollectionToNotes
 from brain_brew.representation.yaml.my_yaml import yaml_dump, yaml_load
 from tests.test_file_manager import get_new_file_manager
 from tests.representation.configuration.test_global_config import global_config
@@ -159,6 +159,6 @@ class TestConstructor:
         fm = get_new_file_manager()
         data = yaml_load.load(self.test_tr_notes)
 
-        tr_notes = TrNotesCsvCollection.from_dict(data)
+        tr_notes = TrCsvCollectionToNotes.from_dict(data)
 
-        assert isinstance(tr_notes, TrNotesCsvCollection)
+        assert isinstance(tr_notes, TrCsvCollectionToNotes)
