@@ -11,7 +11,7 @@ class TrGenericToNotes:
         name: str
         save_to_file: Optional[str]
 
-        def __init__(self, name, save_to_file):
+        def __init__(self, name, save_to_file=None):
             self.name = name
             self.save_to_file = save_to_file
 
@@ -26,5 +26,8 @@ class TrNotesToGeneric:
     @dataclass
     class Representation:
         name: str
+
+        def __init__(self, name):
+            self.name = name
 
     notes: DeckPartNotes

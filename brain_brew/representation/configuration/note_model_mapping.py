@@ -6,8 +6,7 @@ from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.interfaces.verifiable import Verifiable
 from brain_brew.representation.generic.yaml_file import YamlFile, ConfigKey
 from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
-from brain_brew.utils import list_of_str_to_lowercase
-
+from brain_brew.utils import list_of_str_to_lowercase, single_item_to_list
 
 NOTE_MODEL = "note_model"
 COLUMNS = "csv_columns_to_fields"
@@ -42,7 +41,7 @@ class FieldMapping:
 class NoteModelMapping(Verifiable):
     @dataclass
     class Representation:
-        note_model: str  # TODO: Union[str, list]
+        note_models: Union[str, list]
         columns_to_fields: Dict[str, str]
         personal_fields: List[str]
 
@@ -50,7 +49,7 @@ class NoteModelMapping(Verifiable):
         def from_dict(cls, data: dict):
             return cls(**data)
 
-    note_model: DeckPartNoteModel
+    note_models: Dict[str, DeckPartNoteModel]
     columns: List[FieldMapping]
     personal_fields: List[FieldMapping]
 
@@ -58,6 +57,8 @@ class NoteModelMapping(Verifiable):
 
     @classmethod
     def from_repr(cls, data: Representation):
+        note_models = [DeckPartNoteModel.create(model, read_now=True) for model in single_item_to_list(data.note_models)]
+
         return cls(
             columns=[FieldMapping(
                 field_type=FieldMapping.FieldMappingType.COLUMN,
@@ -67,33 +68,37 @@ class NoteModelMapping(Verifiable):
                 field_type=FieldMapping.FieldMappingType.PERSONAL_FIELD,
                 field_name=field,
                 value="") for field in data.personal_fields],
-            note_model=DeckPartNoteModel.create(data.note_model, read_now=True)  # TODO: Fix read_now
+            note_models=dict(map(lambda nm: (nm.name, nm), note_models))  # TODO: Use deck part pool
         )
 
     def verify_contents(self):
         errors = []
 
-        # Check for Required Fields
-        missing = []
-        for req in self.required_fields_definitions:
-            if req not in [field.value for field in self.columns]:
-                missing.append(req)
+        for model in self.note_models:
+            # Check for Required Fields
+            missing = []
+            for req in self.required_fields_definitions:
+                if req not in [field.value for field in self.columns]:
+                    missing.append(req)
 
-        if missing:
-            errors.append(KeyError(f"""Note model "{self.note_model.name}" to Csv config error: \
-                               Definitions for fields {missing} are required."""))
+            if missing:
+                errors.append(KeyError(f"""Note model(s) "{model.name}" to Csv config error: \
+                                   Definitions for fields {missing} are required."""))
 
-        # Check Fields Align with Note Type
-        missing, extra = self.note_model.check_field_overlap(
-            [field.value for field in self.columns if field.value not in self.required_fields_definitions]
-        )
-        missing = [m for m in missing if m not in [field.field_name for field in self.personal_fields]]
+            # TODO: Note Model Mappings are allowed extra fields on a specific note model now, since multiple
+            # TODO: can be applied to a single NMM. Check if ANY are missing and/or ALL have Extra instead
+            # Check Fields Align with Note Type
+            missing, extra = model.check_field_overlap(
+                [field.value for field in self.columns if field.value not in self.required_fields_definitions]
+            )
+            missing = [m for m in missing if m not in [field.field_name for field in self.personal_fields]]
 
-        if missing or extra:
-            raise KeyError(
-                f"""Note model "{self.note_model.name}" to Csv config error. It expected {self.note_model.fields} \
-                    but was missing: {missing}, and got extra: {extra} """)
+            if missing or extra:
+                errors.append(KeyError(
+                    f"""Note model "{model.name}" to Csv config error. It expected {model.fields} \
+                        but was missing: {missing}, and got extra: {extra} """))
 
+            # TODO: Make sure the same note_model is not defined in multiple NMMs
         if errors:
             raise Exception(errors)
 
@@ -142,5 +147,5 @@ class NoteModelMapping(Verifiable):
 
         return relevant_data
 
-    def field_values_in_note_model_order(self, fields_from_csv):
-        return [fields_from_csv[field] for field in self.note_model.fields_lowercase]
+    def field_values_in_note_model_order(self, note_model_name, fields_from_csv):
+        return [fields_from_csv[field] for field in self.note_models[note_model_name].fields_lowercase]

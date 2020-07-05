@@ -98,39 +98,6 @@ class SourceCsv(YamlFile, BuildTaskGeneric, Verifiable):
         if errors:
             raise Exception(errors)
 
-    def notes_to_deck_parts(self):
-        csv_data_by_guid: Dict[str, dict] = {}
-        for csv_map in self.csv_file_mappings:
-            csv_map.compile_data()
-            csv_data_by_guid = {**csv_data_by_guid, **csv_map.compiled_data}
-        csv_rows: List[dict] = list(csv_data_by_guid.values())
-
-        notes_json = []
-        top_level_note_structure = {
-            DeckPartNoteKeys.FIELDS.value: List[str],
-            DeckPartNoteKeys.GUID.value: "",
-            DeckPartNoteKeys.TAGS.value: List[str],
-            DeckPartNoteKeys.NOTE_MODEL.value: ""
-        }
-
-        # Get Guid, Tags, NoteTypeName, Fields
-        for row in csv_rows:
-            note = top_level_note_structure.copy()
-
-            row_nm: NoteModelMapping = self.note_model_mappings_dict[row[DeckPartNoteKeys.NOTE_MODEL.value]]
-
-            filtered_fields = row_nm.csv_row_map_to_note_fields(row)
-
-            note[DeckPartNoteKeys.NOTE_MODEL.value] = row_nm.note_model.name
-            note[DeckPartNoteKeys.GUID.value] = filtered_fields.pop(DeckPartNoteKeys.GUID.value)
-            note[DeckPartNoteKeys.TAGS.value] = self.split_tags(filtered_fields.pop(DeckPartNoteKeys.TAGS.value))
-
-            note[DeckPartNoteKeys.FIELDS.value] = row_nm.field_values_in_note_model_order(filtered_fields)
-
-            notes_json.append(note)
-
-        return notes_json
-
     def notes_to_source(self) -> Dict[str, dict]:
         notes_data = self.notes.get_data(deep_copy=True)[DeckPartNoteKeys.NOTES.value]
         self.verify_notes_match_note_model_mappings(notes_data)

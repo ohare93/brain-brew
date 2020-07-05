@@ -12,12 +12,12 @@ class TrCrowdAnkiToNotes(TrGenericToNotes):
         file: str
         sort_order: Optional[Union[str, List[str]]]
         media: Optional[bool]
-        useless_note_keys: Optional[dict]
+        useless_note_keys: Optional[Union[dict, list]]
 
     crowdanki_file: CrowdAnkiExport
     sort_order: Optional[List[str]]
-    media: Optional[bool]
-    useless_note_keys: Optional[Union[dict, list]]
+    media: bool
+    useless_note_keys: list
 
 
 @dataclass
@@ -27,9 +27,9 @@ class TrNotesToCrowdAnki(TrNotesToGeneric):
         file: str
         sort_order: Optional[Union[str, List[str]]]
         media: Optional[bool]
-        useless_note_keys: Optional[dict]
+        useless_note_keys: Optional[dict]  # TODO: use default value
 
     sort_order: Optional[List[str]]
-    media: Optional[bool]
-    useless_note_keys: Optional[dict]
+    media: bool
+    useless_note_keys: dict
 
