@@ -2,10 +2,9 @@ from unittest.mock import patch
 
 from brain_brew.build_tasks.source_crowd_anki import SourceCrowdAnki
 from brain_brew.build_tasks.source_csv import SourceCsv
-from brain_brew.builder import Builder
+from brain_brew.representation.build_config.builder import Builder
 from brain_brew.representation.generic.yaml_file import YamlFile
 from tests.test_files import TestFiles
-from tests.representation.configuration.test_global_config import global_config
 
 
 class TestConstructor:

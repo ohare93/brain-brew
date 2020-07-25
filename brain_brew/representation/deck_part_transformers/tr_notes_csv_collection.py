@@ -91,7 +91,7 @@ class TrCsvCollectionToNotes(TrCsvCollectionShared, TrGenericToNotes):
     def from_dict(cls, data: dict):
         return cls.from_repr(TrCsvCollectionToNotes.Representation.from_dict(data))
 
-    def notes_to_deck_parts(self):
+    def execute(self):
         csv_data_by_guid: Dict[str, dict] = {}
         for csv_map in self.file_mappings:
             csv_map.compile_data()
@@ -114,7 +114,7 @@ class TrCsvCollectionToNotes(TrCsvCollectionShared, TrGenericToNotes):
 
             deck_part_notes.append(Note(guid=guid, tags=tags, note_model=note_model_name, fields=fields))
 
-        DeckPartNotes.from_list_of_notes(self.name, deck_part_notes)
+        DeckPartNotes.from_list_of_notes(self.name, self.save_to_file, deck_part_notes)
         # TODO: Save to the singleton holder
 
 
@@ -133,7 +133,7 @@ class TrNotesToCsvCollection(TrCsvCollectionShared, TrNotesToGeneric):
     @classmethod
     def from_repr(cls, data: Representation):
         return cls(
-            notes=DeckPartNotes.create(data.name, read_now=True),  # TODO: remove old DeckPartNotes. Use pool of DeckParts
+            notes=DeckPartNotes.from_deck_part_pool(data.name),
             file_mappings=data.get_file_mappings(),
             note_model_mappings=data.get_note_model_mappings()
         )
@@ -142,7 +142,7 @@ class TrNotesToCsvCollection(TrCsvCollectionShared, TrNotesToGeneric):
     def from_dict(cls, data: dict):
         return cls.from_repr(TrCsvCollectionToNotes.Representation.from_dict(data))
 
-    def notes_to_source(self):
+    def execute(self):
         notes_data = self.notes.get_notes()
         self.verify_notes_match_note_model_mappings(notes_data)
 

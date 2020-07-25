@@ -26,14 +26,6 @@ class BBArgumentReader(ArgumentParser):
             help="Global config file to use"
         )
 
-        self.add_argument(
-            "-r", "--reversed",
-            action="store_true",
-            dest="run_reversed",
-            default=False,
-            help="Run the builder file in reverse"
-        )
-
     def get_parsed(self, override_args=None):
         parsed_args = self.parse_args(args=override_args)
 
@@ -42,9 +34,8 @@ class BBArgumentReader(ArgumentParser):
 
         # Optional
         config_file = parsed_args.config_file
-        run_reversed = parsed_args.run_reversed
 
-        return builder, config_file, run_reversed
+        return builder, config_file
 
     def error_if_blank(self, arg):
         if arg == "" or arg is None:

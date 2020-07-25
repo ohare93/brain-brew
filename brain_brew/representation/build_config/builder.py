@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from enum import Enum
 
 from brain_brew.constants.build_config_keys import BuildTaskEnum
@@ -10,41 +11,42 @@ from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.generic.yaml_file import YamlFile, ConfigKey
 
 
-class BuilderKeys(Enum):
-    TASKS = "tasks"
-    REVERSE_RUN_DIRECTION = "reverse"
+@dataclass
+class Builder:
+    @dataclass
+    class Representation:
+        tasks: list
 
+        @classmethod
+        def from_dict(cls, data: dict):
+            return cls(**data)
 
-class Builder(YamlFile):
-    config_entry = {}
-    expected_keys = {
-        BuilderKeys.TASKS.value: ConfigKey(True, list, None),
-        BuilderKeys.REVERSE_RUN_DIRECTION.value: ConfigKey(False, bool, None)
-    }
-    subconfig_filter = None
-
+    tasks: list
     global_config: GlobalConfig
-
-    BUILD_TASK_DEFINITIONS: dict
-    KNOWN_BUILD_TASK_CLASSES = [SourceCrowdAnki, SourceCsv]
-
-    build_tasks = []
     file_manager: FileManager
 
-    def __init__(self, config_data, global_config, run_reversed=False, read_now=True):
-        self.file_manager = FileManager.get_instance()
+    @classmethod
+    def from_repr(cls, data: Representation, global_config, file_manager):
+        tasks = cls.read_tasks(data.tasks)
+        return cls(
+            tasks=tasks,
+            global_config=global_config,
+            file_manager=file_manager
+        )
 
+    @classmethod
+    def from_dict(cls, data: dict, global_config, file_manager):
+        return cls.from_repr(Builder.Representation.from_dict(data), global_config, file_manager)
+
+    @staticmethod
+    def read_tasks(tasks: list) -> list:
         self.BUILD_TASK_DEFINITIONS = {build_task.key_name: build_task
                                        for source in self.KNOWN_BUILD_TASK_CLASSES
                                        for build_task in source.get_build_keys()
                                        }
 
-        self.setup_config_with_subconfig_replacement(config_data)
-        self.verify_config_entry()
 
-        self.global_config = global_config
-
-        self.reverse_run_direction = run_reversed or self.get_config(BuilderKeys.REVERSE_RUN_DIRECTION, False)
+        build_tasks = []
 
         # Tasks
         for key in self.config_entry[BuilderKeys.TASKS.value]:
@@ -58,22 +60,24 @@ class Builder(YamlFile):
                     definition: BuildTaskEnum = self.BUILD_TASK_DEFINITIONS[task_keys[0]]
                     source = definition.source_type(task[task_keys[0]], read_now)
                     if self.reverse_run_direction:
-                        self.build_tasks.append((source, definition.reverse_task_to_execute))
+                        build_tasks.append((source, definition.reverse_task_to_execute))
                     else:
-                        self.build_tasks.append((source, definition.task_to_execute))
+                        build_tasks.append((source, definition.task_to_execute))
                 else:
                     raise KeyError(f"Unknown key {key}")  # TODO: check this first on all and return all errors
 
         if self.reverse_run_direction:
-            self.build_tasks = list(reversed(self.build_tasks))
+            build_tasks = list(reversed(build_tasks))
 
         # Verify tasks
-        for source, task_to_execute in self.build_tasks:
+        for source, task_to_execute in build_tasks:
             if isinstance(source, Verifiable):
                 source.verify_contents()
 
+        return build_tasks
+
     def execute(self):
-        for (source, task_to_execute) in self.build_tasks:
+        for (source, task_to_execute) in self.tasks:
             getattr(source, task_to_execute)()
 
         self.file_manager.write_to_all()

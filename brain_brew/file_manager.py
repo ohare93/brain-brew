@@ -7,6 +7,7 @@ from brain_brew.interfaces.writes_file import WritesFile
 from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.generic.generic_file import GenericFile
 from brain_brew.representation.generic.media_file import MediaFile
+from brain_brew.representation.yaml.my_yaml import YamlRepresentation
 from brain_brew.utils import filename_from_full_path, find_all_files_in_directory
 
 
@@ -16,6 +17,7 @@ class FileManager:
 
     known_files_dict: Dict[str, GenericFile]
     known_media_files_dict: Dict[str, MediaFile]
+    deck_part_pool: Dict[str, YamlRepresentation]
 
     write_files_at_end: List[WritesFile]
 
@@ -29,6 +31,7 @@ class FileManager:
 
         self.known_files_dict = {}
         self.write_files_at_end = []
+        self.deck_part_pool = {}
 
         self.find_all_deck_part_media_files()
 
@@ -48,7 +51,7 @@ class FileManager:
 
     def register_file(self, full_path, file):
         if full_path in self.known_files_dict:
-            raise FileExistsError("File already known to FileManager, cannot be registered twice")
+            raise FileExistsError(f"File already known to FileManager, cannot be registered twice: {full_path}")
         self.known_files_dict.setdefault(full_path, file)
 
     def media_file_if_exists(self, filename) -> Union[MediaFile, None]:
@@ -79,6 +82,16 @@ class FileManager:
 
         logging.debug(f"Media files found: {len(self.known_media_files_dict)}")
 
+    def new_deck_part(self, dp: YamlRepresentation):
+        if dp.name in self.deck_part_pool:
+            raise KeyError(f"Cannot use same name '{dp.name}' for multiple Deck Parts")
+        self.deck_part_pool.setdefault(dp.name, dp)
+
+    def deck_part_from_pool(self, name: str):
+        if name not in self.deck_part_pool:
+            raise KeyError(f"Cannot find Deck Part '{name}'")
+        return self.deck_part_pool[name]
+
     def write_to_all(self):
         files_to_create = []
         for location, file in self.known_files_dict.items():
@@ -95,6 +108,9 @@ class FileManager:
                 logging.info(f"Wrote to {file.file_location}")
                 file.write_file()
                 file.data_state = GenericFile.DataState.READ_IN_DATA
+
+        for dp in self.deck_part_pool.values():
+            dp.write_to_file()
 
         for filename, media_file in self.known_media_files_dict.items():
             media_file.copy_source_to_target()

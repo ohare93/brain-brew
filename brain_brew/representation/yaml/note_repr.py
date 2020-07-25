@@ -1,4 +1,5 @@
-from brain_brew.representation.yaml.my_yaml import yaml_dump, yaml_load
+from brain_brew.file_manager import FileManager
+from brain_brew.representation.yaml.my_yaml import yaml_dump, yaml_load, YamlRepresentation
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Set
 
@@ -112,24 +113,35 @@ class NoteGrouping(GroupableNoteData):
 
 
 @dataclass
-class DeckPartNotes:
+class DeckPartNotes(YamlRepresentation):
     name: str
+    save_to_file: Optional[str]
     note_groupings: List[NoteGrouping]
     # TODO: File location and saving
 
     @classmethod
-    def from_dict(cls, name: str,  data: dict):
+    def from_deck_part_pool(cls, name: str) -> 'DeckPartNotes':
+        return FileManager.get_instance().deck_part_from_pool(name)
+
+    @classmethod
+    def from_dict(cls, name: str, save_to_file: Optional[str], data: dict):
         return cls(
             name=name,
+            save_to_file=save_to_file,
             note_groupings=list(map(NoteGrouping.from_dict, data.get(NOTE_GROUPINGS)))
         )
 
     @classmethod
-    def from_list_of_notes(cls, name: str, notes: List[Note]):
+    def from_list_of_notes(cls, name: str, save_to_file: Optional[str], notes: List[Note]):
         return cls(
             name=name,
+            save_to_file=save_to_file,
             note_groupings=[NoteGrouping(note_model=None, tags=None, notes=notes)]
         )
+
+    def write_to_file(self):
+        if self.save_to_file is not None:
+            self.dump_to_yaml(self.save_to_file)
 
     def encode(self) -> dict:
         data_dict = {NOTE_GROUPINGS: [note_grouping.encode() for note_grouping in self.note_groupings]}
