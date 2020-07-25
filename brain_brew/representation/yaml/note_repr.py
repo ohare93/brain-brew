@@ -113,12 +113,22 @@ class NoteGrouping(GroupableNoteData):
 
 @dataclass
 class DeckPartNotes:
+    name: str
     note_groupings: List[NoteGrouping]
+    # TODO: File location and saving
 
     @classmethod
-    def from_dict(cls, data: dict):
+    def from_dict(cls, name: str,  data: dict):
         return cls(
+            name=name,
             note_groupings=list(map(NoteGrouping.from_dict, data.get(NOTE_GROUPINGS)))
+        )
+
+    @classmethod
+    def from_list_of_notes(cls, name: str, notes: List[Note]):
+        return cls(
+            name=name,
+            note_groupings=[NoteGrouping(note_model=None, tags=None, notes=notes)]
         )
 
     def encode(self) -> dict:
@@ -131,3 +141,6 @@ class DeckPartNotes:
 
     def get_all_known_note_model_names(self):
         return {nms for group in self.note_groupings for nms in group.get_all_known_note_model_names()}
+
+    def get_notes(self):
+        return [note for group in self.note_groupings for note in group.get_all_notes_copy()]

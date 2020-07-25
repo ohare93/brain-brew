@@ -22,13 +22,48 @@ class TrCsvCollectionShared:
             return list(map(CsvFileMapping.from_repr, self.file_mappings))
 
         def get_note_model_mappings(self) -> Dict[str, NoteModelMapping]:
-            note_model_mappings: Dict[str, NoteModelMapping] = {}
-            for nmm in self.note_model_mappings:
-                if
-            return dict(map(lambda nmm: (nmm.note_model, NoteModelMapping.from_repr(nmm)), ))
+            return dict(map(lambda nmm: (nmm.note_model, NoteModelMapping.from_repr(nmm)), self.note_model_mappings))
 
     file_mappings: List[CsvFileMapping]
     note_model_mappings: Dict[str, NoteModelMapping]
+
+    def verify_contents(self):
+        errors = []
+
+        for nm in self.note_model_mappings.values():
+            try:
+                nm.verify_contents()
+            except KeyError as e:
+                errors.append(e)
+
+        for fm in self.file_mappings:
+            # Check all necessary key values are present
+            try:
+                fm.verify_contents()
+            except KeyError as e:
+                errors.append(e)
+
+            # Check all referenced note models have a mapping
+            for csv_map in self.file_mappings:
+                for nm in csv_map.get_used_note_model_names():
+                    if nm not in self.note_model_mappings.keys():
+                        errors.append(f"Missing Note Model Map for {nm}")
+
+        # Check each of the Csvs (or their derivatives) contain all the necessary columns for their stated note model
+        # for cfm in self.file_mappings:
+        #     note_model_names = cfm.get_used_note_model_names()
+        #     available_columns = cfm.get_available_columns()
+        #
+        #     referenced_note_models_maps = [value for key, value in self.note_model_mappings.items() if
+        #                                    key in note_model_names]
+        #     for nm_map in referenced_note_models_maps:
+        #         missing_columns = [col for col in nm_map.note_model.fields_lowercase if
+        #                            col not in nm_map.csv_headers_map_to_note_fields(available_columns)]
+        #         if missing_columns:
+        #             errors.append(KeyError(f"Csvs are missing columns from {nm_map.note_model.name}", missing_columns))
+
+        if errors:
+            raise Exception(errors)
 
 
 @dataclass
@@ -63,23 +98,24 @@ class TrCsvCollectionToNotes(TrCsvCollectionShared, TrGenericToNotes):
             csv_data_by_guid = {**csv_data_by_guid, **csv_map.compiled_data}
         csv_rows: List[dict] = list(csv_data_by_guid.values())
 
-        notes_json: List[Note] = []
+        deck_part_notes: List[Note] = []
 
         # Get Guid, Tags, NoteTypeName, Fields
         for row in csv_rows:
-            row_nm: NoteModelMapping = self.note_model_mappings_dict[row[DeckPartNoteKeys.NOTE_MODEL.value]]
+            note_model_name = row["note_model"]  # TODO: Use object
+            row_nm: NoteModelMapping = self.note_model_mappings[note_model_name]
 
             filtered_fields = row_nm.csv_row_map_to_note_fields(row)
 
-            note_model = row_nm.note_model.name
-            guid = filtered_fields.pop(DeckPartNoteKeys.GUID.value)
-            tags = self.split_tags(filtered_fields.pop(DeckPartNoteKeys.TAGS.value))
+            guid = filtered_fields.pop("guid")
+            tags = self.split_tags(filtered_fields.pop("tags"))
 
-            fields = row_nm.field_values_in_note_model_order(note_model, filtered_fields)
+            fields = row_nm.field_values_in_note_model_order(note_model_name, filtered_fields)
 
-            notes_json.append(Note(guid=guid, tags=tags, note_model=note_model, fields=fields))
+            deck_part_notes.append(Note(guid=guid, tags=tags, note_model=note_model_name, fields=fields))
 
-        return notes_json
+        DeckPartNotes.from_list_of_notes(self.name, deck_part_notes)
+        # TODO: Save to the singleton holder
 
 
 @dataclass
@@ -97,7 +133,7 @@ class TrNotesToCsvCollection(TrCsvCollectionShared, TrNotesToGeneric):
     @classmethod
     def from_repr(cls, data: Representation):
         return cls(
-            notes=DeckPartNotes.create(data.name, read_now=True),  #TODO: remove old DeckPartNotes. Use pool of DeckParts
+            notes=DeckPartNotes.create(data.name, read_now=True),  # TODO: remove old DeckPartNotes. Use pool of DeckParts
             file_mappings=data.get_file_mappings(),
             note_model_mappings=data.get_note_model_mappings()
         )
@@ -105,3 +141,31 @@ class TrNotesToCsvCollection(TrCsvCollectionShared, TrNotesToGeneric):
     @classmethod
     def from_dict(cls, data: dict):
         return cls.from_repr(TrCsvCollectionToNotes.Representation.from_dict(data))
+
+    def notes_to_source(self):
+        notes_data = self.notes.get_notes()
+        self.verify_notes_match_note_model_mappings(notes_data)
+
+        csv_data: Dict[str, dict] = {}
+        for note in notes_data:
+            nm_name = note.note_model
+            row = self.note_model_mappings[nm_name].note_models[nm_name].zip_field_to_data(note.fields)
+            row["guid"] = note.guid
+            row["tags"] = self.join_tags(note.tags)
+
+            formatted_row = self.note_model_mappings[nm_name].note_fields_map_to_csv_row(row)  # TODO: Do not edit data, make copy
+
+            csv_data.setdefault(row["guid"], formatted_row)
+
+        for fm in self.file_mappings:
+            fm.compile_data()
+            fm.set_relevant_data(csv_data)
+
+    def verify_notes_match_note_model_mappings(self, notes: List[Note]):
+        note_models_used = {note.note_model for note in notes}
+        errors = [TypeError(f"Unknown note model type '{model}' in deck part '{self.notes.name}'. "
+                            f"Add mapping for that model.")
+                  for model in note_models_used if model not in self.note_model_mappings.keys()]
+
+        if errors:
+            raise Exception(errors)
