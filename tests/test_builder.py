@@ -1,22 +1,21 @@
 from unittest.mock import patch
 
-from brain_brew.build_tasks.source_crowd_anki import SourceCrowdAnki
-from brain_brew.build_tasks.source_csv import SourceCsv
-from brain_brew.representation.build_config.builder import Builder
+from brain_brew.representation.build_config.top_level_task_builder import TopLevelTaskBuilder
+from brain_brew.representation.deck_part_transformers.tr_notes_csv_collection import TrNotesToCsvCollection
 from brain_brew.representation.generic.yaml_file import YamlFile
+from tests.test_file_manager import get_new_file_manager
 from tests.test_files import TestFiles
+from tests.representation.configuration.test_global_config import global_config
 
 
 class TestConstructor:
     def test_runs(self, global_config):
+        fm = get_new_file_manager()
 
-        with patch.object(SourceCsv, "__init__", return_value=None) as mock_csv, \
-                patch.object(SourceCsv, "verify_contents", return_value=None), \
-                patch.object(SourceCrowdAnki, "__init__", return_value=None) as mock_ca:
+        with patch.object(TrNotesToCsvCollection, "__init__", return_value=None) as mock_csv_tr:
 
             data = YamlFile.read_file(TestFiles.BuildConfig.ONE_OF_EACH_TYPE)
-            builder = Builder(data, global_config, read_now=False)
+            builder = TopLevelTaskBuilder.from_dict(data, global_config, fm)
 
-            assert len(builder.build_tasks) == 2
-            assert mock_csv.call_count == 1
-            assert mock_ca.call_count == 1
+            assert len(builder.build_tasks) == 1
+            assert mock_csv_tr.call_count == 1

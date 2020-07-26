@@ -1,32 +1,67 @@
-reverse: no
 tasks:
-  - csv_collection_to_deck_parts:
-      notes: csv_first_attempt.json
+  - generate_csv_collection:
+      notes: test_from_CA
 
       note_model_mappings:
         - note_model: LL Word
           csv_columns_to_fields:
             guid: guid
             tags: tags
+
             english: Word
             danish: X Word
-          personal_fields: []
+            danish audio: X Pronunciation (Recording and/or IPA)
+            esperanto: Y Word
+            esperanto audio: Y Pronunciation (Recording and/or IPA)
+          personal_fields:
+            - picture
+            - extra
+            - morphman_focusmorph
+        - note_model: LL Verb
+          csv_columns_to_fields:
+            guid: guid
+            tags: tags
+
+            english: Word
+            danish: X Word
+            danish audio: X Pronunciation (Recording and/or IPA)
+            esperanto: Y Word
+            esperanto audio: Y Pronunciation (Recording and/or IPA)
+
+            present: Form Present
+            past: Form Past
+            present perfect: Form Perfect Present
+          personal_fields:
+            - picture
+            - extra
+            - morphman_focusmorph
+        - note_model: LL Noun
+          csv_columns_to_fields:
+            guid: guid
+            tags: tags
+
+            english: Word
+            danish: X Word
+            danish audio: X Pronunciation (Recording and/or IPA)
+            esperanto: Y Word
+            esperanto audio: Y Pronunciation (Recording and/or IPA)
+
+            plural: Plural
+            indefinite plural: Indefinite Plural
+            definite plural: Definite Plural
+          personal_fields:
+            - picture
+            - extra
+            - morphman_focusmorph
 
       csv_file_mappings:
-        - csv: source/vocab/main.csv
-          note_model: LL Word
-          sort_by_columns: [english]
-          reverse_sort: no
+      - file: source/vocab/main.csv
+        note_model: LL Word
+        sort_by_columns: [english]
+        reverse_sort: false
 
-          derivatives:
-            - csv: source/vocab/derivatives/danish/danish_verbs.csv
-              note_model: LL Verb
-            - csv: source/vocab/derivatives/danish/danish_nouns.csv
-              note_model: LL Noun
-
-
-  - crowdanki_to_deck_parts:
-      subconfig: build_tasks/crowdanki/Danish_Esperanto.yaml
-
-      headers: default
-      notes: dan_esp_vocab.json
+        derivatives:
+          - file: source/vocab/derivatives/danish/danish_verbs.csv
+            note_model: LL Verb
+          - file: source/vocab/derivatives/danish/danish_nouns.csv
+            note_model: LL Noun

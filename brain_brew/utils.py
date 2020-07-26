@@ -22,6 +22,10 @@ def single_item_to_list(item):
     return [item]
 
 
+def str_to_lowercase_no_separators(str_to_tidy: str):
+    return re.sub(r'[\s+_-]+', '', str_to_tidy.lower())
+
+
 def filename_from_full_path(full_path):
     return re.findall('[^\\/:*?"<>|\r\n]+$', full_path)[0]
 

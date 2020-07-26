@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Dict
 
+from brain_brew.representation.build_config.build_task import TopLevelBuildTask, GenerateDeckPartBuildTask
 from brain_brew.representation.configuration.csv_file_mapping import CsvFileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 from brain_brew.representation.deck_part_transformers.tr_notes_generic import TrNotesToGeneric, TrGenericToNotes
@@ -67,7 +68,9 @@ class TrCsvCollectionShared:
 
 
 @dataclass
-class TrCsvCollectionToNotes(TrCsvCollectionShared, TrGenericToNotes):
+class TrCsvCollectionToNotes(GenerateDeckPartBuildTask, TrCsvCollectionShared, TrGenericToNotes):
+    task_names = ["Notes From Csv Collection", "Notes From Csv", "Notes From Csvs"]
+
     @dataclass(init=False)
     class Representation(TrCsvCollectionShared.Representation, TrGenericToNotes.Representation):
         def __init__(self, name, file_mappings, note_model_mappings, save_to_file=None):
@@ -119,7 +122,9 @@ class TrCsvCollectionToNotes(TrCsvCollectionShared, TrGenericToNotes):
 
 
 @dataclass
-class TrNotesToCsvCollection(TrCsvCollectionShared, TrNotesToGeneric):
+class TrNotesToCsvCollection(TopLevelBuildTask, TrCsvCollectionShared, TrNotesToGeneric):
+    task_names = ["Generate Csv Collection", "Generate Csv Collections", "Generate Csv", "Generate Csvs"]
+
     @dataclass(init=False)
     class Representation(TrCsvCollectionShared.Representation, TrNotesToGeneric.Representation):
         def __init__(self, name, file_mappings, note_model_mappings):

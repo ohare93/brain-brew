@@ -3,7 +3,6 @@ from typing import Optional
 
 from ruamel.yaml import YAML
 
-from brain_brew.file_manager import FileManager
 
 yaml_load = YAML(typ='safe')
 
@@ -22,6 +21,7 @@ class YamlRepresentation:
 
     @classmethod
     def from_deck_part_pool(cls, name: str) -> 'YamlRepresentation':
+        from brain_brew.file_manager import FileManager
         return FileManager.get_instance().deck_part_from_pool(name)
 
     def write_to_file(self):

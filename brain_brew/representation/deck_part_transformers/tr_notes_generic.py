@@ -2,12 +2,11 @@ from dataclasses import dataclass, field
 from typing import Optional
 import re
 
-from brain_brew.representation.deck_part_transformers.tr_generic import TrGeneric
 from brain_brew.representation.yaml.note_repr import DeckPartNotes
 from brain_brew.representation.configuration.global_config import GlobalConfig
 
 
-class TrNotes(TrGeneric):
+class TrNotes:
     @staticmethod
     def split_tags(tags_value: str) -> list:
         split = [entry.strip() for entry in re.split(';\s*|,\s*|\s+', tags_value)]

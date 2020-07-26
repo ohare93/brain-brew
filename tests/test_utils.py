@@ -1,6 +1,6 @@
 import pytest
 
-from brain_brew.utils import find_media_in_field
+from brain_brew.utils import find_media_in_field, str_to_lowercase_no_separators
 
 
 class TestFindMedia:
@@ -23,3 +23,14 @@ class TestFindMedia:
     ])
     def test_find_media_in_field(self, field_value, expected_results):
         assert find_media_in_field(field_value) == expected_results
+
+
+class TestHelperFunctions:
+    @pytest.mark.parametrize("str_to_tidy", [
+        'Generate Csv Blah Blah',
+        'Generate__Csv_Blah-Blah',
+        'Generate      Csv Blah Blah',
+        'generateCsvBlahBlah'
+    ])
+    def test_remove_spacers_from_str(self, str_to_tidy):
+        assert str_to_lowercase_no_separators(str_to_tidy) == "generatecsvblahblah"
