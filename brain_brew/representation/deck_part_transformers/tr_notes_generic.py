@@ -6,6 +6,7 @@ from brain_brew.representation.yaml.note_repr import DeckPartNotes
 from brain_brew.representation.configuration.global_config import GlobalConfig
 
 
+@dataclass
 class TrNotes:
     @staticmethod
     def split_tags(tags_value: str) -> list:
@@ -40,9 +41,9 @@ class TrGenericToNotes(TrNotes):
 class TrNotesToGeneric(TrNotes):
     @dataclass
     class Representation:
-        name: str
+        notes: str
 
-        def __init__(self, name):
-            self.name = name
+        def __init__(self, notes):
+            self.notes = notes
 
     notes: DeckPartNotes

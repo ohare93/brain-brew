@@ -71,6 +71,9 @@ class NoteModelMapping(Verifiable):
             note_models=dict(map(lambda nm: (nm.name, nm), note_models))  # TODO: Use deck part pool
         )
 
+    def get_note_model_mapping_dict(self):
+        return {model: self for model in self.note_models}
+
     def verify_contents(self):
         errors = []
 

@@ -23,7 +23,11 @@ class TrCsvCollectionShared:
             return list(map(CsvFileMapping.from_repr, self.file_mappings))
 
         def get_note_model_mappings(self) -> Dict[str, NoteModelMapping]:
-            return dict(map(lambda nmm: (nmm.note_model, NoteModelMapping.from_repr(nmm)), self.note_model_mappings))
+            def map_nmm(nmm_to_map: str):
+                nmm = NoteModelMapping.from_repr(nmm_to_map)
+                return nmm.get_note_model_mapping_dict()
+
+            return dict(*map(map_nmm, self.note_model_mappings))
 
     file_mappings: List[CsvFileMapping]
     note_model_mappings: Dict[str, NoteModelMapping]
@@ -90,6 +94,9 @@ class TrCsvCollectionToNotes(GenerateDeckPartBuildTask, TrCsvCollectionShared, T
             note_model_mappings=data.get_note_model_mappings()
         )
 
+    def __repr__(self):
+        return f'TrCsvCollectionToNotes({self.name!r}, {self.save_to_file!r}, {self.file!r}, {self.note_model_mappings!r}, '
+
     @classmethod
     def from_dict(cls, data: dict):
         return cls.from_repr(TrCsvCollectionToNotes.Representation.from_dict(data))
@@ -127,9 +134,9 @@ class TrNotesToCsvCollection(TopLevelBuildTask, TrCsvCollectionShared, TrNotesTo
 
     @dataclass(init=False)
     class Representation(TrCsvCollectionShared.Representation, TrNotesToGeneric.Representation):
-        def __init__(self, name, file_mappings, note_model_mappings):
+        def __init__(self, notes, file_mappings, note_model_mappings):
             TrCsvCollectionShared.Representation.__init__(self, file_mappings, note_model_mappings)
-            TrNotesToGeneric.Representation.__init__(self, name)
+            TrNotesToGeneric.Representation.__init__(self, notes)
 
         @classmethod
         def from_dict(cls, data: dict):
@@ -138,14 +145,14 @@ class TrNotesToCsvCollection(TopLevelBuildTask, TrCsvCollectionShared, TrNotesTo
     @classmethod
     def from_repr(cls, data: Representation):
         return cls(
-            notes=DeckPartNotes.from_deck_part_pool(data.name),
+            notes=DeckPartNotes.from_deck_part_pool(data.notes),
             file_mappings=data.get_file_mappings(),
             note_model_mappings=data.get_note_model_mappings()
         )
 
     @classmethod
     def from_dict(cls, data: dict):
-        return cls.from_repr(TrCsvCollectionToNotes.Representation.from_dict(data))
+        return cls.from_repr(TrNotesToCsvCollection.Representation.from_dict(data))
 
     def execute(self):
         notes_data = self.notes.get_notes()
