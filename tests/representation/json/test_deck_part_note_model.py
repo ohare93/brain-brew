@@ -2,10 +2,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel, CANoteModelKeys
-from brain_brew.representation.json.json_file import JsonFile
+from brain_brew.representation.yaml.note_model import DeckPartNoteModel, CANoteModelKeys
 from tests.test_files import TestFiles
-from tests.representation.configuration.test_global_config import global_config
 
 
 def mock_dp_nm(name, read_now):

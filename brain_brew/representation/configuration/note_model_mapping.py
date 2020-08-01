@@ -4,13 +4,8 @@ from typing import List, Union, Dict
 
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.interfaces.verifiable import Verifiable
-from brain_brew.representation.generic.yaml_file import YamlFile, ConfigKey
-from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
-from brain_brew.utils import list_of_str_to_lowercase, single_item_to_list
-
-NOTE_MODEL = "note_model"
-COLUMNS = "csv_columns_to_fields"
-PERSONAL_FIELDS = "personal_fields"
+from brain_brew.representation.yaml.note_model import DeckPartNoteModel
+from brain_brew.utils import single_item_to_list
 
 
 class FieldMapping:
@@ -57,7 +52,7 @@ class NoteModelMapping(Verifiable):
 
     @classmethod
     def from_repr(cls, data: Representation):
-        note_models = [DeckPartNoteModel.create(model, read_now=True) for model in single_item_to_list(data.note_models)]
+        note_models = [DeckPartNoteModel.from_deck_part_pool(model) for model in single_item_to_list(data.note_models)]
 
         return cls(
             columns=[FieldMapping(

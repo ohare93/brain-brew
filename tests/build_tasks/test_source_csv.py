@@ -1,5 +1,5 @@
 from typing import List
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -9,16 +9,10 @@ from brain_brew.representation.configuration.csv_file_mapping import CsvFileMapp
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 from brain_brew.representation.generic.csv_file import CsvFile
 from brain_brew.representation.generic.generic_file import GenericFile
-from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
 from brain_brew.representation.json.deck_part_notes import DeckPartNotes
-from tests.test_files import TestFiles
-from tests.representation.configuration.test_global_config import global_config
-from tests.representation.generic.test_csv_file import csv_test1, csv_test2, csv_test1_split1, csv_test1_split2
-from tests.representation.json.test_deck_part_notes import dp_notes_test1, dp_notes_test2
-from tests.representation.json.test_deck_part_note_model import dp_note_model_test1
-from tests.representation.configuration.test_note_model_mapping import nmm_test1, setup_nmm_config
-from tests.representation.configuration.test_csv_file_mapping import csv_file_mapping1, csv_file_mapping2, \
-    setup_csv_fm_config
+from tests.representation.json.test_deck_part_notes import dp_notes_test1
+from tests.representation.configuration.test_note_model_mapping import setup_nmm_config
+from tests.representation.configuration.test_csv_file_mapping import setup_csv_fm_config
 
 
 def setup_source_csv_config(notes: str, nmm: list, csv_mappings: list):

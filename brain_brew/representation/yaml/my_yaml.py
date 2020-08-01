@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from ruamel.yaml import YAML
-
+from ruamel.yaml import YAML, Path
 
 yaml_load = YAML(typ='safe')
 
@@ -20,9 +19,20 @@ class YamlRepresentation:
     save_to_file: Optional[str]
 
     @classmethod
-    def from_deck_part_pool(cls, name: str) -> 'YamlRepresentation':
+    def from_deck_part_pool(cls, name: str):
         from brain_brew.file_manager import FileManager
         return FileManager.get_instance().deck_part_from_pool(name)
+
+    @staticmethod
+    def filename_to_dict(filename: str):
+        if filename[-5:] not in [".yaml", ".yml"]:
+            filename += ".yaml"
+
+        if not Path(filename).is_file():
+            raise FileNotFoundError(filename)
+
+        with open(filename) as file:
+            return yaml_load.load(file)
 
     def write_to_file(self):
         raise NotImplemented

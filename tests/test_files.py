@@ -20,10 +20,10 @@ class TestFiles:
         LOC = "tests/test_files/deck_parts/note_models/"
 
         TEST = "Test Model"
-        TEST_COMPLETE = "Test-Model.json"
+        TEST_COMPLETE = LOC + "Test-Model.json"
 
         LL_WORD = "LL Word"
-        LL_WORD_COMPLETE = "LL_Word.json"
+        LL_WORD_COMPLETE = LOC + "LL-Word.json"
 
     class CsvFiles:
         LOC = "tests/test_files/csv/"

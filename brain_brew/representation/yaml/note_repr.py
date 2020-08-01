@@ -121,7 +121,7 @@ class DeckPartNotes(YamlRepresentation):
 
     @classmethod
     def from_deck_part_pool(cls, name: str) -> 'DeckPartNotes':
-        return FileManager.get_instance().deck_part_from_pool(name)
+        return super(DeckPartNotes, cls).from_deck_part_pool(name)
 
     @classmethod
     def from_dict(cls, name: str, save_to_file: Optional[str], data: dict):

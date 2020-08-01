@@ -1,29 +1,22 @@
-from typing import Dict, List
 from unittest.mock import patch
 
 import pytest
 
-from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping, FieldMapping, \
-    NOTE_MODEL, COLUMNS, PERSONAL_FIELDS
+from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping, FieldMapping
 from brain_brew.representation.generic.csv_file import CsvFile
-from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
-from tests.representation.configuration.test_global_config import global_config
+from brain_brew.representation.yaml.note_model import DeckPartNoteModel
 from tests.test_file_manager import get_new_file_manager
-from tests.representation.generic.test_csv_file import csv_test1
 
 
-def setup_nmm_config(note_model: str, field_mappings: Dict[str, str], personal_fields: List[str]):
-    return {
-        NOTE_MODEL: note_model,
-        COLUMNS: field_mappings,
-        PERSONAL_FIELDS: personal_fields
-    }
+@pytest.fixture(autouse=True)
+def run_around_tests(global_config):
+    get_new_file_manager()
+    yield
 
 
 @pytest.fixture()
-def nmm_test1(global_config) -> NoteModelMapping:
-    get_new_file_manager()
-    config = setup_nmm_config(
+def nmm_test1_repr() -> NoteModelMapping.Representation:
+    return NoteModelMapping.Representation(
         "Test Model",
         {
             "guid": "guid",
@@ -34,13 +27,11 @@ def nmm_test1(global_config) -> NoteModelMapping:
         },
         []
     )
-    return NoteModelMapping(config, True)
 
 
 @pytest.fixture()
-def nmm_test_with_personal_fields1(global_config) -> NoteModelMapping:
-    get_new_file_manager()
-    config = setup_nmm_config(
+def nmm_test2_repr() -> NoteModelMapping.Representation:
+    return NoteModelMapping.Representation(
         "Test Model",
         {
             "guid": "guid",
@@ -51,12 +42,21 @@ def nmm_test_with_personal_fields1(global_config) -> NoteModelMapping:
         },
         ["extra", "morph_focus"]
     )
-    return NoteModelMapping(config, True)
+
+
+@pytest.fixture()
+def nmm_test1(nmm_test1_repr) -> NoteModelMapping:
+    return NoteModelMapping.from_repr(nmm_test1_repr)
+
+
+@pytest.fixture()
+def nmm_test2(nmm_test2_repr) -> NoteModelMapping:
+    return NoteModelMapping.from_repr(nmm_test2_repr)
 
 
 class TestInit:
     def test_runs(self):
-        nmm = NoteModelMapping(setup_nmm_config("test", {}, []), read_now=False)
+        nmm = NoteModelMapping.from_repr(NoteModelMapping.Representation("test", {}, []))
         assert isinstance(nmm, NoteModelMapping)
 
     @pytest.mark.parametrize("read_file_now, note_model, personal_fields, columns", [

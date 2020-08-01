@@ -6,15 +6,8 @@ from brain_brew.constants.build_config_keys import BuildConfigKeys
 from brain_brew.build_tasks.source_crowd_anki import SourceCrowdAnki, CrowdAnkiKeys
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.deck_part_header import DeckPartHeader
-from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
+from brain_brew.representation.yaml.note_model import DeckPartNoteModel
 from brain_brew.representation.json.deck_part_notes import DeckPartNotes
-from tests.test_files import TestFiles
-from tests.representation.json.test_crowd_anki_export import ca_export_test1, temp_ca_export_file
-from tests.representation.json.test_deck_part_header import dp_headers_test1, temp_dp_headers_file
-from tests.representation.json.test_deck_part_notes import dp_notes_test1, temp_dp_notes_file
-from tests.representation.json.test_deck_part_note_model import dp_note_model_test1, temp_dp_note_model_file
-from tests.representation.json.test_json_file import temp_json_file
-from tests.representation.configuration.test_global_config import global_config
 
 
 def setup_ca_config(file, media, useless_note_keys, notes, headers):
