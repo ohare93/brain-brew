@@ -25,6 +25,8 @@ class TestFiles:
         LL_WORD = "LL Word"
         LL_WORD_COMPLETE = LOC + "LL-Word.json"
 
+        LL_WORD_COMPLETE_ONLY_REQUIRED = LOC + "LL-Word-Only-Required.json"
+
     class CsvFiles:
         LOC = "tests/test_files/csv/"
 

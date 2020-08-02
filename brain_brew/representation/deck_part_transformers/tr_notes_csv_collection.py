@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Dict
 
+from brain_brew.file_manager import FileManager
 from brain_brew.representation.build_config.build_task import TopLevelBuildTask, GenerateDeckPartBuildTask
 from brain_brew.representation.configuration.csv_file_mapping import CsvFileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
@@ -124,8 +125,8 @@ class TrCsvCollectionToNotes(GenerateDeckPartBuildTask, TrCsvCollectionShared, T
 
             deck_part_notes.append(Note(guid=guid, tags=tags, note_model=note_model_name, fields=fields))
 
-        DeckPartNotes.from_list_of_notes(self.name, self.save_to_file, deck_part_notes)
-        # TODO: Save to the singleton holder
+        dpn = DeckPartNotes.from_list_of_notes(self.name, self.save_to_file, deck_part_notes)
+        FileManager.get_instance().new_deck_part(dpn)
 
 
 @dataclass

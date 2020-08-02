@@ -1,0 +1,194 @@
+{
+    "crowdanki_uuid": "057a8d66-bc4e-11e9-9822-d8cb8ac9abf0",
+    "css": ".card {\n font-family: arial;\n font-size: 20px;\n text-align: center;\n color: black;\n background-color: white;\n}\n\n.card1,.card3, .card5 { background-color: #B60F2D; }\n.card2,.card4, .card6 { background-color: #2E9017; }\n.card7 { background: linear-gradient(90deg, #B60F2D 49.9%, #2E9017 50.1%); }\n\n.word {\n font-size:1.5em;\n}\n\n.pronunciation{\n color:blue;\n}\n\n.extrainfo{\n color:lightgrey;\n}",
+    "flds": [
+        {
+            "font": "Liberation Sans",
+            "media": [],
+            "name": "Word",
+            "ord": 0,
+            "rtl": false,
+            "size": 12,
+            "sticky": false
+        },
+        {
+            "font": "Arial",
+            "media": [],
+            "name": "X Word",
+            "ord": 1,
+            "rtl": false,
+            "size": 20,
+            "sticky": false
+        },
+        {
+            "font": "Arial",
+            "media": [],
+            "name": "Y Word",
+            "ord": 2,
+            "rtl": false,
+            "size": 20,
+            "sticky": false
+        },
+        {
+            "font": "Arial",
+            "media": [],
+            "name": "Picture",
+            "ord": 3,
+            "rtl": false,
+            "size": 6,
+            "sticky": false
+        },
+        {
+            "font": "Arial",
+            "media": [],
+            "name": "Extra",
+            "ord": 4,
+            "rtl": false,
+            "size": 20,
+            "sticky": false
+        },
+        {
+            "font": "Arial",
+            "media": [],
+            "name": "X Pronunciation (Recording and/or IPA)",
+            "ord": 5,
+            "rtl": false,
+            "size": 20,
+            "sticky": false
+        },
+        {
+            "font": "Arial",
+            "media": [],
+            "name": "Y Pronunciation (Recording and/or IPA)",
+            "ord": 6,
+            "rtl": false,
+            "size": 20,
+            "sticky": false
+        }
+    ],
+    "latexPost": "\\end{document}",
+    "latexPre": "\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n",
+    "name": "LL Word",
+    "req": [
+        [
+            0,
+            "all",
+            [
+                1
+            ]
+        ],
+        [
+            1,
+            "all",
+            [
+                2
+            ]
+        ],
+        [
+            2,
+            "all",
+            [
+                1,
+                3
+            ]
+        ],
+        [
+            3,
+            "all",
+            [
+                2,
+                3
+            ]
+        ],
+        [
+            4,
+            "all",
+            [
+                1,
+                3
+            ]
+        ],
+        [
+            5,
+            "all",
+            [
+                2,
+                3
+            ]
+        ],
+        [
+            6,
+            "all",
+            [
+                1,
+                2,
+                3
+            ]
+        ]
+    ],
+    "tmpls": [
+        {
+            "afmt": "{{#X Word}}\n\t<span class=\"word\">{{X Word}}</span>\n{{/X Word}}\n\n<hr id=answer>\n\n{{Picture}}\n\n{{#X Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{X Pronunciation (Recording and/or IPA)}}</span>\n{{/X Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",
+            "bafmt": "",
+            "bqfmt": "",
+            "did": null,
+            "name": "X Comprehension",
+            "ord": 0,
+            "qfmt": "{{#X Word}}\n\t<span class=\"word\">{{text:X Word}}</span>\n{{/X Word}}"
+        },
+        {
+            "afmt": "{{#Y Word}}\n\t<span class=\"word\">{{Y Word}}</span>\n{{/Y Word}}\n\n<hr id=answer>\n\n{{Picture}}\n\n{{#Y Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{Y Pronunciation (Recording and/or IPA)}}</span>\n{{/Y Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",
+            "bafmt": "",
+            "bqfmt": "",
+            "did": null,
+            "name": "Y Comprehension",
+            "ord": 1,
+            "qfmt": "{{#Y Word}}\n\t<span class=\"word\">{{text:Y Word}}</span>\n{{/Y Word}}"
+        },
+        {
+            "afmt": "{{FrontSide}}\n\n<hr id=answer>\n\n<span class=\"word\">{{X Word}}</span>\n\n{{#X Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{X Pronunciation (Recording and/or IPA)}}</span>\n{{/X Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",
+            "bafmt": "",
+            "bqfmt": "",
+            "did": null,
+            "name": "X Production",
+            "ord": 2,
+            "qfmt": "{{#X Word}}{{#Picture}}\n\t{{Picture}}\n{{/Picture}}{{/X Word}}"
+        },
+        {
+            "afmt": "{{FrontSide}}\n\n<hr id=answer>\n\n<span class=\"word\">{{Y Word}}</span>\n\n{{#Y Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{Y Pronunciation (Recording and/or IPA)}}</span>\n{{/Y Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",
+            "bafmt": "",
+            "bqfmt": "",
+            "did": null,
+            "name": "Y Production",
+            "ord": 3,
+            "qfmt": "{{#Y Word}}{{#Picture}}\n\t{{Picture}}\n{{/Picture}}{{/Y Word}}"
+        },
+        {
+            "afmt": "{{FrontSide}}\n\n{{#X Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{X Pronunciation (Recording and/or IPA)}}</span>\n{{/X Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",
+            "bafmt": "",
+            "bqfmt": "",
+            "did": null,
+            "name": "X Spelling",
+            "ord": 4,
+            "qfmt": "{{#X Word}}\n\t<br>Spell this word:<br>\n\n\t<div class=\"word\">{{type:X Word}}</div>\n\n\t<br>{{Picture}}\n{{/X Word}}"
+        },
+        {
+            "afmt": "{{FrontSide}}\n\n{{#Y Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{Y Pronunciation (Recording and/or IPA)}}</span>\n{{/Y Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",
+            "bafmt": "",
+            "bqfmt": "",
+            "did": null,
+            "name": "Y Spelling",
+            "ord": 5,
+            "qfmt": "{{#Y Word}}\n\t<br>Spell this word:<br>\n\n\t<div class=\"word\">{{type:Y Word}}</div>\n\n\t<br>{{Picture}}\n{{/Y Word}}"
+        },
+        {
+            "afmt": "{{FrontSide}}\n\n<hr id=answer>\n\n<div class=\"word\">{{text:X Word}}</div>\n<div class=\"word\">{{text:Y Word}}</div>\n\n{{#X Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{X Pronunciation (Recording and/or IPA)}}</span>\n{{/X Pronunciation (Recording and/or IPA)}}\n\n{{#Y Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{Y Pronunciation (Recording and/or IPA)}}</span>\n{{/Y Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",
+            "bafmt": "",
+            "bqfmt": "",
+            "did": null,
+            "name": "X and Y Production",
+            "ord": 6,
+            "qfmt": "{{#X Word}}\n{{#Y Word}}\n\t{{Picture}}\n{{/Y Word}}\n{{/X Word}}"
+        }
+    ]
+}
