@@ -1,162 +1,203 @@
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Union, Dict
+
+
+class AnkiField:
+    name: str
+    anki_name: str
+    default_value: any
+
+    def __init__(self, anki_name, name=None, default_value=None):
+        self.anki_name = anki_name
+        self.name = name if name is not None else anki_name
+        self.default_value = default_value
+
+    def append_name_if_differs(self, dict_to_add_to: dict, value):
+        if value != self.default_value:
+            dict_to_add_to.setdefault(self.name, value)
+
 
 # CrowdAnki
-CROWDANKI_ID = "crowdanki_uuid"
-CROWDANKI_TYPE = "__type__"
+CROWDANKI_ID = AnkiField("crowdanki_uuid", "id")
+CROWDANKI_TYPE = AnkiField("__type__", default_value="NoteModel")
 
 # Shared
-NAME = "name"
-ORDINAL = "ord"
+NAME = AnkiField("name")
+ORDINAL = AnkiField("ord", "ordinal")
 
 # Note Model
-CSS = "css"
-LATEX_POST = "latexPost"
-LATEX_PRE = "latexPre"
-REQUIRED_FIELDS_PER_TEMPLATE = "req"
-FIELDS = "flds"
-TEMPLATES = "tmpls"
-TAGS = "tags"
-SORT_FIELD_NUM = "sortf"
-IS_CLOZE = "type"
-VERSION = "vers"
+CSS = AnkiField("css")
+LATEX_PRE = AnkiField("latexPre", "latex_pre", default_value="\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n")
+LATEX_POST = AnkiField("latexPost", "latex_post", default_value="\\end{document}")
+REQUIRED_FIELDS_PER_TEMPLATE = AnkiField("req", "required_fields_per_template")
+FIELDS = AnkiField("flds", "fields")
+TEMPLATES = AnkiField("tmpls", "templates")
+TAGS = AnkiField("tags", default_value=[])
+SORT_FIELD_NUM = AnkiField("sortf", "sort_field_num", default_value=0)
+IS_CLOZE = AnkiField("type", "is_cloze", default_value=False)
+VERSION = AnkiField("vers", "version", default_value=[])
 
 # Field
-FONT = "font"
-MEDIA = "media"
-IS_RIGHT_TO_LEFT = "rtl"
-FONT_SIZE = "size"
-IS_STICKY = "sticky"
+FONT = AnkiField("font", default_value="Liberation Sans")
+MEDIA = AnkiField("media", default_value=[])
+IS_RIGHT_TO_LEFT = AnkiField("rtl", "is_right_to_left", default_value=False)
+FONT_SIZE = AnkiField("size", default_value=20)
+IS_STICKY = AnkiField("sticky", "is_sticky", default_value=False)
 
 # Template
-QUESTION_FORMAT = "qfmt"
-ANSWER_FORMAT = "afmt"
-BROWSER_ANSWER_FORMAT = "bafmt"
-BROWSER_QUESTION_FORMAT = "bqfmt"
-DECK_OVERRIDE_ID = "did"
+QUESTION_FORMAT = AnkiField("qfmt", "question_format")
+ANSWER_FORMAT = AnkiField("afmt", "answer_format")
+BROWSER_ANSWER_FORMAT = AnkiField("bafmt", "browser_answer_format", default_value="")
+BROWSER_QUESTION_FORMAT = AnkiField("bqfmt", "browser_question_format", default_value="")
+DECK_OVERRIDE_ID = AnkiField("did", "deck_override_id", default_value=None)
 
 
-# Defaults
-DEFAULT_LATEX_PRE = "\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n"
-DEFAULT_LATEX_POST = "\\end{document}"
-DEFAULT_CROWDANKI_TYPE = "NoteModel"
-DEFAULT_FONT = "Liberation Sans"
+@dataclass
+class Template:
+    @dataclass
+    class CrowdAnki:
+        name: str
+        ord: int
+        qfmt: str
+        afmt: str
+        bqfmt: str = field(default=BROWSER_QUESTION_FORMAT.default_value)
+        bafmt: str = field(default=BROWSER_ANSWER_FORMAT.default_value)
+        did: Optional[int] = field(default=None)
+
+        @classmethod
+        def from_dict(cls, data: dict):
+            return cls(**data)
+
+    name: str
+    ordinal: int
+    question_format: str
+    answer_format: str
+    question_format_in_browser: str = field(default=BROWSER_QUESTION_FORMAT.default_value)
+    answer_format_in_browser: str = field(default=BROWSER_ANSWER_FORMAT.default_value)
+    deck_override_id: Optional[int] = field(default=DECK_OVERRIDE_ID.default_value)
+
+    @classmethod
+    def from_crowdanki(cls, data: Union[CrowdAnki, dict]):
+        ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
+        return cls(
+            name=ca.name, ordinal=ca.ord, question_format=ca.qfmt, answer_format=ca.afmt,
+            question_format_in_browser=ca.bqfmt, answer_format_in_browser=ca.bafmt, deck_override_id=ca.did
+        )
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        return cls(**data)
+
+    def encode_as_crowdanki(self) -> dict:
+        data_dict = {
+            NAME.anki_name: self.name,
+            ORDINAL.anki_name: self.ordinal,
+            QUESTION_FORMAT.anki_name: self.question_format,
+            ANSWER_FORMAT.anki_name: self.answer_format,
+            BROWSER_QUESTION_FORMAT.anki_name: self.question_format_in_browser,
+            BROWSER_ANSWER_FORMAT.anki_name: self.answer_format_in_browser,
+            DECK_OVERRIDE_ID.anki_name: self.deck_override_id
+        }
+
+        return data_dict
+
+    def encode_as_deck_part(self) -> dict:
+        data_dict = {
+            NAME.name: self.name,
+            ORDINAL.name: self.ordinal,
+            QUESTION_FORMAT.name: self.question_format,
+            ANSWER_FORMAT.name: self.answer_format
+        }
+
+        BROWSER_QUESTION_FORMAT.append_name_if_differs(data_dict, self.question_format_in_browser)
+        BROWSER_ANSWER_FORMAT.append_name_if_differs(data_dict, self.answer_format_in_browser)
+        DECK_OVERRIDE_ID.append_name_if_differs(data_dict, self.deck_override_id)
+
+        return data_dict
+
+
+@dataclass
+class Field:
+    @dataclass
+    class CrowdAnki:
+        name: str
+        ord: int
+        font: str = field(default=FONT.default_value)
+        media: List[str] = field(default_factory=lambda: MEDIA.default_value)
+        rtl: bool = field(default=IS_RIGHT_TO_LEFT.default_value)
+        size: int = field(default=FONT_SIZE.default_value)
+        sticky: bool = field(default=IS_STICKY.default_value)
+
+        @classmethod
+        def from_dict(cls, data: dict):
+            return cls(**data)
+
+    name: str
+    ordinal: int
+    font: str = field(default=FONT.default_value)
+    media: List[str] = field(default_factory=lambda: MEDIA.default_value)  # Unused in Anki
+    is_right_to_left: bool = field(default=IS_RIGHT_TO_LEFT.default_value)
+    font_size: int = field(default=FONT_SIZE.default_value)
+    is_sticky: bool = field(default=IS_STICKY.default_value)
+
+    @classmethod
+    def from_crowdanki(cls, data: Union[CrowdAnki, dict]):
+        ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
+        return cls(
+            name=ca.name, ordinal=ca.ord, font=ca.font, media=ca.media,
+            is_right_to_left=ca.rtl, font_size=ca.size, is_sticky=ca.sticky
+        )
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        return cls(**data)
+
+    def encode_as_crowdanki(self) -> dict:
+        data_dict = {
+            NAME.anki_name: self.name,
+            ORDINAL.anki_name: self.ordinal,
+            FONT.anki_name: self.font,
+            MEDIA.anki_name: self.media,
+            IS_RIGHT_TO_LEFT.anki_name: self.is_right_to_left,
+            FONT_SIZE.anki_name: self.font_size,
+            IS_STICKY.anki_name: self.is_sticky
+        }
+
+        return data_dict
+
+    def encode_as_deck_part(self) -> dict:
+        data_dict = {
+            NAME.anki_name: self.name,
+            ORDINAL.anki_name: self.ordinal
+        }
+
+        FONT.append_name_if_differs(data_dict, self.font)
+        MEDIA.append_name_if_differs(data_dict, self.media)
+        IS_RIGHT_TO_LEFT.append_name_if_differs(data_dict, self.is_right_to_left)
+        FONT_SIZE.append_name_if_differs(data_dict, self.font_size)
+        IS_STICKY.append_name_if_differs(data_dict, self.is_sticky)
+
+        return data_dict
 
 
 @dataclass
 class CrowdAnkiNoteModel:
     @dataclass
-    class Field:
-        @dataclass
-        class Representation:
-            name: str
-            ord: int
-            font: str = field(default=DEFAULT_FONT)
-            media: List[str] = field(default_factory=lambda: [])
-            rtl: bool = field(default=False)
-            size: int = field(default=20)
-            sticky: bool = field(default=False)
-
-            @classmethod
-            def from_dict(cls, data: dict):
-                return cls(**data)
-
-        name: str
-        ordinal: int
-        font: str = field(default=DEFAULT_FONT)
-        media: List[str] = field(default_factory=lambda: [])  # Unused in Anki
-        is_right_to_left: bool = field(default=False)
-        font_size: int = field(default=20)
-        is_sticky: bool = field(default=False)
-
-        @classmethod
-        def from_repr(cls, data: Representation):
-            return cls(
-                name=data.name, ordinal=data.ord, font=data.font, media=data.media,
-                is_right_to_left=data.rtl, font_size=data.size, is_sticky=data.sticky
-            )
-
-        @classmethod
-        def from_dict(cls, data: dict):
-            return cls.from_repr(cls.Representation.from_dict(data))
-
-        def encode(self) -> dict:
-            data_dict = {
-                NAME: self.name,
-                ORDINAL: self.ordinal,
-                FONT: self.font,
-                MEDIA: self.media,
-                IS_RIGHT_TO_LEFT: self.is_right_to_left,
-                FONT_SIZE: self.font_size,
-                IS_STICKY: self.is_sticky
-            }
-
-            return data_dict
-
-    @dataclass
-    class Template:
-        @dataclass
-        class Representation:
-            name: str
-            ord: int
-            qfmt: str
-            afmt: str
-            bqfmt: str = field(default="")
-            bafmt: str = field(default="")
-            did: Optional[int] = field(default=None)
-
-            @classmethod
-            def from_dict(cls, data: dict):
-                return cls(**data)
-
-        name: str
-        ordinal: int
-        question_format: str
-        answer_format: str
-        question_format_in_browser: str = field(default="")
-        answer_format_in_browser: str = field(default="")
-        deck_override_id: Optional[int] = field(default=None)
-
-        @classmethod
-        def from_repr(cls, data: Representation):
-            return cls(
-                name=data.name, ordinal=data.ord, question_format=data.qfmt, answer_format=data.afmt,
-                question_format_in_browser=data.bqfmt, answer_format_in_browser=data.bafmt, deck_override_id=data.did
-            )
-
-        @classmethod
-        def from_dict(cls, data: dict):
-            return cls.from_repr(cls.Representation.from_dict(data))
-
-        def encode(self) -> dict:
-            data_dict = {
-                NAME: self.name,
-                ORDINAL: self.ordinal,
-                QUESTION_FORMAT: self.question_format,
-                ANSWER_FORMAT: self.answer_format,
-                BROWSER_QUESTION_FORMAT: self.question_format_in_browser,
-                BROWSER_ANSWER_FORMAT: self.answer_format_in_browser,
-                DECK_OVERRIDE_ID: self.deck_override_id
-            }
-
-            return data_dict
-
-    @dataclass
-    class Representation:
+    class CrowdAnki:
         name: str
         crowdanki_uuid: str
         css: str
         req: List[list]
         flds: List[dict]
         tmpls: List[dict]
-        latexPre: str = field(default=DEFAULT_LATEX_PRE)
-        latexPost: str = field(default=DEFAULT_LATEX_POST)
-        __type__: str = field(default=DEFAULT_CROWDANKI_TYPE)
-        tags: List[str] = field(default_factory=lambda: [])
-        sortf: int = field(default=0)
-        type: int = field(default=0)
-        vers: list = field(default_factory=lambda: [])
+        latexPre: str = field(default=LATEX_PRE.default_value)
+        latexPost: str = field(default=LATEX_POST.default_value)
+        __type__: str = field(default=CROWDANKI_TYPE.default_value)
+        tags: List[str] = field(default_factory=lambda: TAGS.default_value)
+        sortf: int = field(default=SORT_FIELD_NUM.default_value)
+        type: int = field(default=0)  # Is_Cloze Manually set to 0
+        vers: list = field(default_factory=lambda: VERSION.default_value)
 
         @classmethod
         def from_dict(cls, data: dict):
@@ -169,46 +210,68 @@ class CrowdAnkiNoteModel:
     fields: List[Field]
     templates: List[Template]
 
-    latex_post: str = field(default=DEFAULT_LATEX_PRE)
-    latex_pre: str = field(default=DEFAULT_LATEX_POST)
-    sort_field_num: int = field(default=0)
-    is_cloze: bool = field(default=False)
-    crowdanki_type: str = field(default=DEFAULT_CROWDANKI_TYPE)  # Should always be "NoteModel"
-    tags: List[str] = field(default_factory=lambda: [])  # Tags of the last added note
-    version: list = field(default_factory=lambda: [])  # Legacy version number. Deprecated in Anki
+    latex_post: str = field(default=LATEX_PRE.default_value)
+    latex_pre: str = field(default=LATEX_POST.default_value)
+    sort_field_num: int = field(default=SORT_FIELD_NUM.default_value)
+    is_cloze: bool = field(default=IS_CLOZE.default_value)
+    crowdanki_type: str = field(default=CROWDANKI_TYPE.default_value)  # Should always be "NoteModel"
+    tags: List[str] = field(default_factory=lambda: TAGS.default_value)  # Tags of the last added note
+    version: list = field(default_factory=lambda: VERSION.default_value)  # Legacy version number. Deprecated in Anki
 
     @classmethod
-    def from_repr(cls, data: Representation):
+    def from_crowdanki(cls, data: Union[CrowdAnki, dict]):
+        ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
         return cls(
-            fields=[CrowdAnkiNoteModel.Field.from_dict(f) for f in data.flds],
-            templates=[CrowdAnkiNoteModel.Template.from_dict(t) for t in data.tmpls],
-            is_cloze=bool(data.type),
-            name=data.name, css=data.css, latex_pre=data.latexPre, latex_post=data.latexPost,
-            required_fields_per_template=data.req, tags=data.tags, sort_field_num=data.sortf, version=data.vers,
-            crowdanki_id=data.crowdanki_uuid, crowdanki_type=data.__type__
+            fields=[Field.from_crowdanki(f) for f in ca.flds],
+            templates=[Template.from_crowdanki(t) for t in ca.tmpls],
+            is_cloze=bool(ca.type),
+            name=ca.name, css=ca.css, latex_pre=ca.latexPre, latex_post=ca.latexPost,
+            required_fields_per_template=ca.req, tags=ca.tags, sort_field_num=ca.sortf, version=ca.vers,
+            crowdanki_id=ca.crowdanki_uuid, crowdanki_type=ca.__type__
         )
 
     @classmethod
     def from_dict(cls, data: dict):
-        return cls.from_repr(cls.Representation.from_dict(data))
+        return cls(**data)
 
-    def encode(self) -> dict:
+    def encode_as_crowdanki(self) -> dict:
         data_dict = {
-            NAME: self.name,
-            CROWDANKI_ID: self.crowdanki_id,
-            CSS: self.css,
-            REQUIRED_FIELDS_PER_TEMPLATE: self.required_fields_per_template,
-            LATEX_PRE: self.latex_pre,
-            LATEX_POST: self.latex_post,
-            SORT_FIELD_NUM: self.sort_field_num,
-            CROWDANKI_TYPE: self.crowdanki_type,
-            TAGS: self.tags,
-            VERSION: self.version,
-            IS_CLOZE: 1 if self.is_cloze else 0
+            NAME.anki_name: self.name,
+            CROWDANKI_ID.anki_name: self.crowdanki_id,
+            CSS.anki_name: self.css,
+            REQUIRED_FIELDS_PER_TEMPLATE.anki_name: self.required_fields_per_template,
+            LATEX_PRE.anki_name: self.latex_pre,
+            LATEX_POST.anki_name: self.latex_post,
+            SORT_FIELD_NUM.anki_name: self.sort_field_num,
+            CROWDANKI_TYPE.anki_name: self.crowdanki_type,
+            TAGS.anki_name: self.tags,
+            VERSION.anki_name: self.version,
+            IS_CLOZE.anki_name: 1 if self.is_cloze else 0
         }
 
-        data_dict.setdefault(FIELDS, [f.encode() for f in self.fields])
-        data_dict.setdefault(TEMPLATES, [t.encode() for t in self.templates])
+        data_dict.setdefault(FIELDS.anki_name, [f.encode_as_crowdanki() for f in self.fields])
+        data_dict.setdefault(TEMPLATES.anki_name, [t.encode_as_crowdanki() for t in self.templates])
+
+        return OrderedDict(sorted(data_dict.items()))
+
+    def encode_as_deck_part(self) -> dict:
+        data_dict = {
+            NAME.name: self.name,
+            CROWDANKI_ID.name: self.crowdanki_id,
+            CSS.name: self.css,
+            REQUIRED_FIELDS_PER_TEMPLATE.name: self.required_fields_per_template,
+        }
+
+        LATEX_PRE.append_name_if_differs(data_dict, self.latex_pre)
+        LATEX_POST.append_name_if_differs(data_dict, self.latex_post)
+        SORT_FIELD_NUM.append_name_if_differs(data_dict, self.sort_field_num)
+        CROWDANKI_TYPE.append_name_if_differs(data_dict, self.crowdanki_type)
+        TAGS.append_name_if_differs(data_dict, self.tags)
+        VERSION.append_name_if_differs(data_dict, self.version)
+        IS_CLOZE.append_name_if_differs(data_dict, self.is_cloze)
+
+        data_dict.setdefault(FIELDS.name, [f.encode_as_deck_part() for f in self.fields])
+        data_dict.setdefault(TEMPLATES.name, [t.encode_as_deck_part() for t in self.templates])
 
         return OrderedDict(sorted(data_dict.items()))
 

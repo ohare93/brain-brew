@@ -24,7 +24,7 @@ class YamlRepresentation:
         return FileManager.get_instance().deck_part_from_pool(name)
 
     @staticmethod
-    def filename_to_dict(filename: str):
+    def read_to_dict(filename: str):
         if filename[-5:] not in [".yaml", ".yml"]:
             filename += ".yaml"
 

@@ -18,7 +18,7 @@ class TestConstructor:
                 patch.object(DeckPartNotes, "from_deck_part_pool", return_value=Mock()), \
                 patch.object(DeckPartNoteModel, "create", side_effect=mock_dp_nm):
 
-            data = YamlRepresentation.filename_to_dict(TestFiles.BuildConfig.ONE_OF_EACH_TYPE)
+            data = YamlRepresentation.read_to_dict(TestFiles.BuildConfig.ONE_OF_EACH_TYPE)
             builder = TopLevelTaskBuilder.from_dict(data, global_config, fm)
 
             assert len(builder.tasks) == 1
