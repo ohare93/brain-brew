@@ -56,17 +56,18 @@ class TrCsvCollectionShared:
                         errors.append(f"Missing Note Model Map for {nm}")
 
         # Check each of the Csvs (or their derivatives) contain all the necessary columns for their stated note model
-        # for cfm in self.file_mappings:
-        #     note_model_names = cfm.get_used_note_model_names()
-        #     available_columns = cfm.get_available_columns()
-        #
-        #     referenced_note_models_maps = [value for key, value in self.note_model_mappings.items() if
-        #                                    key in note_model_names]
-        #     for nm_map in referenced_note_models_maps:
-        #         missing_columns = [col for col in nm_map.note_model.fields_lowercase if
-        #                            col not in nm_map.csv_headers_map_to_note_fields(available_columns)]
-        #         if missing_columns:
-        #             errors.append(KeyError(f"Csvs are missing columns from {nm_map.note_model.name}", missing_columns))
+        for cfm in self.file_mappings:
+            note_model_names = cfm.get_used_note_model_names()
+            available_columns = cfm.get_available_columns()
+
+            referenced_note_models_maps = [value for key, value in self.note_model_mappings.items() if
+                                           key in note_model_names]
+            for nm_map in referenced_note_models_maps:
+                for model in nm_map.note_models.values():
+                    missing_columns = [col for col in model.fields_lowercase if
+                                       col not in nm_map.csv_headers_map_to_note_fields(available_columns)]
+                    if missing_columns:
+                        errors.append(KeyError(f"Csvs are missing columns from {model.name}", missing_columns))
 
         if errors:
             raise Exception(errors)

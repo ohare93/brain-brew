@@ -128,10 +128,7 @@
         ]
     ],
     "sortf": 0,
-    "tags": [
-        "LL::Grammar::Preposition",
-        "Meta::InProgress"
-    ],
+    "tags": [],
     "tmpls": [
         {
             "afmt": "{{#X Word}}\n\t<span class=\"word\">{{X Word}}</span>\n{{/X Word}}\n\n<hr id=answer>\n\n{{Picture}}\n\n{{#X Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{X Pronunciation (Recording and/or IPA)}}</span>\n{{/X Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",

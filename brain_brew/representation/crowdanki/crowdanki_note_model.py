@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -23,7 +24,7 @@ VERSION = "vers"
 
 # Field
 FONT = "font"
-MEDIA = "media"  # Unused in Anki
+MEDIA = "media"
 IS_RIGHT_TO_LEFT = "rtl"
 FONT_SIZE = "size"
 IS_STICKY = "sticky"
@@ -36,6 +37,13 @@ BROWSER_QUESTION_FORMAT = "bqfmt"
 DECK_OVERRIDE_ID = "did"
 
 
+# Defaults
+DEFAULT_LATEX_PRE = "\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n"
+DEFAULT_LATEX_POST = "\\end{document}"
+DEFAULT_CROWDANKI_TYPE = "NoteModel"
+DEFAULT_FONT = "Liberation Sans"
+
+
 @dataclass
 class CrowdAnkiNoteModel:
     @dataclass
@@ -44,7 +52,7 @@ class CrowdAnkiNoteModel:
         class Representation:
             name: str
             ord: int
-            font: str = field(default="Liberation Sans")
+            font: str = field(default=DEFAULT_FONT)
             media: List[str] = field(default_factory=lambda: [])
             rtl: bool = field(default=False)
             size: int = field(default=20)
@@ -56,11 +64,11 @@ class CrowdAnkiNoteModel:
 
         name: str
         ordinal: int
-        font: str
-        media: List[str]
-        is_right_to_left: bool
-        font_size: int
-        is_sticky: bool
+        font: str = field(default=DEFAULT_FONT)
+        media: List[str] = field(default_factory=lambda: [])  # Unused in Anki
+        is_right_to_left: bool = field(default=False)
+        font_size: int = field(default=20)
+        is_sticky: bool = field(default=False)
 
         @classmethod
         def from_repr(cls, data: Representation):
@@ -72,6 +80,19 @@ class CrowdAnkiNoteModel:
         @classmethod
         def from_dict(cls, data: dict):
             return cls.from_repr(cls.Representation.from_dict(data))
+
+        def encode(self) -> dict:
+            data_dict = {
+                NAME: self.name,
+                ORDINAL: self.ordinal,
+                FONT: self.font,
+                MEDIA: self.media,
+                IS_RIGHT_TO_LEFT: self.is_right_to_left,
+                FONT_SIZE: self.font_size,
+                IS_STICKY: self.is_sticky
+            }
+
+            return data_dict
 
     @dataclass
     class Template:
@@ -93,9 +114,9 @@ class CrowdAnkiNoteModel:
         ordinal: int
         question_format: str
         answer_format: str
-        question_format_in_browser: str
-        answer_format_in_browser: str
-        deck_override_id: Optional[int]
+        question_format_in_browser: str = field(default="")
+        answer_format_in_browser: str = field(default="")
+        deck_override_id: Optional[int] = field(default=None)
 
         @classmethod
         def from_repr(cls, data: Representation):
@@ -108,17 +129,30 @@ class CrowdAnkiNoteModel:
         def from_dict(cls, data: dict):
             return cls.from_repr(cls.Representation.from_dict(data))
 
+        def encode(self) -> dict:
+            data_dict = {
+                NAME: self.name,
+                ORDINAL: self.ordinal,
+                QUESTION_FORMAT: self.question_format,
+                ANSWER_FORMAT: self.answer_format,
+                BROWSER_QUESTION_FORMAT: self.question_format_in_browser,
+                BROWSER_ANSWER_FORMAT: self.answer_format_in_browser,
+                DECK_OVERRIDE_ID: self.deck_override_id
+            }
+
+            return data_dict
+
     @dataclass
     class Representation:
         name: str
         crowdanki_uuid: str
         css: str
-        latexPost: str
-        latexPre: str
         req: List[list]
         flds: List[dict]
         tmpls: List[dict]
-        __type__: str = field(default="NoteModel")
+        latexPre: str = field(default=DEFAULT_LATEX_PRE)
+        latexPost: str = field(default=DEFAULT_LATEX_POST)
+        __type__: str = field(default=DEFAULT_CROWDANKI_TYPE)
         tags: List[str] = field(default_factory=lambda: [])
         sortf: int = field(default=0)
         type: int = field(default=0)
@@ -128,20 +162,20 @@ class CrowdAnkiNoteModel:
         def from_dict(cls, data: dict):
             return cls(**data)
 
-    crowdanki_id: str
-    crowdanki_type: str
-
     name: str
+    crowdanki_id: str
     css: str
-    latex_post: str
-    latex_pre: str
     required_fields_per_template: List[list]
     fields: List[Field]
     templates: List[Template]
-    tags: List[str]
-    sort_field_num: int
-    is_cloze: bool
-    version: list  # Deprecated in Anki
+
+    latex_post: str = field(default=DEFAULT_LATEX_PRE)
+    latex_pre: str = field(default=DEFAULT_LATEX_POST)
+    sort_field_num: int = field(default=0)
+    is_cloze: bool = field(default=False)
+    crowdanki_type: str = field(default=DEFAULT_CROWDANKI_TYPE)  # Should always be "NoteModel"
+    tags: List[str] = field(default_factory=lambda: [])  # Tags of the last added note
+    version: list = field(default_factory=lambda: [])  # Legacy version number. Deprecated in Anki
 
     @classmethod
     def from_repr(cls, data: Representation):
@@ -158,11 +192,25 @@ class CrowdAnkiNoteModel:
     def from_dict(cls, data: dict):
         return cls.from_repr(cls.Representation.from_dict(data))
 
-    # def encode(self) -> dict:
-    #     data_dict = {}
-    #     super().encode_groupable(data_dict)
-    #     data_dict.setdefault(NOTES, [note.encode() for note in self.notes])
-    #     return data_dict
+    def encode(self) -> dict:
+        data_dict = {
+            NAME: self.name,
+            CROWDANKI_ID: self.crowdanki_id,
+            CSS: self.css,
+            REQUIRED_FIELDS_PER_TEMPLATE: self.required_fields_per_template,
+            LATEX_PRE: self.latex_pre,
+            LATEX_POST: self.latex_post,
+            SORT_FIELD_NUM: self.sort_field_num,
+            CROWDANKI_TYPE: self.crowdanki_type,
+            TAGS: self.tags,
+            VERSION: self.version,
+            IS_CLOZE: 1 if self.is_cloze else 0
+        }
+
+        data_dict.setdefault(FIELDS, [f.encode() for f in self.fields])
+        data_dict.setdefault(TEMPLATES, [t.encode() for t in self.templates])
+
+        return OrderedDict(sorted(data_dict.items()))
 
     def find_media(self):
         pass
