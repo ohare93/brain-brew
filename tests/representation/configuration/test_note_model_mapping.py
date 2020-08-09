@@ -4,7 +4,7 @@ import pytest
 
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping, FieldMapping
 from brain_brew.representation.generic.csv_file import CsvFile
-from brain_brew.representation.yaml.note_model import DeckPartNoteModel
+from brain_brew.representation.yaml.note_model_repr import NoteModel
 from tests.test_file_manager import get_new_file_manager
 
 

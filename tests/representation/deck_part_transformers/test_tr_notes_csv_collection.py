@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from brain_brew.file_manager import FileManager
 from brain_brew.representation.deck_part_transformers.tr_notes_csv_collection import TrCsvCollectionToNotes
+from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.my_yaml import yaml_dump, yaml_load
 from tests.test_file_manager import get_new_file_manager
 from tests.representation.configuration.test_global_config import global_config
@@ -91,49 +92,24 @@ class TestConstructor:
         # save_to_file: deckparts/notes/csv_first_attempt.yaml
 
         note_model_mappings:
-          - note_model: LL Word
+          - note_models:
+              - LL Word
+              - LL Verb
+              - LL Noun
             columns_to_fields:
               guid: guid
               tags: tags
-
+  
               english: Word
               danish: X Word
               danish audio: X Pronunciation (Recording and/or IPA)
               esperanto: Y Word
               esperanto audio: Y Pronunciation (Recording and/or IPA)
-            personal_fields:
-              - picture
-              - extra
-              - morphman_focusmorph
-          - note_model: LL Verb
-            columns_to_fields:
-              guid: guid
-              tags: tags
-
-              english: Word
-              danish: X Word
-              danish audio: X Pronunciation (Recording and/or IPA)
-              esperanto: Y Word
-              esperanto audio: Y Pronunciation (Recording and/or IPA)
-
+  
               present: Form Present
               past: Form Past
               present perfect: Form Perfect Present
-            personal_fields:
-              - picture
-              - extra
-              - morphman_focusmorph
-          - note_model: LL Noun
-            columns_to_fields:
-              guid: guid
-              tags: tags
-
-              english: Word
-              danish: X Word
-              danish audio: X Pronunciation (Recording and/or IPA)
-              esperanto: Y Word
-              esperanto audio: Y Pronunciation (Recording and/or IPA)
-
+  
               plural: Plural
               indefinite plural: Indefinite Plural
               definite plural: Definite Plural
@@ -141,7 +117,7 @@ class TestConstructor:
               - picture
               - extra
               - morphman_focusmorph
-
+  
         file_mappings:
           - file: source/vocab/main.csv
             note_model: LL Word
@@ -159,6 +135,11 @@ class TestConstructor:
         fm = get_new_file_manager()
         data = yaml_load.load(self.test_tr_notes)
 
-        tr_notes = TrCsvCollectionToNotes.from_dict(data)
+        def mock_dp_holder(name: str):
+            return DeckPartHolder(name, None, None)
 
-        assert isinstance(tr_notes, TrCsvCollectionToNotes)
+        with patch.object(DeckPartHolder, "from_deck_part_pool", side_effect=mock_dp_holder):
+
+            tr_notes = TrCsvCollectionToNotes.from_dict(data)
+
+            assert isinstance(tr_notes, TrCsvCollectionToNotes)

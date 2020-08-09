@@ -11,7 +11,7 @@ from brain_brew.utils import blank_str_if_none
 from brain_brew.representation.generic.yaml_file import ConfigKey, YamlFile
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.deck_part_header import DeckPartHeader
-from brain_brew.representation.yaml.note_model import CANoteModelKeys, DeckPartNoteModel
+from brain_brew.representation.yaml.note_model_repr import CANoteModelKeys, DeckPartNoteModel
 from brain_brew.representation.json.deck_part_notes import CANoteKeys, DeckPartNotes
 
 

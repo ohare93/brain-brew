@@ -4,7 +4,8 @@ from typing import List, Union, Dict
 
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.interfaces.verifiable import Verifiable
-from brain_brew.representation.yaml.note_model import DeckPartNoteModel
+from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.representation.yaml.note_model_repr import NoteModel
 from brain_brew.utils import single_item_to_list
 
 
@@ -44,7 +45,7 @@ class NoteModelMapping(Verifiable):
         def from_dict(cls, data: dict):
             return cls(**data)
 
-    note_models: Dict[str, DeckPartNoteModel]
+    note_models: Dict[str, DeckPartHolder[NoteModel]]
     columns: List[FieldMapping]
     personal_fields: List[FieldMapping]
 
@@ -52,7 +53,7 @@ class NoteModelMapping(Verifiable):
 
     @classmethod
     def from_repr(cls, data: Representation):
-        note_models = [DeckPartNoteModel.from_deck_part_pool(model) for model in single_item_to_list(data.note_models)]
+        note_models = [DeckPartHolder.from_deck_part_pool(model) for model in single_item_to_list(data.note_models)]
 
         return cls(
             columns=[FieldMapping(
@@ -63,7 +64,7 @@ class NoteModelMapping(Verifiable):
                 field_type=FieldMapping.FieldMappingType.PERSONAL_FIELD,
                 field_name=field,
                 value="") for field in data.personal_fields],
-            note_models=dict(map(lambda nm: (nm.name, nm), note_models))  # TODO: Use deck part pool
+            note_models=dict(map(lambda nm: (nm.name, nm), note_models))
         )
 
     def get_note_model_mapping_dict(self):
@@ -72,7 +73,9 @@ class NoteModelMapping(Verifiable):
     def verify_contents(self):
         errors = []
 
-        for model in self.note_models:
+        for holder in self.note_models.values():
+            model: NoteModel = holder.deck_part
+
             # Check for Required Fields
             missing = []
             for req in self.required_fields_definitions:
@@ -80,7 +83,7 @@ class NoteModelMapping(Verifiable):
                     missing.append(req)
 
             if missing:
-                errors.append(KeyError(f"""Note model(s) "{model.name}" to Csv config error: \
+                errors.append(KeyError(f"""Note model(s) "{holder.name}" to Csv config error: \
                                    Definitions for fields {missing} are required."""))
 
             # TODO: Note Model Mappings are allowed extra fields on a specific note model now, since multiple
@@ -93,7 +96,7 @@ class NoteModelMapping(Verifiable):
 
             if missing or extra:
                 errors.append(KeyError(
-                    f"""Note model "{model.name}" to Csv config error. It expected {model.fields} \
+                    f"""Note model "{holder.name}" to Csv config error. It expected {model.fields} \
                         but was missing: {missing}, and got extra: {extra} """))
 
             # TODO: Make sure the same note_model is not defined in multiple NMMs
@@ -146,4 +149,4 @@ class NoteModelMapping(Verifiable):
         return relevant_data
 
     def field_values_in_note_model_order(self, note_model_name, fields_from_csv):
-        return [fields_from_csv[field] for field in self.note_models[note_model_name].fields_lowercase]
+        return [fields_from_csv[f] for f in self.note_models[note_model_name].deck_part.field_names_lowercase]

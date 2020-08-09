@@ -16,7 +16,7 @@ class TestFiles:
         TEST1_WITH_SHARED_TAGS_EMPTY_AND_GROUPING = "csvtonotes1_withsharedtagsandgrouping_butnothingtogroup.json"
         TEST2_WITH_SHARED_TAGS_AND_GROUPING = "csvtonotes2_withsharedtagsandgrouping.json"
 
-    class NoteModels:
+    class CrowdAnkiNoteModels:
         LOC = "tests/test_files/deck_parts/note_models/"
 
         TEST = "Test Model"
@@ -26,6 +26,17 @@ class TestFiles:
         LL_WORD_COMPLETE = LOC + "LL-Word.json"
 
         LL_WORD_COMPLETE_ONLY_REQUIRED = LOC + "LL-Word-Only-Required.json"
+
+        LL_WORD_COMPLETE_NO_DEFAULTS = LOC + "LL-Word-No-Defaults.json"
+
+    class NoteModels:
+        LOC = "tests/test_files/deck_parts/yaml/note_models/"
+
+        LL_WORD = LOC + "LL-Word.yaml"
+
+        LL_WORD_ONLY_REQUIRED = LOC + "LL-Word-Only-Required.yaml"
+
+        LL_WORD_NO_DEFAULTS = LOC + "LL-Word-No-Defaults.yaml"
 
     class CsvFiles:
         LOC = "tests/test_files/csv/"
@@ -53,6 +64,6 @@ class TestFiles:
         LOC = "tests/test_files/media_files/"
 
     class YamlNotes:
-        LOC = "tests/test_files/yaml/note/"
+        LOC = "tests/test_files/yaml/notes/"
 
         TEST1 = LOC + "note1.yaml"

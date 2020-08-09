@@ -2,6 +2,9 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import List, Optional, Union, Dict
 
+from brain_brew.representation.yaml.my_yaml import YamlRepr
+from brain_brew.utils import list_of_str_to_lowercase
+
 
 class AnkiField:
     name: str
@@ -70,7 +73,6 @@ class Template:
             return cls(**data)
 
     name: str
-    ordinal: int
     question_format: str
     answer_format: str
     question_format_in_browser: str = field(default=BROWSER_QUESTION_FORMAT.default_value)
@@ -81,7 +83,7 @@ class Template:
     def from_crowdanki(cls, data: Union[CrowdAnki, dict]):
         ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
         return cls(
-            name=ca.name, ordinal=ca.ord, question_format=ca.qfmt, answer_format=ca.afmt,
+            name=ca.name, question_format=ca.qfmt, answer_format=ca.afmt,
             question_format_in_browser=ca.bqfmt, answer_format_in_browser=ca.bafmt, deck_override_id=ca.did
         )
 
@@ -89,10 +91,10 @@ class Template:
     def from_dict(cls, data: dict):
         return cls(**data)
 
-    def encode_as_crowdanki(self) -> dict:
+    def encode_as_crowdanki(self, ordinal: int) -> dict:
         data_dict = {
             NAME.anki_name: self.name,
-            ORDINAL.anki_name: self.ordinal,
+            ORDINAL.anki_name: ordinal,
             QUESTION_FORMAT.anki_name: self.question_format,
             ANSWER_FORMAT.anki_name: self.answer_format,
             BROWSER_QUESTION_FORMAT.anki_name: self.question_format_in_browser,
@@ -105,7 +107,6 @@ class Template:
     def encode_as_deck_part(self) -> dict:
         data_dict = {
             NAME.name: self.name,
-            ORDINAL.name: self.ordinal,
             QUESTION_FORMAT.name: self.question_format,
             ANSWER_FORMAT.name: self.answer_format
         }
@@ -134,7 +135,6 @@ class Field:
             return cls(**data)
 
     name: str
-    ordinal: int
     font: str = field(default=FONT.default_value)
     media: List[str] = field(default_factory=lambda: MEDIA.default_value)  # Unused in Anki
     is_right_to_left: bool = field(default=IS_RIGHT_TO_LEFT.default_value)
@@ -145,7 +145,7 @@ class Field:
     def from_crowdanki(cls, data: Union[CrowdAnki, dict]):
         ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
         return cls(
-            name=ca.name, ordinal=ca.ord, font=ca.font, media=ca.media,
+            name=ca.name, font=ca.font, media=ca.media,
             is_right_to_left=ca.rtl, font_size=ca.size, is_sticky=ca.sticky
         )
 
@@ -153,10 +153,10 @@ class Field:
     def from_dict(cls, data: dict):
         return cls(**data)
 
-    def encode_as_crowdanki(self) -> dict:
+    def encode_as_crowdanki(self, ordinal: int) -> dict:
         data_dict = {
             NAME.anki_name: self.name,
-            ORDINAL.anki_name: self.ordinal,
+            ORDINAL.anki_name: ordinal,
             FONT.anki_name: self.font,
             MEDIA.anki_name: self.media,
             IS_RIGHT_TO_LEFT.anki_name: self.is_right_to_left,
@@ -168,8 +168,7 @@ class Field:
 
     def encode_as_deck_part(self) -> dict:
         data_dict = {
-            NAME.anki_name: self.name,
-            ORDINAL.anki_name: self.ordinal
+            NAME.name: self.name
         }
 
         FONT.append_name_if_differs(data_dict, self.font)
@@ -182,7 +181,7 @@ class Field:
 
 
 @dataclass
-class CrowdAnkiNoteModel:
+class NoteModel(YamlRepr):
     @dataclass
     class CrowdAnki:
         name: str
@@ -206,7 +205,7 @@ class CrowdAnkiNoteModel:
     name: str
     crowdanki_id: str
     css: str
-    required_fields_per_template: List[list]
+    required_fields_per_template: List[list]  # TODO: Get rid of this as requirement
     fields: List[Field]
     templates: List[Template]
 
@@ -249,32 +248,54 @@ class CrowdAnkiNoteModel:
             IS_CLOZE.anki_name: 1 if self.is_cloze else 0
         }
 
-        data_dict.setdefault(FIELDS.anki_name, [f.encode_as_crowdanki() for f in self.fields])
-        data_dict.setdefault(TEMPLATES.anki_name, [t.encode_as_crowdanki() for t in self.templates])
+        data_dict.setdefault(FIELDS.anki_name, [f.encode_as_crowdanki(num) for num, f in enumerate(self.fields)])
+        data_dict.setdefault(TEMPLATES.anki_name, [t.encode_as_crowdanki(num) for num, t in enumerate(self.templates)])
 
         return OrderedDict(sorted(data_dict.items()))
 
-    def encode_as_deck_part(self) -> dict:
-        data_dict = {
+    def encode(self) -> dict:
+        data_dict: Dict[str, Union[str, list]] = {
             NAME.name: self.name,
             CROWDANKI_ID.name: self.crowdanki_id,
-            CSS.name: self.css,
-            REQUIRED_FIELDS_PER_TEMPLATE.name: self.required_fields_per_template,
+            CSS.name: self.css
         }
 
+        SORT_FIELD_NUM.append_name_if_differs(data_dict, self.sort_field_num)
+        IS_CLOZE.append_name_if_differs(data_dict, self.is_cloze)
         LATEX_PRE.append_name_if_differs(data_dict, self.latex_pre)
         LATEX_POST.append_name_if_differs(data_dict, self.latex_post)
-        SORT_FIELD_NUM.append_name_if_differs(data_dict, self.sort_field_num)
-        CROWDANKI_TYPE.append_name_if_differs(data_dict, self.crowdanki_type)
-        TAGS.append_name_if_differs(data_dict, self.tags)
-        VERSION.append_name_if_differs(data_dict, self.version)
-        IS_CLOZE.append_name_if_differs(data_dict, self.is_cloze)
 
         data_dict.setdefault(FIELDS.name, [f.encode_as_deck_part() for f in self.fields])
         data_dict.setdefault(TEMPLATES.name, [t.encode_as_deck_part() for t in self.templates])
 
-        return OrderedDict(sorted(data_dict.items()))
+        # Useless
+        TAGS.append_name_if_differs(data_dict, self.tags)
+        VERSION.append_name_if_differs(data_dict, self.version)
+        CROWDANKI_TYPE.append_name_if_differs(data_dict, self.crowdanki_type)
+        data_dict.setdefault(REQUIRED_FIELDS_PER_TEMPLATE.name, self.required_fields_per_template)
+
+        return data_dict
 
     def find_media(self):
         pass
         # Look in templates (and css?)
+
+    @property
+    def field_names_lowercase(self):
+        return list_of_str_to_lowercase(f.name for f in self.fields)
+
+    def check_field_overlap(self, fields_to_check: List[str]):
+        fields_to_check = list_of_str_to_lowercase(fields_to_check)
+        lower_fields = self.field_names_lowercase
+
+        missing = [f for f in lower_fields if f not in fields_to_check]
+        extra = [f for f in fields_to_check if f not in lower_fields]  # TODO: Remove?
+
+        return missing, extra
+
+    def zip_field_to_data(self, data: List[str]) -> dict:
+        if len(self.fields) != len(data):
+            raise Exception(f"Data of length {len(data)} cannot map to fields of length {len(self.field_names_lowercase)}")
+        return dict(zip(self.field_names_lowercase, data))
+
+

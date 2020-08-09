@@ -7,7 +7,7 @@ from brain_brew.representation.yaml.my_yaml import yaml_dump, yaml_load
 
 import pytest
 
-from brain_brew.representation.yaml.note_repr import Note, NoteGrouping, DeckPartNotes, \
+from brain_brew.representation.yaml.note_repr import Note, NoteGrouping, Notes, \
     NOTES, NOTE_GROUPINGS, FIELDS, GUID, NOTE_MODEL, TAGS
 
 working_notes = {
@@ -79,12 +79,12 @@ class TestConstructor:
 
     class TestDeckPartNote:
         def test_constructor(self):
-            dpn = DeckPartNotes(note_groupings=[NoteGrouping.from_dict(working_note_groupings["nothing_grouped"])])
-            assert isinstance(dpn, DeckPartNotes)
+            dpn = Notes(note_groupings=[NoteGrouping.from_dict(working_note_groupings["nothing_grouped"])])
+            assert isinstance(dpn, Notes)
 
         def test_from_dict(self):
-            dpn = DeckPartNotes.from_dict({NOTE_GROUPINGS: [working_note_groupings["nothing_grouped"]]})
-            assert isinstance(dpn, DeckPartNotes)
+            dpn = Notes.from_dict({NOTE_GROUPINGS: [working_note_groupings["nothing_grouped"]]})
+            assert isinstance(dpn, Notes)
 
 
 class TestDumpToYaml:
@@ -245,7 +245,7 @@ class TestDumpToYaml:
         def _assert_dump_to_yaml(tmpdir, ystring, groups: list):
             file = TestDumpToYaml._make_temp_file(tmpdir)
 
-            note = DeckPartNotes.from_dict({NOTE_GROUPINGS: [working_note_groupings[name] for name in groups]})
+            note = Notes.from_dict({NOTE_GROUPINGS: [working_note_groupings[name] for name in groups]})
             note.dump_to_yaml(str(file))
 
             assert file.read() == ystring
@@ -315,12 +315,12 @@ class TestFunctionality:
 
         class TestDeckPartNotes:
             def test_two_groups_two_models(self):
-                dpn = DeckPartNotes.from_dict(working_dpns["two_groups_two_models"])
+                dpn = Notes.from_dict(working_dpns["two_groups_two_models"])
                 models = dpn.get_all_known_note_model_names()
                 assert models == {'LL Test', 'model_name'}
 
             def test_two_groups_three_models(self):
-                dpn = DeckPartNotes.from_dict(working_dpns["two_groups_three_models"])
+                dpn = Notes.from_dict(working_dpns["two_groups_three_models"])
                 models = dpn.get_all_known_note_model_names()
                 assert models == {'LL Test', 'model_name', 'different_model'}
 

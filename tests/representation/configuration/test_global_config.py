@@ -34,7 +34,7 @@ def global_config():
     return GlobalConfig({
         ConfigKeys.DECK_PARTS.value: {
             ConfigKeys.HEADERS.value: TestFiles.Headers.LOC,
-            ConfigKeys.NOTE_MODELS.value: TestFiles.NoteModels.LOC,
+            ConfigKeys.NOTE_MODELS.value: TestFiles.CrowdAnkiNoteModels.LOC,
             ConfigKeys.NOTES.value: TestFiles.NoteFiles.LOC,
             ConfigKeys.MEDIA_FILES.value: TestFiles.MediaFiles.LOC,
 

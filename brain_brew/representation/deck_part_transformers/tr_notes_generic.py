@@ -2,7 +2,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 import re
 
-from brain_brew.representation.yaml.note_repr import DeckPartNotes
+from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.representation.yaml.note_repr import Notes
 from brain_brew.representation.configuration.global_config import GlobalConfig
 
 
@@ -34,7 +35,7 @@ class TrGenericToNotes(TrNotes):
     name: str
     save_to_file: Optional[str]
 
-    data: DeckPartNotes = field(init=False)
+    data: DeckPartHolder[Notes] = field(init=False)
 
 
 @dataclass
@@ -46,4 +47,4 @@ class TrNotesToGeneric(TrNotes):
         def __init__(self, notes):
             self.notes = notes
 
-    notes: DeckPartNotes
+    notes: DeckPartHolder[Notes]

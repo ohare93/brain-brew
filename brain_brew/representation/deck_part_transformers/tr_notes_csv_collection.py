@@ -6,7 +6,8 @@ from brain_brew.representation.build_config.build_task import TopLevelBuildTask,
 from brain_brew.representation.configuration.csv_file_mapping import CsvFileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 from brain_brew.representation.deck_part_transformers.tr_notes_generic import TrNotesToGeneric, TrGenericToNotes
-from brain_brew.representation.yaml.note_repr import DeckPartNotes, Note
+from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.representation.yaml.note_repr import Notes, Note
 
 
 @dataclass
@@ -63,11 +64,11 @@ class TrCsvCollectionShared:
             referenced_note_models_maps = [value for key, value in self.note_model_mappings.items() if
                                            key in note_model_names]
             for nm_map in referenced_note_models_maps:
-                for model in nm_map.note_models.values():
-                    missing_columns = [col for col in model.fields_lowercase if
+                for holder in nm_map.note_models.values():
+                    missing_columns = [col for col in holder.deck_part.field_names_lowercase if
                                        col not in nm_map.csv_headers_map_to_note_fields(available_columns)]
                     if missing_columns:
-                        errors.append(KeyError(f"Csvs are missing columns from {model.name}", missing_columns))
+                        errors.append(KeyError(f"Csvs are missing columns from {holder.name}", missing_columns))
 
         if errors:
             raise Exception(errors)
@@ -96,9 +97,6 @@ class TrCsvCollectionToNotes(GenerateDeckPartBuildTask, TrCsvCollectionShared, T
             note_model_mappings=data.get_note_model_mappings()
         )
 
-    def __repr__(self):
-        return f'TrCsvCollectionToNotes({self.name!r}, {self.save_to_file!r}, {self.file!r}, {self.note_model_mappings!r}, '
-
     @classmethod
     def from_dict(cls, data: dict):
         return cls.from_repr(TrCsvCollectionToNotes.Representation.from_dict(data))
@@ -126,8 +124,8 @@ class TrCsvCollectionToNotes(GenerateDeckPartBuildTask, TrCsvCollectionShared, T
 
             deck_part_notes.append(Note(guid=guid, tags=tags, note_model=note_model_name, fields=fields))
 
-        dpn = DeckPartNotes.from_list_of_notes(self.name, self.save_to_file, deck_part_notes)
-        FileManager.get_instance().new_deck_part(dpn)
+        notes = Notes.from_list_of_notes(deck_part_notes)
+        DeckPartHolder.override_or_create(self.name, self.save_to_file, notes)
 
 
 @dataclass
@@ -147,7 +145,7 @@ class TrNotesToCsvCollection(TopLevelBuildTask, TrCsvCollectionShared, TrNotesTo
     @classmethod
     def from_repr(cls, data: Representation):
         return cls(
-            notes=DeckPartNotes.from_deck_part_pool(data.notes),
+            notes=DeckPartHolder.from_deck_part_pool(data.notes),
             file_mappings=data.get_file_mappings(),
             note_model_mappings=data.get_note_model_mappings()
         )
@@ -157,13 +155,13 @@ class TrNotesToCsvCollection(TopLevelBuildTask, TrCsvCollectionShared, TrNotesTo
         return cls.from_repr(TrNotesToCsvCollection.Representation.from_dict(data))
 
     def execute(self):
-        notes_data = self.notes.get_notes()
+        notes_data = self.notes.deck_part.get_notes()
         self.verify_notes_match_note_model_mappings(notes_data)
 
         csv_data: Dict[str, dict] = {}
         for note in notes_data:
             nm_name = note.note_model
-            row = self.note_model_mappings[nm_name].note_models[nm_name].zip_field_to_data(note.fields)
+            row = self.note_model_mappings[nm_name].note_models[nm_name].deck_part.zip_field_to_data(note.fields)
             row["guid"] = note.guid
             row["tags"] = self.join_tags(note.tags)
 

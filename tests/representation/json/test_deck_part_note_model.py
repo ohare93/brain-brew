@@ -2,7 +2,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from brain_brew.representation.yaml.note_model import DeckPartNoteModel, CANoteModelKeys
+from brain_brew.representation.yaml.note_model_repr import DeckPartNoteModel, CANoteModelKeys
 from tests.test_files import TestFiles
 
 
@@ -14,14 +14,14 @@ def mock_dp_nm(name, read_now):
 
 class TestConstructor:
     @pytest.mark.parametrize("note_model_name", [
-        TestFiles.NoteModels.TEST_COMPLETE,
-        TestFiles.NoteModels.TEST,
+        TestFiles.CrowdAnkiNoteModels.TEST_COMPLETE,
+        TestFiles.CrowdAnkiNoteModels.TEST,
     ])
     def test_run(self, global_config, note_model_name):
         file = DeckPartNoteModel(note_model_name)
 
         assert isinstance(file, DeckPartNoteModel)
-        assert file.file_location == TestFiles.NoteModels.LOC + TestFiles.NoteModels.TEST_COMPLETE
+        assert file.file_location == TestFiles.CrowdAnkiNoteModels.LOC + TestFiles.CrowdAnkiNoteModels.TEST_COMPLETE
         assert len(file.get_data().keys()) == 13
 
         assert file.name == "Test Model"
@@ -45,7 +45,7 @@ class TestConstructor:
 
 @pytest.fixture()
 def dp_note_model_test1(global_config) -> DeckPartNoteModel:
-    return DeckPartNoteModel.create(TestFiles.NoteModels.TEST_COMPLETE)
+    return DeckPartNoteModel.create(TestFiles.CrowdAnkiNoteModels.TEST_COMPLETE)
 
 
 def test_read_fields(dp_note_model_test1):

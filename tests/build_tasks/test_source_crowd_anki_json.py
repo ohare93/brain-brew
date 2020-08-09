@@ -6,7 +6,7 @@ from brain_brew.constants.build_config_keys import BuildConfigKeys
 from brain_brew.build_tasks.source_crowd_anki import SourceCrowdAnki, CrowdAnkiKeys
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.deck_part_header import DeckPartHeader
-from brain_brew.representation.yaml.note_model import DeckPartNoteModel
+from brain_brew.representation.yaml.note_model_repr import DeckPartNoteModel
 from brain_brew.representation.json.deck_part_notes import DeckPartNotes
 
 

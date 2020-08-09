@@ -7,7 +7,8 @@ from brain_brew.interfaces.writes_file import WritesFile
 from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.generic.generic_file import GenericFile
 from brain_brew.representation.generic.media_file import MediaFile
-from brain_brew.representation.yaml.my_yaml import YamlRepresentation
+from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.representation.yaml.my_yaml import YamlRepr
 from brain_brew.utils import filename_from_full_path, find_all_files_in_directory
 
 
@@ -17,7 +18,7 @@ class FileManager:
 
     known_files_dict: Dict[str, GenericFile]
     known_media_files_dict: Dict[str, MediaFile]
-    deck_part_pool: Dict[str, YamlRepresentation]
+    deck_part_pool: Dict[str, DeckPartHolder[YamlRepr]]
 
     write_files_at_end: List[WritesFile]
 
@@ -48,6 +49,9 @@ class FileManager:
         if file_location in self.known_files_dict.keys():
             return self.known_files_dict[file_location]
         return None
+
+    def deck_part_if_exists(self, dp_name) -> Union[DeckPartHolder[YamlRepr], None]:
+        return self.deck_part_pool.get(dp_name)
 
     def register_file(self, full_path, file):
         if full_path in self.known_files_dict:
@@ -82,10 +86,11 @@ class FileManager:
 
         logging.debug(f"Media files found: {len(self.known_media_files_dict)}")
 
-    def new_deck_part(self, dp: YamlRepresentation):
+    def new_deck_part(self, dp: DeckPartHolder) -> DeckPartHolder:
         if dp.name in self.deck_part_pool:
             raise KeyError(f"Cannot use same name '{dp.name}' for multiple Deck Parts")
         self.deck_part_pool.setdefault(dp.name, dp)
+        return dp
 
     def deck_part_from_pool(self, name: str):
         if name not in self.deck_part_pool:

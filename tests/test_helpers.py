@@ -1,6 +1,6 @@
-from brain_brew.representation.json.json_file import JsonFile
+from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 
 
-def debug_write_to_target_json(data, json: JsonFile):
-    json.set_data(data)
-    json.write_file()
+def debug_write_deck_part_to_file(deck_part, filepath: str):
+    dp = DeckPartHolder("Blah", filepath, deck_part)
+    dp.write_to_file()

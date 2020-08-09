@@ -1,5 +1,4 @@
-from brain_brew.file_manager import FileManager
-from brain_brew.representation.yaml.my_yaml import yaml_dump, yaml_load, YamlRepresentation
+from brain_brew.representation.yaml.my_yaml import YamlRepr
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Set
 
@@ -15,7 +14,7 @@ MEDIA_REFERENCES = "media_references"
 
 
 @dataclass
-class GroupableNoteData:
+class GroupableNoteData(YamlRepr):
     note_model: Optional[str]
     tags: Optional[List[str]]
 
@@ -47,10 +46,6 @@ class Note(GroupableNoteData):
         super().encode_groupable(data_dict)
         return data_dict
 
-    def dump_to_yaml(self, file):
-        with open(file, 'w') as fp:
-            yaml_dump.dump(self.encode(), fp)
-
     def get_media_references(self) -> Set[str]:
         return {entry for field in self.fields for entry in find_media_in_field(field)}
 
@@ -72,10 +67,6 @@ class NoteGrouping(GroupableNoteData):
         super().encode_groupable(data_dict)
         data_dict.setdefault(NOTES, [note.encode() for note in self.notes])
         return data_dict
-
-    def dump_to_yaml(self, file):
-        with open(file, 'w') as fp:
-            yaml_dump.dump(self.encode(), fp)
 
     # TODO: Extract Shared Tags and Note Models
     # TODO: Sort notes
@@ -113,43 +104,20 @@ class NoteGrouping(GroupableNoteData):
 
 
 @dataclass
-class DeckPartNotes(YamlRepresentation):
-    name: str
-    save_to_file: Optional[str]
+class Notes(YamlRepr):
     note_groupings: List[NoteGrouping]
-    # TODO: File location and saving
 
     @classmethod
-    def from_deck_part_pool(cls, name: str) -> 'DeckPartNotes':
-        return super(DeckPartNotes, cls).from_deck_part_pool(name)
+    def from_dict(cls, data: dict):
+        return cls(note_groupings=list(map(NoteGrouping.from_dict, data.get(NOTE_GROUPINGS))))
 
     @classmethod
-    def from_dict(cls, name: str, save_to_file: Optional[str], data: dict):
-        return cls(
-            name=name,
-            save_to_file=save_to_file,
-            note_groupings=list(map(NoteGrouping.from_dict, data.get(NOTE_GROUPINGS)))
-        )
-
-    @classmethod
-    def from_list_of_notes(cls, name: str, save_to_file: Optional[str], notes: List[Note]):
-        return cls(
-            name=name,
-            save_to_file=save_to_file,
-            note_groupings=[NoteGrouping(note_model=None, tags=None, notes=notes)]
-        )
-
-    def write_to_file(self):
-        if self.save_to_file is not None:
-            self.dump_to_yaml(self.save_to_file)
+    def from_list_of_notes(cls, notes: List[Note]):
+        return cls(note_groupings=[NoteGrouping(note_model=None, tags=None, notes=notes)])
 
     def encode(self) -> dict:
         data_dict = {NOTE_GROUPINGS: [note_grouping.encode() for note_grouping in self.note_groupings]}
         return data_dict
-
-    def dump_to_yaml(self, file):
-        with open(file, 'w') as fp:
-            yaml_dump.dump(self.encode(), fp)
 
     def get_all_known_note_model_names(self):
         return {nms for group in self.note_groupings for nms in group.get_all_known_note_model_names()}
