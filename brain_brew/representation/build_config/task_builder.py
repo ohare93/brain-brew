@@ -5,26 +5,19 @@ from brain_brew.file_manager import FileManager
 from brain_brew.interfaces.verifiable import Verifiable
 from brain_brew.representation.build_config.build_task import BuildTask
 from brain_brew.representation.configuration.global_config import GlobalConfig
+from brain_brew.representation.yaml.my_yaml import YamlRepr
 from brain_brew.utils import str_to_lowercase_no_separators
 
 
 @dataclass
-class TaskBuilder:
-    @dataclass
-    class Representation:
-        tasks: list
-
-        @classmethod
-        def from_dict(cls, data: dict):
-            return cls(**data)
-
+class TaskBuilder(YamlRepr):
     tasks: List[BuildTask]
     global_config: GlobalConfig
     file_manager: FileManager
 
     @classmethod
-    def from_repr(cls, data: Representation, global_config, file_manager):
-        tasks = cls.read_tasks(data.tasks)
+    def from_list(cls, data: List[dict], global_config, file_manager):
+        tasks = cls.read_tasks(data)
         return cls(
             tasks=tasks,
             global_config=global_config,
@@ -32,15 +25,11 @@ class TaskBuilder:
         )
 
     @classmethod
-    def from_dict(cls, data: dict, global_config, file_manager):
-        return cls.from_repr(TaskBuilder.Representation.from_dict(data), global_config, file_manager)
-
-    @classmethod
     def known_task_dict(cls) -> Dict[str, Type[BuildTask]]:
         raise NotImplemented()
 
     @classmethod
-    def read_tasks(cls, tasks: list) -> list:
+    def read_tasks(cls, tasks: List[dict]) -> list:
         known_task_dict = cls.known_task_dict()
         build_tasks = []
 

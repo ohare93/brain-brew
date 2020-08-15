@@ -7,7 +7,6 @@ from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.interfaces.verifiable import Verifiable
 from brain_brew.interfaces.writes_file import WritesFile
 from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
-from brain_brew.representation.generic.yaml_file import YamlFile, ConfigKey
 from brain_brew.utils import single_item_to_list, generate_anki_guid
 
 

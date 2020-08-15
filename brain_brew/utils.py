@@ -22,6 +22,12 @@ def single_item_to_list(item):
     return [item]
 
 
+def all_combos_prepend_append(original_list: list, prepend_with: str, append_with: str):
+    return list({append_or_not for normal in original_list
+                for prepend_or_not in (normal, prepend_with + normal)
+                for append_or_not in (prepend_or_not, prepend_or_not + append_with)})
+
+
 def str_to_lowercase_no_separators(str_to_tidy: str):
     return re.sub(r'[\s+_-]+', '', str_to_tidy.lower())
 

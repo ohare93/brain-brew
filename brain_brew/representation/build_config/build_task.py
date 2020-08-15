@@ -36,5 +36,5 @@ class TopLevelBuildTask(BuildTask):
     pass
 
 
-class GenerateDeckPartBuildTask(BuildTask):
+class DeckPartBuildTask(BuildTask):
     pass

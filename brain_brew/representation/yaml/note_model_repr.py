@@ -276,7 +276,7 @@ class NoteModel(YamlRepr):
 
         return data_dict
 
-    def find_media(self):
+    def find_media(self):  # TODO
         pass
         # Look in templates (and css?)
 

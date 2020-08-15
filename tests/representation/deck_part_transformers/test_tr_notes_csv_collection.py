@@ -2,7 +2,7 @@ from textwrap import dedent
 from unittest.mock import patch
 
 from brain_brew.file_manager import FileManager
-from brain_brew.representation.deck_part_transformers.tr_notes_csv_collection import TrCsvCollectionToNotes
+from brain_brew.representation.deck_part_transformers.transform_csv_collection import TrCsvCollectionToNotes
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.my_yaml import yaml_dump, yaml_load
 from tests.test_file_manager import get_new_file_manager

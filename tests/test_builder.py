@@ -1,7 +1,7 @@
 from unittest.mock import patch, Mock
 
 from brain_brew.representation.build_config.top_level_task_builder import TopLevelTaskBuilder
-from brain_brew.representation.deck_part_transformers.tr_notes_csv_collection import TrNotesToCsvCollection
+from brain_brew.representation.deck_part_transformers.transform_csv_collection import TrNotesToCsvCollection
 from brain_brew.representation.yaml.my_yaml import YamlRepr
 from brain_brew.representation.yaml.note_model_repr import NoteModel
 from brain_brew.representation.yaml.note_repr import Notes
