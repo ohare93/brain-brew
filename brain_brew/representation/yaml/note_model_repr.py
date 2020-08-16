@@ -2,6 +2,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import List, Optional, Union, Dict
 
+from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.yaml.my_yaml import YamlRepr
 from brain_brew.utils import list_of_str_to_lowercase
 
@@ -57,9 +58,9 @@ DECK_OVERRIDE_ID = AnkiField("did", "deck_override_id", default_value=None)
 
 
 @dataclass
-class Template:
+class Template(RepresentationBase):
     @dataclass
-    class CrowdAnki:
+    class CrowdAnki(RepresentationBase):
         name: str
         ord: int
         qfmt: str
@@ -67,10 +68,6 @@ class Template:
         bqfmt: str = field(default=BROWSER_QUESTION_FORMAT.default_value)
         bafmt: str = field(default=BROWSER_ANSWER_FORMAT.default_value)
         did: Optional[int] = field(default=None)
-
-        @classmethod
-        def from_dict(cls, data: dict):
-            return cls(**data)
 
     name: str
     question_format: str
@@ -86,10 +83,6 @@ class Template:
             name=ca.name, question_format=ca.qfmt, answer_format=ca.afmt,
             question_format_in_browser=ca.bqfmt, answer_format_in_browser=ca.bafmt, deck_override_id=ca.did
         )
-
-    @classmethod
-    def from_dict(cls, data: dict):
-        return cls(**data)
 
     def encode_as_crowdanki(self, ordinal: int) -> dict:
         data_dict = {
@@ -119,9 +112,9 @@ class Template:
 
 
 @dataclass
-class Field:
+class Field(RepresentationBase):
     @dataclass
-    class CrowdAnki:
+    class CrowdAnki(RepresentationBase):
         name: str
         ord: int
         font: str = field(default=FONT.default_value)
@@ -129,10 +122,6 @@ class Field:
         rtl: bool = field(default=IS_RIGHT_TO_LEFT.default_value)
         size: int = field(default=FONT_SIZE.default_value)
         sticky: bool = field(default=IS_STICKY.default_value)
-
-        @classmethod
-        def from_dict(cls, data: dict):
-            return cls(**data)
 
     name: str
     font: str = field(default=FONT.default_value)
@@ -148,10 +137,6 @@ class Field:
             name=ca.name, font=ca.font, media=ca.media,
             is_right_to_left=ca.rtl, font_size=ca.size, is_sticky=ca.sticky
         )
-
-    @classmethod
-    def from_dict(cls, data: dict):
-        return cls(**data)
 
     def encode_as_crowdanki(self, ordinal: int) -> dict:
         data_dict = {
@@ -181,9 +166,9 @@ class Field:
 
 
 @dataclass
-class NoteModel(YamlRepr):
+class NoteModel(YamlRepr, RepresentationBase):
     @dataclass
-    class CrowdAnki:
+    class CrowdAnki(RepresentationBase):
         name: str
         crowdanki_uuid: str
         css: str
@@ -197,10 +182,6 @@ class NoteModel(YamlRepr):
         sortf: int = field(default=SORT_FIELD_NUM.default_value)
         type: int = field(default=0)  # Is_Cloze Manually set to 0
         vers: list = field(default_factory=lambda: VERSION.default_value)
-
-        @classmethod
-        def from_dict(cls, data: dict):
-            return cls(**data)
 
     name: str
     crowdanki_id: str
@@ -228,10 +209,6 @@ class NoteModel(YamlRepr):
             required_fields_per_template=ca.req, tags=ca.tags, sort_field_num=ca.sortf, version=ca.vers,
             crowdanki_id=ca.crowdanki_uuid, crowdanki_type=ca.__type__
         )
-
-    @classmethod
-    def from_dict(cls, data: dict):
-        return cls(**data)
 
     def encode_as_crowdanki(self) -> dict:
         data_dict = {

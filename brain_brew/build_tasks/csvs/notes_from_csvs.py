@@ -1,33 +1,30 @@
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Union
 
-from brain_brew.build_tasks.csv_collection.config.csv_collection_shared import CsvCollectionShared
-from brain_brew.representation.transformers.generic_to_deck_part import TrGenericToDeckPart
+from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
+from brain_brew.representation.transformers.generic_to_deck_part import DeckPartFromBase
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.note_repr import Note, Notes
 from brain_brew.transformers.transform_csv_collection import TransformCsvCollection
 
 
 @dataclass
-class CsvCollectionToNotes(CsvCollectionShared, TrGenericToDeckPart):
+class NotesFromCsvs(SharedBaseCsvs, DeckPartFromBase):
     @dataclass(init=False)
-    class Representation(CsvCollectionShared.Representation, TrGenericToDeckPart.Representation):
+    class Representation(SharedBaseCsvs.Representation, DeckPartFromBase.Representation):
         def __init__(self, name, file_mappings, note_model_mappings, save_to_file=None):
-            CsvCollectionShared.Representation.__init__(self, file_mappings, note_model_mappings)
-            TrGenericToDeckPart.Representation.__init__(self, name, save_to_file)
+            SharedBaseCsvs.Representation.__init__(self, file_mappings, note_model_mappings)
+            DeckPartFromBase.Representation.__init__(self, name, save_to_file)
 
     @classmethod
-    def from_repr(cls, data: Representation):
+    def from_repr(cls, data: Union[Representation, dict]):
+        rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
-            name=data.name,
-            save_to_file=data.save_to_file,
-            file_mappings=data.get_file_mappings(),
-            note_model_mappings=data.get_note_model_mappings()
+            name=rep.name,
+            save_to_file=rep.save_to_file,
+            file_mappings=rep.get_file_mappings(),
+            note_model_mappings=rep.get_note_model_mappings()
         )
-
-    @classmethod
-    def from_dict(cls, data: dict):
-        return cls.from_repr(cls.Representation.from_dict(data))
 
     def execute(self):
         csv_data_by_guid: Dict[str, dict] = {}

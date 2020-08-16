@@ -3,23 +3,15 @@ from enum import Enum
 
 from brain_brew.build_tasks.build_task_generic import BuildTaskGeneric
 from brain_brew.constants.build_config_keys import BuildTaskEnum, BuildConfigKeys
-from brain_brew.constants.crowdanki_keys import CAKeys
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.file_manager import FileManager
 from brain_brew.representation.generic.media_file import MediaFile
 from brain_brew.utils import blank_str_if_none
 from brain_brew.representation.generic.yaml_file import ConfigKey, YamlFile
-from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
+from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport, CAKeys
 from brain_brew.representation.json.deck_part_header import DeckPartHeader
 from brain_brew.representation.yaml.note_model_repr import CANoteModelKeys, DeckPartNoteModel
 from brain_brew.representation.json.deck_part_notes import CANoteKeys, DeckPartNotes
-
-
-class CrowdAnkiKeys(Enum):
-    FILE = "file"
-    NOTE_SORT_ORDER = "note_sort_order"
-    MEDIA = "media"
-    USELESS_NOTE_KEYS = "useless_note_keys"
 
 
 class SourceCrowdAnki(YamlFile, BuildTaskGeneric):

@@ -3,7 +3,7 @@ from typing import List, Dict
 
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 from brain_brew.representation.yaml.note_repr import Note
-from brain_brew.transformers.tr_notes_generic import TrNotes
+from brain_brew.transformers.base_transform_notes import TrNotes
 
 
 class TransformCsvCollection(TrNotes):

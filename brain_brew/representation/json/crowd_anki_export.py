@@ -1,29 +1,32 @@
 import glob
 import logging
 import pathlib
+from enum import Enum
 from pathlib import Path
 from typing import List, Dict
 
-from brain_brew.representation.json.json_file import JsonFile
 from brain_brew.representation.generic.media_file import MediaFile
+from brain_brew.representation.json.json_file import JsonFile
+from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
 from brain_brew.utils import filename_from_full_path, find_all_files_in_directory
 
 
-class CrowdAnkiExport(JsonFile):
+class CrowdAnkiExport:
     folder_location: str
+    json_file_location: str
+    # import_config: CrowdAnkiImportConfig  # TODO: Make this
+
     contains_media: bool
     known_media: Dict[str, MediaFile]
     media_loc: str
 
-    def __init__(self, folder_location, read_now=True, data_override=None):
+    def __init__(self, folder_location):
         self.folder_location = folder_location
         if self.folder_location[-1] != "/":
             self.folder_location = self.folder_location + "/"
 
-        json_file_location = self.find_json_file_in_folder()
+        self.json_file_location = self.find_json_file_in_folder()
         self.find_all_media()
-
-        super().__init__(json_file_location, read_now=read_now, data_override=data_override)
 
     def find_json_file_in_folder(self):
         files = glob.glob(self.folder_location + "*.json")
@@ -53,7 +56,10 @@ class CrowdAnkiExport(JsonFile):
 
         logging.info(f"CrowdAnkiExport found {len(self.known_media)} media files in folder")
 
-    def write_file(self, data_override=None):
-        super().write_file(data_override)
+    def write_to_files(self, json_data):  # import_config_data
+        JsonFile.write_file(self.json_file_location, json_data)
         for filename, media_file in self.known_media.items():
             media_file.copy_source_to_target()
+
+    def read_json_file(self) -> CrowdAnkiJsonWrapper:
+        return CrowdAnkiJsonWrapper(JsonFile.read_file(self.json_file_location))

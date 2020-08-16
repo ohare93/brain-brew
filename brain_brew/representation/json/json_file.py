@@ -15,5 +15,5 @@ class JsonFile:
 
     @staticmethod
     def write_file(file_location, data):
-        with open(file_location, "w", encoding=_encoding) as write_file:
+        with open(file_location, "w+", encoding=_encoding) as write_file:
             json.dump(data, write_file, indent=4, sort_keys=False, ensure_ascii=False)

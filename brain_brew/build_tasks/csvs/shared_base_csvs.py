@@ -1,14 +1,15 @@
 from dataclasses import dataclass
 from typing import List, Dict
 
+from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.configuration.csv_file_mapping import CsvFileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 
 
 @dataclass
-class CsvCollectionShared:
+class SharedBaseCsvs:
     @dataclass(init=False)
-    class Representation:
+    class Representation(RepresentationBase):
         file_mappings: List[CsvFileMapping.Representation]
         note_model_mappings: List[NoteModelMapping.Representation]
 

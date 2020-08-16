@@ -19,7 +19,7 @@ class MediaFile:
         self.filename = filename
 
         self.man_type = man_type
-        self.source_loc = target_loc if source_loc is None else source_loc
+        self.source_loc = source_loc if source_loc is not None else target_loc
 
     def set_override(self, source_loc):
         self.man_type = MediaFile.ManagementType.OVERRIDDEN

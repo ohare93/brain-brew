@@ -10,7 +10,7 @@ class BuildTask(object):
         raise NotImplemented()
 
     @classmethod
-    def from_dict(cls, data: dict):
+    def from_repr(cls, data: dict):
         raise NotImplemented()
 
     @classmethod

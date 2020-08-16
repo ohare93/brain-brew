@@ -10,14 +10,6 @@ from brain_brew.representation.generic.media_file import MediaFile
 from brain_brew.utils import find_media_in_field
 
 
-class CANoteKeys(Enum):
-    NOTE_MODEL = "note_model_uuid"
-    FLAGS = "flags"
-    GUID = "guid"
-    TAGS = "tags"
-    FIELDS = "fields"
-
-
 class DeckPartNotes(JsonFile):
     _data: dict = {}
     flags: DeckPartNoteFlags

@@ -4,6 +4,7 @@ from typing import List, Union, Dict
 
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.interfaces.verifiable import Verifiable
+from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.note_model_repr import NoteModel
 from brain_brew.utils import single_item_to_list
@@ -36,14 +37,10 @@ class FieldMapping:
 @dataclass
 class NoteModelMapping(Verifiable):
     @dataclass
-    class Representation:
+    class Representation(RepresentationBase):
         note_models: Union[str, list]
         columns_to_fields: Dict[str, str]
         personal_fields: List[str]
-
-        @classmethod
-        def from_dict(cls, data: dict):
-            return cls(**data)
 
     note_models: Dict[str, DeckPartHolder[NoteModel]]
     columns: List[FieldMapping]
