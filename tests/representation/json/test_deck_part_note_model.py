@@ -45,7 +45,7 @@ class TestConstructor:
 
 @pytest.fixture()
 def dp_note_model_test1(global_config) -> DeckPartNoteModel:
-    return DeckPartNoteModel.create(TestFiles.CrowdAnkiNoteModels.TEST_COMPLETE)
+    return DeckPartNoteModel.create_or_get(TestFiles.CrowdAnkiNoteModels.TEST_COMPLETE)
 
 
 def test_read_fields(dp_note_model_test1):

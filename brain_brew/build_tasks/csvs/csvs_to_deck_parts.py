@@ -21,7 +21,7 @@ class CsvsToDeckParts(DeckPartBuildTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
-            notes_transform=NotesFromCsvs.from_dict(rep.notes)
+            notes_transform=NotesFromCsvs.from_repr(rep.notes)
         )
 
     def execute(self):

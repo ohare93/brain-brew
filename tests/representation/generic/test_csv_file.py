@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 
 from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
-from brain_brew.representation.generic.generic_file import GenericFile
+from brain_brew.representation.generic.generic_file import SourceFile
 from tests.test_files import TestFiles
 
 
@@ -47,7 +47,7 @@ def temp_csv_test1(tmpdir, csv_test1) -> CsvFile:
     file = tmpdir.mkdir("json").join("file.csv")
     file.write("blank")
 
-    return CsvFile.create(file.strpath, data_override=csv_test1.get_data())
+    return CsvFile.create_or_get(file.strpath, data_override=csv_test1.get_data())
 
 
 class TestConstructor:
@@ -82,13 +82,13 @@ class TestReadFile:
         assert csv_test1_not_read_initially_test.get_data() == []
         assert csv_test1_not_read_initially_test.column_headers == []
         assert csv_test1_not_read_initially_test.file_location == TestFiles.CsvFiles.TEST1
-        assert csv_test1_not_read_initially_test.data_state == GenericFile.DataState.NOTHING_READ_OR_SET
+        assert csv_test1_not_read_initially_test.data_state == SourceFile.DataState.NOTHING_READ_OR_SET
 
         csv_test1_not_read_initially_test.read_file()
 
         assert len(csv_test1_not_read_initially_test.get_data()) == 15
         assert "guid" in csv_test1_not_read_initially_test.column_headers
-        assert csv_test1_not_read_initially_test.data_state == GenericFile.DataState.READ_IN_DATA
+        assert csv_test1_not_read_initially_test.data_state == SourceFile.DataState.READ_IN_DATA
 
 
 class TestWriteFile:

@@ -35,9 +35,10 @@ class TransformCsvCollection(TrNotes):
 
             guid = filtered_fields.pop("guid")
             tags = cls.split_tags(filtered_fields.pop("tags"))
+            flags = filtered_fields.pop("flags") if "flags" in filtered_fields else 0
 
             fields = row_nm.field_values_in_note_model_order(note_model_name, filtered_fields)
 
-            deck_part_notes.append(Note(guid=guid, tags=tags, note_model=note_model_name, fields=fields))
+            deck_part_notes.append(Note(guid=guid, tags=tags, note_model=note_model_name, fields=fields, flags=flags))
 
         return deck_part_notes

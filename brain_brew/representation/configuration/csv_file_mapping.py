@@ -5,7 +5,6 @@ from typing import Dict, List, Optional, Union
 
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.interfaces.verifiable import Verifiable
-from brain_brew.interfaces.writes_file import WritesFile
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
 from brain_brew.utils import single_item_to_list, generate_anki_guid
@@ -48,7 +47,7 @@ class CsvFileMappingDerivative:
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
-            csv_file=CsvFile.create(rep.file, True),   # TODO: Fix Read Now
+            csv_file=CsvFile.create_or_get(rep.file),
             note_model=None if not rep.note_model.strip() else rep.note_model.strip(),
             sort_by_columns=single_item_to_list(rep.sort_by_columns),
             reverse_sort=rep.reverse_sort or False,
@@ -110,7 +109,7 @@ class CsvFileMappingDerivative:
 
 
 @dataclass
-class CsvFileMapping(CsvFileMappingDerivative, Verifiable, WritesFile):
+class CsvFileMapping(CsvFileMappingDerivative, Verifiable):
     note_model: str  # Override Optional on Parent
 
     data_set_has_changed: bool = field(init=False, default=False)

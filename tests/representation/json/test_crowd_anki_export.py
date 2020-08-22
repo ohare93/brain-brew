@@ -38,7 +38,7 @@ class TestFindJsonFileInFolder:
 
 @pytest.fixture()
 def ca_export_test1() -> CrowdAnkiExport:
-    return CrowdAnkiExport.create(TestFiles.CrowdAnkiExport.TEST1_FOLDER)
+    return CrowdAnkiExport.create_or_get(TestFiles.CrowdAnkiExport.TEST1_FOLDER)
 
 
 @pytest.fixture()

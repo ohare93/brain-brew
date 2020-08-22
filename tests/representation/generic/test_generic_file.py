@@ -3,7 +3,7 @@ import logging
 import pytest
 from unittest.mock import MagicMock
 
-from brain_brew.representation.generic.generic_file import GenericFile
+from brain_brew.representation.generic.generic_file import SourceFile
 from tests.test_file_manager import get_new_file_manager
 from tests.test_files import TestFiles
 
@@ -11,9 +11,9 @@ from tests.test_files import TestFiles
 class TestConstructor:
     def test_runs(self):
         file_location = TestFiles.CsvFiles.TEST1
-        file = GenericFile(file_location, read_now=False, data_override=None)
+        file = SourceFile(file_location, read_now=False, data_override=None)
 
-        assert isinstance(file, GenericFile)
+        assert isinstance(file, SourceFile)
         assert file.file_location == file_location
         assert file._data is None
 
@@ -21,13 +21,13 @@ class TestConstructor:
         file_location = "sdfsdfgdsfsdfsdsdg/sdfsdf/sdfsdf/sdfsd/"
 
         with pytest.raises(FileNotFoundError):
-            GenericFile(file_location, read_now=True, data_override=None)
+            SourceFile(file_location, read_now=True, data_override=None)
 
     def test_override_data(self):
         override_data = {"Test": 1}
-        file = GenericFile("", read_now=True, data_override=override_data)
+        file = SourceFile("", read_now=True, data_override=override_data)
 
-        assert isinstance(file, GenericFile)
+        assert isinstance(file, SourceFile)
         assert file._data == override_data
 
 
@@ -36,9 +36,9 @@ class TestCreateFileWithFileManager:
         fm = get_new_file_manager()
         assert len(fm.known_files_dict) == 0
 
-        first = GenericFile.create("test1", read_now=False)
+        first = SourceFile.create_or_get("test1", read_now=False)
 
-        assert isinstance(first, GenericFile)
+        assert isinstance(first, SourceFile)
         assert len(fm.known_files_dict) == 1
         assert fm.known_files_dict["test1"]
 
@@ -46,8 +46,8 @@ class TestCreateFileWithFileManager:
         fm = get_new_file_manager()
         assert len(fm.known_files_dict) == 0
 
-        first = GenericFile.create("test1", read_now=False)
-        second = GenericFile.create("test1", read_now=False)
+        first = SourceFile.create_or_get("test1", read_now=False)
+        second = SourceFile.create_or_get("test1", read_now=False)
 
         assert first == second
         assert len(fm.known_files_dict) == 1

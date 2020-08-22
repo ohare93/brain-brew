@@ -8,6 +8,7 @@ FIELDS = 'fields'
 GUID = 'guid'
 TAGS = 'tags'
 NOTE_MODEL = 'note_model'
+FLAGS = "flags"
 NOTES = "notes"
 NOTE_GROUPINGS = "note_groupings"
 MEDIA_REFERENCES = "media_references"
@@ -30,6 +31,7 @@ class GroupableNoteData(YamlRepr):
 class Note(GroupableNoteData):
     fields: List[str]
     guid: str
+    flags: int
     # media_references: Optional[Set[str]]
 
     @classmethod
@@ -38,11 +40,14 @@ class Note(GroupableNoteData):
             fields=data.get(FIELDS),
             guid=data.get(GUID),
             note_model=data.get(NOTE_MODEL, None),
-            tags=data.get(TAGS, None)
+            tags=data.get(TAGS, None),
+            flags=data.get(FLAGS, 0)
         )
 
     def encode(self) -> dict:
-        data_dict = {FIELDS: self.fields, GUID: self.guid}
+        data_dict: Dict[str, any] = {FIELDS: self.fields, GUID: self.guid}
+        if self.flags is not None and self.flags != 0:
+            data_dict.setdefault(FLAGS, self.flags)
         super().encode_groupable(data_dict)
         return data_dict
 
@@ -99,6 +104,7 @@ class NoteGrouping(GroupableNoteData):
                     tags=join_tags(n.tags),
                     fields=n.fields,
                     guid=n.guid,
+                    flags=n.flags
                     # media_references=n.media_references or n.get_media_references()
                ) for n in self.notes]
 
@@ -113,7 +119,7 @@ class Notes(YamlRepr):
 
     @classmethod
     def from_list_of_notes(cls, notes: List[Note]):
-        return cls(note_groupings=[NoteGrouping(note_model=None, tags=None, notes=notes)])
+        return cls(note_groupings=[NoteGrouping(note_model=None, tags=None, notes=notes)])  # TODO: Check grouping here
 
     def encode(self) -> dict:
         data_dict = {NOTE_GROUPINGS: [note_grouping.encode() for note_grouping in self.note_groupings]}

@@ -5,7 +5,7 @@ from brain_brew.representation.build_config.representation_base import Represent
 
 
 @dataclass
-class DeckPartFromBase:
+class BaseDeckPartsFrom:
     @dataclass
     class Representation(RepresentationBase):
         name: str

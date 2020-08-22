@@ -5,13 +5,14 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Dict
 
+from brain_brew.representation.generic.generic_file import SourceFile
 from brain_brew.representation.generic.media_file import MediaFile
 from brain_brew.representation.json.json_file import JsonFile
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
 from brain_brew.utils import filename_from_full_path, find_all_files_in_directory
 
 
-class CrowdAnkiExport:
+class CrowdAnkiExport(SourceFile):
     folder_location: str
     json_file_location: str
     # import_config: CrowdAnkiImportConfig  # TODO: Make this
@@ -25,8 +26,15 @@ class CrowdAnkiExport:
         if self.folder_location[-1] != "/":
             self.folder_location = self.folder_location + "/"
 
+        if not self.is_dir(self.folder_location):
+            raise FileNotFoundError(f"Missing CrowdAnkiExport '{self.folder_location}'")
+
         self.json_file_location = self.find_json_file_in_folder()
         self.find_all_media()
+
+    @classmethod
+    def from_file_loc(cls, file_loc) -> 'CrowdAnkiExport':
+        return cls(file_loc)
 
     def find_json_file_in_folder(self):
         files = glob.glob(self.folder_location + "*.json")
@@ -43,7 +51,7 @@ class CrowdAnkiExport:
     def find_all_media(self):
         self.known_media = {}
         self.media_loc = self.folder_location + "media/"  # TODO: Make media folder if not exists
-        self.contains_media = Path(self.media_loc).is_dir()
+        self.contains_media = self.is_dir(self.media_loc)
 
         if not self.contains_media:
             return

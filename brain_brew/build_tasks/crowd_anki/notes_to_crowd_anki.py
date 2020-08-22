@@ -8,7 +8,8 @@ from brain_brew.build_tasks.crowd_anki.shared_base_notes import SharedBaseNotes
 class NotesToCrowdAnki(SharedBaseNotes):
     @dataclass
     class Representation(SharedBaseNotes.Representation):
-        pass
+        name: str
+        additional_items_to_add: Optional[dict]
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
@@ -16,8 +17,8 @@ class NotesToCrowdAnki(SharedBaseNotes):
         return cls(
             name=rep.name,
             sort_order=SharedBaseNotes._get_sort_order(rep.sort_order),
-            move_media=SharedBaseNotes._get_move_media(rep.move_media),
-            useless_note_keys=SharedBaseNotes._get_useless_note_keys(rep.useless_note_keys)
+            additional_items_to_add=rep.additional_items_to_add or {}
         )
 
-
+    name: str
+    additional_items_to_add: dict

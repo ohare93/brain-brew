@@ -8,7 +8,7 @@ from brain_brew.representation.yaml.my_yaml import yaml_dump, yaml_load
 import pytest
 
 from brain_brew.representation.yaml.note_repr import Note, NoteGrouping, Notes, \
-    NOTES, NOTE_GROUPINGS, FIELDS, GUID, NOTE_MODEL, TAGS
+    NOTES, NOTE_GROUPINGS, FIELDS, GUID, NOTE_MODEL, TAGS, FLAGS
 
 working_notes = {
     "test1": {FIELDS: ['first'], GUID: "12345", NOTE_MODEL: "model_name", TAGS: ['noun', 'other']},
@@ -17,7 +17,9 @@ working_notes = {
     "no_note_model2": {FIELDS: ['second'], GUID: "67890", TAGS: ['noun', 'other']},
     "no_tags1": {FIELDS: ['first'], GUID: "12345", NOTE_MODEL: "model_name"},
     "no_tags2": {FIELDS: ['first'], GUID: "12345", NOTE_MODEL: "model_name", TAGS: []},
-    "no_model_or_tags": {FIELDS: ['first'], GUID: "12345"}
+    "no_model_or_tags": {FIELDS: ['first'], GUID: "12345"},
+    "test1_with_default_flags": {FIELDS: ['first'], GUID: "12345", NOTE_MODEL: "model_name", TAGS: ['noun', 'other'], FLAGS: 0},
+    "test1_with_flags": {FIELDS: ['first'], GUID: "12345", NOTE_MODEL: "model_name", TAGS: ['noun', 'other'], FLAGS: 1},
 }
 
 working_note_groupings = {
@@ -48,20 +50,21 @@ def note_grouping_fixtures(request):
 
 class TestConstructor:
     class TestNote:
-        @pytest.mark.parametrize("fields, guid, note_model, tags, media", [
-            ([], "", "", [], {}),
-            (None, None, None, None, None),
-            (["test", "blah", "whatever"], "1234567890x", "model_name", ["noun"], {}),
-            (["test", "blah", "<img src=\"animal.jpg\">"], "1234567890x", "model_name", ["noun"], {"animal.jpg"}),
+        @pytest.mark.parametrize("fields, guid, note_model, tags, flags, media", [
+            ([], "", "", [], 0, {}),
+            (None, None, None, None, None, None),
+            (["test", "blah", "whatever"], "1234567890x", "model_name", ["noun"], 1, {}),
+            (["test", "blah", "<img src=\"animal.jpg\">"], "1234567890x", "model_name", ["noun"], 2, {"animal.jpg"}),
         ])
-        def test_constructor(self, fields: List[str], guid: str, note_model: str, tags: List[str], media: Set[str]):
-            note = Note(fields=fields, guid=guid, note_model=note_model, tags=tags)
+        def test_constructor(self, fields: List[str], guid: str, note_model: str, tags: List[str], flags: int, media: Set[str]):
+            note = Note(fields=fields, guid=guid, note_model=note_model, tags=tags, flags=flags)
 
             assert isinstance(note, Note)
             assert note.fields == fields
             assert note.guid == guid
             assert note.note_model == note_model
             assert note.tags == tags
+            assert note.flags == flags
             # assert note.media_references == media
 
         def test_from_dict(self, note_fixtures):
@@ -153,6 +156,33 @@ class TestDumpToYaml:
                 ''')
 
                 self._assert_dump_to_yaml(tmpdir.mkdir(str(num)), ystring, note)
+
+        def test_with_flags(self, tmpdir):
+            ystring = dedent(f'''\
+            {FIELDS}:
+              - first
+            {GUID}: '12345'
+            {FLAGS}: 1
+            {NOTE_MODEL}: model_name
+            {TAGS}:
+              - noun
+              - other
+            ''')
+
+            self._assert_dump_to_yaml(tmpdir, ystring, "test1_with_flags")
+
+        def test_with_default_flags(self, tmpdir):
+            ystring = dedent(f'''\
+            {FIELDS}:
+              - first
+            {GUID}: '12345'
+            {NOTE_MODEL}: model_name
+            {TAGS}:
+              - noun
+              - other
+            ''')
+
+            self._assert_dump_to_yaml(tmpdir, ystring, "test1_with_default_flags")
 
     class TestNoteGrouping:
         @staticmethod
@@ -296,7 +326,7 @@ class TestFunctionality:
                 (["<img src=\"animal.jpg\">", "[sound:test.mp3]", "[sound:test.mp3]"], 2),
             ])
             def test_all(self, fields, expected_count):
-                note = Note(fields=fields, note_model=None, guid="", tags=None,)
+                note = Note(fields=fields, note_model=None, guid="", tags=None, flags=0)
                 media_found = note.get_media_references()
                 assert isinstance(media_found, Set)
                 assert len(media_found) == expected_count

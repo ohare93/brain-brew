@@ -4,6 +4,8 @@ from typing import List
 CA_NOTE_MODELS = "note_models"
 CA_NOTES = "notes"
 CA_MEDIA_FILES = "media_files"
+CA_CHILDREN = "children"
+CA_TYPE = "__type__"
 
 NOTE_MODEL = "note_model_uuid"
 FLAGS = "flags"
@@ -19,27 +21,31 @@ class CrowdAnkiJsonWrapper:
         self.data = data
 
     @property
-    def note_models(self) -> str:
+    def children(self) -> list:
+        return self.data[CA_CHILDREN]
+
+    @property
+    def note_models(self) -> list:
         return self.data[CA_NOTE_MODELS]
 
     @note_models.setter
-    def note_models(self, value: str):
+    def note_models(self, value: list):
         self.data.setdefault(CA_NOTE_MODELS, value)
 
     @property
-    def notes(self) -> str:
+    def notes(self) -> list:
         return self.data[CA_NOTES]
 
     @notes.setter
-    def notes(self, value: str):
+    def notes(self, value: list):
         self.data.setdefault(CA_NOTES, value)
 
     @property
-    def media_files(self) -> str:
+    def media_files(self) -> list:
         return self.data[CA_MEDIA_FILES]
 
     @media_files.setter
-    def media_files(self, value: str):
+    def media_files(self, value: list):
         self.data.setdefault(CA_MEDIA_FILES, value)
 
 

@@ -50,7 +50,7 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
 
         self.headers = DeckPartHeader.create(self.config_entry[BuildConfigKeys.HEADERS.value], read_now=read_now)
         self.notes = DeckPartNotes.create(self.config_entry[BuildConfigKeys.NOTES.value], read_now=read_now)
-        self.crowd_anki_export = CrowdAnkiExport.create(self.config_entry[CrowdAnkiKeys.FILE.value], read_now=read_now)
+        self.crowd_anki_export = CrowdAnkiExport.create_or_get(self.config_entry[CrowdAnkiKeys.FILE.value], read_now=read_now)
 
         self.should_handle_media = self.config_entry[CrowdAnkiKeys.MEDIA.value]
         self.useless_note_keys = self.config_entry[CrowdAnkiKeys.USELESS_NOTE_KEYS.value]
@@ -87,7 +87,7 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
 
         # Note Models
         note_models = [
-            DeckPartNoteModel.create(model[CANoteModelKeys.NAME.value], data_override=model)
+            DeckPartNoteModel.create_or_get(model[CANoteModelKeys.NAME.value], data_override=model)
             for model in source_data[CAKeys.NOTE_MODELS.value]
         ]
 
@@ -140,7 +140,7 @@ class SourceCrowdAnki(YamlFile, BuildTaskGeneric):
                 )
 
         # Note Models
-        note_models = [DeckPartNoteModel.create(name) for name in self.notes.get_all_known_note_model_names()]
+        note_models = [DeckPartNoteModel.create_or_get(name) for name in self.notes.get_all_known_note_model_names()]
 
         ca_json.setdefault(CAKeys.NOTE_MODELS.value, [model.get_data() for model in note_models])
 

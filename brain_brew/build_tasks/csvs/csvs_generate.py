@@ -43,6 +43,7 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
         for fm in self.file_mappings:
             fm.compile_data()
             fm.set_relevant_data(csv_data)
+            fm.write_file_on_close()
 
     def verify_notes_match_note_model_mappings(self, notes: List[Note]):
         note_models_used = {note.note_model for note in notes}

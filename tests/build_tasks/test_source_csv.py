@@ -8,7 +8,7 @@ from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.representation.configuration.csv_file_mapping import CsvFileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 from brain_brew.representation.generic.csv_file import CsvFile
-from brain_brew.representation.generic.generic_file import GenericFile
+from brain_brew.representation.generic.generic_file import SourceFile
 from brain_brew.representation.json.deck_part_notes import DeckPartNotes
 from tests.representation.json.test_deck_part_notes import dp_notes_test1
 from tests.representation.configuration.test_note_model_mapping import setup_nmm_config
@@ -130,7 +130,7 @@ class TestDeckPartsToSource:
         def assert_format(source_data):
             assert source_data == csv_file.get_data()
 
-        with patch.object(GenericFile, "set_data", side_effect=assert_format) as mock_set_data:
+        with patch.object(SourceFile, "set_data", side_effect=assert_format) as mock_set_data:
             csv_source.deck_parts_to_source()
             assert csv_source.csv_file_mappings[0].data_set_has_changed is False
 

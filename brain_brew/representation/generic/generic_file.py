@@ -1,51 +1,28 @@
 import copy
-from enum import Enum
 from pathlib import Path
 
 from brain_brew.representation.configuration.global_config import GlobalConfig
 
 
-class GenericFile:
-    class DataState(Enum):
-        NOTHING_READ_OR_SET = 0
-        READ_IN_DATA = 1
-        DATA_SET = 2
-
-    _data = None
-    file_location: str
-
-    file_exists: bool
-    data_state: DataState = DataState.NOTHING_READ_OR_SET
-
-    def __init__(self, file, read_now, data_override):
-        self.file_location = file
-
-        self.file_exists = Path(file).is_file()
-
-        if data_override:
-            self.data_state = GenericFile.DataState.DATA_SET
-            self.set_data(data_override)
-        elif read_now:
-            if not self.file_exists:
-                return  # raise FileNotFoundError(file)  # TODO: Fix
-            self.data_state = GenericFile.DataState.READ_IN_DATA
-            self.read_file()
-
-    def set_data(self, data_override):
-        self.data_state = GenericFile.DataState.DATA_SET
-        self._data = data_override
-
-    def get_data(self, deep_copy: bool = False):
-        return copy.deepcopy(self._data) if deep_copy else self._data
-
-    def read_file(self):
-        raise NotImplemented
-
-    def write_file(self):
-        raise NotImplemented
+class SourceFile:
+    @classmethod
+    def from_file_loc(cls, file_loc) -> 'SourceFile':
+        pass
 
     @classmethod
-    def create(cls, location, read_now=True, data_override=None):
+    def is_file(cls, filename: str):
+        return Path(filename).is_file()
+
+    @classmethod
+    def is_dir(cls, folder_name: str):
+        return Path(folder_name).is_file()
+
+    @classmethod
+    def get_deep_copy(cls, data):
+        return copy.deepcopy(data)
+
+    @classmethod
+    def create_or_get(cls, location):
         from brain_brew.file_manager import FileManager
         _file_manager = FileManager.get_instance()
         formatted_location = cls.formatted_file_location(location)
@@ -54,7 +31,7 @@ class GenericFile:
         if file is not None:
             return file
 
-        file = cls(location, read_now=read_now, data_override=data_override)
+        file = cls.from_file_loc(location)
         _file_manager.register_file(formatted_location, file)
         return file
 
@@ -63,7 +40,7 @@ class GenericFile:
         return location
 
     @staticmethod
-    def _sort_data(data, sort_by_keys, reverse_sort, case_insensitive_sort=None):
+    def _sort_data(data, sort_by_keys, reverse_sort, case_insensitive_sort=None):  # TODO: Move to NoteGroupings
         if case_insensitive_sort is None:
             case_insensitive_sort = GlobalConfig.get_instance().flags.sort_case_insensitive
 
