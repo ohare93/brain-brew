@@ -1,14 +1,16 @@
 import logging
 from dataclasses import dataclass
-from typing import Union, Optional
+from typing import Union, Optional, List
 
 from brain_brew.build_tasks.crowd_anki.headers_from_crowdanki import HeadersFromCrowdAnki
+from brain_brew.build_tasks.crowd_anki.media_to_from_crowd_anki import MediaToFromCrowdAnki
 from brain_brew.build_tasks.crowd_anki.note_models_from_crowd_anki import NoteModelsFromCrowdAnki
-from brain_brew.build_tasks.crowd_anki.notes_from_crowd_anki import TrCrowdAnkiToNotes
+from brain_brew.build_tasks.crowd_anki.notes_from_crowd_anki import NotesFromCrowdAnki
 from brain_brew.representation.build_config.build_task import DeckPartBuildTask
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.representation.yaml.note_model_repr import NoteModel
 from brain_brew.utils import all_combos_prepend_append
 
 
@@ -24,20 +26,22 @@ class CrowdAnkiToDeckParts(DeckPartBuildTask):
         headers: Optional[dict]
         media: Optional[dict]
 
-    crowd_anki_export: CrowdAnkiExport
-    notes_transform: TrCrowdAnkiToNotes
-    note_model_transform: NoteModelsFromCrowdAnki
-    headers_transform: HeadersFromCrowdAnki
-    media: int
-
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
             crowd_anki_export=CrowdAnkiExport.create_or_get(rep.folder),
-            notes_transform=TrCrowdAnkiToNotes.from_repr(rep.notes),
-            note_model_transform=NoteModelsFromCrowdAnki.from_list(rep.note_models)
+            notes_transform=NotesFromCrowdAnki.from_repr(rep.notes),
+            note_model_transform=NoteModelsFromCrowdAnki.from_list(rep.note_models),
+            headers_transform=HeadersFromCrowdAnki.from_repr(rep.headers),
+            media_transform=MediaToFromCrowdAnki.from_repr(rep.media)
         )
+
+    crowd_anki_export: CrowdAnkiExport
+    notes_transform: NotesFromCrowdAnki
+    note_model_transform: NoteModelsFromCrowdAnki
+    headers_transform: HeadersFromCrowdAnki
+    media_transform: MediaToFromCrowdAnki
 
     def execute(self):
         ca_wrapper = self.crowd_anki_export.read_json_file()
@@ -45,11 +49,11 @@ class CrowdAnkiToDeckParts(DeckPartBuildTask):
         if ca_wrapper.children:
             logging.warning("Child Decks / Subdecks are not currently supported.")  # TODO: Support them
 
-        note_models = self.note_model_transform.execute(ca_wrapper)
+        note_models: List[NoteModel] = self.note_model_transform.execute(ca_wrapper)
 
         nm_id_to_name: dict = {model.crowdanki_id: model.name for model in note_models}
         notes = self.notes_transform.execute(ca_wrapper, nm_id_to_name)
 
         headers = self.headers_transform.execute(ca_wrapper)
 
-
+        self.media_transform.move_to_deck_parts(notes, note_models)

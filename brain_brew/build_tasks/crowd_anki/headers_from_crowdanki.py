@@ -23,7 +23,7 @@ class HeadersFromCrowdAnki(BaseDeckPartsFrom):
         )
 
     def execute(self, ca_wrapper: CrowdAnkiJsonWrapper):
-        headers = Headers(TransformCrowdAnki.headers_to_crowd_anki(ca_wrapper.data))
+        headers = Headers(TransformCrowdAnki.crowd_anki_to_headers(ca_wrapper.data))
 
         DeckPartHolder.override_or_create(self.name, self.save_to_file, headers)
 

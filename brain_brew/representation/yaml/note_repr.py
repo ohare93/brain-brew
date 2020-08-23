@@ -88,6 +88,13 @@ class NoteGrouping(GroupableNoteData):
     def get_all_known_note_model_names(self) -> set:
         return {self.note_model} if self.note_model else {note.note_model for note in self.notes}
 
+    def get_all_media_references(self) -> set:
+        all_media = set()
+        for note in self.notes:
+            for media in note.get_media_references():
+                all_media = all_media.union(media)
+        return all_media
+
     def get_all_notes_copy(self) -> List[Note]:
         def join_tags(n_tags):
             if self.tags is None and n_tags is None:
@@ -127,6 +134,13 @@ class Notes(YamlRepr):
 
     def get_all_known_note_model_names(self):
         return {nms for group in self.note_groupings for nms in group.get_all_known_note_model_names()}
+
+    def get_all_media_references(self) -> set:
+        all_media = set()
+        for note in self.note_groupings:
+            for media in note.get_all_media_references():
+                all_media = all_media.union(media)
+        return all_media
 
     def get_notes(self):
         return [note for group in self.note_groupings for note in group.get_all_notes_copy()]

@@ -78,7 +78,7 @@ class FileManager:
             filename = filename_from_full_path(full_path)
             self._register_media_file(MediaFile(full_path, filename))
 
-        logging.debug(f"Media files found: {len(self.known_media_files_dict)}")
+        logging.debug(f"DeckPart Media files found: {len(self.known_media_files_dict)}")
 
     def new_deck_part(self, dp: DeckPartHolder) -> DeckPartHolder:
         if dp.name in self.deck_part_pool:

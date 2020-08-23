@@ -19,7 +19,7 @@ class TestConstructor:
         media_file = MediaFile(loc, name)
 
         assert isinstance(media_file, MediaFile)
-        assert media_file.source_loc == media_file.target_loc == loc
+        assert media_file.source_loc == media_file.file_location == loc
         assert media_file.filename == name
         assert media_file.man_type == MediaFile.ManagementType.EXISTS
 
@@ -32,7 +32,7 @@ class TestConstructor:
         media_file = MediaFile(target_loc, name, man_type, source_loc)
 
         assert isinstance(media_file, MediaFile)
-        assert media_file.target_loc == target_loc
+        assert media_file.file_location == target_loc
         assert media_file.source_loc == source_loc
         assert media_file.filename == name
         assert media_file.man_type == man_type
@@ -40,12 +40,12 @@ class TestConstructor:
 
 def test_set_override(media_file_test1):
     assert media_file_test1.man_type == MediaFile.ManagementType.EXISTS
-    assert media_file_test1.source_loc == media_file_test1.target_loc == "loc"
+    assert media_file_test1.source_loc == media_file_test1.file_location == "loc"
 
     media_file_test1.set_override("new loc")
 
     assert media_file_test1.source_loc == "new loc"
-    assert media_file_test1.target_loc == "loc"
+    assert media_file_test1.file_location == "loc"
     assert media_file_test1.man_type == MediaFile.ManagementType.OVERRIDDEN
 
 

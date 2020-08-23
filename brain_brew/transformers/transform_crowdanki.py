@@ -18,7 +18,7 @@ class TransformCrowdAnki(TrNotes):
     }
 
     @classmethod
-    def notes_to_crowd_anki(cls, notes: List[Note], note_models_name_to_id: dict, additional_items_to_add: dict) -> List[dict]:
+    def notes_to_crowd_anki(cls, notes: List[Note], nm_name_to_id: dict, additional_items_to_add: dict) -> List[dict]:
         resolved_notes: List[dict] = []
         wrapper: CrowdAnkiNoteWrapper = CrowdAnkiNoteWrapper()
         for note in notes:
@@ -34,7 +34,7 @@ class TransformCrowdAnki(TrNotes):
             wrapper.guid = note.guid
             wrapper.fields = note.fields
             wrapper.tags = note.tags
-            wrapper.note_model = note_models_name_to_id[note.note_model]
+            wrapper.note_model = nm_name_to_id[note.note_model]
             wrapper.flags = note.flags
 
             resolved_notes.append(current)

@@ -11,7 +11,7 @@ from brain_brew.transformers.transform_crowdanki import TransformCrowdAnki
 
 
 @dataclass
-class TrCrowdAnkiToNotes(SharedBaseNotes, BaseDeckPartsFrom):
+class NotesFromCrowdAnki(SharedBaseNotes, BaseDeckPartsFrom):
     @dataclass
     class Representation(SharedBaseNotes.Representation, BaseDeckPartsFrom.Representation):
         pass

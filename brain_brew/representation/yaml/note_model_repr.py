@@ -4,7 +4,7 @@ from typing import List, Optional, Union, Dict
 
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.yaml.my_yaml import YamlRepr
-from brain_brew.utils import list_of_str_to_lowercase
+from brain_brew.utils import list_of_str_to_lowercase, find_media_in_field
 
 
 class AnkiField:
@@ -83,6 +83,14 @@ class Template(RepresentationBase):
             name=ca.name, question_format=ca.qfmt, answer_format=ca.afmt,
             question_format_in_browser=ca.bqfmt, answer_format_in_browser=ca.bafmt, deck_override_id=ca.did
         )
+
+    def get_all_media_references(self) -> set:
+        all_media = set()\
+            .union(find_media_in_field(self.question_format))\
+            .union(find_media_in_field(self.answer_format))\
+            .union(find_media_in_field(self.question_format_in_browser))\
+            .union(find_media_in_field(self.answer_format_in_browser))
+        return all_media
 
     def encode_as_crowdanki(self, ordinal: int) -> dict:
         data_dict = {
@@ -253,9 +261,12 @@ class NoteModel(YamlRepr, RepresentationBase):
 
         return data_dict
 
-    def find_media(self):  # TODO
-        pass
-        # Look in templates (and css?)
+    def get_all_media_references(self) -> set:
+        all_media = set()
+        for template in self.templates:
+            all_media = all_media.union(template.get_all_media_references())
+
+        return all_media
 
     @property
     def field_names_lowercase(self):

@@ -1,8 +1,5 @@
 import glob
 import logging
-import pathlib
-from enum import Enum
-from pathlib import Path
 from typing import List, Dict
 
 from brain_brew.representation.generic.generic_file import SourceFile
