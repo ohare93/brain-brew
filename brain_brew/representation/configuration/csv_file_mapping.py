@@ -18,21 +18,21 @@ DERIVATIVES = "derivatives"
 
 
 @dataclass
-class CsvFileMappingDerivative:
+class FileMappingDerivative:
     @dataclass(init=False)
     class Representation(RepresentationBase):
         file: str
         note_model: Optional[str]
         sort_by_columns: Optional[Union[list, str]]
         reverse_sort: Optional[bool]
-        derivatives: Optional[List['CsvFileMappingDerivative.Representation']]
+        derivatives: Optional[List['FileMappingDerivative.Representation']]
 
         def __init__(self, file, note_model=None, sort_by_columns=None, reverse_sort=None, derivatives=None):
             self.file = file
             self.note_model = note_model
             self.sort_by_columns = sort_by_columns
             self.reverse_sort = reverse_sort
-            self.derivatives = list(map(CsvFileMappingDerivative.Representation.from_dict, derivatives)) if derivatives is not None else []
+            self.derivatives = list(map(FileMappingDerivative.Representation.from_dict, derivatives)) if derivatives is not None else []
 
     compiled_data: Dict[str, dict] = field(init=False)
 
@@ -41,7 +41,7 @@ class CsvFileMappingDerivative:
     note_model: Optional[str]
     sort_by_columns: Optional[list]
     reverse_sort: Optional[bool]
-    derivatives: Optional[List['CsvFileMappingDerivative']]
+    derivatives: Optional[List['FileMappingDerivative']]
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
@@ -109,7 +109,7 @@ class CsvFileMappingDerivative:
 
 
 @dataclass
-class CsvFileMapping(CsvFileMappingDerivative, Verifiable):
+class FileMapping(FileMappingDerivative, Verifiable):
     note_model: str  # Override Optional on Parent
 
     data_set_has_changed: bool = field(init=False, default=False)

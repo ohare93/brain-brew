@@ -12,16 +12,12 @@ from brain_brew.utils import str_to_lowercase_no_separators
 @dataclass
 class TaskBuilder(YamlRepr):
     tasks: List[BuildTask]
-    global_config: GlobalConfig
-    file_manager: FileManager
 
     @classmethod
-    def from_list(cls, data: List[dict], global_config, file_manager):
+    def from_list(cls, data: List[dict]):
         tasks = cls.read_tasks(data)
         return cls(
-            tasks=tasks,
-            global_config=global_config,
-            file_manager=file_manager
+            tasks=tasks
         )
 
     @classmethod

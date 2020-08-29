@@ -66,7 +66,7 @@ def split_tags(tags_value: str) -> list:
 
 
 def join_tags(tags_list: list) -> str:
-    return GlobalConfig.get_instance().flags.join_values_with.join(tags_list)
+    return GlobalConfig.get_instance().defaults.join_values_with.join(tags_list)
 
 
 def generate_anki_guid() -> str:

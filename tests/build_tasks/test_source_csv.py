@@ -5,7 +5,7 @@ import pytest
 
 from brain_brew.build_tasks.source_csv import SourceCsv, SourceCsvKeys
 from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
-from brain_brew.representation.configuration.csv_file_mapping import CsvFileMapping
+from brain_brew.representation.configuration.csv_file_mapping import FileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 from brain_brew.representation.generic.csv_file import CsvFile
 from brain_brew.representation.generic.generic_file import SourceFile
@@ -23,7 +23,7 @@ def setup_source_csv_config(notes: str, nmm: list, csv_mappings: list):
     }
 
 
-def get_csv_default(notes: DeckPartNotes, nmm: List[NoteModelMapping], csv_maps: List[CsvFileMapping]) -> SourceCsv:
+def get_csv_default(notes: DeckPartNotes, nmm: List[NoteModelMapping], csv_maps: List[FileMapping]) -> SourceCsv:
     csv_source = SourceCsv(setup_source_csv_config("", [], []), read_now=False)
 
     csv_source.notes = notes
@@ -87,7 +87,7 @@ class TestConstructor:
             assert config == notes
             assert read_now is False
 
-        with patch.object(CsvFileMapping, "__init__", side_effect=assert_csv), \
+        with patch.object(FileMapping, "__init__", side_effect=assert_csv), \
                 patch.object(NoteModelMapping, "__init__", side_effect=assert_nmm), \
                 patch.object(NoteModelMapping, "note_model"), \
                 patch.object(DeckPartNotes, "create", side_effect=assert_dpn):

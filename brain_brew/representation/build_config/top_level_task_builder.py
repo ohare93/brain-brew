@@ -1,7 +1,7 @@
 from typing import Dict, Type
 
 from brain_brew.representation.build_config.build_task import BuildTask, TopLevelBuildTask
-from brain_brew.build_tasks.task_builder import TaskBuilder
+from brain_brew.representation.build_config.task_builder import TaskBuilder
 
 
 class TopLevelTaskBuilder(TaskBuilder):

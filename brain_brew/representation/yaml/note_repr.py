@@ -120,6 +120,10 @@ class Notes(YamlRepr):
     note_groupings: List[NoteGrouping]
 
     @classmethod
+    def from_file(cls, filename: str):
+        return cls.from_dict(cls.read_to_dict(filename))
+
+    @classmethod
     def from_dict(cls, data: dict):
         return cls(note_groupings=list(map(NoteGrouping.from_dict, data.get(NOTE_GROUPINGS))))
 

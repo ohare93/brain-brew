@@ -207,6 +207,10 @@ class NoteModel(YamlRepr, RepresentationBase):
     version: list = field(default_factory=lambda: VERSION.default_value)  # Legacy version number. Deprecated in Anki
 
     @classmethod
+    def from_file(cls, filename: str):
+        return cls.from_dict(cls.read_to_dict(filename))
+
+    @classmethod
     def from_crowdanki(cls, data: Union[CrowdAnki, dict]):  # TODO: field_whitelist: List[str] = None, note_model_whitelist: List[str] = None):
         ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
         return cls(

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import List, Dict
 
 from brain_brew.representation.build_config.representation_base import RepresentationBase
-from brain_brew.representation.configuration.csv_file_mapping import CsvFileMapping
+from brain_brew.representation.configuration.csv_file_mapping import FileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 
 
@@ -10,15 +10,15 @@ from brain_brew.representation.configuration.note_model_mapping import NoteModel
 class SharedBaseCsvs:
     @dataclass(init=False)
     class Representation(RepresentationBase):
-        file_mappings: List[CsvFileMapping.Representation]
+        file_mappings: List[FileMapping.Representation]
         note_model_mappings: List[NoteModelMapping.Representation]
 
         def __init__(self, file_mappings, note_model_mappings):
-            self.file_mappings = list(map(CsvFileMapping.Representation.from_dict, file_mappings))
+            self.file_mappings = list(map(FileMapping.Representation.from_dict, file_mappings))
             self.note_model_mappings = list(map(NoteModelMapping.Representation.from_dict, note_model_mappings))
 
-        def get_file_mappings(self) -> List[CsvFileMapping]:
-            return list(map(CsvFileMapping.from_repr, self.file_mappings))
+        def get_file_mappings(self) -> List[FileMapping]:
+            return list(map(FileMapping.from_repr, self.file_mappings))
 
         def get_note_model_mappings(self) -> Dict[str, NoteModelMapping]:
             def map_nmm(nmm_to_map: str):
@@ -27,7 +27,7 @@ class SharedBaseCsvs:
 
             return dict(*map(map_nmm, self.note_model_mappings))
 
-    file_mappings: List[CsvFileMapping]
+    file_mappings: List[FileMapping]
     note_model_mappings: Dict[str, NoteModelMapping]
 
     def verify_contents(self):

@@ -19,12 +19,12 @@ def main():
     builder_file_name, global_config_file = argument_reader.get_parsed()
 
     # Read in Global Config File
-    global_config = GlobalConfig.from_yaml(global_config_file) if global_config_file else GlobalConfig.get_default()
+    global_config = GlobalConfig.from_file(global_config_file) if global_config_file else GlobalConfig.from_file()
     file_manager = FileManager()
 
     # Parse Build Config File
     builder_data = TopLevelTaskBuilder.read_to_dict(builder_file_name)
-    builder = TopLevelTaskBuilder.from_list(builder_data, global_config, file_manager)
+    builder = TopLevelTaskBuilder.from_list(builder_data)
 
     # If all good, execute it
     builder.execute()

@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from brain_brew.representation.configuration.csv_file_mapping import CsvFileMappingDerivative, CsvFileMapping, \
+from brain_brew.representation.configuration.csv_file_mapping import FileMappingDerivative, FileMapping, \
     SORT_BY_COLUMNS, REVERSE_SORT, NOTE_MODEL, DERIVATIVES, FILE
 from brain_brew.representation.generic.csv_file import CsvFile
 from tests.test_file_manager import get_new_file_manager
@@ -44,12 +44,12 @@ class TestConstructor:
             assert passed_file == csv
             assert read_now == read_file_now
 
-        with patch.object(CsvFileMappingDerivative, "create_derivative", return_value=None) as mock_derivatives, \
+        with patch.object(FileMappingDerivative, "create_derivative", return_value=None) as mock_derivatives, \
                 patch.object(CsvFile, "create", side_effect=assert_csv) as mock_csv:
 
-            csv_fm = CsvFileMapping(config, read_now=read_file_now)
+            csv_fm = FileMapping(config, read_now=read_file_now)
 
-            assert isinstance(csv_fm, CsvFileMapping)
+            assert isinstance(csv_fm, FileMapping)
             assert csv_fm.reverse_sort == reverse_sort
             assert csv_fm.sort_by_columns == sort_by_columns
             assert csv_fm.note_model_name == note_model_name
@@ -74,17 +74,17 @@ class TestConstructor:
             assert passed_file == der
             assert read_now is False
 
-        with patch.object(CsvFileMappingDerivative, "create_derivative", side_effect=assert_der) as mock_derivatives, \
+        with patch.object(FileMappingDerivative, "create_derivative", side_effect=assert_der) as mock_derivatives, \
                 patch.object(CsvFile, "create", return_value=None):
 
-            csv_fm = CsvFileMapping(config, read_now=False)
+            csv_fm = FileMapping(config, read_now=False)
 
             assert mock_derivatives.call_count == len(csv_fm.derivatives) == expected_call_count
 
 
 def csv_fixture_gen(csv_fix):
     with patch.object(CsvFile, "create", return_value=csv_fix):
-        csv = CsvFileMapping(setup_csv_fm_config("", note_model_name="Test Model"))
+        csv = FileMapping(setup_csv_fm_config("", note_model_name="Test Model"))
         csv.compile_data()
         return csv
 
@@ -120,7 +120,7 @@ def csv_file_mapping2_missing_guids(csv_test2_missing_guids):
 
 
 class TestSetRelevantData:
-    def test_no_change(self, csv_file_mapping1: CsvFileMapping, csv_file_mapping_split1: CsvFileMapping):
+    def test_no_change(self, csv_file_mapping1: FileMapping, csv_file_mapping_split1: FileMapping):
         assert csv_file_mapping1.data_set_has_changed is False
 
         previous_data = csv_file_mapping1.compiled_data.copy()
@@ -129,7 +129,7 @@ class TestSetRelevantData:
         assert previous_data == csv_file_mapping1.compiled_data
         assert csv_file_mapping1.data_set_has_changed is False
 
-    def test_change_but_no_extra(self, csv_file_mapping1: CsvFileMapping, csv_file_mapping2: CsvFileMapping):
+    def test_change_but_no_extra(self, csv_file_mapping1: FileMapping, csv_file_mapping2: FileMapping):
         assert csv_file_mapping1.data_set_has_changed is False
         assert len(csv_file_mapping1.compiled_data) == 15
 
@@ -140,7 +140,7 @@ class TestSetRelevantData:
         assert csv_file_mapping1.data_set_has_changed is True
         assert len(csv_file_mapping1.compiled_data) == 15
 
-    def test_change_extra_row(self, csv_file_mapping1: CsvFileMapping, csv_file_mapping3: CsvFileMapping):
+    def test_change_extra_row(self, csv_file_mapping1: FileMapping, csv_file_mapping3: FileMapping):
         assert csv_file_mapping1.data_set_has_changed is False
         assert len(csv_file_mapping1.compiled_data) == 15
 
@@ -159,7 +159,7 @@ class TestCompileData:
         self.num += 1
         return self.num
 
-    def test_when_missing_guids(self, csv_file_mapping2_missing_guids: CsvFileMapping):
+    def test_when_missing_guids(self, csv_file_mapping2_missing_guids: FileMapping):
         with patch("brain_brew.representation.configuration.csv_file_mapping.generate_anki_guid", wraps=self.get_num) as mock_guid:
 
             csv_file_mapping2_missing_guids.compile_data()

@@ -42,7 +42,7 @@ class SourceFile:
     @staticmethod
     def _sort_data(data, sort_by_keys, reverse_sort, case_insensitive_sort=None):  # TODO: Move to NoteGroupings
         if case_insensitive_sort is None:
-            case_insensitive_sort = GlobalConfig.get_instance().flags.sort_case_insensitive
+            case_insensitive_sort = GlobalConfig.get_instance().defaults.sort_case_insensitive
 
         if sort_by_keys:
             if case_insensitive_sort:
