@@ -75,7 +75,6 @@ class NoteGrouping(GroupableNoteData):
 
     # TODO: Extract Shared Tags and Note Models
     # TODO: Sort notes
-    # TODO: Set data
 
     def verify_groupings(self):
         errors = []
@@ -88,7 +87,7 @@ class NoteGrouping(GroupableNoteData):
     def get_all_known_note_model_names(self) -> set:
         return {self.note_model} if self.note_model else {note.note_model for note in self.notes}
 
-    def get_all_media_references(self) -> set:
+    def get_all_media_references(self) -> Set[str]:
         all_media = set()
         for note in self.notes:
             for media in note.get_media_references():
@@ -135,7 +134,7 @@ class Notes(YamlRepr):
     def get_all_known_note_model_names(self):
         return {nms for group in self.note_groupings for nms in group.get_all_known_note_model_names()}
 
-    def get_all_media_references(self) -> set:
+    def get_all_media_references(self) -> Set[str]:
         all_media = set()
         for note in self.note_groupings:
             for media in note.get_all_media_references():

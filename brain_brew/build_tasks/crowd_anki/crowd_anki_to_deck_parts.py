@@ -9,7 +9,6 @@ from brain_brew.build_tasks.crowd_anki.notes_from_crowd_anki import NotesFromCro
 from brain_brew.representation.build_config.build_task import DeckPartBuildTask
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
-from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.note_model_repr import NoteModel
 from brain_brew.utils import all_combos_prepend_append
 
@@ -56,4 +55,6 @@ class CrowdAnkiToDeckParts(DeckPartBuildTask):
 
         headers = self.headers_transform.execute(ca_wrapper)
 
-        self.media_transform.move_to_deck_parts(notes, note_models)
+        media_files = self.media_transform.move_to_deck_parts(notes, note_models, self.crowd_anki_export)
+        for media in media_files:
+            media.copy_source_to_target()

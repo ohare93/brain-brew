@@ -2,10 +2,11 @@ from dataclasses import dataclass
 from typing import Dict, List, Union
 
 from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
+from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 from brain_brew.representation.transformers.base_deck_part_from import BaseDeckPartsFrom
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.note_repr import Note, Notes
-from brain_brew.transformers.transform_csv_collection import TransformCsvCollection
+from brain_brew.utils import split_tags
 
 
 @dataclass
@@ -33,8 +34,22 @@ class NotesFromCsvs(SharedBaseCsvs, BaseDeckPartsFrom):
             csv_data_by_guid = {**csv_data_by_guid, **csv_map.compiled_data}
         csv_rows: List[dict] = list(csv_data_by_guid.values())
 
-        deck_part_notes: List[Note] = TransformCsvCollection.csv_collection_to_notes(
-            csv_rows, self.note_model_mappings)
+        deck_part_notes: List[Note] = [self.csv_row_to_note(row, self.note_model_mappings) for row in csv_rows]
 
         notes = Notes.from_list_of_notes(deck_part_notes)
         DeckPartHolder.override_or_create(self.name, self.save_to_file, notes)
+
+    @staticmethod
+    def csv_row_to_note(row: dict, note_model_mappings: Dict[str, NoteModelMapping]) -> Note:
+        note_model_name = row["note_model"]  # TODO: Use object
+        row_nm: NoteModelMapping = note_model_mappings[note_model_name]
+
+        filtered_fields = row_nm.csv_row_map_to_note_fields(row)
+
+        guid = filtered_fields.pop("guid")
+        tags = split_tags(filtered_fields.pop("tags"))
+        flags = filtered_fields.pop("flags") if "flags" in filtered_fields else 0
+
+        fields = row_nm.field_values_in_note_model_order(note_model_name, filtered_fields)
+
+        return Note(guid=guid, tags=tags, note_model=note_model_name, fields=fields, flags=flags)

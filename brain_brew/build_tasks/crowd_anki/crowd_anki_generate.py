@@ -36,7 +36,7 @@ class CrowdAnkiGenerate(TopLevelBuildTask):
         return cls(
             crowd_anki_export=CrowdAnkiExport.create_or_get(rep.folder),
             notes_transform=NotesToCrowdAnki.from_repr(rep.notes),
-            note_model_transform=NoteModelsToCrowdAnki.from_list(rep.note_models),
+            note_model_transform=NoteModelsToCrowdAnki.from_repr(rep.note_models),
             headers_transform=HeadersToCrowdAnki.from_repr(rep.headers),
             media_transform=MediaToFromCrowdAnki.from_repr(rep.media)
         )
@@ -61,6 +61,9 @@ class CrowdAnkiGenerate(TopLevelBuildTask):
 
         ca_wrapper.note_models = note_models
         ca_wrapper.notes = notes
-        ca_wrapper.media_files = list(media_files)
+        ca_wrapper.media_files = [m.filename for m in media_files]
 
-        #Set to CrowdAnkiExport
+        # Set to CrowdAnkiExport
+        self.crowd_anki_export.write_to_files(ca_wrapper.data)
+        for media in media_files:
+            media.copy_source_to_target()

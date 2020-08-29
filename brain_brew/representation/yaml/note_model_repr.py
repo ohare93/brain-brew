@@ -1,6 +1,6 @@
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import List, Optional, Union, Dict
+from typing import List, Optional, Union, Dict, Set
 
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.yaml.my_yaml import YamlRepr
@@ -84,7 +84,7 @@ class Template(RepresentationBase):
             question_format_in_browser=ca.bqfmt, answer_format_in_browser=ca.bafmt, deck_override_id=ca.did
         )
 
-    def get_all_media_references(self) -> set:
+    def get_all_media_references(self) -> Set[str]:
         all_media = set()\
             .union(find_media_in_field(self.question_format))\
             .union(find_media_in_field(self.answer_format))\
@@ -261,7 +261,7 @@ class NoteModel(YamlRepr, RepresentationBase):
 
         return data_dict
 
-    def get_all_media_references(self) -> set:
+    def get_all_media_references(self) -> Set[str]:
         all_media = set()
         for template in self.templates:
             all_media = all_media.union(template.get_all_media_references())

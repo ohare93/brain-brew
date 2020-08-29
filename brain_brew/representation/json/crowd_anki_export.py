@@ -63,8 +63,8 @@ class CrowdAnkiExport(SourceFile):
 
     def write_to_files(self, json_data):  # import_config_data
         JsonFile.write_file(self.json_file_location, json_data)
-        for filename, media_file in self.known_media.items():
-            media_file.copy_source_to_target()
+        # for filename, media_file in self.known_media.items():
+        #     media_file.copy_source_to_target()
 
     def read_json_file(self) -> CrowdAnkiJsonWrapper:
         return CrowdAnkiJsonWrapper(JsonFile.read_file(self.json_file_location))

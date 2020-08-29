@@ -1,17 +1,17 @@
 from dataclasses import dataclass
 from typing import Optional, Union
 
+from brain_brew.build_tasks.crowd_anki.headers_from_crowdanki import headers_default_values
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.headers_repr import Headers
-from brain_brew.transformers.transform_crowdanki import TransformCrowdAnki
 
 
 @dataclass
 class HeadersToCrowdAnki:
     @dataclass
     class Representation(RepresentationBase):
-        name: str
+        deck_part: str
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict, str]):
@@ -21,15 +21,20 @@ class HeadersToCrowdAnki:
         elif isinstance(data, dict):
             rep = cls.Representation.from_dict(data)
         else:
-            rep = cls.Representation(name=data)  # Support single string being passed in
+            rep = cls.Representation(deck_part=data)  # Support single string being passed in
 
         return cls(
-            headers=DeckPartHolder.from_deck_part_pool(rep.name),
+            headers=DeckPartHolder.from_deck_part_pool(rep.deck_part),
         )
 
     headers: Headers
 
     def execute(self):
-        headers = Headers(TransformCrowdAnki.headers_to_crowd_anki(self.headers.data))
+        headers = Headers(self.headers_to_crowd_anki(self.headers.data))
 
         return headers
+
+    @staticmethod
+    def headers_to_crowd_anki(headers_data: dict):
+        return {**headers_data, **headers_default_values}
+

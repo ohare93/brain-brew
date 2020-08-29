@@ -5,6 +5,8 @@ import random
 import re
 from typing import List
 
+from brain_brew.representation.configuration.global_config import GlobalConfig
+
 
 def blank_str_if_none(s):
     return '' if s is None else s
@@ -54,6 +56,17 @@ def find_all_files_in_directory(directory, recursive=False):
         if not recursive:
             return found_files
     return found_files
+
+
+def split_tags(tags_value: str) -> list:
+    split = [entry.strip() for entry in re.split(';\s*|,\s*|\s+', tags_value)]
+    while "" in split:
+        split.remove("")
+    return split
+
+
+def join_tags(tags_list: list) -> str:
+    return GlobalConfig.get_instance().flags.join_values_with.join(tags_list)
 
 
 def generate_anki_guid() -> str:

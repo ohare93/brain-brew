@@ -1,13 +1,11 @@
 from dataclasses import dataclass
-from typing import Optional, Union, List
+from typing import Union
 
 from brain_brew.build_tasks.crowd_anki.shared_base_notes import SharedBaseNotes
-from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
-from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
+from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper, CrowdAnkiNoteWrapper
 from brain_brew.representation.transformers.base_deck_part_from import BaseDeckPartsFrom
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
-from brain_brew.representation.yaml.note_repr import Notes
-from brain_brew.transformers.transform_crowdanki import TransformCrowdAnki
+from brain_brew.representation.yaml.note_repr import Notes, Note
 
 
 @dataclass
@@ -26,10 +24,22 @@ class NotesFromCrowdAnki(SharedBaseNotes, BaseDeckPartsFrom):
         )
 
     def execute(self, ca_wrapper: CrowdAnkiJsonWrapper, nm_id_to_name: dict) -> Notes:
-        note_list = TransformCrowdAnki.crowd_anki_to_notes(ca_wrapper.notes, nm_id_to_name)
+        note_list = [self.ca_note_to_note(note, nm_id_to_name) for note in ca_wrapper.notes]
 
         notes = Notes.from_list_of_notes(note_list)  # TODO: pass in sort method
 
         DeckPartHolder.override_or_create(self.name, self.save_to_file, notes)
 
         return notes
+
+    @staticmethod
+    def ca_note_to_note(note: dict, nm_id_to_name: dict) -> Note:
+        wrapper = CrowdAnkiNoteWrapper(note)
+
+        return Note(
+            note_model=nm_id_to_name[wrapper.note_model],
+            tags=wrapper.tags,
+            guid=wrapper.guid,
+            fields=wrapper.fields,
+            flags=wrapper.flags
+        )

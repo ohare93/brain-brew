@@ -43,7 +43,7 @@ class TaskBuilder(YamlRepr):
             task_name = str_to_lowercase_no_separators(task_keys[0])
             task_arguments = task[task_keys[0]]
             if task_name in known_task_dict:
-                task_instance = known_task_dict[task_name].from_dict(task_arguments)
+                task_instance = known_task_dict[task_name].from_repr(task_arguments)
                 build_tasks.append(task_instance)
             else:
                 raise KeyError(f"Unknown task '{task_name}'")  # TODO: check this first on all and return all errors
@@ -59,4 +59,3 @@ class TaskBuilder(YamlRepr):
         for task in self.tasks:
             task.execute()
 
-        self.file_manager.write_to_all()

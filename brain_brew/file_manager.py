@@ -42,6 +42,7 @@ class FileManager:
         if FileManager.__instance:
             FileManager.__instance = None
 
+    # If Exists
     def file_if_exists(self, file_location) -> Union[SourceFile, None]:
         if file_location in self.known_files_dict.keys():
             return self.known_files_dict[file_location]
@@ -50,16 +51,22 @@ class FileManager:
     def deck_part_if_exists(self, dp_name) -> Union[DeckPartHolder[YamlRepr], None]:
         return self.deck_part_pool.get(dp_name)
 
+    def media_file_if_exists(self, filename) -> Union[MediaFile, None]:
+        if filename in self.known_media_files_dict.keys():
+            return self.known_media_files_dict[filename]
+        return None
+
+    # Registration
     def register_file(self, full_path, file):
         if full_path in self.known_files_dict:
             raise FileExistsError(f"File already known to FileManager, cannot be registered twice: {full_path}")
         self.known_files_dict.setdefault(full_path, file)
 
-    def media_file_if_exists(self, filename) -> Union[MediaFile, None]:
-        if filename in self.known_media_files_dict.keys():
-            return self.known_media_files_dict[filename]
-        return None
-    
+    def new_media_file(self, filename, source_loc) -> MediaFile:
+        self._register_media_file(MediaFile(self.global_config.deck_parts.media_files + filename,
+                                            filename, MediaFile.ManagementType.TO_BE_CLONED, source_loc))
+        return self.known_media_files_dict[filename]
+
     def _register_media_file(self, file: MediaFile):
         if file.filename not in self.known_media_files_dict:
             self.known_media_files_dict.setdefault(file.filename, file)
@@ -67,10 +74,13 @@ class FileManager:
             logging.error(f"Duplicate media file '{file.filename}' in both '{file.source_loc}'"
                           f" and '{self.known_media_files_dict[file.filename].source_loc}'")
 
-    def new_media_file(self, filename, source_loc):
-        self._register_media_file(MediaFile(self.global_config.deck_parts.media_files + filename,
-                                            filename, MediaFile.ManagementType.TO_BE_CLONED, source_loc))
+    def new_deck_part(self, dp: DeckPartHolder) -> DeckPartHolder:
+        if dp.name in self.deck_part_pool:
+            raise KeyError(f"Cannot use same name '{dp.name}' for multiple Deck Parts")
+        self.deck_part_pool.setdefault(dp.name, dp)
+        return dp
 
+    # Gets
     def find_all_deck_part_media_files(self):
         self.known_media_files_dict = {}
 
@@ -80,19 +90,7 @@ class FileManager:
 
         logging.debug(f"DeckPart Media files found: {len(self.known_media_files_dict)}")
 
-    def new_deck_part(self, dp: DeckPartHolder) -> DeckPartHolder:
-        if dp.name in self.deck_part_pool:
-            raise KeyError(f"Cannot use same name '{dp.name}' for multiple Deck Parts")
-        self.deck_part_pool.setdefault(dp.name, dp)
-        return dp
-
     def deck_part_from_pool(self, name: str):
         if name not in self.deck_part_pool:
             raise KeyError(f"Cannot find Deck Part '{name}'")
         return self.deck_part_pool[name]
-
-    def write_to_all(self):
-        # logging.info(f"Will create {len(files_to_create)} new files: ", files_to_create)
-
-        for filename, media_file in self.known_media_files_dict.items():
-            media_file.copy_source_to_target()
