@@ -46,7 +46,7 @@ class CrowdAnkiToDeckParts(DeckPartBuildTask):
         ca_wrapper = self.crowd_anki_export.read_json_file()
 
         if ca_wrapper.children:
-            logging.warning("Child Decks / Subdecks are not currently supported.")  # TODO: Support them
+            logging.warning("Child Decks / Sub-decks are not currently supported.")  # TODO: Support them
 
         note_models: List[NoteModel] = self.note_model_transform.execute(ca_wrapper)
 

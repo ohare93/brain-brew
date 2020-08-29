@@ -2,11 +2,9 @@ import csv
 import logging
 import re
 from enum import Enum
-from typing import List, Dict
+from typing import List
 
-from brain_brew.representation.configuration.global_config import GlobalConfig
-from brain_brew.representation.generic.yaml_file import YamlFile, ConfigKey
-from brain_brew.utils import list_of_str_to_lowercase, generate_anki_guid
+from brain_brew.utils import list_of_str_to_lowercase
 from brain_brew.representation.generic.generic_file import SourceFile
 
 

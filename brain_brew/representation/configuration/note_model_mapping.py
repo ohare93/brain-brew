@@ -2,11 +2,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Union, Dict
 
-from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.interfaces.verifiable import Verifiable
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.note_model_repr import NoteModel
+from brain_brew.representation.yaml.note_repr import GUID, TAGS
 from brain_brew.utils import single_item_to_list
 
 
@@ -46,7 +46,7 @@ class NoteModelMapping(Verifiable):
     columns: List[FieldMapping]
     personal_fields: List[FieldMapping]
 
-    required_fields_definitions = [DeckPartNoteKeys.GUID.value, DeckPartNoteKeys.TAGS.value]
+    required_fields_definitions = [GUID, TAGS]
 
     @classmethod
     def from_repr(cls, data: Representation):

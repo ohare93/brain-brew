@@ -1,9 +1,7 @@
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Dict, List, Optional, Union
 
-from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.interfaces.verifiable import Verifiable
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
@@ -90,7 +88,7 @@ class FileMappingDerivative:
                         found_match = True
                         # Set Note Model to matching Derivative Note Model
                         if der.note_model is not None:
-                            row.setdefault(DeckPartNoteKeys.NOTE_MODEL.value, der.note_model)
+                            row.setdefault(NOTE_MODEL, der.note_model)
                         break
                 if not found_match:
                     der_match_errors.append(ValueError(f"Cannot match derivative row {der_row} to parent"))
@@ -127,7 +125,7 @@ class FileMapping(FileMappingDerivative, Verifiable):
         # Set Note Model if not already set
         if self.note_model is not None:
             for row in data_in_progress:
-                row.setdefault(DeckPartNoteKeys.NOTE_MODEL.value, self.note_model)
+                row.setdefault(NOTE_MODEL, self.note_model)
 
         # Fill in Guid if no Guid
         guids_generated = 0
