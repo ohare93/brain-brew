@@ -39,5 +39,5 @@ class HeadersFromCrowdAnki(BaseDeckPartsFrom):
 
     @staticmethod
     def crowd_anki_to_headers(ca_data: dict):
-        return {key: value for key, value in ca_data
+        return {key: value for key, value in ca_data.items()
                 if key not in headers_skip_keys and key not in headers_default_values.keys()}

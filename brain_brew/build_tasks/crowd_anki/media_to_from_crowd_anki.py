@@ -38,7 +38,8 @@ class MediaToFromCrowdAnki:
     file_manager: FileManager = None
 
     def __post_init__(self):
-        self.file_manager = FileManager.get_instance()
+        if not MediaToFromCrowdAnki.file_manager:
+            MediaToFromCrowdAnki.file_manager = FileManager.get_instance()
 
     def move_to_crowd_anki(self, notes: Notes, note_models: List[NoteModel], ca_export: CrowdAnkiExport) -> Set[MediaFile]:
         resolved_media: Set[MediaFile] = set()
@@ -76,7 +77,7 @@ class MediaToFromCrowdAnki:
                 self._move_dps(res)
 
         if len(missing_media) > 0:
-            logging.error(f"Unresolved references in CrowdAnki to {len(missing_media)} files: {missing_media}")
+            logging.error(f"Unresolved media in CrowdAnki to {len(missing_media)} files: {missing_media}")
 
         return resolved_media
 

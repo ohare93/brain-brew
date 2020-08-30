@@ -90,8 +90,8 @@ class NoteGrouping(GroupableNoteData):
     def get_all_media_references(self) -> Set[str]:
         all_media = set()
         for note in self.notes:
-            for media in note.get_media_references():
-                all_media = all_media.union(media)
+            media = note.get_media_references()
+            all_media = all_media.union(media)
         return all_media
 
     def get_all_notes_copy(self) -> List[Note]:
@@ -141,8 +141,8 @@ class Notes(YamlRepr):
     def get_all_media_references(self) -> Set[str]:
         all_media = set()
         for note in self.note_groupings:
-            for media in note.get_all_media_references():
-                all_media = all_media.union(media)
+            media = note.get_all_media_references()
+            all_media = all_media.union(media)
         return all_media
 
     def get_notes(self):

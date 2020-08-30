@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, List, Type
 
 from brain_brew.utils import str_to_lowercase_no_separators
@@ -29,12 +30,17 @@ class BuildTask(object):
 
                 known_build_tasks.setdefault(task_name, sc)
 
+        # logging.debug(f"Known build tasks: {known_build_tasks}")
         return known_build_tasks
 
 
 class TopLevelBuildTask(BuildTask):
-    pass
+    @classmethod
+    def get_all_build_tasks(cls) -> Dict[str, Type['BuildTask']]:
+        return super(TopLevelBuildTask, cls).get_all_build_tasks()
 
 
 class DeckPartBuildTask(BuildTask):
-    pass
+    @classmethod
+    def get_all_build_tasks(cls) -> Dict[str, Type['BuildTask']]:
+        return super(DeckPartBuildTask, cls).get_all_build_tasks()

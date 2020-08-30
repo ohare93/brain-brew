@@ -33,7 +33,8 @@ class DeckPartHolder(Generic[T]):
         else:
             dp.deck_part = deck_part
             dp.save_to_file = save_to_file  # ?
-            dp.write_to_file()
+
+        dp.write_to_file()
 
         return dp
 

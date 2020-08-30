@@ -15,7 +15,7 @@ class SourceFile:
 
     @classmethod
     def is_dir(cls, folder_name: str):
-        return Path(folder_name).is_file()
+        return Path(folder_name).is_dir()
 
     @classmethod
     def get_deep_copy(cls, data):

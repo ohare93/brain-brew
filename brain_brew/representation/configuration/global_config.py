@@ -11,11 +11,12 @@ class GlobalConfig(YamlRepr):
 
     @dataclass
     class Defaults:
+        @dataclass
         class Representation(RepresentationBase):
-            note_sort_order: Optional[Union[List[str], str]]
-            sort_case_insensitive: Optional[bool]
-            reverse_sort: Optional[bool]
-            join_values_with: Optional[str]
+            note_sort_order: Optional[Union[List[str], str]] = field(default_factory=[])
+            sort_case_insensitive: Optional[bool] = field(default=False)
+            reverse_sort: Optional[bool] = field(default=False)
+            join_values_with: Optional[str] = field(default=" ")
 
         note_sort_order: list
         sort_case_insensitive: bool
@@ -26,10 +27,10 @@ class GlobalConfig(YamlRepr):
         def from_repr(cls, data: Union[Representation, dict]):
             rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
             return cls(
-                note_sort_order=rep.note_sort_order or [],
-                sort_case_insensitive=rep.sort_case_insensitive or False,
-                reverse_sort=rep.reverse_sort or False,
-                join_values_with=rep.join_values_with or " "
+                note_sort_order=rep.note_sort_order,
+                sort_case_insensitive=rep.sort_case_insensitive,
+                reverse_sort=rep.reverse_sort,
+                join_values_with=rep.join_values_with
             )
 
     @dataclass
