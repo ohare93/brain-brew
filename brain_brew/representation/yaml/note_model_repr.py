@@ -46,7 +46,7 @@ VERSION = AnkiField("vers", "version", default_value=[])
 FONT = AnkiField("font", default_value="Liberation Sans")
 MEDIA = AnkiField("media", default_value=[])
 IS_RIGHT_TO_LEFT = AnkiField("rtl", "is_right_to_left", default_value=False)
-FONT_SIZE = AnkiField("size", default_value=20)
+FONT_SIZE = AnkiField("size", "font_size", default_value=20)
 IS_STICKY = AnkiField("sticky", "is_sticky", default_value=False)
 
 # Template
@@ -192,7 +192,7 @@ class NoteModel(YamlRepr, RepresentationBase):
         vers: list = field(default_factory=lambda: VERSION.default_value)
 
     name: str
-    crowdanki_id: str
+    id: str
     css: str
     required_fields_per_template: List[list]  # TODO: Get rid of this as requirement
     fields: List[Field]
@@ -208,7 +208,12 @@ class NoteModel(YamlRepr, RepresentationBase):
 
     @classmethod
     def from_file(cls, filename: str):
-        return cls.from_dict(cls.read_to_dict(filename))
+        data = cls.read_to_dict(filename)
+        return cls(
+            fields=[Field(**f) for f in data.pop(FIELDS.name)],
+            templates=[Template(**t) for t in data.pop(TEMPLATES.name)],
+            **data
+        )
 
     @classmethod
     def from_crowdanki(cls, data: Union[CrowdAnki, dict]):  # TODO: field_whitelist: List[str] = None, note_model_whitelist: List[str] = None):
@@ -219,13 +224,13 @@ class NoteModel(YamlRepr, RepresentationBase):
             is_cloze=bool(ca.type),
             name=ca.name, css=ca.css, latex_pre=ca.latexPre, latex_post=ca.latexPost,
             required_fields_per_template=ca.req, tags=ca.tags, sort_field_num=ca.sortf, version=ca.vers,
-            crowdanki_id=ca.crowdanki_uuid, crowdanki_type=ca.__type__
+            id=ca.crowdanki_uuid, crowdanki_type=ca.__type__
         )
 
     def encode_as_crowdanki(self) -> dict:
         data_dict = {
             NAME.anki_name: self.name,
-            CROWDANKI_ID.anki_name: self.crowdanki_id,
+            CROWDANKI_ID.anki_name: self.id,
             CSS.anki_name: self.css,
             REQUIRED_FIELDS_PER_TEMPLATE.anki_name: self.required_fields_per_template,
             LATEX_PRE.anki_name: self.latex_pre,
@@ -245,7 +250,7 @@ class NoteModel(YamlRepr, RepresentationBase):
     def encode(self) -> dict:
         data_dict: Dict[str, Union[str, list]] = {
             NAME.name: self.name,
-            CROWDANKI_ID.name: self.crowdanki_id,
+            CROWDANKI_ID.name: self.id,
             CSS.name: self.css
         }
 
@@ -274,7 +279,7 @@ class NoteModel(YamlRepr, RepresentationBase):
 
     @property
     def field_names_lowercase(self):
-        return list_of_str_to_lowercase(f.name for f in self.fields)
+        return list_of_str_to_lowercase([f.name for f in self.fields])
 
     def check_field_overlap(self, fields_to_check: List[str]):
         fields_to_check = list_of_str_to_lowercase(fields_to_check)

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Dict, Union
 
 from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
@@ -13,7 +13,7 @@ from brain_brew.utils import all_combos_prepend_append, join_tags
 class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
     task_names = all_combos_prepend_append(["Csv Collection", "Csv"], "Generate ", "s")
 
-    notes: DeckPartHolder[Notes]
+    notes: DeckPartHolder[Notes] = field(default=None)
 
     @dataclass(init=False)
     class Representation(SharedBaseCsvs.Representation):
@@ -29,10 +29,12 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
         return cls(
             notes=DeckPartHolder.from_deck_part_pool(rep.notes),
             file_mappings=rep.get_file_mappings(),
-            note_model_mappings=rep.get_note_model_mappings()
+            note_model_mappings_representations=rep.note_model_mappings
         )
 
     def execute(self):
+        self.get_note_model_mappings()
+
         notes: List[Note] = self.notes.deck_part.get_notes()
         self.verify_notes_match_note_model_mappings(notes)
 

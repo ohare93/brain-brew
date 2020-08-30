@@ -106,7 +106,8 @@ class NoteModelMapping(Verifiable):
         for pf in self.personal_fields:  # Add in Personal Fields
             relevant_row_data.setdefault(pf.field_name, False)
         for column in self.columns:  # Rename from Csv Column to Note Type Field
-            relevant_row_data[column.value] = relevant_row_data.pop(column.field_name)
+            if column.value in relevant_row_data:
+                relevant_row_data[column.field_name] = relevant_row_data.pop(column.value)
 
         # TODO: Insert FieldMappings with Default values
 
@@ -127,15 +128,15 @@ class NoteModelMapping(Verifiable):
         return relevant_row_data
 
     def get_relevant_data(self, row):
-        relevant_columns = [field.field_name for field in self.columns]
+        relevant_columns = [field.value for field in self.columns]
         if not relevant_columns:
             return []
 
-        cols = row.keys()
+        cols = list(row.keys())
 
-        errors = [KeyError(f"Missing column {rel_col}") for rel_col in relevant_columns if rel_col not in cols]
-        if errors:
-            raise Exception(errors)
+        # errors = [KeyError(f"Missing column {rel_col}") for rel_col in relevant_columns if rel_col not in cols]
+        # if errors:
+        #     raise Exception(errors)
 
         irrelevant_columns = [column for column in cols if column not in relevant_columns]
         if not irrelevant_columns:

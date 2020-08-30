@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Dict
 
 from brain_brew.representation.build_config.representation_base import RepresentationBase
@@ -20,15 +20,16 @@ class SharedBaseCsvs:
         def get_file_mappings(self) -> List[FileMapping]:
             return list(map(FileMapping.from_repr, self.file_mappings))
 
-        def get_note_model_mappings(self) -> Dict[str, NoteModelMapping]:
-            def map_nmm(nmm_to_map: str):
-                nmm = NoteModelMapping.from_repr(nmm_to_map)
-                return nmm.get_note_model_mapping_dict()
-
-            return dict(*map(map_nmm, self.note_model_mappings))
-
     file_mappings: List[FileMapping]
-    note_model_mappings: Dict[str, NoteModelMapping]
+    note_model_mappings_representations: List[NoteModelMapping.Representation]
+    note_model_mappings: Dict[str, NoteModelMapping] = field(default_factory=dict)
+
+    def get_note_model_mappings(self):
+        def map_nmm(nmm_to_map: str):
+            nmm = NoteModelMapping.from_repr(nmm_to_map)
+            return nmm.get_note_model_mapping_dict()
+
+        self.note_model_mappings = dict(*map(map_nmm, self.note_model_mappings_representations))
 
     def verify_contents(self):
         errors = []
