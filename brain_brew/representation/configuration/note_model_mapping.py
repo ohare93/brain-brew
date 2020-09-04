@@ -109,8 +109,6 @@ class NoteModelMapping(Verifiable):
             if column.value in relevant_row_data:
                 relevant_row_data[column.field_name] = relevant_row_data.pop(column.value)
 
-        # TODO: Insert FieldMappings with Default values
-
         return relevant_row_data
 
     def csv_headers_map_to_note_fields(self, row: list) -> list:

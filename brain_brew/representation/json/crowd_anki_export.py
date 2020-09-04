@@ -47,7 +47,7 @@ class CrowdAnkiExport(SourceFile):
 
     def find_all_media(self):
         self.known_media = {}
-        self.media_loc = self.folder_location + "media/"  # TODO: Make media folder if not exists
+        self.media_loc = self.folder_location + "media/"
         self.contains_media = self.is_dir(self.media_loc)
 
         if not self.contains_media:

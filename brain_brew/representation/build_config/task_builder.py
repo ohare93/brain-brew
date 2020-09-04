@@ -1,10 +1,8 @@
 from dataclasses import dataclass
 from typing import Dict, List, Type
 
-from brain_brew.file_manager import FileManager
 from brain_brew.interfaces.verifiable import Verifiable
 from brain_brew.representation.build_config.build_task import BuildTask
-from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.yaml.my_yaml import YamlRepr
 from brain_brew.utils import str_to_lowercase_no_separators
 

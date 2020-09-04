@@ -1,3 +1,4 @@
+import os
 import shutil
 from enum import Enum
 
@@ -29,6 +30,7 @@ class MediaFile:
     def copy_source_to_target(self):
         if self.should_write():
             # TODO: If ManagementType.OVERRIDDEN check if override necessary
+            os.makedirs(os.path.dirname(self.file_location), exist_ok=True)
             shutil.copy2(self.source_loc, self.file_location)
 
     def should_write(self):

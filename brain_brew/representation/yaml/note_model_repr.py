@@ -194,7 +194,7 @@ class NoteModel(YamlRepr, RepresentationBase):
     name: str
     id: str
     css: str
-    required_fields_per_template: List[list]  # TODO: Get rid of this as requirement
+    required_fields_per_template: List[list]
     fields: List[Field]
     templates: List[Template]
 

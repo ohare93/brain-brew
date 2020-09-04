@@ -41,8 +41,6 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
         csv_data: List[dict] = [self.note_to_csv_row(note, self.note_model_mappings) for note in notes]
         rows_by_guid = {row["guid"]: row for row in csv_data}
 
-        # TODO: Dry run option, to not save anything at this stage
-
         for fm in self.file_mappings:
             fm.compile_data()
             fm.set_relevant_data(rows_by_guid)
@@ -65,4 +63,4 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
         row["tags"] = join_tags(note.tags)
         # TODO: Flags?
 
-        return note_model_mappings[nm_name].note_fields_map_to_csv_row(row)  # TODO: Do not edit data, make copy
+        return note_model_mappings[nm_name].note_fields_map_to_csv_row(row)
