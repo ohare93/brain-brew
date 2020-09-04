@@ -30,8 +30,11 @@ class NoteModelsToCrowdAnki:
                 rep = cls.Representation(deck_part=data)  # Support string
 
             return cls(
-                deck_part=DeckPartHolder.from_deck_part_pool(rep.deck_part)
+                deck_part=DeckPartHolder.from_deck_part_pool(rep.deck_part).deck_part
             )
+
+        def get_note_model(self) -> NoteModel:
+            return self.deck_part  # Todo: add filters in here
 
         deck_part: NoteModel
 
@@ -49,11 +52,12 @@ class NoteModelsToCrowdAnki:
         else:
             rep = cls.Representation(deck_parts=data)  # Support list of Note Models
 
+        note_model_items = list(map(cls.NoteModelListItem.from_repr, rep.deck_parts))
         return cls(
-            note_models=list(map(cls.NoteModelListItem.from_repr, rep.deck_parts))
+            note_models=[nm.get_note_model() for nm in note_model_items]
         )
 
-    note_models: List[NoteModelListItem]
+    note_models: List[NoteModel]
 
     def execute(self) -> List[dict]:
-        return [model.deck_part.encode_as_crowdanki() for model in self.note_models]
+        return [model.encode_as_crowdanki() for model in self.note_models]

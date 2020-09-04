@@ -29,12 +29,10 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
         return cls(
             notes=DeckPartHolder.from_deck_part_pool(rep.notes),
             file_mappings=rep.get_file_mappings(),
-            note_model_mappings_representations=rep.note_model_mappings
+            note_model_mappings=rep.get_note_model_mappings()
         )
 
     def execute(self):
-        self.get_note_model_mappings()
-
         notes: List[Note] = self.notes.deck_part.get_notes()
         self.verify_notes_match_note_model_mappings(notes)
 

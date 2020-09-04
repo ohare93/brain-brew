@@ -53,15 +53,16 @@ class CrowdAnkiGenerate(TopLevelBuildTask):
 
         note_models: List[dict] = self.note_model_transform.execute()
 
-        nm_name_to_id: dict = {model.name: model.crowdanki_id for model in self.note_model_transform.note_models}
+        nm_name_to_id: dict = {model.name: model.id for model in self.note_model_transform.note_models}
         notes = self.notes_transform.execute(nm_name_to_id)
 
         media_files = self.media_transform.move_to_crowd_anki(
             self.notes_transform.notes, self.note_model_transform.note_models, self.crowd_anki_export)
 
+        ca_wrapper.media_files = sorted([m.filename for m in media_files])
+        ca_wrapper.name = self.headers_transform.headers.name
         ca_wrapper.note_models = note_models
         ca_wrapper.notes = notes
-        ca_wrapper.media_files = [m.filename for m in media_files]
 
         # Set to CrowdAnkiExport
         self.crowd_anki_export.write_to_files(ca_wrapper.data)

@@ -6,6 +6,7 @@ CA_NOTES = "notes"
 CA_MEDIA_FILES = "media_files"
 CA_CHILDREN = "children"
 CA_TYPE = "__type__"
+CA_NAME = "name"
 
 NOTE_MODEL = "note_model_uuid"
 FLAGS = "flags"
@@ -47,6 +48,14 @@ class CrowdAnkiJsonWrapper:
     @media_files.setter
     def media_files(self, value: list):
         self.data.setdefault(CA_MEDIA_FILES, value)
+
+    @property
+    def name(self) -> list:
+        return self.data[CA_NAME]
+
+    @name.setter
+    def name(self, value: list):
+        self.data.setdefault(CA_NAME, value)
 
 
 class CrowdAnkiNoteWrapper:

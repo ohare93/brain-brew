@@ -94,13 +94,13 @@ class Template(RepresentationBase):
 
     def encode_as_crowdanki(self, ordinal: int) -> dict:
         data_dict = {
+            ANSWER_FORMAT.anki_name: self.answer_format,
+            BROWSER_ANSWER_FORMAT.anki_name: self.answer_format_in_browser,
+            BROWSER_QUESTION_FORMAT.anki_name: self.question_format_in_browser,
+            DECK_OVERRIDE_ID.anki_name: self.deck_override_id,
             NAME.anki_name: self.name,
             ORDINAL.anki_name: ordinal,
             QUESTION_FORMAT.anki_name: self.question_format,
-            ANSWER_FORMAT.anki_name: self.answer_format,
-            BROWSER_QUESTION_FORMAT.anki_name: self.question_format_in_browser,
-            BROWSER_ANSWER_FORMAT.anki_name: self.answer_format_in_browser,
-            DECK_OVERRIDE_ID.anki_name: self.deck_override_id
         }
 
         return data_dict
@@ -148,10 +148,10 @@ class Field(RepresentationBase):
 
     def encode_as_crowdanki(self, ordinal: int) -> dict:
         data_dict = {
-            NAME.anki_name: self.name,
-            ORDINAL.anki_name: ordinal,
             FONT.anki_name: self.font,
             MEDIA.anki_name: self.media,
+            NAME.anki_name: self.name,
+            ORDINAL.anki_name: ordinal,
             IS_RIGHT_TO_LEFT.anki_name: self.is_right_to_left,
             FONT_SIZE.anki_name: self.font_size,
             IS_STICKY.anki_name: self.is_sticky
@@ -198,8 +198,8 @@ class NoteModel(YamlRepr, RepresentationBase):
     fields: List[Field]
     templates: List[Template]
 
-    latex_post: str = field(default=LATEX_PRE.default_value)
-    latex_pre: str = field(default=LATEX_POST.default_value)
+    latex_post: str = field(default=LATEX_POST.default_value)
+    latex_pre: str = field(default=LATEX_PRE.default_value)
     sort_field_num: int = field(default=SORT_FIELD_NUM.default_value)
     is_cloze: bool = field(default=IS_CLOZE.default_value)
     crowdanki_type: str = field(default=CROWDANKI_TYPE.default_value)  # Should always be "NoteModel"

@@ -25,23 +25,26 @@ class FromDeckParts(DeckPartBuildTask):
         note_models: List[dict] = field(default_factory=list)
         headers: List[dict] = field(default_factory=list)
 
-    notes: List[DeckPartToRead]
-    note_models: List[DeckPartToRead]
-    headers: List[DeckPartToRead]
+    notes: List[Notes]
+    note_models: List[NoteModel]
+    headers: List[Headers]
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
+
+        notes: List[cls.DeckPartToRead] = list(map(FromDeckParts.DeckPartToRead.from_dict, rep.notes))
+        note_models: List[cls.DeckPartToRead] = list(map(FromDeckParts.DeckPartToRead.from_dict, rep.note_models))
+        headers: List[cls.DeckPartToRead] = list(map(FromDeckParts.DeckPartToRead.from_dict, rep.headers))
+
         return cls(
-            notes=list(map(FromDeckParts.DeckPartToRead.from_dict, rep.notes)),
-            note_models=list(map(FromDeckParts.DeckPartToRead.from_dict, rep.note_models)),
-            headers=list(map(FromDeckParts.DeckPartToRead.from_dict, rep.headers))
+            notes=[DeckPartHolder.override_or_create(
+                name=note.name, save_to_file=None, deck_part=Notes.from_file(note.file)) for note in notes],
+            note_models=[DeckPartHolder.override_or_create(
+                name=model.name, save_to_file=None, deck_part=NoteModel.from_file(model.file)) for model in note_models],
+            headers=[DeckPartHolder.override_or_create(
+                name=header.name, save_to_file=None, deck_part=Headers.from_file(header.file)) for header in headers]
         )
 
     def execute(self):
-        for note in self.notes:
-            DeckPartHolder.override_or_create(name=note.name, save_to_file=None, deck_part=Notes.from_file(note.file))
-        for model in self.note_models:
-            DeckPartHolder.override_or_create(name=model.name, save_to_file=None, deck_part=NoteModel.from_file(model.file))
-        for header in self.headers:
-            DeckPartHolder.override_or_create(name=header.name, save_to_file=None, deck_part=Headers.from_file(header.file))
+        pass

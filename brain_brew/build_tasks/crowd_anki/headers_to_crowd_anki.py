@@ -24,17 +24,17 @@ class HeadersToCrowdAnki:
             rep = cls.Representation(deck_part=data)  # Support single string being passed in
 
         return cls(
-            headers=DeckPartHolder.from_deck_part_pool(rep.deck_part),
+            headers=DeckPartHolder.from_deck_part_pool(rep.deck_part).deck_part,
         )
 
     headers: Headers
 
-    def execute(self):
-        headers = Headers(self.headers_to_crowd_anki(self.headers.data))
+    def execute(self) -> dict:
+        headers = self.headers_to_crowd_anki(self.headers.data_without_name)
 
         return headers
 
     @staticmethod
     def headers_to_crowd_anki(headers_data: dict):
-        return {**headers_data, **headers_default_values}
+        return {**headers_default_values, **headers_data}
 
