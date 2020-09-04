@@ -46,7 +46,7 @@ class FileMappingDerivative:
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
             csv_file=CsvFile.create_or_get(rep.file),
-            note_model=None if not rep.note_model.strip() else rep.note_model.strip(),
+            note_model=rep.note_model.strip() or None,
             sort_by_columns=single_item_to_list(rep.sort_by_columns),
             reverse_sort=rep.reverse_sort or False,
             derivatives=list(map(cls.from_repr, rep.derivatives)) if rep.derivatives is not None else []
@@ -101,6 +101,7 @@ class FileMappingDerivative:
     def write_to_csv(self, data_to_set):
         self.csv_file.set_data_from_superset(data_to_set)
         self.csv_file.sort_data(self.sort_by_columns, self.reverse_sort)
+        self.csv_file.write_file()
 
         for der in self.derivatives:
             der.write_to_csv(data_to_set)
@@ -113,8 +114,7 @@ class FileMapping(FileMappingDerivative, Verifiable):
     data_set_has_changed: bool = field(init=False, default=False)
 
     def verify_contents(self):
-        if self.note_model is "":
-            raise KeyError(f"Top level Csv Mapping requires key {NOTE_MODEL}")
+        pass
 
     def compile_data(self):
         self.compiled_data = {}

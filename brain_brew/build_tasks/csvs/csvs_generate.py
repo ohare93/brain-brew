@@ -33,6 +33,8 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
         )
 
     def execute(self):
+        self.verify_contents()
+
         notes: List[Note] = self.notes.deck_part.get_notes()
         self.verify_notes_match_note_model_mappings(notes)
 

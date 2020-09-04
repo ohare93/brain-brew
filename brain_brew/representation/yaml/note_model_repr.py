@@ -283,12 +283,15 @@ class NoteModel(YamlRepr, RepresentationBase):
 
     def check_field_overlap(self, fields_to_check: List[str]):
         fields_to_check = list_of_str_to_lowercase(fields_to_check)
-        lower_fields = self.field_names_lowercase
 
-        missing = [f for f in lower_fields if f not in fields_to_check]
-        extra = [f for f in fields_to_check if f not in lower_fields]  # TODO: Remove?
+        missing = [f for f in self.field_names_lowercase if f not in fields_to_check]
 
-        return missing, extra
+        return missing
+
+    def check_field_extra(self, fields_to_check: List[str]):
+        fields_to_check = list_of_str_to_lowercase(fields_to_check)
+
+        return [f for f in fields_to_check if f not in self.field_names_lowercase]
 
     def zip_field_to_data(self, data: List[str]) -> dict:
         if len(self.fields) != len(data):

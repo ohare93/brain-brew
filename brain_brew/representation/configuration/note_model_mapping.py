@@ -70,6 +70,9 @@ class NoteModelMapping(Verifiable):
     def verify_contents(self):
         errors = []
 
+        extra_fields = [field.field_name for field in self.columns
+                        if field.field_name not in self.required_fields_definitions]
+
         for holder in self.note_models.values():
             model: NoteModel = holder.deck_part
 
@@ -83,20 +86,26 @@ class NoteModelMapping(Verifiable):
                 errors.append(KeyError(f"""Note model(s) "{holder.name}" to Csv config error: \
                                    Definitions for fields {missing} are required."""))
 
-            # TODO: Note Model Mappings are allowed extra fields on a specific note model now, since multiple
-            # TODO: can be applied to a single NMM. Check if ANY are missing and/or ALL have Extra instead
             # Check Fields Align with Note Type
-            missing, extra = model.check_field_overlap(
-                [field.value for field in self.columns if field.value not in self.required_fields_definitions]
+            missing = model.check_field_overlap(
+                [field.field_name for field in self.columns
+                 if field.field_name not in self.required_fields_definitions]
             )
             missing = [m for m in missing if m not in [field.field_name for field in self.personal_fields]]
 
-            if missing or extra:
-                errors.append(KeyError(
-                    f"""Note model "{holder.name}" to Csv config error. It expected {model.fields} \
-                        but was missing: {missing}, and got extra: {extra} """))
+            if missing:
+                errors.append(
+                    KeyError(f"Note model '{holder.name}' to Csv config error. "
+                             f"It expected {[field.name for field in model.fields]} but was missing: {missing}")
+                )
 
-            # TODO: Make sure the same note_model is not defined in multiple NMMs
+            # Find mappings which do not exist on any note models
+            if extra_fields:
+                extra_fields = model.check_field_extra(extra_fields)
+
+        if extra_fields:
+            errors.append(KeyError(f"Field(s) '{extra_fields} are defined as mappings, but match no Note Model's field"))
+
         if errors:
             raise Exception(errors)
 
@@ -116,10 +125,12 @@ class NoteModelMapping(Verifiable):
 
     def note_fields_map_to_csv_row(self, row):
         for column in self.columns:  # Rename from Note Type Field to Csv Column
-            row[column.field_name] = row.pop(column.value)
+            if column.field_name in row:
+                row[column.value] = row.pop(column.field_name)
 
         for pf in self.personal_fields:  # Remove Personal Fields
-            del row[pf.field_name]
+            if pf.field_name in row:
+                del row[pf.field_name]
 
         relevant_row_data = self.get_relevant_data(row)
 
