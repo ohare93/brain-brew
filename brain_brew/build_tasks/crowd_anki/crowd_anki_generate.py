@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 from typing import Union, Optional, List
 
@@ -25,10 +25,10 @@ class CrowdAnkiGenerate(TopLevelBuildTask):
     @dataclass
     class Representation(RepresentationBase):
         folder: str
-        notes: Optional[dict]
-        note_models: Optional[list]
-        headers: Optional[dict]
-        media: Optional[dict]
+        notes: dict
+        note_models: dict
+        headers: dict
+        media: Union[dict, bool] = field(default_factory=lambda: False)
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):

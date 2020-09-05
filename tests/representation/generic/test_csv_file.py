@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 
 from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
-from brain_brew.representation.generic.generic_file import SourceFile
+from brain_brew.representation.generic.source_file import SourceFile
 from tests.test_files import TestFiles
 
 

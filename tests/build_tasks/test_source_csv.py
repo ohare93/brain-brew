@@ -8,7 +8,7 @@ from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.representation.configuration.csv_file_mapping import FileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 from brain_brew.representation.generic.csv_file import CsvFile
-from brain_brew.representation.generic.generic_file import SourceFile
+from brain_brew.representation.generic.source_file import SourceFile
 from brain_brew.representation.json.deck_part_notes import DeckPartNotes
 from tests.representation.json.test_deck_part_notes import dp_notes_test1
 from tests.representation.configuration.test_note_model_mapping import setup_nmm_config

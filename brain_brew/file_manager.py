@@ -5,7 +5,7 @@ from typing import Dict, List, Union
 
 
 from brain_brew.representation.configuration.global_config import GlobalConfig
-from brain_brew.representation.generic.generic_file import SourceFile
+from brain_brew.representation.generic.source_file import SourceFile
 from brain_brew.representation.generic.media_file import MediaFile
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.my_yaml import YamlRepr

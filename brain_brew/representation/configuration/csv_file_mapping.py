@@ -111,14 +111,11 @@ class FileMappingDerivative:
 class FileMapping(FileMappingDerivative, Verifiable):
     note_model: str  # Override Optional on Parent
 
-    data_set_has_changed: bool = field(init=False, default=False)
-
     def verify_contents(self):
         pass
 
     def compile_data(self):
         self.compiled_data = {}
-        self.data_set_has_changed = False
 
         data_in_progress = self._build_data_recursive()
 
@@ -137,7 +134,6 @@ class FileMapping(FileMappingDerivative, Verifiable):
             self.compiled_data.setdefault(guid, {key.lower(): row[key] for key in row})
 
         if guids_generated > 0:
-            self.data_set_has_changed = True
             logging.info(f"Generated {guids_generated} guids in {self.csv_file.file_location}")
 
     def set_relevant_data(self, data_set: Dict[str, dict]):
@@ -157,12 +153,8 @@ class FileMapping(FileMappingDerivative, Verifiable):
                 added += 1
                 self.compiled_data.setdefault(guid, data_set[guid])
 
-        if changed > 0 or added > 0:
-            self.data_set_has_changed = True
-
         logging.info(f"Set {self.csv_file.file_location} data; changed {changed}, "
                      f"added {added}, while {unchanged} were identical")
 
     def write_file_on_close(self):
-        if self.data_set_has_changed:
-            self.write_to_csv(list(self.compiled_data.values()))
+        self.write_to_csv(list(self.compiled_data.values()))

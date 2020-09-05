@@ -48,7 +48,7 @@ class TestSortData:
         # (["tags"], False, "tags", [(0, "besttag"), (1, "funny"), (2, "tag2, tag3"), (13, ""), (14, "")]),
     ])
     def test_sort(self, dp_notes_test1: DeckPartNotes, keys, reverse, result_column, expected_results):
-        dp_notes_test1.sort_data(
+        dp_notes_test1.sort_dict(
             keys, reverse
         )
 

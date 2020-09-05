@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Union, List
 
 from brain_brew.build_tasks.crowd_anki.shared_base_notes import SharedBaseNotes
+from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiNoteWrapper
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.note_repr import Notes, Note
@@ -11,9 +12,11 @@ from brain_brew.utils import blank_str_if_none
 @dataclass
 class NotesToCrowdAnki(SharedBaseNotes):
     @dataclass
-    class Representation(SharedBaseNotes.Representation):
+    class Representation(RepresentationBase):
         deck_part: str
         additional_items_to_add: Optional[dict] = field(default_factory=lambda: None)
+        sort_order: Optional[List[str]] = field(default_factory=lambda: None)
+        reverse_sort: Optional[bool] = field(default_factory=lambda: None)
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
@@ -21,18 +24,19 @@ class NotesToCrowdAnki(SharedBaseNotes):
         return cls(
             notes=DeckPartHolder.from_deck_part_pool(rep.deck_part).deck_part,
             sort_order=SharedBaseNotes._get_sort_order(rep.sort_order),
+            reverse_sort=SharedBaseNotes._get_reverse_sort(rep.reverse_sort),
             additional_items_to_add=rep.additional_items_to_add or {}
         )
 
     notes: Notes
     additional_items_to_add: dict
+    sort_order: Optional[List[str]] = field(default_factory=lambda: None)
+    reverse_sort: Optional[bool] = field(default_factory=lambda: None)
 
     def execute(self, nm_name_to_id: dict) -> List[dict]:
-        notes = self.notes.get_notes()
+        notes = self.notes.get_sorted_notes_copy(sort_by_keys=self.sort_order, reverse_sort=self.reverse_sort)
 
         note_dicts = [self.note_to_ca_note(note, nm_name_to_id, self.additional_items_to_add) for note in notes]
-
-        # TODO: Sort
 
         return note_dicts
 

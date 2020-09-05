@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Union, List
 
 from brain_brew.representation.build_config.representation_base import RepresentationBase
@@ -6,10 +6,6 @@ from brain_brew.representation.build_config.representation_base import Represent
 
 @dataclass
 class SharedBaseNotes:
-    @dataclass
-    class Representation(RepresentationBase):
-        sort_order: Optional[Union[str, List[str]]]
-
     @staticmethod
     def _get_sort_order(sort_order: Optional[Union[str, List[str]]]):
         if isinstance(sort_order, list):
@@ -18,4 +14,9 @@ class SharedBaseNotes:
             return [sort_order]
         return []
 
-    sort_order: Optional[List[str]]
+    @staticmethod
+    def _get_reverse_sort(reverse_sort: Optional[bool]):
+        return reverse_sort or False
+
+    # sort_order: Optional[List[str]]
+    # reverse_sort: Optional[bool]

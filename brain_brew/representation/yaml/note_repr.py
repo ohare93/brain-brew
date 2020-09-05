@@ -1,3 +1,6 @@
+import logging
+
+from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.yaml.my_yaml import YamlRepr
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Set
@@ -94,7 +97,34 @@ class NoteGrouping(GroupableNoteData):
             all_media = all_media.union(media)
         return all_media
 
-    def get_all_notes_copy(self) -> List[Note]:
+    def get_sorted_notes(self, sort_by_keys, reverse_sort, case_insensitive_sort=None):
+        if case_insensitive_sort is None:
+            case_insensitive_sort = GlobalConfig.get_instance().defaults.sort_case_insensitive
+
+        if sort_by_keys:
+            def sort_method(i: Note):
+                def get_sort_tuple(attr_or_field):
+                    if attr_or_field in [GUID, FLAGS, NOTE_MODEL, TAGS]:
+                        value = getattr(i, attr_or_field)
+                    elif isinstance(attr_or_field, int) and attr_or_field < len(i.fields):
+                        value = i.fields[attr_or_field]
+                    else:
+                        value = ""
+                        logging.warning(f"No known sort value for {attr_or_field}")
+
+                    if not isinstance(value, str):
+                        return True, False
+                    return (value == "", value.lower()) if case_insensitive_sort else (value == "", value)
+
+                return tuple(get_sort_tuple(column) for column in sort_by_keys)
+
+            return sorted(self.notes, key=sort_method, reverse=reverse_sort)
+        elif reverse_sort:
+            return list(reversed(self.notes))
+
+        return self.notes
+    
+    def get_all_notes_copy(self, sort_by_keys, reverse_sort, case_insensitive_sort=None) -> List[Note]:
         def join_tags(n_tags):
             if self.tags is None and n_tags is None:
                 return []
@@ -106,13 +136,13 @@ class NoteGrouping(GroupableNoteData):
                 return [*n_tags, *self.tags]
 
         return [Note(
-                    note_model=self.note_model if self.note_model is not None else n.note_model,
+                    note_model=self.note_model or n.note_model,
                     tags=join_tags(n.tags),
                     fields=n.fields,
                     guid=n.guid,
                     flags=n.flags
                     # media_references=n.media_references or n.get_media_references()
-               ) for n in self.notes]
+               ) for n in self.get_sorted_notes(sort_by_keys, reverse_sort, case_insensitive_sort)]
 
 
 @dataclass
@@ -145,5 +175,6 @@ class Notes(YamlRepr):
             all_media = all_media.union(media)
         return all_media
 
-    def get_notes(self):
-        return [note for group in self.note_groupings for note in group.get_all_notes_copy()]
+    def get_sorted_notes_copy(self, sort_by_keys, reverse_sort, case_insensitive_sort=None):
+        return [note for group in self.note_groupings
+                for note in group.get_all_notes_copy(sort_by_keys, reverse_sort, case_insensitive_sort)]

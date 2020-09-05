@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Union
+from dataclasses import dataclass, field
+from typing import Union, Optional, List
 
 from brain_brew.build_tasks.crowd_anki.shared_base_notes import SharedBaseNotes
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper, CrowdAnkiNoteWrapper
@@ -11,8 +11,9 @@ from brain_brew.representation.yaml.note_repr import Notes, Note
 @dataclass
 class NotesFromCrowdAnki(SharedBaseNotes, BaseDeckPartsFrom):
     @dataclass
-    class Representation(SharedBaseNotes.Representation, BaseDeckPartsFrom.Representation):
-        pass
+    class Representation(BaseDeckPartsFrom.Representation):
+        sort_order: Optional[List[str]] = field(default_factory=lambda: None)
+        reverse_sort: Optional[bool] = field(default_factory=lambda: None)
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
@@ -20,8 +21,12 @@ class NotesFromCrowdAnki(SharedBaseNotes, BaseDeckPartsFrom):
         return cls(
             name=rep.name,
             sort_order=SharedBaseNotes._get_sort_order(rep.sort_order),
+            reverse_sort=SharedBaseNotes._get_reverse_sort(rep.reverse_sort),
             save_to_file=rep.save_to_file
         )
+
+    sort_order: Optional[List[str]] = field(default_factory=lambda: None)
+    reverse_sort: Optional[bool] = field(default_factory=lambda: None)
 
     def execute(self, ca_wrapper: CrowdAnkiJsonWrapper, nm_id_to_name: dict) -> Notes:
         note_list = [self.ca_note_to_note(note, nm_id_to_name) for note in ca_wrapper.notes]

@@ -35,7 +35,8 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
     def execute(self):
         self.verify_contents()
 
-        notes: List[Note] = self.notes.deck_part.get_notes()
+        notes: List[Note] = self.notes.deck_part.get_sorted_notes_copy(
+            sort_by_keys=[], reverse_sort=False, case_insensitive_sort=False)
         self.verify_notes_match_note_model_mappings(notes)
 
         csv_data: List[dict] = [self.note_to_csv_row(note, self.note_model_mappings) for note in notes]

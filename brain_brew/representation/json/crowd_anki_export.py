@@ -2,7 +2,7 @@ import glob
 import logging
 from typing import List, Dict
 
-from brain_brew.representation.generic.generic_file import SourceFile
+from brain_brew.representation.generic.source_file import SourceFile
 from brain_brew.representation.generic.media_file import MediaFile
 from brain_brew.representation.json.json_file import JsonFile
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper

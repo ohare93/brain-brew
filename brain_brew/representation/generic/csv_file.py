@@ -4,8 +4,8 @@ import re
 from enum import Enum
 from typing import List
 
-from brain_brew.utils import list_of_str_to_lowercase
-from brain_brew.representation.generic.generic_file import SourceFile
+from brain_brew.utils import list_of_str_to_lowercase, sort_dict
+from brain_brew.representation.generic.source_file import SourceFile
 
 
 class CsvKeys(Enum):
@@ -80,4 +80,4 @@ class CsvFile(SourceFile):
         return cls.to_filename_csv(location)
 
     def sort_data(self, sort_by_keys, reverse_sort):
-        self._data = self._sort_data(self._data, sort_by_keys, reverse_sort)
+        self._data = sort_dict(self._data, sort_by_keys, reverse_sort)

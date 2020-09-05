@@ -38,20 +38,3 @@ class SourceFile:
     @classmethod
     def formatted_file_location(cls, location):
         return location
-
-    @staticmethod
-    def _sort_data(data, sort_by_keys, reverse_sort, case_insensitive_sort=None):  # TODO: Move to NoteGroupings
-        if case_insensitive_sort is None:
-            case_insensitive_sort = GlobalConfig.get_instance().defaults.sort_case_insensitive
-
-        if sort_by_keys:
-            if case_insensitive_sort:
-                def sort_method(i): return tuple((i[column] == "", i[column].lower()) for column in sort_by_keys)
-            else:
-                def sort_method(i): return tuple((i[column] == "", i[column]) for column in sort_by_keys)
-
-            return sorted(data, key=sort_method, reverse=reverse_sort)
-        elif reverse_sort:
-            return list(reversed(data))
-
-        return data

@@ -3,7 +3,7 @@ import logging
 import pytest
 from unittest.mock import MagicMock
 
-from brain_brew.representation.generic.generic_file import SourceFile
+from brain_brew.representation.generic.source_file import SourceFile
 from tests.test_file_manager import get_new_file_manager
 from tests.test_files import TestFiles
 
