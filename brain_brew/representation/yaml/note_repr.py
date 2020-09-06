@@ -77,7 +77,6 @@ class NoteGrouping(GroupableNoteData):
         return data_dict
 
     # TODO: Extract Shared Tags and Note Models
-    # TODO: Sort notes
 
     def verify_groupings(self):
         errors = []

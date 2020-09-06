@@ -5,9 +5,9 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="Brain-Brew",
-    version="0.1.5",
+    version="0.2.0",
     author="Jordan Munch O'Hare",
-    author_email="ohare93@gmail.com",
+    author_email="brainbrew@jordan.munchohare.com",
     description="Automated Anki flashcard creation and extraction to/from Csv ",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -17,6 +17,7 @@ setuptools.setup(
         'console_scripts': [
             'brain_brew = brain_brew.main:main',
             'brain-brew = brain_brew.main:main',
+            'brainbrew = brain_brew.main:main',
         ]
     },
     classifiers=[
@@ -24,8 +25,10 @@ setuptools.setup(
         "License :: Public Domain",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     install_requires=[
-        'PyYAML'
+        'PyYAML',
+        'ruamel-yaml',
+        'yamale'
     ]
 )
