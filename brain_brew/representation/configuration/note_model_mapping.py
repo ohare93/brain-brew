@@ -1,17 +1,13 @@
+from dataclasses import dataclass
 from enum import Enum
-from typing import List
+from typing import List, Union, Dict
 
-from brain_brew.constants.deckpart_keys import DeckPartNoteKeys
 from brain_brew.interfaces.verifiable import Verifiable
-from brain_brew.representation.generic.yaml_file import YamlFile, ConfigKey
-from brain_brew.representation.json.deck_part_notemodel import DeckPartNoteModel
-from brain_brew.utils import list_of_str_to_lowercase
-
-
-class NoteModelMappingKeys(Enum):
-    NOTE_MODEL = "note_model"
-    COLUMNS = "csv_columns_to_fields"
-    PERSONAL_FIELDS = "personal_fields"
+from brain_brew.representation.build_config.representation_base import RepresentationBase
+from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.representation.yaml.note_model_repr import NoteModel
+from brain_brew.representation.yaml.note_repr import GUID, TAGS
+from brain_brew.utils import single_item_to_list
 
 
 class FieldMapping:
@@ -38,63 +34,77 @@ class FieldMapping:
             self.value = value
 
 
-class NoteModelMapping(YamlFile, Verifiable):
-    config_entry = {}
-    expected_keys = {
-        NoteModelMappingKeys.NOTE_MODEL.value: ConfigKey(True, str, None),
-        NoteModelMappingKeys.COLUMNS.value: ConfigKey(True, dict, None),
-        NoteModelMappingKeys.PERSONAL_FIELDS.value: ConfigKey(False, list, None),
-    }
-    subconfig_filter = None
+@dataclass
+class NoteModelMapping(Verifiable):
+    @dataclass
+    class Representation(RepresentationBase):
+        note_models: Union[str, list]
+        columns_to_fields: Dict[str, str]
+        personal_fields: List[str]
 
-    note_model: DeckPartNoteModel = None
+    note_models: Dict[str, DeckPartHolder[NoteModel]]
     columns: List[FieldMapping]
     personal_fields: List[FieldMapping]
 
-    required_fields_definitions = [DeckPartNoteKeys.GUID.value, DeckPartNoteKeys.TAGS.value]
+    required_fields_definitions = [GUID, TAGS]
 
-    def __init__(self, config_data: dict, read_now=True):
-        self.setup_config_with_subconfig_replacement(config_data)
-        self.verify_config_entry()
+    @classmethod
+    def from_repr(cls, data: Representation):
+        note_models = [DeckPartHolder.from_deck_part_pool(model) for model in single_item_to_list(data.note_models)]
 
-        columns = self.get_config(NoteModelMappingKeys.COLUMNS)
-        personal_fields = self.get_config(NoteModelMappingKeys.PERSONAL_FIELDS, [])
+        return cls(
+            columns=[FieldMapping(
+                field_type=FieldMapping.FieldMappingType.COLUMN,
+                field_name=field,
+                value=key) for key, field in data.columns_to_fields.items()],
+            personal_fields=[FieldMapping(
+                field_type=FieldMapping.FieldMappingType.PERSONAL_FIELD,
+                field_name=field,
+                value="") for field in data.personal_fields],
+            note_models=dict(map(lambda nm: (nm.name, nm), note_models))
+        )
 
-        self.columns = [FieldMapping(
-            field_type=FieldMapping.FieldMappingType.COLUMN,
-            field_name=field,
-            value=columns[field]) for field in columns]
-
-        self.personal_fields = [FieldMapping(
-            field_type=FieldMapping.FieldMappingType.PERSONAL_FIELD,
-            field_name=field,
-            value="") for field in personal_fields]
-
-        self.note_model = DeckPartNoteModel.create(self.get_config(NoteModelMappingKeys.NOTE_MODEL), read_now=read_now)
+    def get_note_model_mapping_dict(self):
+        return {model: self for model in self.note_models}
 
     def verify_contents(self):
         errors = []
 
-        # Check for Required Fields
-        missing = []
-        for req in self.required_fields_definitions:
-            if req not in [field.value for field in self.columns]:
-                missing.append(req)
+        extra_fields = [field.field_name for field in self.columns
+                        if field.field_name not in self.required_fields_definitions]
 
-        if missing:
-            errors.append(KeyError(f"""Note model "{self.note_model.name}" to Csv config error: \
-                               Definitions for fields {missing} are required."""))
+        for holder in self.note_models.values():
+            model: NoteModel = holder.deck_part
 
-        # Check Fields Align with Note Type
-        missing, extra = self.note_model.check_field_overlap(
-            [field.value for field in self.columns if field.value not in self.required_fields_definitions]
-        )
-        missing = [m for m in missing if m not in [field.field_name for field in self.personal_fields]]
+            # Check for Required Fields
+            missing = []
+            for req in self.required_fields_definitions:
+                if req not in [field.value for field in self.columns]:
+                    missing.append(req)
 
-        if missing or extra:
-            raise KeyError(
-                f"""Note model "{self.note_model.name}" to Csv config error. It expected {self.note_model.fields} \
-                    but was missing: {missing}, and got extra: {extra} """)
+            if missing:
+                errors.append(KeyError(f"""Note model(s) "{holder.name}" to Csv config error: \
+                                   Definitions for fields {missing} are required."""))
+
+            # Check Fields Align with Note Type
+            missing = model.check_field_overlap(
+                [field.field_name for field in self.columns
+                 if field.field_name not in self.required_fields_definitions]
+            )
+            missing = [m for m in missing if m not in [field.field_name for field in self.personal_fields]]
+
+            if missing:
+                errors.append(
+                    KeyError(f"Note model '{holder.name}' to Csv config error. "
+                             f"It expected {[field.name for field in model.fields]} but was missing: {missing}")
+                )
+
+            # Find mappings which do not exist on any note models
+            if extra_fields:
+                extra_fields = model.check_field_extra(extra_fields)
+
+        if extra_fields:
+            errors.append(KeyError(f"Field(s) '{extra_fields} are defined as mappings, but match no Note Model's field"))
 
         if errors:
             raise Exception(errors)
@@ -105,9 +115,8 @@ class NoteModelMapping(YamlFile, Verifiable):
         for pf in self.personal_fields:  # Add in Personal Fields
             relevant_row_data.setdefault(pf.field_name, False)
         for column in self.columns:  # Rename from Csv Column to Note Type Field
-            relevant_row_data[column.value] = relevant_row_data.pop(column.field_name)
-
-        # TODO: Insert FieldMappings with Default values
+            if column.value in relevant_row_data:
+                relevant_row_data[column.field_name] = relevant_row_data.pop(column.value)
 
         return relevant_row_data
 
@@ -116,25 +125,27 @@ class NoteModelMapping(YamlFile, Verifiable):
 
     def note_fields_map_to_csv_row(self, row):
         for column in self.columns:  # Rename from Note Type Field to Csv Column
-            row[column.field_name] = row.pop(column.value)
+            if column.field_name in row:
+                row[column.value] = row.pop(column.field_name)
 
         for pf in self.personal_fields:  # Remove Personal Fields
-            del row[pf.field_name]
+            if pf.field_name in row:
+                del row[pf.field_name]
 
         relevant_row_data = self.get_relevant_data(row)
 
         return relevant_row_data
 
     def get_relevant_data(self, row):
-        relevant_columns = [field.field_name for field in self.columns]
+        relevant_columns = [field.value for field in self.columns]
         if not relevant_columns:
             return []
 
-        cols = row.keys()
+        cols = list(row.keys())
 
-        errors = [KeyError(f"Missing column {rel_col}") for rel_col in relevant_columns if rel_col not in cols]
-        if errors:
-            raise Exception(errors)
+        # errors = [KeyError(f"Missing column {rel_col}") for rel_col in relevant_columns if rel_col not in cols]
+        # if errors:
+        #     raise Exception(errors)
 
         irrelevant_columns = [column for column in cols if column not in relevant_columns]
         if not irrelevant_columns:
@@ -144,5 +155,5 @@ class NoteModelMapping(YamlFile, Verifiable):
 
         return relevant_data
 
-    def field_values_in_note_model_order(self, fields_from_csv):
-        return [fields_from_csv[field] for field in self.note_model.fields_lowercase]
+    def field_values_in_note_model_order(self, note_model_name, fields_from_csv):
+        return [fields_from_csv[f] for f in self.note_models[note_model_name].deck_part.field_names_lowercase]

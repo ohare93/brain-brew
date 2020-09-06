@@ -25,13 +25,12 @@ class BBArgumentReader(ArgumentParser):
             type=str,
             help="Global config file to use"
         )
-
         self.add_argument(
-            "-r", "--reversed",
+            "--verify", "-v",
             action="store_true",
-            dest="run_reversed",
+            dest="verify_only",
             default=False,
-            help="Run the builder file in reverse"
+            help="Only verify the builder contents, without running it."
         )
 
     def get_parsed(self, override_args=None):
@@ -42,9 +41,9 @@ class BBArgumentReader(ArgumentParser):
 
         # Optional
         config_file = parsed_args.config_file
-        run_reversed = parsed_args.run_reversed
+        verify_only = parsed_args.verify_only
 
-        return builder, config_file, run_reversed
+        return builder, config_file, verify_only
 
     def error_if_blank(self, arg):
         if arg == "" or arg is None:

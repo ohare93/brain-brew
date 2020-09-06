@@ -1,0 +1,101 @@
+list(
+    map(include('generate_deck_parts'), key=regex('.*deck[\s_-]+?part.*', ignore_case=True)),
+    map(include('generate_csv'), key=regex('.*csv.*', ignore_case=True)),
+    map(include('generate_crowd_anki'), key=regex('.*crowd[\s_-]+?anki.*', ignore_case=True))
+)
+
+---
+
+generate_deck_parts:
+  list(
+    map(include('from_deck_parts'), key=regex('.*deck[\s_-]+?part.*', ignore_case=True)),
+    map(include('from_csv'), key=regex('.*csv.*', ignore_case=True)),
+    map(include('from_crowd_anki'), key=regex('.*crowd[\s_-]+?anki.*', ignore_case=True))
+  )
+
+
+
+from_crowd_anki:
+  folder: str()
+  notes: include('from_ca_notes', required=False)
+  note_models: list(include('from_ca_note_models'), required=False)
+  headers: include('from_ca_headers', required=False)
+  media: any(bool(), include('ca_media'), required=False)
+
+
+generate_crowd_anki:
+  folder: str()
+  headers: str()
+  notes: include('notes_to_source')
+  note_models: include('note_models_to_source')
+  media: any(bool(), include('ca_media'), required=False)
+
+
+
+from_ca_notes:
+  name: str()
+  sort_order: list(str(), required=False)
+  save_to_file: str(required=False)
+
+from_ca_note_models:
+  name: str()
+  model_name: str(required=False)
+  save_to_file: str(required=False)
+
+from_ca_headers:
+  name: str()
+  save_to_file: str(required=False)
+
+ca_media:
+  from_notes: bool()
+  from_note_models: bool()
+
+note_models_to_source:
+  deck_parts: list(include('note_model_to_source'))
+
+note_model_to_source:
+  deck_part: str()
+
+notes_to_source:
+  deck_part: str()
+  sort_order: list(str(), required=False)
+  reverse_sort: bool(required=False)
+  additional_items_to_add: map(str(), key=str(), required=False)
+
+
+
+
+from_deck_parts:
+  notes: list(include('deck_part_to_read'), required=False)
+  note_models: list(include('deck_part_to_read'), required=False)
+  headers: list(include('deck_part_to_read'), required=False)
+
+deck_part_to_read:
+  name: str()
+  file: str()
+
+
+
+from_csv:
+  notes:
+    name: str()
+    save_to_file: str(required=False)
+    note_model_mappings: list(include('note_model_mapping'))
+    file_mappings: list(include('file_mapping'))
+
+generate_csv:
+  notes: str()
+  note_model_mappings: list(include('note_model_mapping'))
+  file_mappings: list(include('file_mapping'))
+
+note_model_mapping:
+  note_models: list(str())
+  columns_to_fields: map(str(), key=str())
+  personal_fields: list(str())
+
+file_mapping:
+  file: str()
+  note_model: str(required=False)
+  sort_by_columns: list(str(), required=False)
+  reverse_sort: bool(required=False)
+  derivatives: list(include('file_mapping'), required=False)

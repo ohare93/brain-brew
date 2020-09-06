@@ -1,3 +1,4 @@
+import os
 import shutil
 from unittest.mock import patch
 
@@ -19,7 +20,7 @@ class TestConstructor:
         media_file = MediaFile(loc, name)
 
         assert isinstance(media_file, MediaFile)
-        assert media_file.source_loc == media_file.target_loc == loc
+        assert media_file.source_loc == media_file.file_location == loc
         assert media_file.filename == name
         assert media_file.man_type == MediaFile.ManagementType.EXISTS
 
@@ -32,7 +33,7 @@ class TestConstructor:
         media_file = MediaFile(target_loc, name, man_type, source_loc)
 
         assert isinstance(media_file, MediaFile)
-        assert media_file.target_loc == target_loc
+        assert media_file.file_location == target_loc
         assert media_file.source_loc == source_loc
         assert media_file.filename == name
         assert media_file.man_type == man_type
@@ -40,12 +41,12 @@ class TestConstructor:
 
 def test_set_override(media_file_test1):
     assert media_file_test1.man_type == MediaFile.ManagementType.EXISTS
-    assert media_file_test1.source_loc == media_file_test1.target_loc == "loc"
+    assert media_file_test1.source_loc == media_file_test1.file_location == "loc"
 
     media_file_test1.set_override("new loc")
 
     assert media_file_test1.source_loc == "new loc"
-    assert media_file_test1.target_loc == "loc"
+    assert media_file_test1.file_location == "loc"
     assert media_file_test1.man_type == MediaFile.ManagementType.OVERRIDDEN
 
 
@@ -66,9 +67,11 @@ class TestCopy:
     ])
     def test_takes_should_write_into_account(self, media_file_test1, should_write_returns, num_calls_to_copy):
         with patch.object(MediaFile, "should_write", return_value=should_write_returns), \
+                patch.object(os, "makedirs") as mock_dirs, \
                 patch.object(shutil, "copy2") as mock_copy:
             media_file_test1.copy_source_to_target()
             assert mock_copy.call_count == num_calls_to_copy
+            assert mock_dirs.call_count == num_calls_to_copy
 
     def test_copies_file(self, tmpdir):
         source_dir = tmpdir.mkdir("source")

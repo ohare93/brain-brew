@@ -2,12 +2,10 @@ import csv
 import logging
 import re
 from enum import Enum
-from typing import List, Dict
+from typing import List
 
-from brain_brew.representation.configuration.global_config import GlobalConfig
-from brain_brew.representation.generic.yaml_file import YamlFile, ConfigKey
-from brain_brew.utils import list_of_str_to_lowercase, generate_anki_guid
-from brain_brew.representation.generic.generic_file import GenericFile
+from brain_brew.utils import list_of_str_to_lowercase, sort_dict
+from brain_brew.representation.generic.source_file import SourceFile
 
 
 class CsvKeys(Enum):
@@ -15,14 +13,19 @@ class CsvKeys(Enum):
     TAGS = "tags"
 
 
-class CsvFile(GenericFile):
+class CsvFile(SourceFile):
     file_location: str = ""
     _data: List[dict] = []
-
     column_headers: list = []
 
-    def __init__(self, file, read_now=True, data_override=None):
-        super(CsvFile, self).__init__(file, read_now=read_now, data_override=data_override)
+    def __init__(self, file):
+        self.file_location = file
+
+        self.read_file()
+
+    @classmethod
+    def from_file_loc(cls, file_loc) -> 'CsvFile':
+        return cls(file_loc)
 
     def read_file(self):
         self._data = []
@@ -35,9 +38,8 @@ class CsvFile(GenericFile):
             for row in csv_reader:
                 self._data.append({key.lower(): row[key] for key in row})
 
-        self.data_state = GenericFile.DataState.READ_IN_DATA
-
     def write_file(self):
+        logging.info(f"Writing to Csv '{self.file_location}'")
         with open(self.file_location, mode='w') as csv_file:
             csv_writer = csv.DictWriter(csv_file, fieldnames=self.column_headers)
 
@@ -46,10 +48,8 @@ class CsvFile(GenericFile):
             for row in self._data:
                 csv_writer.writerow(row)
 
-        self.file_exists = True
-
     def set_data(self, data_override):
-        super().set_data(data_override)
+        self._data = data_override
         self.column_headers = list(data_override[0].keys()) if data_override else []
 
     def set_data_from_superset(self, superset: List[dict], column_header_override=None):
@@ -65,10 +65,10 @@ class CsvFile(GenericFile):
                 new_row[column] = row[column]
             data_to_set.append(new_row)
 
-        super().set_data(data_to_set)
+        self.set_data(data_to_set)
 
     def get_data(self, deep_copy=False) -> List[dict]:
-        return super().get_data(deep_copy=deep_copy)
+        return self.get_deep_copy(self._data) if deep_copy else self._data
 
     @staticmethod
     def to_filename_csv(filename: str) -> str:
@@ -80,4 +80,4 @@ class CsvFile(GenericFile):
         return cls.to_filename_csv(location)
 
     def sort_data(self, sort_by_keys, reverse_sort):
-        self._data = self._sort_data(self._data, sort_by_keys, reverse_sort)
+        self._data = sort_dict(self._data, sort_by_keys, reverse_sort)
