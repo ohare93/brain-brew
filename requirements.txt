@@ -1,8 +1,18 @@
 args==0.1.0
+attrs==20.1.0
 clint==0.5.1
 coverage==4.5.4
-PyYAML==5.1.2
-ruamel-yaml==0.16.10
-
-# Testing
+importlib-metadata==1.7.0
+more-itertools==8.5.0
+packaging==20.4
+pluggy==0.13.1
+py==1.9.0
+pyparsing==2.4.7
 pytest==5.4.1
+PyYAML==5.3.1
+ruamel.yaml==0.16.10
+ruamel.yaml.clib==0.2.2
+six==1.15.0
+wcwidth==0.2.5
+yamale==3.0.4
+zipp==3.1.0

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Dict, List, Type
+import re
 
 from brain_brew.interfaces.verifiable import Verifiable
 from brain_brew.representation.build_config.build_task import BuildTask
@@ -24,8 +25,14 @@ class TaskBuilder(YamlRepr):
 
     @classmethod
     def read_tasks(cls, tasks: List[dict]) -> list:
-        known_task_dict = cls.known_task_dict()
+        task_regex_matches = cls.known_task_dict()
         build_tasks = []
+
+        def find_matching_task(task_n):
+            for regex, task_to_run in task_regex_matches.items():
+                if re.match(regex, task_n, re.RegexFlag.IGNORECASE):
+                    return task_to_run
+            return None
 
         # Tasks
         for task in tasks:
@@ -34,10 +41,12 @@ class TaskBuilder(YamlRepr):
                 raise KeyError(f"Task should only contain 1 entry, but contains {task_keys} instead. "
                                f"Missing list separator '-'?", task)
 
-            task_name = str_to_lowercase_no_separators(task_keys[0])
+            task_name = task_keys[0]
             task_arguments = task[task_keys[0]]
-            if task_name in known_task_dict:
-                task_instance = known_task_dict[task_name].from_repr(task_arguments)
+
+            matching_task = find_matching_task(task_name)
+            if matching_task is not None:
+                task_instance = matching_task.from_repr(task_arguments)
                 build_tasks.append(task_instance)
             else:
                 raise KeyError(f"Unknown task '{task_name}'")  # TODO: check this first on all and return all errors

@@ -25,6 +25,13 @@ class BBArgumentReader(ArgumentParser):
             type=str,
             help="Global config file to use"
         )
+        self.add_argument(
+            "--verify", "-v",
+            action="store_true",
+            dest="verify_only",
+            default=False,
+            help="Only verify the builder contents, without running it."
+        )
 
     def get_parsed(self, override_args=None):
         parsed_args = self.parse_args(args=override_args)
@@ -34,8 +41,9 @@ class BBArgumentReader(ArgumentParser):
 
         # Optional
         config_file = parsed_args.config_file
+        verify_only = parsed_args.verify_only
 
-        return builder, config_file
+        return builder, config_file, verify_only
 
     def error_if_blank(self, arg):
         if arg == "" or arg is None:

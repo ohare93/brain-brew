@@ -5,7 +5,7 @@ from brain_brew.utils import str_to_lowercase_no_separators
 
 
 class BuildTask(object):
-    task_names: List[str]
+    task_regex: str
 
     def execute(self):
         raise NotImplemented()
@@ -15,32 +15,29 @@ class BuildTask(object):
         raise NotImplemented()
 
     @classmethod
-    def get_all_build_tasks(cls) -> Dict[str, Type['BuildTask']]:
+    def get_all_task_regex(cls) -> Dict[str, Type['BuildTask']]:
         subclasses: List[Type[BuildTask]] = cls.__subclasses__()
-        known_build_tasks: Dict[str, Type[BuildTask]] = {}
+        task_regex_matches: Dict[str, Type[BuildTask]] = {}
 
         for sc in subclasses:
-            for original_task_name in sc.task_names:
-                task_name = str_to_lowercase_no_separators(original_task_name)
+            if sc.task_regex in task_regex_matches:
+                raise KeyError(f"Multiple instances of task regex '{sc.task_regex}'")
+            elif sc.task_regex == "" or sc.task_regex is None:
+                raise KeyError(f"Unknown task regex {sc.task_regex}")
 
-                if task_name in known_build_tasks:
-                    raise KeyError(f"Multiple instances of task name '{task_name}'")
-                elif task_name == "" or task_name is None:
-                    raise KeyError(f"Unknown task name {original_task_name}")
-
-                known_build_tasks.setdefault(task_name, sc)
+            task_regex_matches.setdefault(sc.task_regex, sc)
 
         # logging.debug(f"Known build tasks: {known_build_tasks}")
-        return known_build_tasks
+        return task_regex_matches
 
 
 class TopLevelBuildTask(BuildTask):
     @classmethod
-    def get_all_build_tasks(cls) -> Dict[str, Type['BuildTask']]:
-        return super(TopLevelBuildTask, cls).get_all_build_tasks()
+    def get_all_task_regex(cls) -> Dict[str, Type['BuildTask']]:
+        return super(TopLevelBuildTask, cls).get_all_task_regex()
 
 
 class DeckPartBuildTask(BuildTask):
     @classmethod
-    def get_all_build_tasks(cls) -> Dict[str, Type['BuildTask']]:
-        return super(DeckPartBuildTask, cls).get_all_build_tasks()
+    def get_all_task_regex(cls) -> Dict[str, Type['BuildTask']]:
+        return super(DeckPartBuildTask, cls).get_all_task_regex()

@@ -11,7 +11,7 @@ from brain_brew.utils import all_combos_prepend_append, join_tags
 
 @dataclass
 class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
-    task_names = all_combos_prepend_append(["Csv Collection", "Csv"], "Generate ", "s")
+    task_regex = r'.*csv.*'
 
     notes: DeckPartHolder[Notes] = field(default=None)
 

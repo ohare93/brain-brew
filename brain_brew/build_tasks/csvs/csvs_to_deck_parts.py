@@ -9,7 +9,7 @@ from brain_brew.utils import all_combos_prepend_append
 
 @dataclass
 class CsvsToDeckParts(DeckPartBuildTask):
-    task_names = all_combos_prepend_append(["Csv Collection", "Csv"], "From ", "s")
+    task_regex = r'.*csv.*'
 
     @dataclass
     class Representation(RepresentationBase):

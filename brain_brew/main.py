@@ -7,6 +7,7 @@ from brain_brew.representation.configuration.global_config import GlobalConfig
 
 # sys.path.append(os.path.join(os.path.dirname(__file__), "dist"))
 # sys.path.append(os.path.dirname(__file__))
+from brain_brew.yaml_verifier import YamlVerifier
 
 
 def main():
@@ -14,18 +15,19 @@ def main():
 
     # Read in Arguments
     argument_reader = BBArgumentReader()
-    builder_file_name, global_config_file = argument_reader.get_parsed()
+    builder_file_name, global_config_file, verify_only = argument_reader.get_parsed()
 
     # Read in Global Config File
     global_config = GlobalConfig.from_file(global_config_file) if global_config_file else GlobalConfig.from_file()
     file_manager = FileManager()
 
     # Parse Build Config File
-    builder_data = TopLevelTaskBuilder.read_to_dict(builder_file_name)
-    builder = TopLevelTaskBuilder.from_list(builder_data)
+    YamlVerifier()
+    builder = TopLevelTaskBuilder.parse_and_read(builder_file_name)
 
     # If all good, execute it
-    builder.execute()
+    if not verify_only:
+        builder.execute()
 
 
 if __name__ == "__main__":
