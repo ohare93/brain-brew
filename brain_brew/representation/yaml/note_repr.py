@@ -99,7 +99,7 @@ class NoteGrouping(GroupableNoteData):
 
     def get_sorted_notes(self, sort_by_keys, reverse_sort, case_insensitive_sort=None):
         if case_insensitive_sort is None:
-            case_insensitive_sort = GlobalConfig.get_instance().defaults.sort_case_insensitive
+            case_insensitive_sort = GlobalConfig.get_instance().sort_case_insensitive
 
         if sort_by_keys:
             def sort_method(i: Note):

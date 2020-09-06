@@ -84,7 +84,7 @@ class FileManager:
     def find_all_deck_part_media_files(self):
         self.known_media_files_dict = {}
 
-        for full_path in find_all_files_in_directory(self.global_config.deck_parts.media_files, recursive=True):
+        for full_path in find_all_files_in_directory(self.global_config.media_files_location, recursive=True):
             filename = filename_from_full_path(full_path)
             self._register_media_file(MediaFile(full_path, filename))
 

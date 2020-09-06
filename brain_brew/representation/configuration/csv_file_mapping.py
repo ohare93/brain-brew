@@ -8,7 +8,7 @@ from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
 from brain_brew.utils import single_item_to_list, generate_anki_guid
 
 
-FILE = "csv"
+FILE = "csv_file"
 NOTE_MODEL = "note_model"
 SORT_BY_COLUMNS = "sort_by_columns"
 REVERSE_SORT = "reverse_sort"
@@ -111,11 +111,14 @@ class FileMappingDerivative:
 class FileMapping(FileMappingDerivative, Verifiable):
     note_model: str  # Override Optional on Parent
 
+    data_set_has_changed: bool = field(init=False, default=False)
+
     def verify_contents(self):
         pass
 
     def compile_data(self):
         self.compiled_data = {}
+        self.data_set_has_changed = False
 
         data_in_progress = self._build_data_recursive()
 
@@ -134,6 +137,7 @@ class FileMapping(FileMappingDerivative, Verifiable):
             self.compiled_data.setdefault(guid, {key.lower(): row[key] for key in row})
 
         if guids_generated > 0:
+            self.data_set_has_changed = True
             logging.info(f"Generated {guids_generated} guids in {self.csv_file.file_location}")
 
     def set_relevant_data(self, data_set: Dict[str, dict]):
@@ -152,6 +156,9 @@ class FileMapping(FileMappingDerivative, Verifiable):
             else:
                 added += 1
                 self.compiled_data.setdefault(guid, data_set[guid])
+
+        if changed > 0 or added > 0:
+            self.data_set_has_changed = True
 
         logging.info(f"Set {self.csv_file.file_location} data; changed {changed}, "
                      f"added {added}, while {unchanged} were identical")

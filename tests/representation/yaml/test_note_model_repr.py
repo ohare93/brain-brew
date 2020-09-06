@@ -4,10 +4,12 @@ from brain_brew.representation.yaml.note_model_repr import NoteModel, Template, 
 from brain_brew.representation.json.json_file import JsonFile
 from brain_brew.representation.yaml.my_yaml import YamlRepr
 from tests.test_files import TestFiles
-from tests.test_helpers import debug_write_deck_part_to_file
 
 
 # CrowdAnki Files --------------------------------------------------------------------------
+from tests.test_helpers import debug_write_deck_part_to_file
+
+
 @pytest.fixture
 def ca_nm_data_word():
     return JsonFile.read_file(TestFiles.CrowdAnkiNoteModels.LL_WORD_COMPLETE)
@@ -117,6 +119,8 @@ class TestCrowdAnkiNoteModel:
             model = ca_nm_word_no_defaults
 
             encoded = model.encode()
+
+            # debug_write_deck_part_to_file(model, TestFiles.NoteModels.LL_WORD_NO_DEFAULTS)
 
             assert encoded != ca_nm_data_word_no_defaults
             assert encoded == nm_data_word_no_defaults
