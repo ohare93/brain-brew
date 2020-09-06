@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="Brain-Brew",
-    version="0.2.0",
+    version="0.2.1",
     author="Jordan Munch O'Hare",
     author_email="brainbrew@jordan.munchohare.com",
     description="Automated Anki flashcard creation and extraction to/from Csv ",
@@ -13,6 +13,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/ohare93/brain-brew",
     packages=setuptools.find_packages(),
+    include_package_data=True,
     entry_points={
         'console_scripts': [
             'brain_brew = brain_brew.main:main',
