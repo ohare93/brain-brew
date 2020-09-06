@@ -26,8 +26,8 @@ def single_item_to_list(item):
 
 def all_combos_prepend_append(original_list: list, prepend_with: str, append_with: str):
     return list({append_or_not for normal in original_list
-                for prepend_or_not in (normal, prepend_with + normal)
-                for append_or_not in (prepend_or_not, prepend_or_not + append_with)})
+                 for prepend_or_not in (normal, prepend_with + normal)
+                 for append_or_not in (prepend_or_not, prepend_or_not + append_with)})
 
 
 def str_to_lowercase_no_separators(str_to_tidy: str):
@@ -59,7 +59,7 @@ def find_all_files_in_directory(directory, recursive=False):
 
 
 def split_tags(tags_value: str) -> list:
-    split = [entry.strip() for entry in re.split(';\s*|,\s*|\s+', tags_value)]
+    split = [entry.strip() for entry in re.split(r';\s*|,\s*|\s+', tags_value)]
     while "" in split:
         split.remove("")
     return split
@@ -96,9 +96,11 @@ def sort_dict(data, sort_by_keys, reverse_sort, case_insensitive_sort=None):
 
     if sort_by_keys:
         if case_insensitive_sort:
-            def sort_method(i): return tuple((i[column] == "", i[column].lower()) for column in sort_by_keys)
+            def sort_method(i):
+                return tuple((i[column] == "", i[column].lower()) for column in sort_by_keys)
         else:
-            def sort_method(i): return tuple((i[column] == "", i[column]) for column in sort_by_keys)
+            def sort_method(i):
+                return tuple((i[column] == "", i[column]) for column in sort_by_keys)
 
         return sorted(data, key=sort_method, reverse=reverse_sort)
     elif reverse_sort:
