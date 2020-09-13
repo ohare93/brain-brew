@@ -12,7 +12,7 @@ from brain_brew.utils import all_combos_prepend_append
 
 @dataclass
 class FromDeckParts(DeckPartBuildTask):
-    task_regex = r'.*deck[\s_-]+?part.*'
+    task_regex = r'.*deck[\s_-]*?part.*'
 
     @dataclass
     class DeckPartToRead(RepresentationBase):

@@ -3,6 +3,8 @@ from pathlib import Path
 import os
 from ruamel.yaml import YAML
 
+from brain_brew.utils import create_path_if_not_exists
+
 yaml_load = YAML(typ='safe')
 
 
@@ -30,9 +32,7 @@ class YamlRepr:
     def dump_to_yaml(self, filepath):
         filepath = YamlRepr.append_yaml_if_needed(filepath)
 
-        if not Path(filepath).is_file():
-            logging.warning(f"Creating missing filepath '{filepath}'")
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        create_path_if_not_exists(filepath)
 
         with open(filepath, 'w') as fp:
             yaml_dump.dump(self.encode(), fp)

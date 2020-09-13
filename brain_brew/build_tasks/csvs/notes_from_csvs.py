@@ -24,10 +24,11 @@ class NotesFromCsvs(SharedBaseCsvs, BaseDeckPartsFrom):
             name=rep.name,
             save_to_file=rep.save_to_file,
             file_mappings=rep.get_file_mappings(),
-            note_model_mappings=rep.get_note_model_mappings()
+            note_model_mappings_to_read=rep.note_model_mappings
         )
 
     def execute(self):
+        self.setup_note_model_mappings()
         self.verify_contents()
 
         csv_data_by_guid: Dict[str, dict] = {}

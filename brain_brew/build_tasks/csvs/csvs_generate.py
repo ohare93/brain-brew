@@ -13,6 +13,7 @@ from brain_brew.utils import all_combos_prepend_append, join_tags
 class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
     task_regex = r'.*csv.*'
 
+    notes_to_read: str
     notes: DeckPartHolder[Notes] = field(default=None)
 
     @dataclass(init=False)
@@ -27,12 +28,14 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
-            notes=DeckPartHolder.from_deck_part_pool(rep.notes),
+            notes_to_read=rep.notes,
             file_mappings=rep.get_file_mappings(),
-            note_model_mappings=rep.get_note_model_mappings()
+            note_model_mappings_to_read=rep.note_model_mappings
         )
 
     def execute(self):
+        self.setup_note_model_mappings()
+        self.notes = DeckPartHolder.from_deck_part_pool(self.notes_to_read)
         self.verify_contents()
 
         notes: List[Note] = self.notes.deck_part.get_sorted_notes_copy(

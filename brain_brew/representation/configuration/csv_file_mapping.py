@@ -46,7 +46,7 @@ class FileMappingDerivative:
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
             csv_file=CsvFile.create_or_get(rep.file),
-            note_model=rep.note_model.strip() or None,
+            note_model=rep.note_model.strip() if rep.note_model else None,
             sort_by_columns=single_item_to_list(rep.sort_by_columns),
             reverse_sort=rep.reverse_sort or False,
             derivatives=list(map(cls.from_repr, rep.derivatives)) if rep.derivatives is not None else []
@@ -146,7 +146,7 @@ class FileMapping(FileMappingDerivative, Verifiable):
             if guid in self.compiled_data.keys():
                 changed_row = False
                 for key in data_set[guid]:
-                    if self.compiled_data[guid][key] != data_set[guid][key]:
+                    if key in self.compiled_data[guid] and self.compiled_data[guid][key] != data_set[guid][key]:
                         self.compiled_data[guid][key] = data_set[guid][key]
                         changed_row = True
                 if changed_row:

@@ -15,7 +15,7 @@ from brain_brew.utils import all_combos_prepend_append
 
 @dataclass
 class CrowdAnkiToDeckParts(DeckPartBuildTask):
-    task_regex = r'.*crowd[\s_-]+?anki.*'
+    task_regex = r'.*crowd[\s_-]*?anki.*'
 
     @dataclass
     class Representation(RepresentationBase):
@@ -50,7 +50,7 @@ class CrowdAnkiToDeckParts(DeckPartBuildTask):
 
         note_models: List[NoteModel] = self.note_model_transform.execute(ca_wrapper)
 
-        nm_id_to_name: dict = {model.crowdanki_id: model.name for model in note_models}
+        nm_id_to_name: dict = {model.id: model.name for model in note_models}
         notes = self.notes_transform.execute(ca_wrapper, nm_id_to_name)
 
         headers = self.headers_transform.execute(ca_wrapper)

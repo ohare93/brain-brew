@@ -1,11 +1,10 @@
+import logging
 import os
-import pathlib
+from pathlib import Path
 import string
 import random
 import re
 from typing import List
-
-from brain_brew.representation.configuration.global_config import GlobalConfig
 
 
 def blank_str_if_none(s):
@@ -58,6 +57,13 @@ def find_all_files_in_directory(directory, recursive=False):
     return found_files
 
 
+def create_path_if_not_exists(path):
+    dir_name = os.path.dirname(path)
+    if not Path().is_dir():
+        logging.warning(f"Creating missing filepath '{dir_name}'")
+        os.makedirs(os.path.dirname(dir_name), exist_ok=True)
+
+
 def split_tags(tags_value: str) -> list:
     split = [entry.strip() for entry in re.split(r';\s*|,\s*|\s+', tags_value)]
     while "" in split:
@@ -66,6 +72,7 @@ def split_tags(tags_value: str) -> list:
 
 
 def join_tags(tags_list: list) -> str:
+    from brain_brew.representation.configuration.global_config import GlobalConfig
     return GlobalConfig.get_instance().join_values_with.join(tags_list)
 
 
@@ -91,6 +98,7 @@ def generate_anki_guid() -> str:
 
 
 def sort_dict(data, sort_by_keys, reverse_sort, case_insensitive_sort=None):
+    from brain_brew.representation.configuration.global_config import GlobalConfig
     if case_insensitive_sort is None:
         case_insensitive_sort = GlobalConfig.get_instance().sort_case_insensitive
 

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Union, List
 import logging
 
@@ -14,7 +14,7 @@ class NoteModelsFromCrowdAnki:
     class NoteModelListItem(BaseDeckPartsFrom):
         @dataclass
         class Representation(BaseDeckPartsFrom.Representation):
-            model_name: Optional[str]
+            model_name: Optional[str] = field(default_factory=lambda: None)
             # TODO: fields: Optional[List[str]]
             # TODO: templates: Optional[List[str]]
 

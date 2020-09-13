@@ -1,16 +1,16 @@
 list(
-    map(include('generate_deck_parts'), key=regex('.*deck[\s_-]+?part.*', ignore_case=True)),
+    map(include('generate_deck_parts'), key=regex('.*deck[\s_-]*?part.*', ignore_case=True)),
     map(include('generate_csv'), key=regex('.*csv.*', ignore_case=True)),
-    map(include('generate_crowd_anki'), key=regex('.*crowd[\s_-]+?anki.*', ignore_case=True))
+    map(include('generate_crowd_anki'), key=regex('.*crowd[\s_-]*?anki.*', ignore_case=True))
 )
 
 ---
 
 generate_deck_parts:
   list(
-    map(include('from_deck_parts'), key=regex('.*deck[\s_-]+?part.*', ignore_case=True)),
+    map(include('from_deck_parts'), key=regex('.*deck[\s_-]*?part.*', ignore_case=True)),
     map(include('from_csv'), key=regex('.*csv.*', ignore_case=True)),
-    map(include('from_crowd_anki'), key=regex('.*crowd[\s_-]+?anki.*', ignore_case=True))
+    map(include('from_crowd_anki'), key=regex('.*crowd[\s_-]*?anki.*', ignore_case=True))
   )
 
 

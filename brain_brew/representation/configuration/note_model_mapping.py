@@ -156,4 +156,6 @@ class NoteModelMapping(Verifiable):
         return relevant_data
 
     def field_values_in_note_model_order(self, note_model_name, fields_from_csv):
-        return [fields_from_csv[f] for f in self.note_models[note_model_name].deck_part.field_names_lowercase]
+        return [fields_from_csv[f] if f in fields_from_csv else ""
+                for f in self.note_models[note_model_name].deck_part.field_names_lowercase
+               ]

@@ -20,7 +20,7 @@ from brain_brew.utils import all_combos_prepend_append
 
 @dataclass
 class CrowdAnkiGenerate(TopLevelBuildTask):
-    task_regex = r'.*crowd[\s_-]+?anki.*'
+    task_regex = r'.*crowd[\s_-]*?anki.*'
 
     @dataclass
     class Representation(RepresentationBase):

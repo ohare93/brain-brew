@@ -13,7 +13,7 @@ from brain_brew.utils import str_to_lowercase_no_separators
 
 @dataclass
 class GenerateDeckParts(TaskBuilder, TopLevelBuildTask):
-    task_regex = r'.*deck[\s_-]+?part.*'
+    task_regex = r'.*deck[\s_-]*?part.*'
 
     @classmethod
     def known_task_dict(cls) -> Dict[str, Type[BuildTask]]:

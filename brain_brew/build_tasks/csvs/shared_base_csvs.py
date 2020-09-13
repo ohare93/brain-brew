@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass, field
 from typing import List, Dict
 
@@ -20,15 +21,16 @@ class SharedBaseCsvs:
         def get_file_mappings(self) -> List[FileMapping]:
             return list(map(FileMapping.from_repr, self.file_mappings))
 
-        def get_note_model_mappings(self):
-            def map_nmm(nmm_to_map: str):
-                nmm = NoteModelMapping.from_repr(nmm_to_map)
-                return nmm.get_note_model_mapping_dict()
-
-            return dict(*map(map_nmm, self.note_model_mappings))
-
     file_mappings: List[FileMapping]
-    note_model_mappings: Dict[str, NoteModelMapping]
+    note_model_mappings_to_read: List[NoteModelMapping.Representation]
+    note_model_mappings: Dict[str, NoteModelMapping] = field(init=False)
+
+    def setup_note_model_mappings(self):
+        def map_nmm(nmm_to_map: str):
+            nmm = NoteModelMapping.from_repr(nmm_to_map)
+            return nmm.get_note_model_mapping_dict()
+
+        self.note_model_mappings = dict(*map(map_nmm, self.note_model_mappings_to_read))
 
     def verify_contents(self):
         errors = []
@@ -64,7 +66,7 @@ class SharedBaseCsvs:
                     missing_columns = [col for col in holder.deck_part.field_names_lowercase if
                                        col not in nm_map.csv_headers_map_to_note_fields(available_columns)]
                     if missing_columns:
-                        errors.append(KeyError(f"Csvs are missing columns from {holder.name}", missing_columns))
+                        logging.warning(f"Csvs are missing columns from {holder.name} {missing_columns}")
 
         if errors:
             raise Exception(errors)

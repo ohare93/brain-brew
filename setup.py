@@ -28,8 +28,8 @@ setuptools.setup(
     ],
     python_requires='>=3.7',
     install_requires=[
-        'PyYAML',
-        'ruamel-yaml',
-        'yamale'
+        'ruamel.yaml.clib>=0.2.2',
+        'ruamel.yaml>=0.16.10',
+        'yamale>=3.0.4'
     ]
 )

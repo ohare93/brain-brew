@@ -2,6 +2,8 @@ import os
 import shutil
 from enum import Enum
 
+from brain_brew.utils import create_path_if_not_exists
+
 
 class MediaFile:
     class ManagementType(Enum):
@@ -30,7 +32,7 @@ class MediaFile:
     def copy_source_to_target(self):
         if self.should_write():
             # TODO: If ManagementType.OVERRIDDEN check if override necessary
-            os.makedirs(os.path.dirname(self.file_location), exist_ok=True)
+            create_path_if_not_exists(self.file_location)
             shutil.copy2(self.source_loc, self.file_location)
 
     def should_write(self):

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Union, List
 import logging
 
@@ -30,13 +30,15 @@ class NoteModelsToCrowdAnki:
                 rep = cls.Representation(deck_part=data)  # Support string
 
             return cls(
-                deck_part=DeckPartHolder.from_deck_part_pool(rep.deck_part).deck_part
+                deck_part_to_read=rep.deck_part
             )
 
         def get_note_model(self) -> NoteModel:
+            self.deck_part = DeckPartHolder.from_deck_part_pool(self.deck_part_to_read).deck_part
             return self.deck_part  # Todo: add filters in here
 
-        deck_part: NoteModel
+        deck_part: NoteModel = field(init=False)
+        deck_part_to_read: str
 
     @dataclass
     class Representation(RepresentationBase):
