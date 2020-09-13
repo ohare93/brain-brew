@@ -67,7 +67,7 @@ class TestCopy:
     ])
     def test_takes_should_write_into_account(self, media_file_test1, should_write_returns, num_calls_to_copy):
         with patch.object(MediaFile, "should_write", return_value=should_write_returns), \
-                patch.object(os, "makedirs") as mock_dirs, \
+                patch("brain_brew.representation.generic.media_file.create_path_if_not_exists") as mock_dirs, \
                 patch.object(shutil, "copy2") as mock_copy:
             media_file_test1.copy_source_to_target()
             assert mock_copy.call_count == num_calls_to_copy

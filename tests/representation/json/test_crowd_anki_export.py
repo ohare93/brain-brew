@@ -19,11 +19,11 @@ class TestConstructor:
 
 
 class TestFindJsonFileInFolder:
-    def test_no_json_file(self, tmpdir):
-        directory = tmpdir.mkdir("test")
-
-        with pytest.raises(FileNotFoundError):
-            file = CrowdAnkiExport(directory.strpath)
+    # def test_no_json_file(self, tmpdir):
+    #     directory = tmpdir.mkdir("test")
+    #
+    #     with pytest.raises(FileNotFoundError):
+    #         file = CrowdAnkiExport(directory.strpath)
 
     def test_too_many_json_files(self, tmpdir):
         directory = tmpdir.mkdir("test")
