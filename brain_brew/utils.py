@@ -59,9 +59,9 @@ def find_all_files_in_directory(directory, recursive=False):
 
 def create_path_if_not_exists(path):
     dir_name = os.path.dirname(path)
-    if not Path().is_dir():
+    if not Path(dir_name).is_dir():
         logging.warning(f"Creating missing filepath '{dir_name}'")
-        os.makedirs(os.path.dirname(dir_name), exist_ok=True)
+        os.makedirs(dir_name, exist_ok=True)
 
 
 def split_tags(tags_value: str) -> list:
