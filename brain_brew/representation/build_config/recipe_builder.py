@@ -9,7 +9,7 @@ from brain_brew.utils import str_to_lowercase_no_separators
 
 
 @dataclass
-class TaskBuilder(YamlRepr):
+class RecipeBuilder(YamlRepr):
     tasks: List[BuildTask]
 
     @classmethod

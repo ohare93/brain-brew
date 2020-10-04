@@ -4,12 +4,11 @@ from typing import Union
 from brain_brew.build_tasks.csvs.notes_from_csvs import NotesFromCsvs
 from brain_brew.representation.build_config.build_task import DeckPartBuildTask
 from brain_brew.representation.build_config.representation_base import RepresentationBase
-from brain_brew.utils import all_combos_prepend_append
 
 
 @dataclass
 class CsvsToDeckParts(DeckPartBuildTask):
-    task_regex = r'.*csv.*'
+    task_regex = r'from_csvs'
 
     @dataclass
     class Representation(RepresentationBase):

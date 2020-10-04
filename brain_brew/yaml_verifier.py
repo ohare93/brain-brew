@@ -12,7 +12,7 @@ validators = DefaultValidators.copy()
 
 class YamlVerifier:
     __instance = None
-    builder_schema: Schema
+    recipe_schema: Schema
 
     def __init__(self):
         if YamlVerifier.__instance is None:
@@ -20,17 +20,17 @@ class YamlVerifier:
         else:
             raise Exception("Multiple YamlVerifiers created")
 
-        path = os.path.join(os.path.dirname(__file__), "schemas/builder.yaml")
-        self.builder_schema = yamale.make_schema(path, parser='ruamel', validators=validators)
+        path = os.path.join(os.path.dirname(__file__), "schemas/recipe.yaml")
+        self.recipe_schema = yamale.make_schema(path, parser='ruamel', validators=validators)
 
     @staticmethod
     def get_instance() -> 'YamlVerifier':
         return YamlVerifier.__instance
 
-    def verify_builder(self, filename):
+    def verify_recipe(self, filename):
         data = yamale.make_data(filename)
         try:
-            yamale.validate(self.builder_schema, data)
+            yamale.validate(self.recipe_schema, data)
         except YamaleError as e:
             print('Validation failed!\n')
             for result in e.results:

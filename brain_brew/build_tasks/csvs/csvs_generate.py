@@ -6,12 +6,12 @@ from brain_brew.representation.build_config.build_task import TopLevelBuildTask
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.note_repr import Notes, Note
-from brain_brew.utils import all_combos_prepend_append, join_tags
+from brain_brew.utils import join_tags
 
 
 @dataclass
 class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
-    task_regex = r'.*csv.*'
+    task_regex = r'generate_csvs'
 
     notes_to_read: str
     notes: DeckPartHolder[Notes] = field(default=None)
@@ -52,7 +52,7 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
 
     def verify_notes_match_note_model_mappings(self, notes: List[Note]):
         note_models_used = {note.note_model for note in notes}
-        errors = [TypeError(f"Unknown note model type '{model}' in deck part '{self.notes.name}'. "
+        errors = [TypeError(f"Unknown note model type '{model}' in deck part '{self.notes.part_id}'. "
                             f"Add mapping for that model.")
                   for model in note_models_used if model not in self.note_model_mappings.keys()]
 

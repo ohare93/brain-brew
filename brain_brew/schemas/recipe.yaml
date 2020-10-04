@@ -1,16 +1,16 @@
 list(
-    map(include('generate_deck_parts'), key=regex('.*deck[\s_-]*?part.*', ignore_case=True)),
-    map(include('generate_csv'), key=regex('.*csv.*', ignore_case=True)),
-    map(include('generate_crowd_anki'), key=regex('.*crowd[\s_-]*?anki.*', ignore_case=True))
+    map(include('generate_deck_parts'), key=regex('build_deck_parts', ignore_case=True)),
+    map(include('generate_csv'), key=regex('generate_csvs', ignore_case=True)),
+    map(include('generate_crowd_anki'), key=regex('generate_crowd_anki', ignore_case=True))
 )
 
 ---
 
 generate_deck_parts:
   list(
-    map(include('from_deck_parts'), key=regex('.*deck[\s_-]*?part.*', ignore_case=True)),
-    map(include('from_csv'), key=regex('.*csv.*', ignore_case=True)),
-    map(include('from_crowd_anki'), key=regex('.*crowd[\s_-]*?anki.*', ignore_case=True))
+    map(include('from_deck_parts'), key=regex('from_deck_parts', ignore_case=True)),
+    map(include('from_csv'), key=regex('from_csvs', ignore_case=True)),
+    map(include('from_crowd_anki'), key=regex('from_crowd_anki', ignore_case=True))
   )
 
 
@@ -33,17 +33,17 @@ generate_crowd_anki:
 
 
 from_ca_notes:
-  name: str()
+  part_id: str()
   sort_order: list(str(), required=False)
   save_to_file: str(required=False)
 
 from_ca_note_models:
-  name: str()
+  part_id: str()
   model_name: str(required=False)
   save_to_file: str(required=False)
 
 from_ca_headers:
-  name: str()
+  part_id: str()
   save_to_file: str(required=False)
 
 ca_media:
@@ -71,14 +71,14 @@ from_deck_parts:
   headers: list(include('deck_part_to_read'), required=False)
 
 deck_part_to_read:
-  name: str()
+  part_id: str()
   file: str()
 
 
 
 from_csv:
   notes:
-    name: str()
+    part_id: str()
     save_to_file: str(required=False)
     note_model_mappings: list(include('note_model_mapping'))
     file_mappings: list(include('file_mapping'))

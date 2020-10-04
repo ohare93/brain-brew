@@ -7,16 +7,15 @@ from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.headers_repr import Headers
 from brain_brew.representation.yaml.note_model_repr import NoteModel
 from brain_brew.representation.yaml.note_repr import Notes
-from brain_brew.utils import all_combos_prepend_append
 
 
 @dataclass
 class FromDeckParts(DeckPartBuildTask):
-    task_regex = r'.*deck[\s_-]*?part.*'
+    task_regex = r'from_deck_parts'
 
     @dataclass
     class DeckPartToRead(RepresentationBase):
-        name: str
+        part_id: str
         file: str
 
     @dataclass
@@ -39,11 +38,11 @@ class FromDeckParts(DeckPartBuildTask):
 
         return cls(
             notes=[DeckPartHolder.override_or_create(
-                name=note.name, save_to_file=None, deck_part=Notes.from_file(note.file)) for note in notes],
+                part_id=note.part_id, save_to_file=None, deck_part=Notes.from_file(note.file)) for note in notes],
             note_models=[DeckPartHolder.override_or_create(
-                name=model.name, save_to_file=None, deck_part=NoteModel.from_file(model.file)) for model in note_models],
+                part_id=model.part_id, save_to_file=None, deck_part=NoteModel.from_file(model.file)) for model in note_models],
             headers=[DeckPartHolder.override_or_create(
-                name=header.name, save_to_file=None, deck_part=Headers.from_file(header.file)) for header in headers]
+                part_id=header.part_id, save_to_file=None, deck_part=Headers.from_file(header.file)) for header in headers]
         )
 
     def execute(self):

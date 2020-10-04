@@ -1,7 +1,7 @@
 import logging
 
 from brain_brew.argument_reader import BBArgumentReader
-from brain_brew.representation.build_config.top_level_task_builder import TopLevelTaskBuilder
+from brain_brew.representation.build_config.top_level_recipe_builder import TopLevelRecipeBuilder
 from brain_brew.file_manager import FileManager
 from brain_brew.representation.configuration.global_config import GlobalConfig
 
@@ -15,7 +15,7 @@ def main():
 
     # Read in Arguments
     argument_reader = BBArgumentReader()
-    builder_file_name, global_config_file, verify_only = argument_reader.get_parsed()
+    recipe_file_name, global_config_file, verify_only = argument_reader.get_parsed()
 
     # Read in Global Config File
     global_config = GlobalConfig.from_file(global_config_file) if global_config_file else GlobalConfig.from_file()
@@ -23,11 +23,11 @@ def main():
 
     # Parse Build Config File
     YamlVerifier()
-    builder = TopLevelTaskBuilder.parse_and_read(builder_file_name)
+    recipe = TopLevelRecipeBuilder.parse_and_read(recipe_file_name)
 
     # If all good, execute it
     if not verify_only:
-        builder.execute()
+        recipe.execute()
 
 
 if __name__ == "__main__":

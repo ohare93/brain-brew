@@ -26,14 +26,14 @@ class HeadersFromCrowdAnki(BaseDeckPartsFrom):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
-            name=rep.name,
+            part_id=rep.part_id,
             save_to_file=rep.save_to_file
         )
 
     def execute(self, ca_wrapper: CrowdAnkiJsonWrapper):
         headers = Headers(self.crowd_anki_to_headers(ca_wrapper.data))
 
-        DeckPartHolder.override_or_create(self.name, self.save_to_file, headers)
+        DeckPartHolder.override_or_create(self.part_id, self.save_to_file, headers)
 
         return headers
 
