@@ -7,12 +7,11 @@ from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.headers_repr import Headers
 from brain_brew.representation.yaml.note_model_repr import NoteModel
 from brain_brew.representation.yaml.note_repr import Notes
-from brain_brew.utils import all_combos_prepend_append
 
 
 @dataclass
 class FromDeckParts(DeckPartBuildTask):
-    task_regex = r'.*deck[\s_-]*?part.*'
+    task_regex = r'from_deck_parts'
 
     @dataclass
     class DeckPartToRead(RepresentationBase):

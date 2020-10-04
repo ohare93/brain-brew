@@ -7,8 +7,7 @@ from brain_brew.representation.build_config.task_builder import TaskBuilder
 # Build Tasks
 from brain_brew.build_tasks.csvs.csvs_generate import CsvsGenerate
 from brain_brew.build_tasks.crowd_anki.crowd_anki_generate import CrowdAnkiGenerate
-from brain_brew.representation.build_config.generate_deck_parts import GenerateDeckParts
-from brain_brew.utils import str_to_lowercase_no_separators
+from brain_brew.representation.build_config.generate_deck_parts import BuildDeckParts
 
 
 class TopLevelTaskBuilder(TaskBuilder):

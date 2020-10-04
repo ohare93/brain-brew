@@ -10,12 +10,11 @@ from brain_brew.representation.build_config.build_task import DeckPartBuildTask
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.yaml.note_model_repr import NoteModel
-from brain_brew.utils import all_combos_prepend_append
 
 
 @dataclass
 class CrowdAnkiToDeckParts(DeckPartBuildTask):
-    task_regex = r'.*crowd[\s_-]*?anki.*'
+    task_regex = r'from_crowd_anki'
 
     @dataclass
     class Representation(RepresentationBase):
