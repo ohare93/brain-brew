@@ -20,7 +20,7 @@ class YamlVerifier:
         else:
             raise Exception("Multiple YamlVerifiers created")
 
-        path = os.path.join(os.path.dirname(__file__), "schemas/builder.yaml")
+        path = os.path.join(os.path.dirname(__file__), "schemas/recipe.yaml")
         self.recipe_schema = yamale.make_schema(path, parser='ruamel', validators=validators)
 
     @staticmethod
