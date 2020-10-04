@@ -19,7 +19,7 @@ class NotesFromCrowdAnki(SharedBaseNotes, BaseDeckPartsFrom):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
-            name=rep.name,
+            part_id=rep.part_id,
             sort_order=SharedBaseNotes._get_sort_order(rep.sort_order),
             reverse_sort=SharedBaseNotes._get_reverse_sort(rep.reverse_sort),
             save_to_file=rep.save_to_file
@@ -33,7 +33,7 @@ class NotesFromCrowdAnki(SharedBaseNotes, BaseDeckPartsFrom):
 
         notes = Notes.from_list_of_notes(note_list)  # TODO: pass in sort method
 
-        DeckPartHolder.override_or_create(self.name, self.save_to_file, notes)
+        DeckPartHolder.override_or_create(self.part_id, self.save_to_file, notes)
 
         return notes
 

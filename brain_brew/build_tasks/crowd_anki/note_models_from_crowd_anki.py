@@ -22,8 +22,8 @@ class NoteModelsFromCrowdAnki:
         def from_repr(cls, data: Union[Representation, dict]):
             rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
             return cls(
-                name=rep.name,
-                model_name=rep.model_name or rep.name,
+                part_id=rep.part_id,
+                model_name=rep.model_name or rep.part_id,
                 save_to_file=rep.save_to_file
             )
 
@@ -51,7 +51,7 @@ class NoteModelsFromCrowdAnki:
             extra_models.remove(nm_item.model_name)
 
             deck_part = NoteModel.from_crowdanki(model)
-            DeckPartHolder.override_or_create(nm_item.name, nm_item.save_to_file, deck_part)
+            DeckPartHolder.override_or_create(nm_item.part_id, nm_item.save_to_file, deck_part)
 
             dp_note_models.append(deck_part)
 

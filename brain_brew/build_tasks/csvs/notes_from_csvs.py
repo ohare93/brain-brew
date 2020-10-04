@@ -13,15 +13,15 @@ from brain_brew.utils import split_tags
 class NotesFromCsvs(SharedBaseCsvs, BaseDeckPartsFrom):
     @dataclass(init=False)
     class Representation(SharedBaseCsvs.Representation, BaseDeckPartsFrom.Representation):
-        def __init__(self, name, file_mappings, note_model_mappings, save_to_file=None):
+        def __init__(self, part_id, file_mappings, note_model_mappings, save_to_file=None):
             SharedBaseCsvs.Representation.__init__(self, file_mappings, note_model_mappings)
-            BaseDeckPartsFrom.Representation.__init__(self, name, save_to_file)
+            BaseDeckPartsFrom.Representation.__init__(self, part_id, save_to_file)
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
-            name=rep.name,
+            part_id=rep.part_id,
             save_to_file=rep.save_to_file,
             file_mappings=rep.get_file_mappings(),
             note_model_mappings_to_read=rep.note_model_mappings
@@ -40,7 +40,7 @@ class NotesFromCsvs(SharedBaseCsvs, BaseDeckPartsFrom):
         deck_part_notes: List[Note] = [self.csv_row_to_note(row, self.note_model_mappings) for row in csv_rows]
 
         notes = Notes.from_list_of_notes(deck_part_notes)
-        DeckPartHolder.override_or_create(self.name, self.save_to_file, notes)
+        DeckPartHolder.override_or_create(self.part_id, self.save_to_file, notes)
 
     @staticmethod
     def csv_row_to_note(row: dict, note_model_mappings: Dict[str, NoteModelMapping]) -> Note:

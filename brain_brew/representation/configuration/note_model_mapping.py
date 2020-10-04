@@ -61,7 +61,7 @@ class NoteModelMapping(Verifiable):
                 field_type=FieldMapping.FieldMappingType.PERSONAL_FIELD,
                 field_name=field,
                 value="") for field in data.personal_fields],
-            note_models=dict(map(lambda nm: (nm.name, nm), note_models))
+            note_models=dict(map(lambda nm: (nm.part_id, nm), note_models))
         )
 
     def get_note_model_mapping_dict(self):
@@ -83,7 +83,7 @@ class NoteModelMapping(Verifiable):
                     missing.append(req)
 
             if missing:
-                errors.append(KeyError(f"""Note model(s) "{holder.name}" to Csv config error: \
+                errors.append(KeyError(f"""Note model(s) "{holder.part_id}" to Csv config error: \
                                    Definitions for fields {missing} are required."""))
 
             # Check Fields Align with Note Type
@@ -95,7 +95,7 @@ class NoteModelMapping(Verifiable):
 
             if missing:
                 errors.append(
-                    KeyError(f"Note model '{holder.name}' to Csv config error. "
+                    KeyError(f"Note model '{holder.part_id}' to Csv config error. "
                              f"It expected {[field.name for field in model.fields]} but was missing: {missing}")
                 )
 

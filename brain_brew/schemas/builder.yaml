@@ -33,17 +33,17 @@ generate_crowd_anki:
 
 
 from_ca_notes:
-  name: str()
+  part_id: str()
   sort_order: list(str(), required=False)
   save_to_file: str(required=False)
 
 from_ca_note_models:
-  name: str()
+  part_id: str()
   model_name: str(required=False)
   save_to_file: str(required=False)
 
 from_ca_headers:
-  name: str()
+  part_id: str()
   save_to_file: str(required=False)
 
 ca_media:
@@ -71,14 +71,14 @@ from_deck_parts:
   headers: list(include('deck_part_to_read'), required=False)
 
 deck_part_to_read:
-  name: str()
+  part_id: str()
   file: str()
 
 
 
 from_csv:
   notes:
-    name: str()
+    part_id: str()
     save_to_file: str(required=False)
     note_model_mappings: list(include('note_model_mapping'))
     file_mappings: list(include('file_mapping'))

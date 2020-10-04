@@ -5,7 +5,7 @@
 #                 patch.object(CsvFile, "create_or_get", return_value=Mock()):
 #
 #             data = YamlRepr.read_to_dict(TestFiles.BuildConfig.ONE_OF_EACH_TYPE)
-#             builder = TopLevelTaskBuilder.from_list(data)
+#             builder = TopLevelRecipeBuilder.from_list(data)
 #             builder.execute()
 #
 #             assert len(builder.tasks) == 1

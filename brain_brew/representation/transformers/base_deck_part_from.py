@@ -8,12 +8,12 @@ from brain_brew.representation.build_config.representation_base import Represent
 class BaseDeckPartsFrom:
     @dataclass
     class Representation(RepresentationBase):
-        name: str
+        part_id: str
         save_to_file: Optional[str]
 
-        def __init__(self, name, save_to_file=None):
-            self.name = name
+        def __init__(self, part_id, save_to_file=None):
+            self.part_id = part_id
             self.save_to_file = save_to_file
 
-    name: str
+    part_id: str
     save_to_file: Optional[str]

@@ -75,9 +75,9 @@ class FileManager:
                           f" and '{self.known_media_files_dict[file.filename].source_loc}'")
 
     def new_deck_part(self, dp: DeckPartHolder) -> DeckPartHolder:
-        if dp.name in self.deck_part_pool:
-            raise KeyError(f"Cannot use same name '{dp.name}' for multiple Deck Parts")
-        self.deck_part_pool.setdefault(dp.name, dp)
+        if dp.part_id in self.deck_part_pool:
+            raise KeyError(f"Cannot use same name '{dp.part_id}' for multiple Deck Parts")
+        self.deck_part_pool.setdefault(dp.part_id, dp)
         return dp
 
     # Gets
