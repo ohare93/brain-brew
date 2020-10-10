@@ -36,6 +36,15 @@ class FieldMapping:
 
 @dataclass
 class NoteModelMapping(Verifiable):
+    @classmethod
+    def yamale_validator(cls) -> (str, set):
+        return f'''\
+            note_model_mapping:
+                note_models: any(list(str()), str())
+                columns_to_fields: map(str(), key=str())
+                personal_fields: list(str())
+            '''
+
     @dataclass
     class Representation(RepresentationBase):
         note_models: Union[str, list]

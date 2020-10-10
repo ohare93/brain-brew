@@ -149,7 +149,7 @@ class Notes(YamlRepr):
     note_groupings: List[NoteGrouping]
 
     @classmethod
-    def from_file(cls, filename: str):
+    def from_yaml_file(cls, filename: str):
         return cls.from_dict(cls.read_to_dict(filename))
 
     @classmethod

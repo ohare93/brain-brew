@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from typing import Dict, List, Union
 
 from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
+from brain_brew.representation.build_config.build_task import DeckPartBuildTask
+from brain_brew.representation.configuration.csv_file_mapping import FileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 from brain_brew.representation.transformers.base_deck_part_from import BaseDeckPartsFrom
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
@@ -10,7 +12,19 @@ from brain_brew.utils import split_tags
 
 
 @dataclass
-class NotesFromCsvs(SharedBaseCsvs, BaseDeckPartsFrom):
+class NotesFromCsvs(SharedBaseCsvs, BaseDeckPartsFrom, DeckPartBuildTask):
+    task_regex = r'notes_from_csvs'
+
+    @classmethod
+    def yamale_validator(cls) -> (str, set):
+        return f'''\
+            {cls.task_regex}:
+              part_id: str()
+              save_to_file: str(required=False)
+              note_model_mappings: list(include('note_model_mapping'))
+              file_mappings: list(include('file_mapping'))
+            ''', {NoteModelMapping, FileMapping}
+
     @dataclass(init=False)
     class Representation(SharedBaseCsvs.Representation, BaseDeckPartsFrom.Representation):
         def __init__(self, part_id, file_mappings, note_model_mappings, save_to_file=None):

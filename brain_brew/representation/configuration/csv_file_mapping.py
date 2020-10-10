@@ -17,6 +17,17 @@ DERIVATIVES = "derivatives"
 
 @dataclass
 class FileMappingDerivative:
+    @classmethod
+    def yamale_validator(cls) -> (str, set):
+        return f'''\
+            "file_mapping:
+                file: str()
+                note_model: str(required=False)
+                sort_by_columns: list(str(), required=False)
+                reverse_sort: bool(required=False)
+                derivatives: list(include('file_mapping'), required=False)
+            ''', None
+
     @dataclass(init=False)
     class Representation(RepresentationBase):
         file: str

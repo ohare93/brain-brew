@@ -207,7 +207,7 @@ class NoteModel(YamlRepr, RepresentationBase):
     version: list = field(default_factory=lambda: VERSION.default_value)  # Legacy version number. Deprecated in Anki
 
     @classmethod
-    def from_file(cls, filename: str):
+    def from_yaml_file(cls, filename: str):
         data = cls.read_to_dict(filename)
         return cls(
             fields=[Field(**f) for f in data.pop(FIELDS.name)],

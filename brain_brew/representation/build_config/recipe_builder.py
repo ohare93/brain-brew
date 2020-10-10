@@ -46,8 +46,11 @@ class RecipeBuilder(YamlRepr):
 
             matching_task = find_matching_task(task_name)
             if matching_task is not None:
-                task_instance = matching_task.from_repr(task_arguments)
-                build_tasks.append(task_instance)
+                if isinstance(task_arguments, list):
+                    task_or_tasks = [matching_task.from_repr(t_arg) for t_arg in task_arguments]
+                else:
+                    task_or_tasks = matching_task.from_repr(task_arguments)
+                build_tasks.append(task_or_tasks)
             else:
                 raise KeyError(f"Unknown task '{task_name}'")  # TODO: check this first on all and return all errors
 

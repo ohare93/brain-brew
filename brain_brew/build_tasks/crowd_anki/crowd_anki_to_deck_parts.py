@@ -16,6 +16,16 @@ from brain_brew.representation.yaml.note_model_repr import NoteModel
 class CrowdAnkiToDeckParts(DeckPartBuildTask):
     task_regex = r'from_crowd_anki'
 
+    @classmethod
+    def yamale_validator(cls) -> (str, set):
+        return f'''\
+            {cls.task_regex}:
+                part_id: str()
+                save_to_file: str(required=False)
+                note_model_mappings: list(include('note_model_mapping'))
+                file_mappings: list(include('file_mapping'))
+            ''', None
+
     @dataclass
     class Representation(RepresentationBase):
         folder: str
