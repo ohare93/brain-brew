@@ -1,11 +1,13 @@
+from abc import ABCMeta
 from dataclasses import dataclass
 from typing import Optional
 
+from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 
 
 @dataclass
-class BaseDeckPartsFrom:
+class BaseDeckPartsFrom(YamlRepr, metaclass=ABCMeta):
     @dataclass
     class Representation(RepresentationBase):
         part_id: str

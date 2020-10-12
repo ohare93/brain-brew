@@ -1,3 +1,4 @@
+from abc import ABCMeta
 from dataclasses import dataclass
 from typing import Union
 
@@ -10,12 +11,11 @@ from brain_brew.representation.yaml.note_repr import Notes
 
 
 @dataclass
-class FromYamlDeckPartBase:
-    task_regex = ''
+class FromYamlDeckPartBase(DeckPartBuildTask, metaclass=ABCMeta):
     deck_part_type = None
 
     @classmethod
-    def yamale_validator(cls) -> (str, set):
+    def yamale_validator_and_deps(cls) -> (str, set):
         return f'''\
             {cls.task_regex}:
               part_id: str()
@@ -39,18 +39,27 @@ class FromYamlDeckPartBase:
 
 
 @dataclass
-class NotesFromYamlDeckPart(FromYamlDeckPartBase, DeckPartBuildTask):
-    task_regex = r'notes_from_deck_parts'
+class NotesFromYamlDeckPart(FromYamlDeckPartBase):
+    @classmethod
+    def task_regex(cls) -> str:
+        return r'notes_from_deck_parts'
+
     deck_part_type = Notes
 
 
 @dataclass
-class HeadersFromYamlDeckPart(FromYamlDeckPartBase, DeckPartBuildTask):
-    task_regex = r'headers_from_deck_parts'
+class HeadersFromYamlDeckPart(FromYamlDeckPartBase):
+    @classmethod
+    def task_regex(cls) -> str:
+        return r'headers_from_deck_parts'
+
     deck_part_type = Headers
 
 
 @dataclass
-class NoteModelsFromYamlDeckPart(FromYamlDeckPartBase, DeckPartBuildTask):
-    task_regex = r'note_models_from_deck_parts'
+class NoteModelsFromYamlDeckPart(FromYamlDeckPartBase):
+    @classmethod
+    def task_regex(cls) -> str:
+        return r'note_models_from_deck_parts'
+
     deck_part_type = NoteModel

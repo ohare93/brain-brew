@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Union, Dict
 
-from brain_brew.interfaces.verifiable import Verifiable
+from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.note_model_repr import NoteModel
@@ -35,15 +35,19 @@ class FieldMapping:
 
 
 @dataclass
-class NoteModelMapping(Verifiable):
+class NoteModelMapping(YamlRepr):
     @classmethod
-    def yamale_validator(cls) -> (str, set):
+    def task_regex(cls) -> str:
+        return r'note_model_mapping'
+
+    @classmethod
+    def yamale_validator_and_deps(cls) -> (str, set):
         return f'''\
-            note_model_mapping:
+            {cls.task_regex()}:
                 note_models: any(list(str()), str())
                 columns_to_fields: map(str(), key=str())
                 personal_fields: list(str())
-            '''
+            ''', None
 
     @dataclass
     class Representation(RepresentationBase):
@@ -113,7 +117,8 @@ class NoteModelMapping(Verifiable):
                 extra_fields = model.check_field_extra(extra_fields)
 
         if extra_fields:
-            errors.append(KeyError(f"Field(s) '{extra_fields} are defined as mappings, but match no Note Model's field"))
+            errors.append(
+                KeyError(f"Field(s) '{extra_fields} are defined as mappings, but match no Note Model's field"))
 
         if errors:
             raise Exception(errors)
@@ -167,4 +172,4 @@ class NoteModelMapping(Verifiable):
     def field_values_in_note_model_order(self, note_model_name, fields_from_csv):
         return [fields_from_csv[f] if f in fields_from_csv else ""
                 for f in self.note_models[note_model_name].deck_part.field_names_lowercase
-               ]
+                ]

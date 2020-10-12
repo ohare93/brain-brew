@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 
 from brain_brew.representation.json.wrappers_for_crowd_anki import CA_NAME
-from brain_brew.representation.yaml.my_yaml import YamlRepr
+from brain_brew.representation.yaml.yaml_object import YamlObject
 
 
 @dataclass
-class Headers(YamlRepr):
+class Headers(YamlObject):
     data: dict
 
     @classmethod

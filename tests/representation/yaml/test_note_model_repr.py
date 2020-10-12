@@ -2,7 +2,7 @@ import pytest
 
 from brain_brew.representation.yaml.note_model_repr import NoteModel, Template, Field
 from brain_brew.representation.json.json_file import JsonFile
-from brain_brew.representation.yaml.my_yaml import YamlRepr
+from brain_brew.representation.yaml.yaml_object import YamlObject
 from tests.test_files import TestFiles
 
 
@@ -43,12 +43,12 @@ def ca_nm_word_no_defaults(ca_nm_data_word_no_defaults) -> NoteModel:
 # Yaml Files --------------------------------------------------------------------------
 @pytest.fixture
 def nm_data_word_required_only():
-    return YamlRepr.read_to_dict(TestFiles.NoteModels.LL_WORD_ONLY_REQUIRED)
+    return YamlObject.read_to_dict(TestFiles.NoteModels.LL_WORD_ONLY_REQUIRED)
 
 
 @pytest.fixture
 def nm_data_word_no_defaults():
-    return YamlRepr.read_to_dict(TestFiles.NoteModels.LL_WORD_NO_DEFAULTS)
+    return YamlObject.read_to_dict(TestFiles.NoteModels.LL_WORD_NO_DEFAULTS)
 
 
 class TestCrowdAnkiNoteModel:

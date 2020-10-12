@@ -15,10 +15,10 @@ yaml_dump.representer.ignore_aliases = lambda *data: True
 # yaml.sort_base_mapping_type_on_output = False
 
 
-class YamlRepr:
+class YamlObject:
     @staticmethod
     def read_to_dict(filename: str):
-        filename = YamlRepr.append_yaml_if_needed(filename)
+        filename = YamlObject.append_yaml_if_needed(filename)
 
         if not Path(filename).is_file():
             raise FileNotFoundError(filename)
@@ -30,7 +30,7 @@ class YamlRepr:
         raise NotImplemented
 
     def dump_to_yaml(self, filepath):
-        filepath = YamlRepr.append_yaml_if_needed(filepath)
+        filepath = YamlObject.append_yaml_if_needed(filepath)
 
         create_path_if_not_exists(filepath)
 

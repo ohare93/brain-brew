@@ -2,11 +2,11 @@ from dataclasses import dataclass, field
 from typing import Union, Optional
 
 from brain_brew.representation.build_config.representation_base import RepresentationBase
-from brain_brew.representation.yaml.my_yaml import YamlRepr
+from brain_brew.representation.yaml.yaml_object import YamlObject
 
 
 @dataclass
-class GlobalConfig(YamlRepr):
+class GlobalConfig(YamlObject):
     __instance = None
 
     @dataclass

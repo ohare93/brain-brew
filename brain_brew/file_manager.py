@@ -8,7 +8,7 @@ from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.generic.source_file import SourceFile
 from brain_brew.representation.generic.media_file import MediaFile
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
-from brain_brew.representation.yaml.my_yaml import YamlRepr
+from brain_brew.representation.yaml.yaml_object import YamlObject
 from brain_brew.utils import filename_from_full_path, find_all_files_in_directory
 
 
@@ -18,7 +18,7 @@ class FileManager:
 
     known_files_dict: Dict[str, SourceFile]
     known_media_files_dict: Dict[str, MediaFile]
-    deck_part_pool: Dict[str, DeckPartHolder[YamlRepr]]
+    deck_part_pool: Dict[str, DeckPartHolder[YamlObject]]
 
     def __init__(self):
         if FileManager.__instance is None:
@@ -48,7 +48,7 @@ class FileManager:
             return self.known_files_dict[file_location]
         return None
 
-    def deck_part_if_exists(self, dp_name) -> Union[DeckPartHolder[YamlRepr], None]:
+    def deck_part_if_exists(self, dp_name) -> Union[DeckPartHolder[YamlObject], None]:
         return self.deck_part_pool.get(dp_name)
 
     def media_file_if_exists(self, filename) -> Union[MediaFile, None]:

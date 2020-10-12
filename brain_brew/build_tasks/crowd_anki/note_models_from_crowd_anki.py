@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Union, List
 import logging
 
+from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
 from brain_brew.representation.transformers.base_deck_part_from import BaseDeckPartsFrom
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
@@ -9,53 +10,49 @@ from brain_brew.representation.yaml.note_model_repr import NoteModel
 
 
 @dataclass
-class NoteModelsFromCrowdAnki:
-    @dataclass
-    class NoteModelListItem(BaseDeckPartsFrom):
-        @dataclass
-        class Representation(BaseDeckPartsFrom.Representation):
-            model_name: Optional[str] = field(default_factory=lambda: None)
-            # TODO: fields: Optional[List[str]]
-            # TODO: templates: Optional[List[str]]
-
-        @classmethod
-        def from_repr(cls, data: Union[Representation, dict]):
-            rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
-            return cls(
-                part_id=rep.part_id,
-                model_name=rep.model_name or rep.part_id,
-                save_to_file=rep.save_to_file
-            )
-
-        model_name: str
+class NoteModelsFromCrowdAnki(BaseDeckPartsFrom):
+    @classmethod
+    def task_regex(cls) -> str:
+        return r'note_models_from_crowd_anki'
 
     @classmethod
-    def from_list(cls, note_model_items: List[dict]):
+    def yamale_validator_and_deps(cls) -> (str, set):
+        return f'''\
+            {cls.task_regex()}:
+              source: str()
+              part_id: str()
+              model_name: str(required=False)
+              save_to_file: str(required=False)
+        '''
+
+    class Representation(BaseDeckPartsFrom.Representation):
+        source: str
+        model_name: Optional[str] = field(default_factory=lambda: None)
+        # TODO: fields: Optional[List[str]]
+        # TODO: templates: Optional[List[str]]
+
+    @classmethod
+    def from_repr(cls, data: Union[Representation, dict]):
+        rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
-            note_model_items=list(map(cls.NoteModelListItem.from_repr, note_model_items))
+            ca_export=CrowdAnkiExport.create_or_get(rep.source),
+            part_id=rep.part_id,
+            model_name=rep.model_name or rep.part_id,
+            save_to_file=rep.save_to_file
         )
 
-    note_model_items: List[NoteModelListItem]
+    ca_export: CrowdAnkiExport
+    model_name: str
 
-    def execute(self, ca_wrapper: CrowdAnkiJsonWrapper) -> List[NoteModel]:
-        note_models = {model["name"]: model for model in ca_wrapper.note_models}
+    def execute(self):
+        ca_wrapper: CrowdAnkiJsonWrapper = self.ca_export.json_data
 
-        extra_models = list(note_models.keys())
-        dp_note_models: List[NoteModel] = []
+        note_models_dict = {model.name: model for model in ca_wrapper.note_models}
 
-        for nm_item in self.note_model_items:
-            if nm_item.model_name not in note_models:
-                raise ReferenceError(f"Missing Note Model '{nm_item.model_name}' in CrowdAnki file")
+        if self.model_name not in note_models_dict:
+            raise ReferenceError(f"Missing Note Model '{self.model_name}' in CrowdAnki file")
 
-            model = note_models[nm_item.model_name]
-            extra_models.remove(nm_item.model_name)
+        deck_part = NoteModel.from_crowdanki(note_models_dict[self.model_name])
+        DeckPartHolder.override_or_create(self.part_id, self.save_to_file, deck_part)
 
-            deck_part = NoteModel.from_crowdanki(model)
-            DeckPartHolder.override_or_create(nm_item.part_id, nm_item.save_to_file, deck_part)
-
-            dp_note_models.append(deck_part)
-
-        if extra_models:
-            logging.warning(f"Note Models were converted to Deck Parts, but did you miss some? Possible missing: {extra_models}")
-
-        return dp_note_models
+        # TODO: Media

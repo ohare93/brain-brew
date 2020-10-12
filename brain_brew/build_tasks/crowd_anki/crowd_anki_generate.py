@@ -19,7 +19,20 @@ from brain_brew.representation.build_config.representation_base import Represent
 
 @dataclass
 class CrowdAnkiGenerate(TopLevelBuildTask):
-    task_regex = r'generate_crowd_anki'
+    @classmethod
+    def task_regex(cls) -> str:
+        return r'generate_crowd_anki'
+
+    @classmethod
+    def yamale_validator_and_deps(cls) -> (str, set):
+        return f'''\
+            {cls.task_regex()}:
+              folder: str()
+              headers: str()
+              notes: include('{NotesToCrowdAnki.task_regex()}')
+              note_models: include('{NoteModelsToCrowdAnki.task_regex()}')
+              media: any(bool(), include('{MediaToFromCrowdAnki.task_regex()}'), required=False)
+        ''', {NotesToCrowdAnki, NoteModelsToCrowdAnki, MediaToFromCrowdAnki}
 
     @dataclass
     class Representation(RepresentationBase):

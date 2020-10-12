@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Union, List
 
 from brain_brew.build_tasks.crowd_anki.shared_base_notes import SharedBaseNotes
+from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiNoteWrapper
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
@@ -10,7 +11,21 @@ from brain_brew.utils import blank_str_if_none
 
 
 @dataclass
-class NotesToCrowdAnki(SharedBaseNotes):
+class NotesToCrowdAnki(YamlRepr, SharedBaseNotes):
+    @classmethod
+    def task_regex(cls) -> str:
+        return r'notes_to_crowd_anki'
+
+    @classmethod
+    def yamale_validator_and_deps(cls) -> (str, set):
+        return f'''\
+            {cls.task_regex()}:
+              deck_part: str()
+              sort_order: list(str(), required=False)
+              reverse_sort: bool(required=False)
+              additional_items_to_add: map(str(), key=str(), required=False)
+        ''', None
+
     @dataclass
     class Representation(RepresentationBase):
         deck_part: str

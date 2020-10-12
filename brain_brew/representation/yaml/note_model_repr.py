@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Union, Dict, Set
 
 from brain_brew.representation.build_config.representation_base import RepresentationBase
-from brain_brew.representation.yaml.my_yaml import YamlRepr
+from brain_brew.representation.yaml.yaml_object import YamlObject
 from brain_brew.utils import list_of_str_to_lowercase, find_media_in_field
 
 
@@ -174,7 +174,7 @@ class Field(RepresentationBase):
 
 
 @dataclass
-class NoteModel(YamlRepr, RepresentationBase):
+class NoteModel(YamlObject, RepresentationBase):
     @dataclass
     class CrowdAnki(RepresentationBase):
         name: str

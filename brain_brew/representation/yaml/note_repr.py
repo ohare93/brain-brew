@@ -1,7 +1,7 @@
 import logging
 
 from brain_brew.representation.configuration.global_config import GlobalConfig
-from brain_brew.representation.yaml.my_yaml import YamlRepr
+from brain_brew.representation.yaml.yaml_object import YamlObject
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Set
 
@@ -18,7 +18,7 @@ MEDIA_REFERENCES = "media_references"
 
 
 @dataclass
-class GroupableNoteData(YamlRepr):
+class GroupableNoteData(YamlObject):
     note_model: Optional[str]
     tags: Optional[List[str]]
 
@@ -145,7 +145,7 @@ class NoteGrouping(GroupableNoteData):
 
 
 @dataclass
-class Notes(YamlRepr):
+class Notes(YamlObject):
     note_groupings: List[NoteGrouping]
 
     @classmethod

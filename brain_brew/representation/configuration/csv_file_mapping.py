@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Union
 
-from brain_brew.interfaces.verifiable import Verifiable
+from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
 from brain_brew.utils import single_item_to_list, generate_anki_guid
@@ -16,16 +16,20 @@ DERIVATIVES = "derivatives"
 
 
 @dataclass
-class FileMappingDerivative:
+class FileMappingDerivative(YamlRepr):
     @classmethod
-    def yamale_validator(cls) -> (str, set):
+    def task_regex(cls) -> str:
+        return r'file_mapping'
+
+    @classmethod
+    def yamale_validator_and_deps(cls) -> (str, set):
         return f'''\
-            "file_mapping:
-                file: str()
-                note_model: str(required=False)
-                sort_by_columns: list(str(), required=False)
-                reverse_sort: bool(required=False)
-                derivatives: list(include('file_mapping'), required=False)
+            {cls.task_regex()}:
+              file: str()
+              note_model: str(required=False)
+              sort_by_columns: list(str(), required=False)
+              reverse_sort: bool(required=False)
+              derivatives: list(include('{cls.task_regex()}'), required=False)
             ''', None
 
     @dataclass(init=False)
@@ -119,13 +123,10 @@ class FileMappingDerivative:
 
 
 @dataclass
-class FileMapping(FileMappingDerivative, Verifiable):
+class FileMapping(FileMappingDerivative):
     note_model: str  # Override Optional on Parent
 
     data_set_has_changed: bool = field(init=False, default=False)
-
-    def verify_contents(self):
-        pass
 
     def compile_data(self):
         self.compiled_data = {}

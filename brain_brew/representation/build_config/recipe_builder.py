@@ -2,14 +2,12 @@ from dataclasses import dataclass
 from typing import Dict, List, Type
 import re
 
-from brain_brew.interfaces.verifiable import Verifiable
 from brain_brew.representation.build_config.build_task import BuildTask
-from brain_brew.representation.yaml.my_yaml import YamlRepr
-from brain_brew.utils import str_to_lowercase_no_separators
+from brain_brew.representation.yaml.yaml_object import YamlObject
 
 
 @dataclass
-class RecipeBuilder(YamlRepr):
+class RecipeBuilder(YamlObject):
     tasks: List[BuildTask]
 
     @classmethod
@@ -53,11 +51,6 @@ class RecipeBuilder(YamlRepr):
                 build_tasks.append(task_or_tasks)
             else:
                 raise KeyError(f"Unknown task '{task_name}'")  # TODO: check this first on all and return all errors
-
-        # Verify tasks
-        for task in build_tasks:
-            if isinstance(task, Verifiable):
-                task.verify_contents()
 
         return build_tasks
 

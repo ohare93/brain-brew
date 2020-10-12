@@ -13,7 +13,9 @@ from brain_brew.build_tasks.crowd_anki.crowd_anki_to_deck_parts import CrowdAnki
 
 @dataclass
 class BuildDeckParts(RecipeBuilder, TopLevelBuildTask):
-    task_regex = r'build_deck_parts'
+    @classmethod
+    def task_regex(cls) -> str:
+        return r'build_deck_parts'
 
     @classmethod
     def known_task_dict(cls) -> Dict[str, Type[BuildTask]]:
@@ -30,7 +32,7 @@ class BuildDeckParts(RecipeBuilder, TopLevelBuildTask):
         return cls.from_list(data)
 
     @classmethod
-    def yamale_validator(cls) -> (str, set):
+    def yamale_validator_and_deps(cls) -> (str, set):
         # list(
         #     map(include('from_deck_parts'), key=regex('from_deck_parts', ignore_case=True)),
         #     map(include('from_csv'), key=regex('from_csvs', ignore_case=True)),

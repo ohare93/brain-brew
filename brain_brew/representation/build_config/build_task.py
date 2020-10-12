@@ -1,22 +1,14 @@
 import logging
+from abc import ABCMeta, abstractmethod
 from typing import Dict, List, Type, Tuple
 
-from brain_brew.utils import str_to_lowercase_no_separators
+from brain_brew.interfaces.yamale_verifyable import YamlRepr
 
 
-class BuildTask(object):
-    task_regex: str
-
+class BuildTask(YamlRepr, object, metaclass=ABCMeta):
+    @abstractmethod
     def execute(self):
-        raise NotImplemented()
-
-    @classmethod
-    def from_repr(cls, data: dict):
-        raise NotImplemented()
-
-    @classmethod
-    def yamale_validator(cls) -> (str, set):
-        raise NotImplemented()
+        pass
 
     @classmethod
     def get_all_task_regex(cls) -> Dict[str, Type['BuildTask']]:
@@ -29,7 +21,7 @@ class BuildTask(object):
             elif sc.task_regex == "" or sc.task_regex is None:
                 raise KeyError(f"Unknown task regex {sc.task_regex}")
 
-            task_regex_matches.setdefault(sc.task_regex, sc)
+            task_regex_matches.setdefault(sc.task_regex(), sc)
 
         # logging.debug(f"Known build tasks: {known_build_tasks}")
         return task_regex_matches
@@ -37,10 +29,10 @@ class BuildTask(object):
     @classmethod
     def get_all_validators(cls) -> List[Tuple[str, set]]:
         subclasses: List[Type[BuildTask]] = cls.__subclasses__()
-        return [sc.yamale_validator() for sc in subclasses]
+        return [sc.yamale_validator_and_deps() for sc in subclasses]
 
 
-class TopLevelBuildTask(BuildTask):
+class TopLevelBuildTask(BuildTask, metaclass=ABCMeta):
     @classmethod
     def get_all_task_regex(cls) -> Dict[str, Type['BuildTask']]:
         return super(TopLevelBuildTask, cls).get_all_task_regex()
@@ -50,7 +42,7 @@ class TopLevelBuildTask(BuildTask):
         return super(TopLevelBuildTask, cls).get_all_validators()
 
 
-class DeckPartBuildTask(BuildTask):
+class DeckPartBuildTask(BuildTask, metaclass=ABCMeta):
     @classmethod
     def get_all_task_regex(cls) -> Dict[str, Type['BuildTask']]:
         return super(DeckPartBuildTask, cls).get_all_task_regex()

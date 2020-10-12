@@ -4,7 +4,7 @@
 #                 patch.object(DeckPartHolder, "from_deck_part_pool", return_value=Mock()), \
 #                 patch.object(CsvFile, "create_or_get", return_value=Mock()):
 #
-#             data = YamlRepr.read_to_dict(TestFiles.BuildConfig.ONE_OF_EACH_TYPE)
+#             data = YamlObject.read_to_dict(TestFiles.BuildConfig.ONE_OF_EACH_TYPE)
 #             builder = TopLevelRecipeBuilder.from_list(data)
 #             builder.execute()
 #

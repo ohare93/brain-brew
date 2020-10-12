@@ -14,17 +14,20 @@ from brain_brew.representation.yaml.note_model_repr import NoteModel
 
 @dataclass
 class CrowdAnkiToDeckParts(DeckPartBuildTask):
-    task_regex = r'from_crowd_anki'
+    @classmethod
+    def task_regex(cls) -> str:
+        return r'from_crowd_anki'
 
     @classmethod
-    def yamale_validator(cls) -> (str, set):
+    def yamale_validator_and_deps(cls) -> (str, set):
         return f'''\
             {cls.task_regex}:
-                part_id: str()
-                save_to_file: str(required=False)
-                note_model_mappings: list(include('note_model_mapping'))
-                file_mappings: list(include('file_mapping'))
-            ''', None
+              folder: str()
+              notes: include('from_ca_notes', required=False)
+              note_models: list(include('from_ca_note_models'), required=False)
+              headers: include('{HeadersFromCrowdAnki.task_regex()}', required=False)
+              media: any(bool(), include('{MediaToFromCrowdAnki.task_regex()}'), required=False)
+            '''
 
     @dataclass
     class Representation(RepresentationBase):
@@ -52,15 +55,8 @@ class CrowdAnkiToDeckParts(DeckPartBuildTask):
     media_transform: MediaToFromCrowdAnki
 
     def execute(self):
-        ca_wrapper = self.crowd_anki_export.read_json_file()
-
-        if ca_wrapper.children:
-            logging.warning("Child Decks / Sub-decks are not currently supported.")
 
         note_models: List[NoteModel] = self.note_model_transform.execute(ca_wrapper)
-
-        nm_id_to_name: dict = {model.id: model.name for model in note_models}
-        notes = self.notes_transform.execute(ca_wrapper, nm_id_to_name)
 
         headers = self.headers_transform.execute(ca_wrapper)
 

@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from typing import Optional, TypeVar, Generic
 
@@ -31,6 +32,7 @@ class DeckPartHolder(Generic[T]):
         if dp is None:
             dp = fm.new_deck_part(DeckPartHolder(part_id, save_to_file, deck_part))
         else:
+            logging.warning(f"Overwriting existing Deck Part '{part_id}'")
             dp.deck_part = deck_part
             dp.save_to_file = save_to_file
 

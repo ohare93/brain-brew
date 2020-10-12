@@ -3,7 +3,7 @@ import sys
 from textwrap import dedent
 from typing import List, Set
 from ruamel.yaml import round_trip_dump
-from brain_brew.representation.yaml.my_yaml import yaml_dump, yaml_load
+from brain_brew.representation.yaml.yaml_object import yaml_dump, yaml_load
 
 import pytest
 

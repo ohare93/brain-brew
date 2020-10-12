@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Union, List
 import logging
 
+from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
 from brain_brew.representation.transformers.base_deck_part_from import BaseDeckPartsFrom
@@ -10,7 +11,21 @@ from brain_brew.representation.yaml.note_model_repr import NoteModel
 
 
 @dataclass
-class NoteModelsToCrowdAnki:
+class NoteModelsToCrowdAnki(YamlRepr):
+    @classmethod
+    def task_regex(cls) -> str:
+        return r'note_models_to_crowd_anki'
+
+    @classmethod
+    def yamale_validator_and_deps(cls) -> (str, set):
+        return f'''\
+            {cls.task_regex()}:
+              deck_parts: list(include('{cls.task_regex()}_item'))
+            
+            {cls.task_regex()}_item:
+              deck_part: str()
+        ''', None
+
     @dataclass
     class NoteModelListItem:
         @dataclass
