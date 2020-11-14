@@ -39,8 +39,8 @@ class MediaGroupFromFolder(BaseDeckPartsFrom):
             part_id=rep.part_id,
             save_to_file=rep.save_to_file,
             media_in_folder=MediaGroup.from_directory(rep.source, rep.recursive),
-            groups_to_blacklist=list(map(DeckPartHolder.from_deck_part_pool, rep.filter_blacklist_from_parts)),
-            groups_to_whitelist=list(map(DeckPartHolder.from_deck_part_pool, rep.filter_whitelist_from_parts))
+            groups_to_blacklist=list(map(DeckPartHolder.from_file_manager, rep.filter_blacklist_from_parts)),
+            groups_to_whitelist=list(map(DeckPartHolder.from_file_manager, rep.filter_whitelist_from_parts))
             # match criteria
         )
 
@@ -51,7 +51,14 @@ class MediaGroupFromFolder(BaseDeckPartsFrom):
 
     def execute(self):
 
-        self.media_in_folder.compare_media_containers()
-        # Find matching media files from match criteria
+        if self.groups_to_whitelist:
+            white = list(set.union(*[container.get_all_media_references() for container in self.groups_to_whitelist]))
+            self.media_in_folder.filter_by_filenames(white, should_match=True)
+
+        if self.groups_to_blacklist:
+            black = list(set.union(*[container.get_all_media_references() for container in self.groups_to_blacklist]))
+            self.media_in_folder.filter_by_filenames(black, should_match=False)
+
+        DeckPartHolder.override_or_create(self.part_id, self.save_to_file, self.media_in_folder)
 
 

@@ -10,60 +10,37 @@ from brain_brew.utils import find_all_files_in_directory
 
 @dataclass
 class MediaGroup(YamlObject):
-    media_files: Set[MediaFile]
-    _media_filenames: Set[str] = field(default_factory=set())
+    media_files: Dict[str, MediaFile]
 
     def encode(self) -> list:
-        return list(self.media_files)
-
-    @classmethod
-    def from_directory(cls, directory: str, recursive: bool):
-        files: Set[MediaFile] = set()
-        for full_path in find_all_files_in_directory(directory, recursive=recursive):
-            files.add(MediaFile.create_or_get(full_path))
-        return cls(media_files=files)
+        return list(m.file_path for m in self.media_files.values())  # TODO: Use relative path for directory?
 
     @classmethod
     def from_yaml_file(cls, filename: str):
-        return cls(media_files=cls.from_list(cls.read_to_dict(filename)))
+        return cls(media_files=cls.from_full_path_list(cls.read_to_dict(filename)))
 
-    def __post_init__(self):
-        self._media_filenames = set(file.filename for file in self.media_files)
+    @classmethod
+    def from_directory(cls, directory: str, recursive: bool):
+        return cls.from_full_path_list(find_all_files_in_directory(directory, recursive=recursive))
 
     @staticmethod
-    def from_list(known_files: list):
-        files: Set[MediaFile] = set()
+    def from_full_path_list(known_files: list):
+        files: Dict[str, MediaFile] = dict()
 
         for full_path in known_files:
-            if full_path not in files:
-                if MediaFile.is_file(full_path):
-                    files.add(MediaFile.create_or_get(full_path))
-                else:
-                    logging.error(f"Missing expected media file at '{full_path}'")
+            file = MediaFile.create_or_get(full_path)
+            if file.filename not in files.keys():
+                files[file.filename] = file
             else:
-                logging.warning(f"Duplicate media file '{full_path}' in MediaGroup")
+                raise NameError(f"Duplicate files with same filename '{file.filename}' in group")
 
         return files
 
-    def compare_media_containers(self, containers: List[MediaContainer]) -> Tuple[Set[MediaFile], Set[MediaFile], Set[str]]:
-        all_to_compare: Set[str] = set.union(*[container.get_all_media_references() for container in containers])
+    def remove_by_filename(self, filename: str):
+        self.media_files.pop(filename, None)
 
-        resolved, unresolved, missing = self.compare_filenames(all_to_compare)
-
-        return resolved, unresolved, missing
-
-    def compare_filenames(self, compare: Set[str]) -> Tuple[Set[MediaFile], Set[MediaFile], Set[str]]:
-        resolved: Set[MediaFile] = set()
-        unresolved: Set[MediaFile] = set()
-
-        for media_file in self.media_files:
-            if media_file.filename in compare:
-                resolved.add(media_file)
-            else:
-                unresolved.add(media_file)
-
-        missing: Set[str] = compare.difference(self._media_filenames)
-        if len(missing) > 0:
-            logging.error(f"Unresolved references in DeckParts to {len(missing)} files: {missing}")
-
-        return resolved, unresolved, missing
+    def filter_by_filenames(self, filenames: List[str], should_match: bool):
+        for media_filename in self.media_files.keys():
+            is_match = media_filename in filenames
+            if is_match != should_match:
+                self.remove_by_filename(media_filename)

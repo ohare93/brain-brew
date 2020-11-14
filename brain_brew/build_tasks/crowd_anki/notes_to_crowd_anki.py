@@ -51,7 +51,7 @@ class NotesToCrowdAnki(YamlRepr, SharedBaseNotes):
     reverse_sort: Optional[bool] = field(default_factory=lambda: None)
 
     def execute(self, nm_name_to_id: dict) -> List[dict]:
-        self.notes = DeckPartHolder.from_deck_part_pool(self.notes_to_read).deck_part
+        self.notes = DeckPartHolder.from_file_manager(self.notes_to_read).deck_part
 
         notes = self.notes.get_sorted_notes_copy(sort_by_keys=self.sort_order, reverse_sort=self.reverse_sort)
 

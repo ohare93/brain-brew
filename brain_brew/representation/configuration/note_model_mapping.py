@@ -63,7 +63,7 @@ class NoteModelMapping(YamlRepr):
 
     @classmethod
     def from_repr(cls, data: Representation):
-        note_models = [DeckPartHolder.from_deck_part_pool(model) for model in single_item_to_list(data.note_models)]
+        note_models = [DeckPartHolder.from_file_manager(model) for model in single_item_to_list(data.note_models)]
 
         return cls(
             columns=[FieldMapping(

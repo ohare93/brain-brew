@@ -31,6 +31,9 @@ class SourceFile(object):
         if file is not None:
             return file
 
+        if not cls.is_file(location):
+            raise FileNotFoundError(f"No file '{location}' exists")
+
         file = cls.from_file_loc(location)
         _file_manager.register_file(formatted_location, file)
         return file

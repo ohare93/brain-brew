@@ -42,7 +42,7 @@ class HeadersToCrowdAnki(YamlRepr):
     headers: Headers = field(init=False)
 
     def execute(self) -> dict:
-        self.headers = DeckPartHolder.from_deck_part_pool(self.headers_to_read).deck_part
+        self.headers = DeckPartHolder.from_file_manager(self.headers_to_read).deck_part
 
         headers = self.headers_to_crowd_anki(self.headers.data_without_name)
 

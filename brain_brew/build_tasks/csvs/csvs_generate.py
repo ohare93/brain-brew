@@ -35,7 +35,7 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
 
     def execute(self):
         self.setup_note_model_mappings()
-        self.notes = DeckPartHolder.from_deck_part_pool(self.notes_to_read)
+        self.notes = DeckPartHolder.from_file_manager(self.notes_to_read)
         self.verify_contents()
 
         notes: List[Note] = self.notes.deck_part.get_sorted_notes_copy(

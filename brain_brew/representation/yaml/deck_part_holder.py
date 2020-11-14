@@ -21,16 +21,16 @@ class DeckPartHolder(Generic[T]):
         return cls.file_manager
 
     @classmethod
-    def from_deck_part_pool(cls, part_id: str) -> T:
-        return cls.get_file_manager().deck_part_from_pool(part_id)
+    def from_file_manager(cls, part_id: str) -> T:
+        return cls.get_file_manager().get_deck_part(part_id)
 
     @classmethod
     def override_or_create(cls, part_id: str, save_to_file: Optional[str], deck_part: T):
         fm = cls.get_file_manager()
 
-        dp = fm.deck_part_if_exists(part_id)
+        dp = fm.get_deck_part_if_exists(part_id)
         if dp is None:
-            dp = fm.new_deck_part(DeckPartHolder(part_id, save_to_file, deck_part))
+            dp = fm.register_deck_part(DeckPartHolder(part_id, save_to_file, deck_part))
         else:
             logging.warning(f"Overwriting existing Deck Part '{part_id}'")
             dp.deck_part = deck_part

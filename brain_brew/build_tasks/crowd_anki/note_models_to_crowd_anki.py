@@ -49,7 +49,7 @@ class NoteModelsToCrowdAnki(YamlRepr):
             )
 
         def get_note_model(self) -> NoteModel:
-            self.deck_part = DeckPartHolder.from_deck_part_pool(self.deck_part_to_read).deck_part
+            self.deck_part = DeckPartHolder.from_file_manager(self.deck_part_to_read).deck_part
             return self.deck_part  # Todo: add filters in here
 
         deck_part: NoteModel = field(init=False)

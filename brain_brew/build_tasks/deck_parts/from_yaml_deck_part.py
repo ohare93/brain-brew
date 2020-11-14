@@ -43,7 +43,7 @@ class FromYamlDeckPartBase(DeckPartBuildTask, metaclass=ABCMeta):
 class NotesFromYamlDeckPart(FromYamlDeckPartBase):
     @classmethod
     def task_regex(cls) -> str:
-        return r'notes_from_deck_parts'
+        return r'notes_from_yaml_deck_part'
 
     deck_part_type = Notes
 
@@ -52,7 +52,7 @@ class NotesFromYamlDeckPart(FromYamlDeckPartBase):
 class HeadersFromYamlDeckPart(FromYamlDeckPartBase):
     @classmethod
     def task_regex(cls) -> str:
-        return r'headers_from_deck_parts'
+        return r'headers_from_yaml_deck_part'
 
     deck_part_type = Headers
 
@@ -61,7 +61,7 @@ class HeadersFromYamlDeckPart(FromYamlDeckPartBase):
 class NoteModelsFromYamlDeckPart(FromYamlDeckPartBase):
     @classmethod
     def task_regex(cls) -> str:
-        return r'note_models_from_deck_parts'
+        return r'note_models_from_yaml_deck_part'
 
     deck_part_type = NoteModel
 
@@ -70,6 +70,6 @@ class NoteModelsFromYamlDeckPart(FromYamlDeckPartBase):
 class MediaGroupFromYamlDeckPart(FromYamlDeckPartBase):
     @classmethod
     def task_regex(cls) -> str:
-        return r'media_group_from_deck_parts'
+        return r'media_group_from_yaml_deck_part'
 
     deck_part_type = MediaGroup
