@@ -4,7 +4,7 @@ from pathlib import Path
 from brain_brew.representation.configuration.global_config import GlobalConfig
 
 
-class SourceFile:
+class SourceFile(object):
     @classmethod
     def from_file_loc(cls, file_loc) -> 'SourceFile':
         pass

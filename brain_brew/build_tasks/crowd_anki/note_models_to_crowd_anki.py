@@ -23,14 +23,14 @@ class NoteModelsToCrowdAnki(YamlRepr):
               deck_parts: list(include('{cls.task_regex()}_item'))
             
             {cls.task_regex()}_item:
-              deck_part: str()
+              part_id: str()
         ''', None
 
     @dataclass
     class NoteModelListItem:
         @dataclass
         class Representation(RepresentationBase):
-            deck_part: str
+            part_id: str
             # TODO: fields: Optional[List[str]]
             # TODO: templates: Optional[List[str]]
 
@@ -42,10 +42,10 @@ class NoteModelsToCrowdAnki(YamlRepr):
             elif isinstance(data, dict):
                 rep = cls.Representation.from_dict(data)
             else:
-                rep = cls.Representation(deck_part=data)  # Support string
+                rep = cls.Representation(part_id=data)  # Support string
 
             return cls(
-                deck_part_to_read=rep.deck_part
+                deck_part_to_read=rep.part_id
             )
 
         def get_note_model(self) -> NoteModel:

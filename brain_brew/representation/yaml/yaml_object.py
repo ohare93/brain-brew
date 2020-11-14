@@ -1,4 +1,5 @@
 import logging
+from abc import ABC, abstractmethod
 from pathlib import Path
 import os
 from ruamel.yaml import YAML
@@ -15,7 +16,7 @@ yaml_dump.representer.ignore_aliases = lambda *data: True
 # yaml.sort_base_mapping_type_on_output = False
 
 
-class YamlObject:
+class YamlObject(ABC):
     @staticmethod
     def read_to_dict(filename: str):
         filename = YamlObject.append_yaml_if_needed(filename)
@@ -26,8 +27,20 @@ class YamlObject:
         with open(filename) as file:
             return yaml_load.load(file)
 
+    @staticmethod
+    def append_yaml_if_needed(filename: str):
+        if filename[-5:] != ".yaml" and filename[-4:] != ".yml":
+            return filename + ".yaml"
+        return filename
+
+    @abstractmethod
     def encode(self) -> dict:
-        raise NotImplemented
+        pass
+
+    @classmethod
+    @abstractmethod
+    def from_yaml_file(cls, filename: str) -> 'YamlObject':
+        pass
 
     def dump_to_yaml(self, filepath):
         filepath = YamlObject.append_yaml_if_needed(filepath)
@@ -37,8 +50,3 @@ class YamlObject:
         with open(filepath, 'w') as fp:
             yaml_dump.dump(self.encode(), fp)
 
-    @staticmethod
-    def append_yaml_if_needed(filename: str):
-        if filename[-5:] != ".yaml" and filename[-4:] != ".yml":
-            return filename + ".yaml"
-        return filename

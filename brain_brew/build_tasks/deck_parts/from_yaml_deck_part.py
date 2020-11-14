@@ -6,6 +6,7 @@ from brain_brew.representation.build_config.build_task import DeckPartBuildTask
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.headers_repr import Headers
+from brain_brew.representation.yaml.media_group_repr import MediaGroup
 from brain_brew.representation.yaml.note_model_repr import NoteModel
 from brain_brew.representation.yaml.note_repr import Notes
 
@@ -63,3 +64,12 @@ class NoteModelsFromYamlDeckPart(FromYamlDeckPartBase):
         return r'note_models_from_deck_parts'
 
     deck_part_type = NoteModel
+
+
+@dataclass
+class MediaGroupFromYamlDeckPart(FromYamlDeckPartBase):
+    @classmethod
+    def task_regex(cls) -> str:
+        return r'media_group_from_deck_parts'
+
+    deck_part_type = MediaGroup

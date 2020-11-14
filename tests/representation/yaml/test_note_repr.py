@@ -327,7 +327,7 @@ class TestFunctionality:
             ])
             def test_all(self, fields, expected_count):
                 note = Note(fields=fields, note_model=None, guid="", tags=None, flags=0)
-                media_found = note.get_media_references()
+                media_found = note.get_all_media_references()
                 assert isinstance(media_found, Set)
                 assert len(media_found) == expected_count
 

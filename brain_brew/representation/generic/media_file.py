@@ -1,39 +1,28 @@
-import os
 import shutil
-from enum import Enum
+from dataclasses import dataclass, field
 
-from brain_brew.utils import create_path_if_not_exists
+from brain_brew.representation.generic.source_file import SourceFile
+from brain_brew.utils import create_path_if_not_exists, filename_from_full_path
 
 
-class MediaFile:
-    class ManagementType(Enum):
-        EXISTS = 0
-        OVERRIDDEN = 1
-        TO_BE_CLONED = 2
+@dataclass
+class MediaFile(SourceFile):
+    file_path: str
+    filename: str = field(init=False)
 
-    file_location: str
-    filename: str
+    def __post_init__(self):
+        self.filename = filename_from_full_path(self.file_path)
 
-    man_type: ManagementType
-    source_loc: str
+    @classmethod
+    def from_file_loc(cls, file_loc) -> 'MediaFile':
+        return cls(file_loc)
 
-    def __init__(self, file_location, filename, man_type: ManagementType = ManagementType.EXISTS, source_loc=None):
-        self.file_location = file_location
-        self.filename = filename
+    def __repr__(self):
+        return f"MediaFile({self.file_path})"
 
-        self.man_type = man_type
-        self.source_loc = source_loc if source_loc is not None else file_location
+    def __hash__(self):
+        return hash(self.__repr__())
 
-    def set_override(self, source_loc):
-        if source_loc != self.source_loc:
-            self.man_type = MediaFile.ManagementType.OVERRIDDEN
-            self.source_loc = source_loc
-
-    def copy_source_to_target(self):
-        if self.should_write():
-            # TODO: If ManagementType.OVERRIDDEN check if override necessary
-            create_path_if_not_exists(self.file_location)
-            shutil.copy2(self.source_loc, self.file_location)
-
-    def should_write(self):
-        return self.man_type in [MediaFile.ManagementType.OVERRIDDEN, MediaFile.ManagementType.TO_BE_CLONED]
+    def copy_self_to_target(self, target: str):
+        create_path_if_not_exists(target)
+        shutil.copy2(self.file_path, target)

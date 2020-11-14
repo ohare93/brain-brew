@@ -39,9 +39,3 @@ class YamlVerifier:
                     print('\t%s' % error)
             exit(1)
         logging.info(f"Builder file {filename} is ✔")
-
-    def build_from_parts(self, validators, extras):
-        for val, extras in cls.known_validators():
-            final_result = final_result + dedent(val) + "\n"
-            if extras is not None:
-                final_extras = final_extras.union(extras)

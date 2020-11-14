@@ -1,5 +1,7 @@
 import logging
+from abc import ABCMeta
 
+from brain_brew.interfaces.media_container import MediaContainer
 from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.yaml.yaml_object import YamlObject
 from dataclasses import dataclass
@@ -18,7 +20,7 @@ MEDIA_REFERENCES = "media_references"
 
 
 @dataclass
-class GroupableNoteData(YamlObject):
+class GroupableNoteData(YamlObject, MediaContainer, metaclass=ABCMeta):
     note_model: Optional[str]
     tags: Optional[List[str]]
 
@@ -31,7 +33,7 @@ class GroupableNoteData(YamlObject):
 
 
 @dataclass
-class Note(GroupableNoteData):
+class Note(GroupableNoteData, metaclass=ABCMeta):
     fields: List[str]
     guid: str
     flags: int
@@ -54,12 +56,12 @@ class Note(GroupableNoteData):
         super().encode_groupable(data_dict)
         return data_dict
 
-    def get_media_references(self) -> Set[str]:
+    def get_all_media_references(self) -> Set[str]:
         return {entry for field in self.fields for entry in find_media_in_field(field)}
 
 
 @dataclass
-class NoteGrouping(GroupableNoteData):
+class NoteGrouping(GroupableNoteData, metaclass=ABCMeta):
     notes: List[Note]
 
     @classmethod
@@ -92,7 +94,7 @@ class NoteGrouping(GroupableNoteData):
     def get_all_media_references(self) -> Set[str]:
         all_media = set()
         for note in self.notes:
-            media = note.get_media_references()
+            media = note.get_all_media_references()
             all_media = all_media.union(media)
         return all_media
 
@@ -145,7 +147,7 @@ class NoteGrouping(GroupableNoteData):
 
 
 @dataclass
-class Notes(YamlObject):
+class Notes(YamlObject, MediaContainer):
     note_groupings: List[NoteGrouping]
 
     @classmethod
@@ -169,8 +171,8 @@ class Notes(YamlObject):
 
     def get_all_media_references(self) -> Set[str]:
         all_media = set()
-        for note in self.note_groupings:
-            media = note.get_all_media_references()
+        for note_group in self.note_groupings:
+            media = note_group.get_all_media_references()
             all_media = all_media.union(media)
         return all_media
 

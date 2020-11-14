@@ -20,7 +20,7 @@ class NotesToCrowdAnki(YamlRepr, SharedBaseNotes):
     def yamale_validator_and_deps(cls) -> (str, set):
         return f'''\
             {cls.task_regex()}:
-              deck_part: str()
+              part_id: str()
               sort_order: list(str(), required=False)
               reverse_sort: bool(required=False)
               additional_items_to_add: map(str(), key=str(), required=False)
@@ -28,7 +28,7 @@ class NotesToCrowdAnki(YamlRepr, SharedBaseNotes):
 
     @dataclass
     class Representation(RepresentationBase):
-        deck_part: str
+        part_id: str
         additional_items_to_add: Optional[dict] = field(default_factory=lambda: None)
         sort_order: Optional[List[str]] = field(default_factory=lambda: None)
         reverse_sort: Optional[bool] = field(default_factory=lambda: None)
@@ -37,7 +37,7 @@ class NotesToCrowdAnki(YamlRepr, SharedBaseNotes):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
-            notes_to_read=rep.deck_part,
+            notes_to_read=rep.part_id,
             sort_order=SharedBaseNotes._get_sort_order(rep.sort_order),
             reverse_sort=SharedBaseNotes._get_reverse_sort(rep.reverse_sort),
             additional_items_to_add=rep.additional_items_to_add or {}

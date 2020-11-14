@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Union, List, Set
 
 from brain_brew.file_manager import FileManager
+from brain_brew.interfaces.media_container import MediaContainer
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.generic.media_file import MediaFile
@@ -54,6 +55,13 @@ class MediaToFromCrowdAnki(YamlRepr):
         if not MediaToFromCrowdAnki.file_manager:
             MediaToFromCrowdAnki.file_manager = FileManager.get_instance()
 
+    # CrowdAnki
+
+
+
+
+
+
     def move_to_crowd_anki(self, notes: Notes, note_models: List[NoteModel], ca_export: CrowdAnkiExport) -> Set[MediaFile]:
         resolved_media: Set[MediaFile] = set()
         missing_media: Set[str] = set()
@@ -73,6 +81,20 @@ class MediaToFromCrowdAnki(YamlRepr):
             logging.error(f"Unresolved references in DeckParts to {len(missing_media)} files: {missing_media}")
 
         return resolved_media
+
+    @classmethod
+    def resolve_media_references_to_deck_parts(cls, filenames: Set[str]) -> (List[MediaFile], List[str]):
+        resolved_media: List[MediaFile] = []
+        missing_media: List[str] = []
+        for filename in filenames:
+            media_file = cls.file_manager.media_file_if_exists(filename)
+            if media_file:
+                resolved_media.append(media_file)
+            else:
+                missing_media.append(filename)
+        return resolved_media, missing_media
+
+    # Deck Parts
 
     def move_to_deck_parts(self, notes: Notes, note_models: List[NoteModel], ca_export: CrowdAnkiExport) -> Set[MediaFile]:
         resolved_media: Set[MediaFile] = set()
@@ -105,34 +127,3 @@ class MediaToFromCrowdAnki(YamlRepr):
                 missing_media.append(filename)
         return resolved_media, missing_media
 
-    @classmethod
-    def resolve_media_references_to_deck_parts(cls, filenames: Set[str]) -> (List[MediaFile], List[str]):
-        resolved_media: List[MediaFile] = []
-        missing_media: List[str] = []
-        for filename in filenames:
-            media_file = cls.file_manager.media_file_if_exists(filename)
-            if media_file:
-                resolved_media.append(media_file)
-            else:
-                missing_media.append(filename)
-        return resolved_media, missing_media
-
-    @classmethod
-    def _move_ca(cls, media_files: List[MediaFile], ca_export: CrowdAnkiExport):
-        for file in media_files:
-            if file.filename in ca_export.known_media:
-                ca_export.known_media[file.filename].set_override(file.source_loc)
-            else:
-                ca_export.known_media.setdefault(
-                    file.filename, MediaFile(ca_export.media_loc + file.filename,
-                                             file.filename, MediaFile.ManagementType.TO_BE_CLONED, file.source_loc)
-                )
-
-    @classmethod
-    def _move_dps(cls, media_files: List[MediaFile]):
-        for file in media_files:
-            dp_media_file = cls.file_manager.media_file_if_exists(file.filename)
-            if dp_media_file:
-                dp_media_file.set_override(file.source_loc)
-            else:
-                cls.file_manager.new_media_file(file.filename, file.source_loc)
