@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, Union
 
+from brain_brew.representation.build_config.build_task import DeckPartBuildTask
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
 from brain_brew.representation.transformers.base_deck_part_from import BaseDeckPartsFrom
@@ -18,7 +19,7 @@ headers_default_values = {
 
 
 @dataclass
-class HeadersFromCrowdAnki(BaseDeckPartsFrom):
+class HeadersFromCrowdAnki(BaseDeckPartsFrom, DeckPartBuildTask):
     @classmethod
     def task_regex(cls) -> str:
         return r'headers_from_crowd_anki'

@@ -23,6 +23,7 @@ class MediaFile(SourceFile):
     def __hash__(self):
         return hash(self.__repr__())
 
-    def copy_self_to_target(self, target: str):
-        create_path_if_not_exists(target)
+    def copy_self_to_target(self, target: str, create_dir: bool = True):
+        if create_dir:
+            create_path_if_not_exists(target)
         shutil.copy2(self.file_path, target)

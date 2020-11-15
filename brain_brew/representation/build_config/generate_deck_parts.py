@@ -1,3 +1,4 @@
+from abc import ABC
 from dataclasses import dataclass
 from typing import Dict, Type, List, Tuple
 from textwrap import dedent
@@ -6,13 +7,13 @@ from brain_brew.representation.build_config.build_task import BuildTask, TopLeve
 from brain_brew.representation.build_config.recipe_builder import RecipeBuilder
 
 # Build Tasks
-from brain_brew.build_tasks.deck_parts.from_yaml_deck_part import NotesFromYamlDeckPart, HeadersFromYamlDeckPart, NoteModelsFromYamlDeckPart  # noqa
+from brain_brew.build_tasks.deck_parts.from_yaml_deck_part import NotesFromYamlDeckPart, HeadersFromYamlDeckPart, NoteModelsFromYamlDeckPart, MediaGroupFromYamlDeckPart  # noqa
 from brain_brew.build_tasks.csvs.notes_from_csvs import NotesFromCsvs  # noqa
-from brain_brew.build_tasks.crowd_anki.crowd_anki_to_deck_parts import CrowdAnkiToDeckParts  # noqa
+from brain_brew.build_tasks.deck_parts.media_group_from_folder import MediaGroupFromSource, MediaGroupFromFolder  # noqa
 
 
 @dataclass
-class BuildDeckParts(RecipeBuilder, TopLevelBuildTask):
+class BuildDeckParts(RecipeBuilder, TopLevelBuildTask, ABC):
     @classmethod
     def task_regex(cls) -> str:
         return r'build_deck_parts'

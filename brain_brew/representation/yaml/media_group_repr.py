@@ -44,3 +44,4 @@ class MediaGroup(YamlObject):
             is_match = media_filename in filenames
             if is_match != should_match:
                 self.remove_by_filename(media_filename)
+        # TODO: Find all missing files

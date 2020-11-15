@@ -7,7 +7,7 @@ from brain_brew.representation.build_config.representation_base import Represent
 
 
 @dataclass
-class BaseDeckPartsFrom(DeckPartBuildTask, metaclass=ABCMeta):
+class BaseDeckPartsFrom:
     @dataclass
     class Representation(RepresentationBase):
         part_id: str

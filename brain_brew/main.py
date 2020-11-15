@@ -25,7 +25,6 @@ def main():
     YamlVerifier()
     recipe = TopLevelRecipeBuilder.parse_and_read(recipe_file_name)
 
-    # If all good, execute it
     if not verify_only:
         recipe.execute()
 

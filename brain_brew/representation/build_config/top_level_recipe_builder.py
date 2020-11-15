@@ -1,4 +1,5 @@
 import logging
+from abc import ABC
 from typing import Dict, Type
 
 from brain_brew.representation.build_config.build_task import BuildTask, TopLevelBuildTask
@@ -10,7 +11,7 @@ from brain_brew.build_tasks.crowd_anki.crowd_anki_generate import CrowdAnkiGener
 from brain_brew.representation.build_config.generate_deck_parts import BuildDeckParts  # noqa
 
 
-class TopLevelRecipeBuilder(RecipeBuilder):
+class TopLevelRecipeBuilder(RecipeBuilder, ABC):
     @classmethod
     def known_task_dict(cls) -> Dict[str, Type[BuildTask]]:
         values = TopLevelBuildTask.get_all_task_regex()

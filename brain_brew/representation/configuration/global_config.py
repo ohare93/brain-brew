@@ -11,19 +11,16 @@ class GlobalConfig(YamlObject):
 
     @dataclass
     class Representation(RepresentationBase):
-        media_files_location: str
         sort_case_insensitive: Optional[bool] = field(default=False)
         join_values_with: Optional[str] = field(default=" ")
 
     sort_case_insensitive: bool
     join_values_with: str
-    media_files_location: str
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
-            media_files_location=rep.media_files_location,
             sort_case_insensitive=rep.sort_case_insensitive,
             join_values_with=rep.join_values_with
         )

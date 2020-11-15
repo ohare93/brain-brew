@@ -78,5 +78,3 @@ class CrowdAnkiGenerate(TopLevelBuildTask):
 
         # Set to CrowdAnkiExport
         self.crowd_anki_export.write_to_files(ca_wrapper.data)
-        for media in media_files:
-            media.copy_source_to_target()

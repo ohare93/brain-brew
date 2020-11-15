@@ -44,9 +44,9 @@ class NoteModelMapping(YamlRepr):
     def yamale_validator_and_deps(cls) -> (str, set):
         return f'''\
             {cls.task_regex()}:
-                note_models: any(list(str()), str())
-                columns_to_fields: map(str(), key=str())
-                personal_fields: list(str())
+              note_models: any(list(str()), str())
+              columns_to_fields: map(str(), key=str())
+              personal_fields: list(str())
             ''', None
 
     @dataclass

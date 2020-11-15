@@ -18,7 +18,7 @@ class FromYamlDeckPartBase(DeckPartBuildTask, metaclass=ABCMeta):
     @classmethod
     def yamale_validator_and_deps(cls) -> (str, set):
         return f'''\
-            {cls.task_regex}:
+            {cls.task_regex()}:
               part_id: str()
               file: str()
             ''', None

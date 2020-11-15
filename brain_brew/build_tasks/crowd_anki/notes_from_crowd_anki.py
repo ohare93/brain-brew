@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Union, Optional, List
 
 from brain_brew.build_tasks.crowd_anki.shared_base_notes import SharedBaseNotes
+from brain_brew.representation.build_config.build_task import DeckPartBuildTask
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper, CrowdAnkiNoteWrapper
 from brain_brew.representation.transformers.base_deck_part_from import BaseDeckPartsFrom
@@ -11,7 +12,7 @@ from brain_brew.representation.yaml.note_repr import Notes, Note
 
 
 @dataclass
-class NotesFromCrowdAnki(SharedBaseNotes, BaseDeckPartsFrom):
+class NotesFromCrowdAnki(SharedBaseNotes, BaseDeckPartsFrom, DeckPartBuildTask):
     @classmethod
     def task_regex(cls) -> str:
         return r'notes_from_crowd_anki'
@@ -25,7 +26,7 @@ class NotesFromCrowdAnki(SharedBaseNotes, BaseDeckPartsFrom):
               sort_order: list(str(), required=False)
               save_to_file: str(required=False)
               reverse_sort: str(required=False)
-        '''
+        ''', None
 
     @dataclass
     class Representation(BaseDeckPartsFrom.Representation):
@@ -58,8 +59,6 @@ class NotesFromCrowdAnki(SharedBaseNotes, BaseDeckPartsFrom):
 
         notes = Notes.from_list_of_notes(note_list)  # TODO: pass in sort method
         DeckPartHolder.override_or_create(self.part_id, self.save_to_file, notes)
-
-        # TODO: Media
 
     @staticmethod
     def ca_note_to_note(note: dict, nm_id_to_name: dict) -> Note:

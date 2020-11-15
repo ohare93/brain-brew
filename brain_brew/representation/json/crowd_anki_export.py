@@ -17,8 +17,6 @@ class CrowdAnkiExport(SourceFile):
     json_data: CrowdAnkiJsonWrapper
     note_models: List[NoteModel]
 
-    contains_media: bool
-    known_media: Dict[str, MediaFile]
     media_loc: str
 
     def __init__(self, folder_location):
@@ -30,7 +28,12 @@ class CrowdAnkiExport(SourceFile):
 
         self.json_file_location = self.find_json_file_in_folder()
         self._read_json_file()
-        self.find_all_media()
+
+        self.media_loc = self.folder_location + "media/"
+
+        if not self.is_dir(self.media_loc):
+            create_path_if_not_exists(self.media_loc)
+            return
 
     @classmethod
     def from_file_loc(cls, file_loc) -> 'CrowdAnkiExport':
@@ -49,27 +52,8 @@ class CrowdAnkiExport(SourceFile):
             logging.error(f"Multiple json files found in '{self.folder_location}': {files}")
             raise FileExistsError()
 
-    def find_all_media(self):
-        self.known_media = {}
-        self.media_loc = self.folder_location + "media/"
-        self.contains_media = self.is_dir(self.media_loc)
-
-        if not self.contains_media:
-            create_path_if_not_exists(self.media_loc)
-            return
-
-        media_files = find_all_files_in_directory(self.media_loc)
-
-        for full_path in media_files:
-            filename = filename_from_full_path(full_path)
-            self.known_media.setdefault(filename, MediaFile(full_path, filename))
-
-        logging.info(f"CrowdAnkiExport found {len(self.known_media)} media files in folder")
-
     def write_to_files(self, json_data):  # import_config_data
         JsonFile.write_file(self.json_file_location, json_data)
-        for filename, media_file in self.known_media.items():
-            media_file.copy_source_to_target()
 
     def _read_json_file(self):
         self.json_data = CrowdAnkiJsonWrapper(JsonFile.read_file(self.json_file_location))

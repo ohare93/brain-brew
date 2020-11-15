@@ -82,18 +82,6 @@ class MediaToFromCrowdAnki(YamlRepr):
 
         return resolved_media
 
-    @classmethod
-    def resolve_media_references_to_deck_parts(cls, filenames: Set[str]) -> (List[MediaFile], List[str]):
-        resolved_media: List[MediaFile] = []
-        missing_media: List[str] = []
-        for filename in filenames:
-            media_file = cls.file_manager.media_file_if_exists(filename)
-            if media_file:
-                resolved_media.append(media_file)
-            else:
-                missing_media.append(filename)
-        return resolved_media, missing_media
-
     # Deck Parts
 
     def move_to_deck_parts(self, notes: Notes, note_models: List[NoteModel], ca_export: CrowdAnkiExport) -> Set[MediaFile]:

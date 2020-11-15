@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Union, List
 import logging
 
+from brain_brew.representation.build_config.build_task import DeckPartBuildTask
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
 from brain_brew.representation.transformers.base_deck_part_from import BaseDeckPartsFrom
@@ -10,7 +11,7 @@ from brain_brew.representation.yaml.note_model_repr import NoteModel
 
 
 @dataclass
-class NoteModelsFromCrowdAnki(BaseDeckPartsFrom):
+class NoteModelsFromCrowdAnki(BaseDeckPartsFrom, DeckPartBuildTask):
     @classmethod
     def task_regex(cls) -> str:
         return r'note_models_from_crowd_anki'
@@ -54,5 +55,3 @@ class NoteModelsFromCrowdAnki(BaseDeckPartsFrom):
 
         deck_part = NoteModel.from_crowdanki(note_models_dict[self.model_name])
         DeckPartHolder.override_or_create(self.part_id, self.save_to_file, deck_part)
-
-        # TODO: Media
