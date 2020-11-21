@@ -1,7 +1,6 @@
-import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-import os
+
 from ruamel.yaml import YAML
 
 from brain_brew.utils import create_path_if_not_exists

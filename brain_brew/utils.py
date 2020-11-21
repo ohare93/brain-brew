@@ -1,9 +1,9 @@
 import logging
 import os
-from pathlib import Path
-import string
 import random
 import re
+import string
+from pathlib import Path
 from typing import List
 
 
@@ -28,7 +28,7 @@ def str_to_lowercase_no_separators(str_to_tidy: str):
 
 
 def filename_from_full_path(full_path):
-    return re.findall('[^\\/:*?"<>|\r\n]+$', full_path)[0]
+    return re.findall(r'[^\\/:*?"<>|\r\n]+$', full_path)[0]
 
 
 def find_media_in_field(field_value: str) -> List[str]:
@@ -36,7 +36,7 @@ def find_media_in_field(field_value: str) -> List[str]:
         return []
 
     images = re.findall(r'<\s*?img.*?src="(.*?)"[^>]*?>', field_value)
-    audio = re.findall(r'\[sound:(.*?)\]', field_value)
+    audio = re.findall(r'\[sound:(.*?)]', field_value)
 
     return images + audio
 

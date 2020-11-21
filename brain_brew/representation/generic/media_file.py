@@ -1,5 +1,5 @@
-import shutil
 import os
+import shutil
 from dataclasses import dataclass, field
 
 from brain_brew.representation.generic.source_file import SourceFile

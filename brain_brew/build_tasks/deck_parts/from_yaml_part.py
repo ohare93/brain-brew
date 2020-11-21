@@ -4,11 +4,11 @@ from typing import Union
 
 from brain_brew.representation.build_config.build_task import PartBuildTask
 from brain_brew.representation.build_config.representation_base import RepresentationBase
-from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.headers_repr import Headers
 from brain_brew.representation.yaml.media_group_repr import MediaGroup
 from brain_brew.representation.yaml.note_model_repr import NoteModel
 from brain_brew.representation.yaml.note_repr import Notes
+from brain_brew.representation.yaml.part_holder import PartHolder
 
 
 @dataclass

@@ -1,13 +1,12 @@
 import glob
 import logging
-from typing import List, Dict
+from typing import List
 
 from brain_brew.representation.generic.source_file import SourceFile
-from brain_brew.representation.generic.media_file import MediaFile
 from brain_brew.representation.json.json_file import JsonFile
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
 from brain_brew.representation.yaml.note_model_repr import NoteModel
-from brain_brew.utils import filename_from_full_path, find_all_files_in_directory, create_path_if_not_exists
+from brain_brew.utils import create_path_if_not_exists
 
 
 class CrowdAnkiExport(SourceFile):

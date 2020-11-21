@@ -4,8 +4,8 @@ import re
 from enum import Enum
 from typing import List
 
-from brain_brew.utils import list_of_str_to_lowercase, sort_dict
 from brain_brew.representation.generic.source_file import SourceFile
+from brain_brew.utils import list_of_str_to_lowercase, sort_dict
 
 
 class CsvKeys(Enum):

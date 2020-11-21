@@ -9,6 +9,9 @@ from brain_brew.representation.yaml.yaml_object import YamlObject
 class GlobalConfig(YamlObject):
     __instance = None
 
+    def encode(self) -> dict:
+        pass
+
     @dataclass
     class Representation(RepresentationBase):
         sort_case_insensitive: Optional[bool] = field(default=False)
@@ -32,7 +35,7 @@ class GlobalConfig(YamlObject):
             raise Exception("Multiple GlobalConfigs created")
 
     @classmethod
-    def from_file(cls, filename: str = "brain_brew_config.yaml"):
+    def from_yaml_file(cls, filename: str = "brain_brew_config.yaml") -> 'GlobalConfig':
         return cls.from_repr(cls.read_to_dict(filename))
 
     @classmethod

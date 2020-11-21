@@ -3,17 +3,29 @@ from typing import List, Dict, Union
 
 from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
 from brain_brew.representation.build_config.build_task import TopLevelBuildTask
+from brain_brew.representation.configuration.csv_file_mapping import FileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
-from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.note_repr import Notes, Note
+from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.utils import join_tags
 
 
 @dataclass
 class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
-    task_regex = r'generate_csvs'
+    @classmethod
+    def task_regex(cls) -> str:
+        return r'generate_csvs'
 
-    notes_to_read: str
+    @classmethod
+    def yamale_validator_and_deps(cls) -> (str, set):
+        return f'''\
+            {cls.task_regex()}:
+              notes: str()
+              note_model_mappings: list(include('{NoteModelMapping.task_regex()}'))
+              file_mappings: list(include('{FileMapping.task_regex()}'))
+            ''', {NoteModelMapping, FileMapping}
+
+    notes_to_read: str  # TODO: Accept Multiple Note Parts
     notes: PartHolder[Notes] = field(default=None)
 
     @dataclass(init=False)

@@ -20,6 +20,7 @@ class TestFindMedia:
         (r'[sound:test.mp3][sound:othersound.mp3]', ["test.mp3", "othersound.mp3"]),
         (r'[sound:test.mp3]                       [sound:othersound.mp3]', ["test.mp3", "othersound.mp3"]),
         (r'words in the field [sound:test.mp3] other stuff too [sound:othersound.mp3] end', ["test.mp3", "othersound.mp3"]),
+        (r'[sound:unfinished-bracket.mp3', [])
     ])
     def test_find_media_in_field(self, field_value, expected_results):
         assert find_media_in_field(field_value) == expected_results

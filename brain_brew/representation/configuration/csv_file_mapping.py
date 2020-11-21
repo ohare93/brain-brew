@@ -7,7 +7,6 @@ from brain_brew.representation.build_config.representation_base import Represent
 from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
 from brain_brew.utils import single_item_to_list, generate_anki_guid
 
-
 FILE = "csv_file"
 NOTE_MODEL = "note_model"
 SORT_BY_COLUMNS = "sort_by_columns"
@@ -45,7 +44,8 @@ class FileMappingDerivative(YamlRepr):
             self.note_model = note_model
             self.sort_by_columns = sort_by_columns
             self.reverse_sort = reverse_sort
-            self.derivatives = list(map(FileMappingDerivative.Representation.from_dict, derivatives)) if derivatives is not None else []
+            self.derivatives = list(map(FileMappingDerivative.Representation.from_dict, derivatives)) \
+                if derivatives is not None else []
 
     compiled_data: Dict[str, dict] = field(init=False)
 

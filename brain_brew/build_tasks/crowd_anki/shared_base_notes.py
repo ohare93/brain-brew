@@ -1,7 +1,5 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, Union, List
-
-from brain_brew.representation.build_config.representation_base import RepresentationBase
 
 
 @dataclass

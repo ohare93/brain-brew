@@ -4,9 +4,9 @@ from typing import List, Union, Dict
 
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.build_config.representation_base import RepresentationBase
-from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.note_model_repr import NoteModel
 from brain_brew.representation.yaml.note_repr import GUID, TAGS
+from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.utils import single_item_to_list
 
 

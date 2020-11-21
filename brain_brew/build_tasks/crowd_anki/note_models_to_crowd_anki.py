@@ -3,8 +3,8 @@ from typing import Union, List
 
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.build_config.representation_base import RepresentationBase
-from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.note_model_repr import NoteModel
+from brain_brew.representation.yaml.part_holder import PartHolder
 
 
 @dataclass

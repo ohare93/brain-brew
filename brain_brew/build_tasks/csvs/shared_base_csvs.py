@@ -26,7 +26,7 @@ class SharedBaseCsvs:
     note_model_mappings: Dict[str, NoteModelMapping] = field(init=False)
 
     def setup_note_model_mappings(self):
-        def map_nmm(nmm_to_map: str):
+        def map_nmm(nmm_to_map):
             nmm = NoteModelMapping.from_repr(nmm_to_map)
             return nmm.get_note_model_mapping_dict()
 
@@ -41,18 +41,11 @@ class SharedBaseCsvs:
             except KeyError as e:
                 errors.append(e)
 
-        for fm in self.file_mappings:
-            # Check all necessary key values are present
-            try:
-                fm.verify_contents()
-            except KeyError as e:
-                errors.append(e)
-
-            # Check all referenced note models have a mapping
-            for csv_map in self.file_mappings:
-                for nm in csv_map.get_used_note_model_names():
-                    if nm not in self.note_model_mappings.keys():
-                        errors.append(f"Missing Note Model Map for {nm}")
+        # Check all referenced note models have a mapping
+        for csv_map in self.file_mappings:
+            for nm in csv_map.get_used_note_model_names():
+                if nm not in self.note_model_mappings.keys():
+                    errors.append(f"Missing Note Model Map for {nm}")
 
         # Check each of the Csvs (or their derivatives) contain all the necessary columns for their stated note model
         for cfm in self.file_mappings:

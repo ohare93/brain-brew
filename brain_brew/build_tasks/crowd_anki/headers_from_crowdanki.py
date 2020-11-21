@@ -2,14 +2,13 @@ from dataclasses import dataclass
 from typing import Union
 
 from brain_brew.representation.build_config.build_task import PartBuildTask
-from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
-from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
 from brain_brew.representation.configuration.base_parts_from import BasePartsFrom
-from brain_brew.representation.yaml.part_holder import PartHolder
-from brain_brew.representation.yaml.headers_repr import Headers
-from brain_brew.representation.json.wrappers_for_crowd_anki import CA_NOTE_MODELS, CA_NOTES, CA_MEDIA_FILES,\
+from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
+from brain_brew.representation.json.wrappers_for_crowd_anki import CA_NOTE_MODELS, CA_NOTES, CA_MEDIA_FILES, \
     CA_CHILDREN, CA_TYPE
-
+from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
+from brain_brew.representation.yaml.headers_repr import Headers
+from brain_brew.representation.yaml.part_holder import PartHolder
 
 headers_skip_keys = [CA_NOTE_MODELS, CA_NOTES, CA_MEDIA_FILES]
 headers_default_values = {

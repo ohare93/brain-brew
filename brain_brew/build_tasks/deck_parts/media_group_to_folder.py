@@ -3,8 +3,8 @@ from typing import List, Union, Optional
 
 from brain_brew.representation.build_config.build_task import PartBuildTask
 from brain_brew.representation.build_config.representation_base import RepresentationBase
-from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.media_group_repr import MediaGroup
+from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.transformers.media_group_save_to_location import save_media_groups_to_location
 
 

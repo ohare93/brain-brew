@@ -3,11 +3,11 @@ from typing import Dict, List, Union
 
 from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
 from brain_brew.representation.build_config.build_task import PartBuildTask
+from brain_brew.representation.configuration.base_parts_from import BasePartsFrom
 from brain_brew.representation.configuration.csv_file_mapping import FileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
-from brain_brew.representation.configuration.base_parts_from import BasePartsFrom
-from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.note_repr import Note, Notes
+from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.utils import split_tags
 
 

@@ -33,7 +33,10 @@ ORDINAL = AnkiField("ord", "ordinal")
 
 # Note Model
 CSS = AnkiField("css")
-LATEX_PRE = AnkiField("latexPre", "latex_pre", default_value="\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n")
+LATEX_PRE = AnkiField("latexPre", "latex_pre",
+                      default_value="\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage{"
+                                    "amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{"
+                                    "document}\n")
 LATEX_POST = AnkiField("latexPost", "latex_post", default_value="\\end{document}")
 REQUIRED_FIELDS_PER_TEMPLATE = AnkiField("req", "required_fields_per_template")
 FIELDS = AnkiField("flds", "fields")
@@ -217,7 +220,7 @@ class NoteModel(YamlObject, MediaContainer, RepresentationBase):
         )
 
     @classmethod
-    def from_crowdanki(cls, data: Union[CrowdAnki, dict]):  # TODO: field_whitelist: List[str] = None, note_model_whitelist: List[str] = None):
+    def from_crowdanki(cls, data: Union[CrowdAnki, dict]):  # TODO: field_whitelist, note_model_whitelist
         ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
         return cls(
             fields=[Field.from_crowd_anki(f) for f in ca.flds],
@@ -296,7 +299,8 @@ class NoteModel(YamlObject, MediaContainer, RepresentationBase):
 
     def zip_field_to_data(self, data: List[str]) -> dict:
         if len(self.fields) != len(data):
-            raise Exception(f"Data of length {len(data)} cannot map to fields of length {len(self.field_names_lowercase)}")
+            raise Exception(
+                f"Data of length {len(data)} cannot map to fields of length {len(self.field_names_lowercase)}")
         return dict(zip(self.field_names_lowercase, data))
 
 

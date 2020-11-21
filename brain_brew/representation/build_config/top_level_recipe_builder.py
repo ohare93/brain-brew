@@ -1,14 +1,12 @@
-import logging
 from abc import ABC
 from typing import Dict, Type
 
-from brain_brew.representation.build_config.build_task import BuildTask, TopLevelBuildTask
-from brain_brew.representation.build_config.recipe_builder import RecipeBuilder
-
+from brain_brew.build_tasks.crowd_anki.crowd_anki_generate import CrowdAnkiGenerate  # noqa
 # Build Tasks
 from brain_brew.build_tasks.csvs.csvs_generate import CsvsGenerate  # noqa
-from brain_brew.build_tasks.crowd_anki.crowd_anki_generate import CrowdAnkiGenerate  # noqa
+from brain_brew.representation.build_config.build_task import BuildTask, TopLevelBuildTask
 from brain_brew.representation.build_config.generate_parts import BuildParts  # noqa
+from brain_brew.representation.build_config.recipe_builder import RecipeBuilder
 
 
 class TopLevelRecipeBuilder(RecipeBuilder, ABC):

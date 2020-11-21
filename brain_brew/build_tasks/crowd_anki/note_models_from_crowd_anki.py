@@ -2,11 +2,11 @@ from dataclasses import dataclass, field
 from typing import Optional, Union
 
 from brain_brew.representation.build_config.build_task import PartBuildTask
+from brain_brew.representation.configuration.base_parts_from import BasePartsFrom
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
-from brain_brew.representation.configuration.base_parts_from import BasePartsFrom
-from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.note_model_repr import NoteModel
+from brain_brew.representation.yaml.part_holder import PartHolder
 
 
 @dataclass

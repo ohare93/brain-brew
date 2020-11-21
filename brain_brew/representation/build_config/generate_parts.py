@@ -1,15 +1,15 @@
 from abc import ABC
 from dataclasses import dataclass
-from typing import Dict, Type, List, Tuple
 from textwrap import dedent
+from typing import Dict, Type, List, Tuple
+
+# Build Tasks
+from brain_brew.build_tasks.csvs.notes_from_csvs import NotesFromCsvs  # noqa
+from brain_brew.build_tasks.deck_parts.from_yaml_part import NotesFromYamlPart, HeadersFromYamlPart, NoteModelsFromYamlPart, MediaGroupFromYamlPart  # noqa
+from brain_brew.build_tasks.deck_parts.media_group_from_folder import MediaGroupFromSource, MediaGroupFromFolder  # noqa
 
 from brain_brew.representation.build_config.build_task import BuildTask, TopLevelBuildTask, PartBuildTask
 from brain_brew.representation.build_config.recipe_builder import RecipeBuilder
-
-# Build Tasks
-from brain_brew.build_tasks.deck_parts.from_yaml_part import NotesFromYamlPart, HeadersFromYamlPart, NoteModelsFromYamlPart, MediaGroupFromYamlPart  # noqa
-from brain_brew.build_tasks.csvs.notes_from_csvs import NotesFromCsvs  # noqa
-from brain_brew.build_tasks.deck_parts.media_group_from_folder import MediaGroupFromSource, MediaGroupFromFolder  # noqa
 
 
 @dataclass

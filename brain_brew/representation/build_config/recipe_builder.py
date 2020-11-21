@@ -1,7 +1,7 @@
+import re
 from abc import ABC
 from dataclasses import dataclass
 from typing import Dict, List, Type
-import re
 
 from brain_brew.representation.build_config.build_task import BuildTask
 from brain_brew.representation.yaml.yaml_object import YamlObject
