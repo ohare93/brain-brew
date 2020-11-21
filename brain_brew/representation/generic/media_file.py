@@ -1,8 +1,9 @@
 import shutil
+import os
 from dataclasses import dataclass, field
 
 from brain_brew.representation.generic.source_file import SourceFile
-from brain_brew.utils import create_path_if_not_exists, filename_from_full_path
+from brain_brew.utils import filename_from_full_path
 
 
 @dataclass
@@ -23,7 +24,8 @@ class MediaFile(SourceFile):
     def __hash__(self):
         return hash(self.__repr__())
 
-    def copy_self_to_target(self, target: str, create_dir: bool = True):
-        if create_dir:
-            create_path_if_not_exists(target)
+    def copy_self_to_target(self, target: str):
         shutil.copy2(self.file_path, target)
+
+    def delete_self(self):
+        os.remove(self.file_path)

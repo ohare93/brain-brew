@@ -1,18 +1,13 @@
 from dataclasses import dataclass, field
-import logging
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Set
 
-from brain_brew.build_tasks.crowd_anki.headers_from_crowdanki import HeadersFromCrowdAnki
 from brain_brew.build_tasks.crowd_anki.headers_to_crowd_anki import HeadersToCrowdAnki
-from brain_brew.build_tasks.crowd_anki.media_to_from_crowd_anki import MediaToFromCrowdAnki
-from brain_brew.build_tasks.crowd_anki.note_models_from_crowd_anki import NoteModelsFromCrowdAnki
+from brain_brew.build_tasks.crowd_anki.media_to_crowd_anki import MediaGroupToCrowdAnki
 from brain_brew.build_tasks.crowd_anki.note_models_to_crowd_anki import NoteModelsToCrowdAnki
-from brain_brew.build_tasks.crowd_anki.notes_from_crowd_anki import NotesFromCrowdAnki
 from brain_brew.build_tasks.crowd_anki.notes_to_crowd_anki import NotesToCrowdAnki
+from brain_brew.representation.generic.media_file import MediaFile
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
-from brain_brew.representation.yaml.note_model_repr import NoteModel
-
 from brain_brew.representation.build_config.build_task import TopLevelBuildTask
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 
@@ -31,8 +26,8 @@ class CrowdAnkiGenerate(TopLevelBuildTask):
               headers: str()
               notes: include('{NotesToCrowdAnki.task_regex()}')
               note_models: include('{NoteModelsToCrowdAnki.task_regex()}')
-              media: any(bool(), include('{MediaToFromCrowdAnki.task_regex()}'), required=False)
-        ''', {NotesToCrowdAnki, NoteModelsToCrowdAnki, MediaToFromCrowdAnki}
+              media: include('{MediaGroupToCrowdAnki.task_regex()}', required=False)
+        ''', {NotesToCrowdAnki, NoteModelsToCrowdAnki, MediaGroupToCrowdAnki}
 
     @dataclass
     class Representation(RepresentationBase):
@@ -40,7 +35,7 @@ class CrowdAnkiGenerate(TopLevelBuildTask):
         notes: dict
         note_models: dict
         headers: dict
-        media: Union[dict, bool] = field(default_factory=lambda: False)
+        media: Optional[dict] = field(default_factory=lambda: dict())
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
@@ -50,14 +45,14 @@ class CrowdAnkiGenerate(TopLevelBuildTask):
             notes_transform=NotesToCrowdAnki.from_repr(rep.notes),
             note_model_transform=NoteModelsToCrowdAnki.from_repr(rep.note_models),
             headers_transform=HeadersToCrowdAnki.from_repr(rep.headers),
-            media_transform=MediaToFromCrowdAnki.from_repr(rep.media)
+            media_transform=MediaGroupToCrowdAnki.from_repr(rep.media) if rep.media else None
         )
 
     crowd_anki_export: CrowdAnkiExport
     notes_transform: NotesToCrowdAnki
     note_model_transform: NoteModelsToCrowdAnki
     headers_transform: HeadersToCrowdAnki
-    media_transform: MediaToFromCrowdAnki
+    media_transform: Optional[MediaGroupToCrowdAnki]
 
     def execute(self):
         headers = self.headers_transform.execute()
@@ -68,8 +63,9 @@ class CrowdAnkiGenerate(TopLevelBuildTask):
         nm_name_to_id: dict = {model.name: model.id for model in self.note_model_transform.note_models}
         notes = self.notes_transform.execute(nm_name_to_id)
 
-        media_files = self.media_transform.move_to_crowd_anki(
-            self.notes_transform.notes, self.note_model_transform.note_models, self.crowd_anki_export)
+        media_files: Set[MediaFile] = set()
+        if self.media_transform:
+            media_files = self.media_transform.execute(self.crowd_anki_export.media_loc)
 
         ca_wrapper.media_files = sorted([m.filename for m in media_files])
         ca_wrapper.name = self.headers_transform.headers.name
