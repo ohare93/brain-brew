@@ -1,11 +1,11 @@
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Union
 
-from brain_brew.representation.build_config.build_task import DeckPartBuildTask
+from brain_brew.representation.build_config.build_task import PartBuildTask
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
-from brain_brew.representation.transformers.base_deck_part_from import BaseDeckPartsFrom
-from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.representation.configuration.base_parts_from import BasePartsFrom
+from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.headers_repr import Headers
 from brain_brew.representation.json.wrappers_for_crowd_anki import CA_NOTE_MODELS, CA_NOTES, CA_MEDIA_FILES,\
     CA_CHILDREN, CA_TYPE
@@ -19,7 +19,7 @@ headers_default_values = {
 
 
 @dataclass
-class HeadersFromCrowdAnki(BaseDeckPartsFrom, DeckPartBuildTask):
+class HeadersFromCrowdAnki(BasePartsFrom, PartBuildTask):
     @classmethod
     def task_regex(cls) -> str:
         return r'headers_from_crowd_anki'
@@ -34,7 +34,7 @@ class HeadersFromCrowdAnki(BaseDeckPartsFrom, DeckPartBuildTask):
         '''
 
     @dataclass
-    class Representation(BaseDeckPartsFrom.Representation):
+    class Representation(BasePartsFrom.Representation):
         source: str
 
     @classmethod
@@ -53,7 +53,7 @@ class HeadersFromCrowdAnki(BaseDeckPartsFrom, DeckPartBuildTask):
 
         headers = Headers(self.crowd_anki_to_headers(ca_wrapper.data))
 
-        DeckPartHolder.override_or_create(self.part_id, self.save_to_file, headers)
+        PartHolder.override_or_create(self.part_id, self.save_to_file, headers)
 
     @staticmethod
     def crowd_anki_to_headers(ca_data: dict):

@@ -5,7 +5,7 @@ from brain_brew.build_tasks.crowd_anki.shared_base_notes import SharedBaseNotes
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiNoteWrapper
-from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.note_repr import Notes, Note
 from brain_brew.utils import blank_str_if_none
 
@@ -51,7 +51,7 @@ class NotesToCrowdAnki(YamlRepr, SharedBaseNotes):
     reverse_sort: Optional[bool] = field(default_factory=lambda: None)
 
     def execute(self, nm_name_to_id: dict) -> List[dict]:
-        self.notes = DeckPartHolder.from_file_manager(self.notes_to_read).deck_part
+        self.notes = PartHolder.from_file_manager(self.notes_to_read).part
 
         notes = self.notes.get_sorted_notes_copy(sort_by_keys=self.sort_order, reverse_sort=self.reverse_sort)
 

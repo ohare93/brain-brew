@@ -4,7 +4,7 @@ from typing import Optional, Union
 from brain_brew.build_tasks.crowd_anki.headers_from_crowdanki import headers_default_values
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.build_config.representation_base import RepresentationBase
-from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.headers_repr import Headers
 
 
@@ -42,7 +42,7 @@ class HeadersToCrowdAnki(YamlRepr):
     headers: Headers = field(init=False)
 
     def execute(self) -> dict:
-        self.headers = DeckPartHolder.from_file_manager(self.headers_to_read).deck_part
+        self.headers = PartHolder.from_file_manager(self.headers_to_read).part
 
         headers = self.headers_to_crowd_anki(self.headers.data_without_name)
 

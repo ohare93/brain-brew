@@ -8,7 +8,7 @@ from brain_brew.representation.build_config.recipe_builder import RecipeBuilder
 # Build Tasks
 from brain_brew.build_tasks.csvs.csvs_generate import CsvsGenerate  # noqa
 from brain_brew.build_tasks.crowd_anki.crowd_anki_generate import CrowdAnkiGenerate  # noqa
-from brain_brew.representation.build_config.generate_deck_parts import BuildDeckParts  # noqa
+from brain_brew.representation.build_config.generate_parts import BuildParts  # noqa
 
 
 class TopLevelRecipeBuilder(RecipeBuilder, ABC):

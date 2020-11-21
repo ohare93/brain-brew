@@ -1,14 +1,14 @@
 list(
-    map(include('generate_deck_parts'), key=regex('build_deck_parts', ignore_case=True)),
+    map(include('generate_parts'), key=regex('build_parts', ignore_case=True)),
     map(include('generate_csv'), key=regex('generate_csvs', ignore_case=True)),
     map(include('generate_crowd_anki'), key=regex('generate_crowd_anki', ignore_case=True))
 )
 
 ---
 
-generate_deck_parts:
+generate_parts:
   list(
-    map(include('from_deck_parts'), key=regex('from_deck_parts', ignore_case=True)),
+    map(include('from_parts'), key=regex('from_parts', ignore_case=True)),
     map(include('from_csv'), key=regex('from_csvs', ignore_case=True)),
     map(include('from_crowd_anki'), key=regex('from_crowd_anki', ignore_case=True))
   )
@@ -51,13 +51,13 @@ ca_media:
   from_note_models: bool()
 
 note_models_to_source:
-  deck_parts: list(include('note_model_to_source'))
+  parts: list(include('note_model_to_source'))
 
 note_model_to_source:
-  deck_part: str()
+  part: str()
 
 notes_to_source:
-  deck_part: str()
+  part: str()
   sort_order: list(str(), required=False)
   reverse_sort: bool(required=False)
   additional_items_to_add: map(str(), key=str(), required=False)
@@ -65,12 +65,12 @@ notes_to_source:
 
 
 
-from_deck_parts:
-  notes: list(include('deck_part_to_read'), required=False)
-  note_models: list(include('deck_part_to_read'), required=False)
-  headers: list(include('deck_part_to_read'), required=False)
+from_parts:
+  notes: list(include('part_to_read'), required=False)
+  note_models: list(include('part_to_read'), required=False)
+  headers: list(include('part_to_read'), required=False)
 
-deck_part_to_read:
+part_to_read:
   part_id: str()
   file: str()
 

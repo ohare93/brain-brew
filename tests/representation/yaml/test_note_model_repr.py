@@ -7,7 +7,7 @@ from tests.test_files import TestFiles
 
 
 # CrowdAnki Files --------------------------------------------------------------------------
-from tests.test_helpers import debug_write_deck_part_to_file
+from tests.test_helpers import debug_write_part_to_file
 
 
 @pytest.fixture
@@ -120,7 +120,7 @@ class TestCrowdAnkiNoteModel:
 
             encoded = model.encode()
 
-            # debug_write_deck_part_to_file(model, TestFiles.NoteModels.LL_WORD_NO_DEFAULTS)
+            # debug_write_part_to_file(model, TestFiles.NoteModels.LL_WORD_NO_DEFAULTS)
 
             assert encoded != ca_nm_data_word_no_defaults
             assert encoded == nm_data_word_no_defaults

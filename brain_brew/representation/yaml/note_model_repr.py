@@ -106,7 +106,7 @@ class Template(RepresentationBase):
 
         return data_dict
 
-    def encode_as_deck_part(self) -> dict:
+    def encode_as_part(self) -> dict:
         data_dict = {
             NAME.name: self.name,
             QUESTION_FORMAT.name: self.question_format,
@@ -140,7 +140,7 @@ class Field(RepresentationBase):
     is_sticky: bool = field(default=IS_STICKY.default_value)
 
     @classmethod
-    def from_crowdanki(cls, data: Union[CrowdAnki, dict]):
+    def from_crowd_anki(cls, data: Union[CrowdAnki, dict]):
         ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
         return cls(
             name=ca.name, font=ca.font, media=ca.media,
@@ -160,7 +160,7 @@ class Field(RepresentationBase):
 
         return data_dict
 
-    def encode_as_deck_part(self) -> dict:
+    def encode_as_part(self) -> dict:
         data_dict = {
             NAME.name: self.name
         }
@@ -220,7 +220,7 @@ class NoteModel(YamlObject, MediaContainer, RepresentationBase):
     def from_crowdanki(cls, data: Union[CrowdAnki, dict]):  # TODO: field_whitelist: List[str] = None, note_model_whitelist: List[str] = None):
         ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
         return cls(
-            fields=[Field.from_crowdanki(f) for f in ca.flds],
+            fields=[Field.from_crowd_anki(f) for f in ca.flds],
             templates=[Template.from_crowdanki(t) for t in ca.tmpls],
             is_cloze=bool(ca.type),
             name=ca.name, css=ca.css, latex_pre=ca.latexPre, latex_post=ca.latexPost,
@@ -260,8 +260,8 @@ class NoteModel(YamlObject, MediaContainer, RepresentationBase):
         LATEX_PRE.append_name_if_differs(data_dict, self.latex_pre)
         LATEX_POST.append_name_if_differs(data_dict, self.latex_post)
 
-        data_dict.setdefault(FIELDS.name, [f.encode_as_deck_part() for f in self.fields])
-        data_dict.setdefault(TEMPLATES.name, [t.encode_as_deck_part() for t in self.templates])
+        data_dict.setdefault(FIELDS.name, [f.encode_as_part() for f in self.fields])
+        data_dict.setdefault(TEMPLATES.name, [t.encode_as_part() for t in self.templates])
 
         # Useless
         TAGS.append_name_if_differs(data_dict, self.tags)

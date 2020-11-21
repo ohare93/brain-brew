@@ -1,8 +1,6 @@
 import copy
 from pathlib import Path
 
-from brain_brew.representation.configuration.global_config import GlobalConfig
-
 
 class SourceFile(object):
     @classmethod

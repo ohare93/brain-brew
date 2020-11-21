@@ -63,7 +63,7 @@ class SharedBaseCsvs:
                                            key in note_model_names]
             for nm_map in referenced_note_models_maps:
                 for holder in nm_map.note_models.values():
-                    missing_columns = [col for col in holder.deck_part.field_names_lowercase if
+                    missing_columns = [col for col in holder.part.field_names_lowercase if
                                        col not in nm_map.csv_headers_map_to_note_fields(available_columns)]
                     if missing_columns:
                         logging.warning(f"Csvs are missing columns from {holder.part_id} {missing_columns}")

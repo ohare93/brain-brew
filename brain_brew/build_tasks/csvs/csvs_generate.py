@@ -4,7 +4,7 @@ from typing import List, Dict, Union
 from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
 from brain_brew.representation.build_config.build_task import TopLevelBuildTask
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
-from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.note_repr import Notes, Note
 from brain_brew.utils import join_tags
 
@@ -14,7 +14,7 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
     task_regex = r'generate_csvs'
 
     notes_to_read: str
-    notes: DeckPartHolder[Notes] = field(default=None)
+    notes: PartHolder[Notes] = field(default=None)
 
     @dataclass(init=False)
     class Representation(SharedBaseCsvs.Representation):
@@ -35,10 +35,10 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
 
     def execute(self):
         self.setup_note_model_mappings()
-        self.notes = DeckPartHolder.from_file_manager(self.notes_to_read)
+        self.notes = PartHolder.from_file_manager(self.notes_to_read)
         self.verify_contents()
 
-        notes: List[Note] = self.notes.deck_part.get_sorted_notes_copy(
+        notes: List[Note] = self.notes.part.get_sorted_notes_copy(
             sort_by_keys=[], reverse_sort=False, case_insensitive_sort=False)
         self.verify_notes_match_note_model_mappings(notes)
 
@@ -62,7 +62,7 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
     @staticmethod
     def note_to_csv_row(note: Note, note_model_mappings: Dict[str, NoteModelMapping]) -> dict:
         nm_name = note.note_model
-        row = note_model_mappings[nm_name].note_models[nm_name].deck_part.zip_field_to_data(note.fields)
+        row = note_model_mappings[nm_name].note_models[nm_name].part.zip_field_to_data(note.fields)
         row["guid"] = note.guid
         row["tags"] = join_tags(note.tags)
         # TODO: Flags?

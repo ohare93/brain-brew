@@ -4,7 +4,7 @@ from typing import List, Union, Dict
 
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.build_config.representation_base import RepresentationBase
-from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.note_model_repr import NoteModel
 from brain_brew.representation.yaml.note_repr import GUID, TAGS
 from brain_brew.utils import single_item_to_list
@@ -55,7 +55,7 @@ class NoteModelMapping(YamlRepr):
         columns_to_fields: Dict[str, str]
         personal_fields: List[str]
 
-    note_models: Dict[str, DeckPartHolder[NoteModel]]
+    note_models: Dict[str, PartHolder[NoteModel]]
     columns: List[FieldMapping]
     personal_fields: List[FieldMapping]
 
@@ -63,7 +63,7 @@ class NoteModelMapping(YamlRepr):
 
     @classmethod
     def from_repr(cls, data: Representation):
-        note_models = [DeckPartHolder.from_file_manager(model) for model in single_item_to_list(data.note_models)]
+        note_models = [PartHolder.from_file_manager(model) for model in single_item_to_list(data.note_models)]
 
         return cls(
             columns=[FieldMapping(
@@ -87,7 +87,7 @@ class NoteModelMapping(YamlRepr):
                         if field.field_name not in self.required_fields_definitions]
 
         for holder in self.note_models.values():
-            model: NoteModel = holder.deck_part
+            model: NoteModel = holder.part
 
             # Check for Required Fields
             missing = []
@@ -171,5 +171,5 @@ class NoteModelMapping(YamlRepr):
 
     def field_values_in_note_model_order(self, note_model_name, fields_from_csv):
         return [fields_from_csv[f] if f in fields_from_csv else ""
-                for f in self.note_models[note_model_name].deck_part.field_names_lowercase
+                for f in self.note_models[note_model_name].part.field_names_lowercase
                 ]

@@ -1,12 +1,9 @@
 from dataclasses import dataclass, field
-from typing import Optional, Union, List
-import logging
+from typing import Union, List
 
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.build_config.representation_base import RepresentationBase
-from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
-from brain_brew.representation.transformers.base_deck_part_from import BaseDeckPartsFrom
-from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.note_model_repr import NoteModel
 
 
@@ -20,7 +17,7 @@ class NoteModelsToCrowdAnki(YamlRepr):
     def yamale_validator_and_deps(cls) -> (str, set):
         return f'''\
             {cls.task_regex()}:
-              deck_parts: list(include('{cls.task_regex()}_item'))
+              parts: list(include('{cls.task_regex()}_item'))
             
             {cls.task_regex()}_item:
               part_id: str()
@@ -45,19 +42,19 @@ class NoteModelsToCrowdAnki(YamlRepr):
                 rep = cls.Representation(part_id=data)  # Support string
 
             return cls(
-                deck_part_to_read=rep.part_id
+                part_to_read=rep.part_id
             )
 
         def get_note_model(self) -> NoteModel:
-            self.deck_part = DeckPartHolder.from_file_manager(self.deck_part_to_read).deck_part
-            return self.deck_part  # Todo: add filters in here
+            self.part = PartHolder.from_file_manager(self.part_to_read).part
+            return self.part  # Todo: add filters in here
 
-        deck_part: NoteModel = field(init=False)
-        deck_part_to_read: str
+        part: NoteModel = field(init=False)
+        part_to_read: str
 
     @dataclass
     class Representation(RepresentationBase):
-        deck_parts: List[Union[dict, str]]
+        parts: List[Union[dict, str]]
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict, List[str]]):
@@ -67,9 +64,9 @@ class NoteModelsToCrowdAnki(YamlRepr):
         elif isinstance(data, dict):
             rep = cls.Representation.from_dict(data)
         else:
-            rep = cls.Representation(deck_parts=data)  # Support list of Note Models
+            rep = cls.Representation(parts=data)  # Support list of Note Models
 
-        note_model_items = list(map(cls.NoteModelListItem.from_repr, rep.deck_parts))
+        note_model_items = list(map(cls.NoteModelListItem.from_repr, rep.parts))
         return cls(
             note_models=[nm.get_note_model() for nm in note_model_items]
         )

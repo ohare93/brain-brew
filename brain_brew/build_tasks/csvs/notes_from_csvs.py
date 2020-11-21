@@ -2,17 +2,17 @@ from dataclasses import dataclass
 from typing import Dict, List, Union
 
 from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
-from brain_brew.representation.build_config.build_task import DeckPartBuildTask
+from brain_brew.representation.build_config.build_task import PartBuildTask
 from brain_brew.representation.configuration.csv_file_mapping import FileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
-from brain_brew.representation.transformers.base_deck_part_from import BaseDeckPartsFrom
-from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.representation.configuration.base_parts_from import BasePartsFrom
+from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.note_repr import Note, Notes
 from brain_brew.utils import split_tags
 
 
 @dataclass
-class NotesFromCsvs(SharedBaseCsvs, BaseDeckPartsFrom, DeckPartBuildTask):
+class NotesFromCsvs(SharedBaseCsvs, BasePartsFrom, PartBuildTask):
     @classmethod
     def task_regex(cls) -> str:
         return r'notes_from_csvs'
@@ -28,10 +28,10 @@ class NotesFromCsvs(SharedBaseCsvs, BaseDeckPartsFrom, DeckPartBuildTask):
             ''', {NoteModelMapping, FileMapping}
 
     @dataclass(init=False)
-    class Representation(SharedBaseCsvs.Representation, BaseDeckPartsFrom.Representation):
+    class Representation(SharedBaseCsvs.Representation, BasePartsFrom.Representation):
         def __init__(self, part_id, file_mappings, note_model_mappings, save_to_file=None):
             SharedBaseCsvs.Representation.__init__(self, file_mappings, note_model_mappings)
-            BaseDeckPartsFrom.Representation.__init__(self, part_id, save_to_file)
+            BasePartsFrom.Representation.__init__(self, part_id, save_to_file)
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
@@ -53,10 +53,10 @@ class NotesFromCsvs(SharedBaseCsvs, BaseDeckPartsFrom, DeckPartBuildTask):
             csv_data_by_guid = {**csv_data_by_guid, **csv_map.compiled_data}
         csv_rows: List[dict] = list(csv_data_by_guid.values())
 
-        deck_part_notes: List[Note] = [self.csv_row_to_note(row, self.note_model_mappings) for row in csv_rows]
+        notes_part: List[Note] = [self.csv_row_to_note(row, self.note_model_mappings) for row in csv_rows]
 
-        notes = Notes.from_list_of_notes(deck_part_notes)
-        DeckPartHolder.override_or_create(self.part_id, self.save_to_file, notes)
+        notes = Notes.from_list_of_notes(notes_part)
+        PartHolder.override_or_create(self.part_id, self.save_to_file, notes)
 
     @staticmethod
     def csv_row_to_note(row: dict, note_model_mappings: Dict[str, NoteModelMapping]) -> Note:

@@ -2,12 +2,11 @@ from abc import ABCMeta
 from dataclasses import dataclass
 from typing import Optional
 
-from brain_brew.representation.build_config.build_task import DeckPartBuildTask
 from brain_brew.representation.build_config.representation_base import RepresentationBase
 
 
 @dataclass
-class BaseDeckPartsFrom:
+class BasePartsFrom:
     @dataclass
     class Representation(RepresentationBase):
         part_id: str

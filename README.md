@@ -70,7 +70,7 @@ Reusable subconfig files allow for minor changes without breaking the DRY princi
 # Build tasks to run
 tasks:
   # Convert a collection of csvs into Deck Parts
-  - csv_collection_to_deck_parts:
+  - csv_collection_to_parts:
       notes: words.json
 
       # List of Note Models

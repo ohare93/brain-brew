@@ -9,8 +9,8 @@
 # from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 # from brain_brew.representation.generic.csv_file import CsvFile
 # from brain_brew.representation.generic.source_file import SourceFile
-# from brain_brew.representation.json.deck_part_notes import DeckPartNotes
-# from tests.representation.json.test_deck_part_notes import dp_notes_test1
+# from brain_brew.representation.json.part_notes import DeckPartNotes
+# from tests.representation.json.test_part_notes import dp_notes_test1
 # from tests.representation.configuration.test_note_model_mapping import setup_nmm_config
 # from tests.representation.configuration.test_csv_file_mapping import setup_csv_fm_config
 #
@@ -115,7 +115,7 @@
 #             assert notes_data == dp_notes.get_data()[DeckPartNoteKeys.NOTES.value]
 #
 #         with patch.object(DeckPartNotes, "set_data", side_effect=assert_format) as mock_set_data:
-#             csv_source.source_to_deck_parts()
+#             csv_source.source_to_parts()
 #             assert mock_set_data.call_count == 1
 #
 #
@@ -131,7 +131,7 @@
 #             assert source_data == csv_file.get_data()
 #
 #         with patch.object(SourceFile, "set_data", side_effect=assert_format) as mock_set_data:
-#             csv_source.deck_parts_to_source()
+#             csv_source.parts_to_source()
 #             assert csv_source.csv_file_mappings[0].data_set_has_changed is False
 #
 #             csv_source.csv_file_mappings[0].data_set_has_changed = True
