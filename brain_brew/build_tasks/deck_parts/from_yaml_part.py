@@ -2,8 +2,8 @@ from abc import ABCMeta
 from dataclasses import dataclass
 from typing import Union
 
-from brain_brew.representation.build_config.build_task import PartBuildTask
-from brain_brew.representation.build_config.representation_base import RepresentationBase
+from brain_brew.representation.build_config.build_task import BuildPartTask
+from brain_brew.representation.configuration.representation_base import RepresentationBase
 from brain_brew.representation.yaml.headers_repr import Headers
 from brain_brew.representation.yaml.media_group_repr import MediaGroup
 from brain_brew.representation.yaml.note_model_repr import NoteModel
@@ -12,8 +12,12 @@ from brain_brew.representation.yaml.part_holder import PartHolder
 
 
 @dataclass
-class FromYamlPartBase(PartBuildTask, metaclass=ABCMeta):
+class FromYamlPartBase:
     part_type = None
+
+    @classmethod
+    def task_regex(cls) -> str:
+        pass
 
     @classmethod
     def yamale_validator_and_deps(cls) -> (str, set):
@@ -40,7 +44,7 @@ class FromYamlPartBase(PartBuildTask, metaclass=ABCMeta):
 
 
 @dataclass
-class NotesFromYamlPart(FromYamlPartBase):
+class NotesFromYamlPart(FromYamlPartBase, BuildPartTask):
     @classmethod
     def task_regex(cls) -> str:
         return r'notes_from_yaml_part'
@@ -49,7 +53,7 @@ class NotesFromYamlPart(FromYamlPartBase):
 
 
 @dataclass
-class HeadersFromYamlPart(FromYamlPartBase):
+class HeadersFromYamlPart(FromYamlPartBase, BuildPartTask):
     @classmethod
     def task_regex(cls) -> str:
         return r'headers_from_yaml_part'
@@ -58,7 +62,7 @@ class HeadersFromYamlPart(FromYamlPartBase):
 
 
 @dataclass
-class NoteModelsFromYamlPart(FromYamlPartBase):
+class NoteModelsFromYamlPart(FromYamlPartBase, BuildPartTask):
     @classmethod
     def task_regex(cls) -> str:
         return r'note_models_from_yaml_part'
@@ -67,7 +71,7 @@ class NoteModelsFromYamlPart(FromYamlPartBase):
 
 
 @dataclass
-class MediaGroupFromYamlPart(FromYamlPartBase):
+class MediaGroupFromYamlPart(FromYamlPartBase, BuildPartTask):
     @classmethod
     def task_regex(cls) -> str:
         return r'media_group_from_yaml_part'

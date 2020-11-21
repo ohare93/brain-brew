@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Union, List
 
 from brain_brew.interfaces.media_container import MediaContainer
-from brain_brew.representation.build_config.build_task import PartBuildTask
+from brain_brew.representation.build_config.build_task import BuildPartTask
 from brain_brew.representation.configuration.base_parts_from import BasePartsFrom
 from brain_brew.representation.yaml.media_group_repr import MediaGroup
 from brain_brew.representation.yaml.part_holder import PartHolder
@@ -10,7 +10,7 @@ from brain_brew.transformers.media_group_from_location import create_media_group
 
 
 @dataclass
-class MediaGroupFromFolder(BasePartsFrom, PartBuildTask):
+class MediaGroupFromFolder(BasePartsFrom, BuildPartTask):
     @classmethod
     def task_regex(cls) -> str:
         return r"media_group_from_folder"

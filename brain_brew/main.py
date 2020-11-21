@@ -2,7 +2,7 @@ import logging
 
 from brain_brew.argument_reader import BBArgumentReader
 from brain_brew.file_manager import FileManager
-from brain_brew.representation.build_config.top_level_recipe_builder import TopLevelRecipeBuilder
+from brain_brew.representation.build_config.top_level_builder import TopLevelBuilder
 from brain_brew.representation.configuration.global_config import GlobalConfig
 # sys.path.append(os.path.join(os.path.dirname(__file__), "dist"))
 # sys.path.append(os.path.dirname(__file__))
@@ -22,7 +22,7 @@ def main():
 
     # Parse Build Config File
     YamlVerifier()
-    recipe = TopLevelRecipeBuilder.parse_and_read(recipe_file_name)
+    recipe = TopLevelBuilder.parse_and_read(recipe_file_name)
 
     if not verify_only:
         recipe.execute()

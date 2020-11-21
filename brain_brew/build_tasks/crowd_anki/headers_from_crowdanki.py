@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Union
 
-from brain_brew.representation.build_config.build_task import PartBuildTask
+from brain_brew.representation.build_config.build_task import BuildPartTask
 from brain_brew.representation.configuration.base_parts_from import BasePartsFrom
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.wrappers_for_crowd_anki import CA_NOTE_MODELS, CA_NOTES, CA_MEDIA_FILES, \
@@ -18,7 +18,7 @@ headers_default_values = {
 
 
 @dataclass
-class HeadersFromCrowdAnki(BasePartsFrom, PartBuildTask):
+class HeadersFromCrowdAnki(BasePartsFrom, BuildPartTask):
     @classmethod
     def task_regex(cls) -> str:
         return r'headers_from_crowd_anki'
@@ -30,7 +30,7 @@ class HeadersFromCrowdAnki(BasePartsFrom, PartBuildTask):
               source: str()
               part_id: str()
               save_to_file: str(required=False)
-        '''
+        ''', None
 
     @dataclass
     class Representation(BasePartsFrom.Representation):

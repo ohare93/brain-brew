@@ -41,11 +41,11 @@ class TopLevelBuildTask(BuildTask, metaclass=ABCMeta):
         return super(TopLevelBuildTask, cls).get_all_validators()
 
 
-class PartBuildTask(BuildTask, metaclass=ABCMeta):
+class BuildPartTask(BuildTask, metaclass=ABCMeta):
     @classmethod
     def get_all_task_regex(cls) -> Dict[str, Type['BuildTask']]:
-        return super(PartBuildTask, cls).get_all_task_regex()
+        return super(BuildPartTask, cls).get_all_task_regex()
 
     @classmethod
     def get_all_validators(cls) -> List[Tuple[str, set]]:
-        return super(PartBuildTask, cls).get_all_validators()
+        return super(BuildPartTask, cls).get_all_validators()

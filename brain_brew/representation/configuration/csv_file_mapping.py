@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Union
 
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
-from brain_brew.representation.build_config.representation_base import RepresentationBase
+from brain_brew.representation.configuration.representation_base import RepresentationBase
 from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
 from brain_brew.utils import single_item_to_list, generate_anki_guid
 

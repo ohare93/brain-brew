@@ -3,7 +3,7 @@ from typing import Optional, Union, List
 
 from brain_brew.build_tasks.crowd_anki.shared_base_notes import SharedBaseNotes
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
-from brain_brew.representation.build_config.representation_base import RepresentationBase
+from brain_brew.representation.configuration.representation_base import RepresentationBase
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiNoteWrapper
 from brain_brew.representation.yaml.note_repr import Notes, Note
 from brain_brew.representation.yaml.part_holder import PartHolder

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional, Union
 
-from brain_brew.representation.build_config.build_task import PartBuildTask
+from brain_brew.representation.build_config.build_task import BuildPartTask
 from brain_brew.representation.configuration.base_parts_from import BasePartsFrom
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
@@ -10,7 +10,7 @@ from brain_brew.representation.yaml.part_holder import PartHolder
 
 
 @dataclass
-class NoteModelsFromCrowdAnki(BasePartsFrom, PartBuildTask):
+class NoteModelsFromCrowdAnki(BasePartsFrom, BuildPartTask):
     @classmethod
     def task_regex(cls) -> str:
         return r'note_models_from_crowd_anki'
@@ -23,7 +23,7 @@ class NoteModelsFromCrowdAnki(BasePartsFrom, PartBuildTask):
               part_id: str()
               model_name: str(required=False)
               save_to_file: str(required=False)
-        '''
+        ''', None
 
     class Representation(BasePartsFrom.Representation):
         source: str

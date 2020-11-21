@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Union, Optional, List
 
 from brain_brew.build_tasks.crowd_anki.shared_base_notes import SharedBaseNotes
-from brain_brew.representation.build_config.build_task import PartBuildTask
+from brain_brew.representation.build_config.build_task import BuildPartTask
 from brain_brew.representation.configuration.base_parts_from import BasePartsFrom
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper, CrowdAnkiNoteWrapper
@@ -12,7 +12,7 @@ from brain_brew.representation.yaml.part_holder import PartHolder
 
 
 @dataclass
-class NotesFromCrowdAnki(SharedBaseNotes, BasePartsFrom, PartBuildTask):
+class NotesFromCrowdAnki(SharedBaseNotes, BasePartsFrom, BuildPartTask):
     @classmethod
     def task_regex(cls) -> str:
         return r'notes_from_crowd_anki'

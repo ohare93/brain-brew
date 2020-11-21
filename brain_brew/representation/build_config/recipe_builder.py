@@ -1,5 +1,5 @@
 import re
-from abc import ABC
+from abc import ABCMeta
 from dataclasses import dataclass
 from typing import Dict, List, Type
 
@@ -8,7 +8,7 @@ from brain_brew.representation.yaml.yaml_object import YamlObject
 
 
 @dataclass
-class RecipeBuilder(YamlObject, ABC):
+class RecipeBuilder(YamlObject, metaclass=ABCMeta):
     tasks: List[BuildTask]
 
     @classmethod
@@ -58,4 +58,3 @@ class RecipeBuilder(YamlObject, ABC):
     def execute(self):
         for task in self.tasks:
             task.execute()
-

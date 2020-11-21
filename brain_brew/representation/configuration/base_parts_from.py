@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from brain_brew.representation.build_config.representation_base import RepresentationBase
+from brain_brew.representation.configuration.representation_base import RepresentationBase
 
 
 @dataclass

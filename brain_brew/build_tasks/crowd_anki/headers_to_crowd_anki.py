@@ -3,7 +3,7 @@ from typing import Union
 
 from brain_brew.build_tasks.crowd_anki.headers_from_crowdanki import headers_default_values
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
-from brain_brew.representation.build_config.representation_base import RepresentationBase
+from brain_brew.representation.configuration.representation_base import RepresentationBase
 from brain_brew.representation.yaml.headers_repr import Headers
 from brain_brew.representation.yaml.part_holder import PartHolder
 
@@ -18,7 +18,7 @@ class HeadersToCrowdAnki(YamlRepr):
     def yamale_validator_and_deps(cls) -> (str, set):
         return f'''\
             part_id: str()
-        '''
+        ''', None
 
     @dataclass
     class Representation(RepresentationBase):
