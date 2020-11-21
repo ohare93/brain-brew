@@ -2,13 +2,13 @@
 
 class TestFiles:
     class Headers:
-        LOC = "tests/test_files/parts/headers/"
+        LOC = "tests/test_files/deck_parts/headers/"
 
         FIRST = "default header"
         FIRST_COMPLETE = "default-header.json"
 
     class NoteFiles:
-        LOC = "tests/test_files/parts/"
+        LOC = "tests/test_files/deck_parts/"
 
         TEST1_NO_GROUPING_OR_SHARED_TAGS = "csvtonotes1_withnogroupingorsharedtags.json"
         TEST1_WITH_GROUPING = "csvtonotes1_withgrouping.json"
@@ -17,7 +17,7 @@ class TestFiles:
         TEST2_WITH_SHARED_TAGS_AND_GROUPING = "csvtonotes2_withsharedtagsandgrouping.json"
 
     class CrowdAnkiNoteModels:
-        LOC = "tests/test_files/parts/note_models/"
+        LOC = "tests/test_files/deck_parts/note_models/"
 
         TEST = "Test Model"
         TEST_COMPLETE = LOC + "Test-Model.json"
@@ -30,7 +30,7 @@ class TestFiles:
         LL_WORD_COMPLETE_NO_DEFAULTS = LOC + "LL-Word-No-Defaults.json"
 
     class NoteModels:
-        LOC = "tests/test_files/parts/yaml/note_models/"
+        LOC = "tests/test_files/deck_parts/yaml/note_models/"
 
         LL_WORD = LOC + "LL-Word.yaml"
 
