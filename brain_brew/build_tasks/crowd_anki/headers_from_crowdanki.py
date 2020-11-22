@@ -24,6 +24,10 @@ class HeadersFromCrowdAnki(BasePartsFrom, BuildPartTask):
         return r'headers_from_crowd_anki'
 
     @classmethod
+    def task_regex(cls) -> str:
+        return r'header[s]?_from_crowd_anki'
+
+    @classmethod
     def yamale_schema(cls) -> str:
         return f'''\
             source: str()

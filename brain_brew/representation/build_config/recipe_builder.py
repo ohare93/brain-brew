@@ -27,7 +27,7 @@ class RecipeBuilder(YamlObject, metaclass=ABCMeta):
     @classmethod
     def build_yamale_root_node(cls, subclasses: Set[Type['BuildTask']]) -> str:
         task_list = [f"map(include('{c.task_name()}'), key=regex('{c.task_regex()}', ignore_case=True))"
-                     for c in subclasses]
+                     for c in sorted(subclasses, key=lambda x: x.task_name())]
 
         final_tasks: str = "list(\n" + indent(",\n".join(task_list), '  ') + "\n)\n"
 

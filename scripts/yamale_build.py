@@ -1,13 +1,12 @@
+import sys
+import os
+sys.path.append(os.path.abspath('../'))
+
 from brain_brew.representation.build_config.top_level_builder import TopLevelBuilder
-from brain_brew.representation.yaml.yaml_object import YamlObject
 
+build: str = TopLevelBuilder.build_yamale()
+filepath = "../brain_brew/schemas/recipe.yaml"
 
-class YamaleBuildFile(YamlObject):
-    def encode(self) -> dict:
-        TopLevelBuilder.build_yamale()
-
-    @classmethod
-    def from_yaml_file(cls, filename: str) -> 'YamlObject':
-        pass
-
-
+with open(filepath, 'w') as fp:
+    fp.write(build)
+    fp.close()

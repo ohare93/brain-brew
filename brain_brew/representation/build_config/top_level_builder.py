@@ -25,12 +25,12 @@ class TopLevelBuilder(YamlRepr, RecipeBuilder, metaclass=ABCMeta):
 
         builder: List[str] = [cls.build_yamale_root_node(top_level), separator]
 
-        def to_yamale_string(c: Type[BuildTask]):
-            return f'''{c.task_name()}:\n{indent(dedent(c.yamale_schema()), '    ')}'''
+        def to_sorted_yamale_string(lines: Set[Type[BuildTask]]):
+            return [f'''{line.task_name()}:\n{indent(dedent(line.yamale_schema()), '    ')}'''
+                    for line in sorted(lines, key=lambda x: x.task_name())]
 
         # Schema
-        for dep in top_level:
-            builder.append(to_yamale_string(dep))
+        builder += to_sorted_yamale_string(top_level)
 
         builder.append(separator)
 
@@ -43,9 +43,7 @@ class TopLevelBuilder(YamlRepr, RecipeBuilder, metaclass=ABCMeta):
             return result
 
         children = resolve_dependencies(cls.yamale_dependencies())
-        for dep in children:
-            if dep not in top_level:
-                builder.append(to_yamale_string(dep))
+        builder += to_sorted_yamale_string({dep for dep in children if dep not in top_level})
 
         return '\n'.join(builder)
 

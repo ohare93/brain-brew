@@ -25,6 +25,10 @@ class PartsBuilder(RecipeBuilder, TopLevelBuildTask, metaclass=ABCMeta):
         return r'build_parts'
 
     @classmethod
+    def task_regex(cls) -> str:
+        return r'build_part[s]?'
+
+    @classmethod
     def known_task_dict(cls) -> Dict[str, Type[BuildTask]]:
         return BuildPartTask.get_all_task_regex(cls.yamale_dependencies())
 
