@@ -12,15 +12,14 @@ from brain_brew.transformers.media_group_save_to_location import save_media_grou
 @dataclass
 class MediaGroupToCrowdAnki(YamlRepr):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r'media_group_to_crowd_anki'
 
     @classmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
+    def yamale_schema(cls) -> str:
         return f'''\
-            {cls.task_regex()}
-              parts: list(str())
-        ''', None
+            parts: list(str())
+        '''
 
     @dataclass
     class Representation(RepresentationBase):

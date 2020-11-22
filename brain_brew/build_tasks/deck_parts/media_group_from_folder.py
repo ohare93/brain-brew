@@ -12,20 +12,19 @@ from brain_brew.transformers.media_group_from_location import create_media_group
 @dataclass
 class MediaGroupFromFolder(BasePartsFrom, BuildPartTask):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r"media_group_from_folder"
 
     @classmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
+    def yamale_schema(cls) -> str:
         return f'''\
-            {cls.task_regex()}:
-              part_id: str()
-              save_to_file: str(required=False)
-              source: str()
-              recursive: bool(required=False)
-              filter_whitelist_from_parts: list(str(), required=False)
-              filter_blacklist_from_parts: list(str(), required=False)
-        ''', None
+            part_id: str()
+            save_to_file: str(required=False)
+            source: str()
+            recursive: bool(required=False)
+            filter_whitelist_from_parts: list(str(), required=False)
+            filter_blacklist_from_parts: list(str(), required=False)
+        '''
 
     @dataclass(init=False)
     class Representation(BasePartsFrom.Representation):

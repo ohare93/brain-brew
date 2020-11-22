@@ -13,17 +13,24 @@ from brain_brew.utils import join_tags
 @dataclass
 class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r'generate_csvs'
 
     @classmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
+    def task_regex(cls) -> str:
+        return r'generate_csv[s]?'
+
+    @classmethod
+    def yamale_schema(cls) -> str:
         return f'''\
-            {cls.task_regex()}:
-              notes: str()
-              note_model_mappings: list(include('{NoteModelMapping.task_regex()}'))
-              file_mappings: list(include('{FileMapping.task_regex()}'))
-            ''', {NoteModelMapping, FileMapping}
+            notes: str()
+            note_model_mappings: list(include('{NoteModelMapping.task_name()}'))
+            file_mappings: list(include('{FileMapping.task_name()}'))
+        '''
+
+    @classmethod
+    def yamale_dependencies(cls) -> set:
+        return {NoteModelMapping, FileMapping}
 
     notes_to_read: str  # TODO: Accept Multiple Note Parts
     notes: PartHolder[Notes] = field(default=None)

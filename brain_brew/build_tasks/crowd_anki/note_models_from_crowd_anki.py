@@ -12,18 +12,21 @@ from brain_brew.representation.yaml.part_holder import PartHolder
 @dataclass
 class NoteModelsFromCrowdAnki(BasePartsFrom, BuildPartTask):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r'note_models_from_crowd_anki'
 
     @classmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
+    def task_regex(cls) -> str:
+        return r'note_model[s]?_from_crowd_anki'
+
+    @classmethod
+    def yamale_schema(cls) -> str:
         return f'''\
-            {cls.task_regex()}:
-              source: str()
-              part_id: str()
-              model_name: str(required=False)
-              save_to_file: str(required=False)
-        ''', None
+            source: str()
+            part_id: str()
+            model_name: str(required=False)
+            save_to_file: str(required=False)
+        '''
 
     class Representation(BasePartsFrom.Representation):
         source: str

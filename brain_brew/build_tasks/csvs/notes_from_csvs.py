@@ -14,18 +14,25 @@ from brain_brew.utils import split_tags
 @dataclass
 class NotesFromCsvs(SharedBaseCsvs, BasePartsFrom, BuildPartTask):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r'notes_from_csvs'
 
     @classmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
+    def task_regex(cls) -> str:
+        return r'notes_from_csv[s]?'
+
+    @classmethod
+    def yamale_schema(cls) -> str:
         return f'''\
-            {cls.task_regex()}:
-              part_id: str()
-              save_to_file: str(required=False)
-              note_model_mappings: list(include('{NoteModelMapping.task_regex()}'))
-              file_mappings: list(include('{FileMapping.task_regex()}'))
-            ''', {NoteModelMapping, FileMapping}
+            part_id: str()
+            save_to_file: str(required=False)
+            note_model_mappings: list(include('{NoteModelMapping.task_name()}'))
+            file_mappings: list(include('{FileMapping.task_name()}'))
+        '''
+
+    @classmethod
+    def yamale_dependencies(cls) -> set:
+        return {NoteModelMapping, FileMapping}
 
     @dataclass(init=False)
     class Representation(SharedBaseCsvs.Representation, BasePartsFrom.Representation):

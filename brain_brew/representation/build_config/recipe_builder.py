@@ -1,7 +1,8 @@
 import re
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Type
+from typing import Dict, List, Type, Set
+from textwrap import indent, dedent
 
 from brain_brew.representation.build_config.build_task import BuildTask
 from brain_brew.representation.yaml.yaml_object import YamlObject
@@ -19,8 +20,18 @@ class RecipeBuilder(YamlObject, metaclass=ABCMeta):
         )
 
     @classmethod
+    @abstractmethod
     def known_task_dict(cls) -> Dict[str, Type[BuildTask]]:
-        raise NotImplemented()
+        pass
+
+    @classmethod
+    def build_yamale_root_node(cls, subclasses: Set[Type['BuildTask']]) -> str:
+        task_list = [f"map(include('{c.task_name()}'), key=regex('{c.task_regex()}', ignore_case=True))"
+                     for c in subclasses]
+
+        final_tasks: str = "list(\n" + indent(",\n".join(task_list), '  ') + "\n)\n"
+
+        return final_tasks
 
     @classmethod
     def read_tasks(cls, tasks: List[dict]) -> list:

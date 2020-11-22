@@ -13,18 +13,17 @@ from brain_brew.utils import blank_str_if_none
 @dataclass
 class NotesToCrowdAnki(YamlRepr, SharedBaseNotes):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r'notes_to_crowd_anki'
 
     @classmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
+    def yamale_schema(cls) -> str:
         return f'''\
-            {cls.task_regex()}:
-              part_id: str()
-              sort_order: list(str(), required=False)
-              reverse_sort: bool(required=False)
-              additional_items_to_add: map(str(), key=str(), required=False)
-        ''', None
+            part_id: str()
+            sort_order: list(str(), required=False)
+            reverse_sort: bool(required=False)
+            additional_items_to_add: map(str(), key=str(), required=False)
+        '''
 
     @dataclass
     class Representation(RepresentationBase):

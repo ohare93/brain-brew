@@ -10,21 +10,31 @@ from brain_brew.representation.yaml.part_holder import PartHolder
 @dataclass
 class NoteModelsToCrowdAnki(YamlRepr):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r'note_models_to_crowd_anki'
 
     @classmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
+    def yamale_schema(cls) -> str:
         return f'''\
-            {cls.task_regex()}:
-              parts: list(include('{cls.task_regex()}_item'))
-            
-            {cls.task_regex()}_item:
-              part_id: str()
-        ''', None
+            parts: list(include('{cls.NoteModelListItem.task_name()}'))
+        '''
+
+    @classmethod
+    def yamale_dependencies(cls) -> set:
+        return {cls.NoteModelListItem}
 
     @dataclass
-    class NoteModelListItem:
+    class NoteModelListItem(YamlRepr):
+        @classmethod
+        def task_name(cls) -> str:
+            return r'note_models_to_crowd_anki_item'
+
+        @classmethod
+        def yamale_schema(cls) -> str:
+            return f'''\
+                part_id: str()
+            '''
+
         @dataclass
         class Representation(RepresentationBase):
             part_id: str

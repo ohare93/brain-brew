@@ -11,7 +11,7 @@ from brain_brew.transformers.media_group_from_location import create_media_group
 @dataclass
 class MediaGroupFromCrowdAnki(MediaGroupFromFolder):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r"media_group_from_crowd_anki"
 
     @classmethod

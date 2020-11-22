@@ -37,17 +37,16 @@ class FieldMapping:
 @dataclass
 class NoteModelMapping(YamlRepr):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r'note_model_mapping'
 
     @classmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
+    def yamale_schema(cls) -> str:
         return f'''\
-            {cls.task_regex()}:
-              note_models: any(list(str()), str())
-              columns_to_fields: map(str(), key=str())
-              personal_fields: list(str())
-            ''', None
+            note_models: any(list(str()), str())
+            columns_to_fields: map(str(), key=str())
+            personal_fields: list(str())
+        '''
 
     @dataclass
     class Representation(RepresentationBase):

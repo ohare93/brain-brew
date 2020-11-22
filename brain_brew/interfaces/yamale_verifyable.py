@@ -4,13 +4,17 @@ from abc import ABC, abstractmethod
 class YamlRepr(ABC):
     @classmethod
     @abstractmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         pass
 
     @classmethod
     @abstractmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
+    def yamale_schema(cls) -> str:
         pass
+
+    @classmethod
+    def yamale_dependencies(cls) -> set:
+        return set()
 
     @classmethod
     @abstractmethod

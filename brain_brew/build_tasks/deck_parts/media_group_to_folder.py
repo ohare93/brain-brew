@@ -11,17 +11,20 @@ from brain_brew.transformers.media_group_save_to_location import save_media_grou
 @dataclass
 class MediaGroupsToFolder(BuildPartTask):
     @classmethod
-    def task_regex(cls) -> str:
-        return r"save_media_groups_to_folder"
+    def task_name(cls) -> str:
+        return r'save_media_groups_to_folder'
 
     @classmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
+    def task_regex(cls) -> str:
+        return r"save_media_group[s]?_to_folder"
+
+    @classmethod
+    def yamale_schema(cls) -> str:
         return f'''\
-            {cls.task_regex()}
-              parts: list(str())
-              folder: str()
-              clear_folder: bool(required=False)
-        ''', None
+            parts: list(str())
+            folder: str()
+            clear_folder: bool(required=False)
+        '''
 
     @dataclass
     class Representation(RepresentationBase):

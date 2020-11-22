@@ -20,17 +20,16 @@ headers_default_values = {
 @dataclass
 class HeadersFromCrowdAnki(BasePartsFrom, BuildPartTask):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r'headers_from_crowd_anki'
 
     @classmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
+    def yamale_schema(cls) -> str:
         return f'''\
-            {cls.task_regex()}:
-              source: str()
-              part_id: str()
-              save_to_file: str(required=False)
-        ''', None
+            source: str()
+            part_id: str()
+            save_to_file: str(required=False)
+        '''
 
     @dataclass
     class Representation(BasePartsFrom.Representation):

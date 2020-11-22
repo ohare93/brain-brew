@@ -9,17 +9,7 @@ from brain_brew.representation.yaml.part_holder import PartHolder
 
 
 @dataclass
-class HeadersToCrowdAnki(YamlRepr):
-    @classmethod
-    def task_regex(cls) -> str:
-        return r"headers_to_crowd_anki"
-
-    @classmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
-        return f'''\
-            part_id: str()
-        ''', None
-
+class HeadersToCrowdAnki:
     @dataclass
     class Representation(RepresentationBase):
         part_id: str

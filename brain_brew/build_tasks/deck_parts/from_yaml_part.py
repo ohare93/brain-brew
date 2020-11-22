@@ -12,20 +12,15 @@ from brain_brew.representation.yaml.part_holder import PartHolder
 
 
 @dataclass
-class FromYamlPartBase:
+class FromYamlPartBase(BuildPartTask, metaclass=ABCMeta):
     part_type = None
 
     @classmethod
-    def task_regex(cls) -> str:
-        pass
-
-    @classmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
+    def yamale_schema(cls) -> str:
         return f'''\
-            {cls.task_regex()}:
-              part_id: str()
-              file: str()
-            ''', None
+            part_id: str()
+            file: str()
+        '''
 
     @dataclass
     class Representation(RepresentationBase):
@@ -44,9 +39,9 @@ class FromYamlPartBase:
 
 
 @dataclass
-class NotesFromYamlPart(FromYamlPartBase, BuildPartTask):
+class NotesFromYamlPart(FromYamlPartBase):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r'notes_from_yaml_part'
 
     part_type = Notes
@@ -55,8 +50,12 @@ class NotesFromYamlPart(FromYamlPartBase, BuildPartTask):
 @dataclass
 class HeadersFromYamlPart(FromYamlPartBase, BuildPartTask):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r'headers_from_yaml_part'
+
+    @classmethod
+    def task_regex(cls) -> str:
+        return r'header[s]?_from_yaml_part'
 
     part_type = Headers
 
@@ -64,8 +63,12 @@ class HeadersFromYamlPart(FromYamlPartBase, BuildPartTask):
 @dataclass
 class NoteModelsFromYamlPart(FromYamlPartBase, BuildPartTask):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r'note_models_from_yaml_part'
+
+    @classmethod
+    def task_regex(cls) -> str:
+        return r'note_model[s]?_from_yaml_part'
 
     part_type = NoteModel
 
@@ -73,7 +76,7 @@ class NoteModelsFromYamlPart(FromYamlPartBase, BuildPartTask):
 @dataclass
 class MediaGroupFromYamlPart(FromYamlPartBase, BuildPartTask):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r'media_group_from_yaml_part'
 
     part_type = MediaGroup

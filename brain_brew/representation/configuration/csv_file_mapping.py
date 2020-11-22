@@ -17,19 +17,18 @@ DERIVATIVES = "derivatives"
 @dataclass
 class FileMappingDerivative(YamlRepr):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r'file_mapping'
 
     @classmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
+    def yamale_schema(cls) -> str:
         return f'''\
-            {cls.task_regex()}:
-              file: str()
-              note_model: str(required=False)
-              sort_by_columns: list(str(), required=False)
-              reverse_sort: bool(required=False)
-              derivatives: list(include('{cls.task_regex()}'), required=False)
-            ''', None
+            file: str()
+            note_model: str(required=False)
+            sort_by_columns: list(str(), required=False)
+            reverse_sort: bool(required=False)
+            derivatives: list(include('{cls.task_name()}'), required=False)
+        '''
 
     @dataclass(init=False)
     class Representation(RepresentationBase):

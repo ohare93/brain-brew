@@ -15,19 +15,22 @@ from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJson
 @dataclass
 class CrowdAnkiGenerate(TopLevelBuildTask):
     @classmethod
-    def task_regex(cls) -> str:
+    def task_name(cls) -> str:
         return r'generate_crowd_anki'
 
     @classmethod
-    def yamale_validator_and_deps(cls) -> (str, set):
+    def yamale_schema(cls) -> str:
         return f'''\
-            {cls.task_regex()}:
-              folder: str()
-              headers: str()
-              notes: include('{NotesToCrowdAnki.task_regex()}')
-              note_models: include('{NoteModelsToCrowdAnki.task_regex()}')
-              media: include('{MediaGroupToCrowdAnki.task_regex()}', required=False)
-        ''', {NotesToCrowdAnki, NoteModelsToCrowdAnki, MediaGroupToCrowdAnki}
+            folder: str()
+            headers: str()
+            notes: include('{NotesToCrowdAnki.task_name()}')
+            note_models: include('{NoteModelsToCrowdAnki.task_name()}')
+            media: include('{MediaGroupToCrowdAnki.task_name()}', required=False)
+        '''
+
+    @classmethod
+    def yamale_dependencies(cls) -> set:
+        return {NotesToCrowdAnki, NoteModelsToCrowdAnki, MediaGroupToCrowdAnki}
 
     @dataclass
     class Representation(RepresentationBase):
