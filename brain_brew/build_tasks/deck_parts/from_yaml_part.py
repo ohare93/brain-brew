@@ -42,7 +42,7 @@ class FromYamlPartBase(BuildPartTask, metaclass=ABCMeta):
 class NotesFromYamlPart(FromYamlPartBase):
     @classmethod
     def task_name(cls) -> str:
-        return r'notes_from_yaml_part2'
+        return r'notes_from_yaml_part'
 
     part_type = Notes
 
