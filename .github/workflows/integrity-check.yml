@@ -21,6 +21,7 @@ jobs:
     - name: Run tests
       run: py.test
 
+
     - uses: actions/checkout@v1
     - name: Build Yamale Recipe
       run: python scripts/yamale_build.py
