@@ -26,4 +26,4 @@ jobs:
     - name: Build Yamale Recipe
       run: python scripts/yamale_build.py
     - name: Check diff
-      run: git diff --quiet -- || echo "::error :: You need to run \`python scripts/yamale_build.py\`"
+      run: git diff --quiet -- || echo "::error file=yamale,line=0,col=0::You need to run \`python scripts/yamale_build.py\`"
