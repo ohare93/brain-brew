@@ -1,6 +1,5 @@
 import pytest
 
-from brain_brew.file_manager import FileManager
 from brain_brew.representation.generic.csv_file import CsvFile
 from tests.test_files import TestFiles
 

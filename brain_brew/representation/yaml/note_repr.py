@@ -32,7 +32,11 @@ class GroupableNoteData(YamlObject, MediaContainer, metaclass=ABCMeta):
 
 
 @dataclass
-class Note(GroupableNoteData, metaclass=ABCMeta):
+class Note(GroupableNoteData):
+    @classmethod
+    def from_yaml_file(cls, filename: str) -> 'Note':
+        return cls.from_dict(cls.read_to_dict(filename))
+
     fields: List[str]
     guid: str
     flags: int
@@ -60,8 +64,12 @@ class Note(GroupableNoteData, metaclass=ABCMeta):
 
 
 @dataclass
-class NoteGrouping(GroupableNoteData, metaclass=ABCMeta):
+class NoteGrouping(GroupableNoteData):
     notes: List[Note]
+
+    @classmethod
+    def from_yaml_file(cls, filename: str) -> 'NoteGrouping':
+        return cls.from_dict(cls.read_to_dict(filename))
 
     @classmethod
     def from_dict(cls, data: dict):
@@ -150,7 +158,7 @@ class Notes(YamlObject, MediaContainer):
     note_groupings: List[NoteGrouping]
 
     @classmethod
-    def from_yaml_file(cls, filename: str):
+    def from_yaml_file(cls, filename: str) -> 'Notes':
         return cls.from_dict(cls.read_to_dict(filename))
 
     @classmethod

@@ -66,11 +66,11 @@ class Template(RepresentationBase):
     @dataclass
     class CrowdAnki(RepresentationBase):
         name: str
-        ord: int
         qfmt: str
         afmt: str
         bqfmt: str = field(default=BROWSER_QUESTION_FORMAT.default_value)
         bafmt: str = field(default=BROWSER_ANSWER_FORMAT.default_value)
+        ord: int = field(default=None)
         did: Optional[int] = field(default=None)
 
     name: str
@@ -128,7 +128,7 @@ class Field(RepresentationBase):
     @dataclass
     class CrowdAnki(RepresentationBase):
         name: str
-        ord: int
+        ord: int = field(default=None)
         font: str = field(default=FONT.default_value)
         media: List[str] = field(default_factory=lambda: MEDIA.default_value)
         rtl: bool = field(default=IS_RIGHT_TO_LEFT.default_value)
