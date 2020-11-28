@@ -12,7 +12,7 @@ from brain_brew.build_tasks.crowd_anki.headers_from_crowdanki import HeadersFrom
 from brain_brew.build_tasks.crowd_anki.media_group_from_crowd_anki import MediaGroupFromCrowdAnki
 from brain_brew.build_tasks.crowd_anki.note_models_from_crowd_anki import NoteModelsFromCrowdAnki
 from brain_brew.build_tasks.crowd_anki.notes_from_crowd_anki import NotesFromCrowdAnki
-
+from brain_brew.build_tasks.deck_parts.media_group_to_folder import MediaGroupsToFolder
 
 from brain_brew.representation.build_config.build_task import BuildTask, BuildPartTask, TopLevelBuildTask
 from brain_brew.representation.build_config.recipe_builder import RecipeBuilder
@@ -58,6 +58,6 @@ class PartsBuilder(RecipeBuilder, TopLevelBuildTask):
         return {
             NotesFromCsvs,
             NotesFromYamlPart, HeadersFromYamlPart, NoteModelsFromYamlPart, MediaGroupFromYamlPart,
-            MediaGroupFromFolder,
+            MediaGroupFromFolder, MediaGroupsToFolder,
             HeadersFromCrowdAnki, MediaGroupFromCrowdAnki, NoteModelsFromCrowdAnki, NotesFromCrowdAnki
         }

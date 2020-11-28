@@ -18,7 +18,8 @@ build_parts:
       map(any(include('note_models_from_yaml_part'), list(include('note_models_from_yaml_part'))), key=regex('note_model[s]?_from_yaml_part', ignore_case=True)),
       map(any(include('notes_from_crowd_anki'), list(include('notes_from_crowd_anki'))), key=regex('notes_from_crowd_anki', ignore_case=True)),
       map(any(include('notes_from_csvs'), list(include('notes_from_csvs'))), key=regex('notes_from_csv[s]?', ignore_case=True)),
-      map(any(include('notes_from_yaml_part'), list(include('notes_from_yaml_part'))), key=regex('notes_from_yaml_part', ignore_case=True))
+      map(any(include('notes_from_yaml_part'), list(include('notes_from_yaml_part'))), key=regex('notes_from_yaml_part', ignore_case=True)),
+      map(any(include('save_media_groups_to_folder'), list(include('save_media_groups_to_folder'))), key=regex('save_media_group[s]?_to_folder', ignore_case=True))
     )
 
 generate_crowd_anki:
@@ -118,3 +119,8 @@ notes_to_crowd_anki:
     sort_order: list(str(), required=False)
     reverse_sort: bool(required=False)
     additional_items_to_add: map(str(), key=str(), required=False)
+
+save_media_groups_to_folder:
+    parts: list(str())
+    folder: str()
+    clear_folder: bool(required=False)

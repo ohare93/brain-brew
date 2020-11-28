@@ -29,10 +29,11 @@ class NoteModelsFromCrowdAnki(BuildPartTask):
             save_to_file: str(required=False)
         '''
 
+    @dataclass
     class Representation(RepresentationBase):
         source: str
-        model_name: Optional[str] = field(default_factory=lambda: None)
         part_id: str
+        model_name: Optional[str] = field(default=None)
         save_to_file: Optional[str] = field(default=None)
         # TODO: fields: Optional[List[str]]
         # TODO: templates: Optional[List[str]]
@@ -55,7 +56,7 @@ class NoteModelsFromCrowdAnki(BuildPartTask):
     def execute(self):
         ca_wrapper: CrowdAnkiJsonWrapper = self.ca_export.json_data
 
-        note_models_dict = {model.name: model for model in ca_wrapper.note_models}
+        note_models_dict = {model.get('name'): model for model in ca_wrapper.note_models}
 
         if self.model_name not in note_models_dict:
             raise ReferenceError(f"Missing Note Model '{self.model_name}' in CrowdAnki file")
