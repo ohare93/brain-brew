@@ -9,6 +9,7 @@ from brain_brew.representation.yaml.media_group_repr import MediaGroup
 from brain_brew.representation.yaml.note_model_repr import NoteModel
 from brain_brew.representation.yaml.note_repr import Notes
 from brain_brew.representation.yaml.part_holder import PartHolder
+from brain_brew.representation.yaml.yaml_object import YamlObject
 
 
 @dataclass
@@ -31,11 +32,15 @@ class FromYamlPartBase(BuildPartTask, metaclass=ABCMeta):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
 
-        return PartHolder.override_or_create(
-            part_id=rep.part_id, save_to_file=None, part=cls.part_type.from_yaml_file(rep.file))
+        return cls(
+            part=PartHolder.override_or_create(
+                part_id=rep.part_id, save_to_file=None, part=cls.part_type.from_yaml_file(rep.file))
+        )
 
     def execute(self):
         pass
+
+    part: YamlObject
 
 
 @dataclass

@@ -11,7 +11,7 @@ def create_media_group_from_location(
         media_group: MediaGroup,
         groups_to_blacklist: List[MediaContainer],
         groups_to_whitelist: List[MediaContainer]
-):
+) -> MediaGroup:
     if groups_to_whitelist:
         white = list(set.union(*[container.get_all_media_references() for container in groups_to_whitelist]))
         media_group.filter_by_filenames(white, should_match=True)
@@ -20,4 +20,5 @@ def create_media_group_from_location(
         black = list(set.union(*[container.get_all_media_references() for container in groups_to_blacklist]))
         media_group.filter_by_filenames(black, should_match=False)
 
-    PartHolder.override_or_create(part_id, save_to_file, media_group)
+    holder = PartHolder.override_or_create(part_id, save_to_file, media_group)
+    return holder.part

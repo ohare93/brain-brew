@@ -40,7 +40,7 @@ class CsvFile(SourceFile):
 
     def write_file(self):
         logging.info(f"Writing to Csv '{self.file_location}'")
-        with open(self.file_location, mode='w') as csv_file:
+        with open(self.file_location, mode='w+') as csv_file:
             csv_writer = csv.DictWriter(csv_file, fieldnames=self.column_headers)
 
             csv_writer.writeheader()

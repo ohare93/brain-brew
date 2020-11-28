@@ -1,5 +1,5 @@
 list(
-  map(any(include('build_parts'), list(include('build_parts'))), key=regex('build_part[s]?', ignore_case=True)),
+  map(include('build_parts'), key=regex('build_part[s]?', ignore_case=True)),
   map(any(include('generate_crowd_anki'), list(include('generate_crowd_anki'))), key=regex('generate_crowd_anki', ignore_case=True)),
   map(any(include('generate_csvs'), list(include('generate_csvs'))), key=regex('generate_csv[s]?', ignore_case=True))
 )

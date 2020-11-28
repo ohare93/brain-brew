@@ -19,10 +19,14 @@ from brain_brew.representation.build_config.recipe_builder import RecipeBuilder
 
 
 @dataclass
-class PartsBuilder(RecipeBuilder, TopLevelBuildTask, metaclass=ABCMeta):
+class PartsBuilder(RecipeBuilder, TopLevelBuildTask):
     @classmethod
     def task_name(cls) -> str:
         return r'build_parts'
+
+    @classmethod
+    def accepts_list(cls) -> bool:
+        return False
 
     @classmethod
     def task_regex(cls) -> str:
@@ -37,6 +41,13 @@ class PartsBuilder(RecipeBuilder, TopLevelBuildTask, metaclass=ABCMeta):
         if not isinstance(data, list):
             raise TypeError(f"PartsBuilder needs a list")
         return cls.from_list(data)
+
+    def encode(self) -> dict:
+        pass
+
+    @classmethod
+    def from_yaml_file(cls, filename: str):
+        pass
 
     @classmethod
     def yamale_schema(cls) -> str:

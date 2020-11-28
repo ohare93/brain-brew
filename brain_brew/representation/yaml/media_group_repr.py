@@ -50,8 +50,8 @@ class MediaGroup(YamlObject):
         # TODO: Find all missing files
 
     def compare(self, other: 'MediaGroup') -> Tuple[Set[str], Set[str], Set[str]]:
-        intersection = set(self.media_files.keys() & other.media_files.keys())
-        difference_main = set(self.media_files.keys() ^ other.media_files.keys())
-        difference_other = set(self.media_files.keys() ^ other.media_files.keys())
 
-        return intersection, difference_main, difference_other
+        self_set = set(self.media_files)
+        other_set = set(other.media_files)
+
+        return self_set.intersection(other_set), self_set - other_set, other_set - self_set

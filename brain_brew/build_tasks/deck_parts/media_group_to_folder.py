@@ -36,7 +36,7 @@ class MediaGroupsToFolder(BuildPartTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
-            parts=list(map(PartHolder.from_file_manager, rep.parts)),
+            parts=list(holder.part for holder in map(PartHolder.from_file_manager, rep.parts)),
             folder=rep.folder,
             clear_folder=rep.clear_folder or False
         )

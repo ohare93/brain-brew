@@ -1,3 +1,4 @@
+import logging
 from typing import List, Set
 
 from brain_brew.representation.generic.media_file import MediaFile
@@ -22,7 +23,9 @@ def save_media_groups_to_location(
         #    pass  # TODO: Check if copying is needed?
         media_file.copy_self_to_target(folder)
 
-    if clear_folder:
+    if clear_folder and to_delete:
+        deleted = '\n'.join(to_delete)
+        logging.warning(f"Deleting extra files in media folder '{folder}':\n{'-'*20}\n{deleted}\n{'-'*20}")
         for delete_name in to_delete:
             existing_media_group.media_files[delete_name].delete_self()
 

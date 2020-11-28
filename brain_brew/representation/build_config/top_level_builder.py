@@ -12,7 +12,7 @@ from brain_brew.representation.build_config.recipe_builder import RecipeBuilder
 from brain_brew.representation.build_config.build_task import BuildTask, TopLevelBuildTask
 
 
-class TopLevelBuilder(YamlRepr, RecipeBuilder, metaclass=ABCMeta):
+class TopLevelBuilder(YamlRepr, RecipeBuilder):
     @classmethod
     def known_task_dict(cls) -> Dict[str, Type[BuildTask]]:
         values = TopLevelBuildTask.get_all_task_regex(cls.yamale_dependencies())
@@ -58,6 +58,25 @@ class TopLevelBuilder(YamlRepr, RecipeBuilder, metaclass=ABCMeta):
             return None
 
         return cls.from_list(recipe_data)
+
+    @classmethod
+    def task_name(cls) -> str:
+        pass
+
+    @classmethod
+    def yamale_schema(cls) -> str:
+        pass
+
+    @classmethod
+    def from_repr(cls, data: dict):
+        pass
+
+    def encode(self) -> dict:
+        pass
+
+    @classmethod
+    def from_yaml_file(cls, filename: str):
+        pass
 
     @classmethod
     def yamale_dependencies(cls) -> Set[Type[TopLevelBuildTask]]:

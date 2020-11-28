@@ -20,13 +20,18 @@ class MediaGroupFromCrowdAnki(MediaGroupFromFolder):
 
         cae: CrowdAnkiExport = CrowdAnkiExport.create_or_get(rep.source)
         return cls(
-            part_id=rep.part_id,
-            save_to_file=rep.save_to_file,
-            media_group=MediaGroup.from_directory(cae.media_loc, rep.recursive),
-            groups_to_blacklist=list(map(PartHolder.from_file_manager, rep.filter_blacklist_from_parts)),
-            groups_to_whitelist=list(map(PartHolder.from_file_manager, rep.filter_whitelist_from_parts))
+            part=create_media_group_from_location(
+                part_id=rep.part_id,
+                save_to_file=rep.save_to_file,
+                media_group=MediaGroup.from_directory(cae.media_loc, rep.recursive),
+                groups_to_blacklist=list(holder.part for holder in
+                                         map(PartHolder.from_file_manager, rep.filter_blacklist_from_parts)),
+                groups_to_whitelist=list(holder.part for holder in
+                                         map(PartHolder.from_file_manager, rep.filter_whitelist_from_parts))
+            )
         )
 
+    part: MediaGroup
+
     def execute(self):
-        create_media_group_from_location(self.part_id, self.save_to_file, self.media_group,
-                                         self.groups_to_blacklist, self.groups_to_whitelist)
+        pass

@@ -26,13 +26,13 @@ class CrowdAnkiExport(SourceFile):
         create_path_if_not_exists(self.folder_location)
 
         self.json_file_location = self.find_json_file_in_folder()
-        self._read_json_file()
-
         self.media_loc = self.folder_location + "media/"
 
         if not self.is_dir(self.media_loc):
             create_path_if_not_exists(self.media_loc)
             return
+        else:
+            self._read_json_file()
 
     @classmethod
     def from_file_loc(cls, file_loc) -> 'CrowdAnkiExport':
@@ -55,5 +55,8 @@ class CrowdAnkiExport(SourceFile):
         JsonFile.write_file(self.json_file_location, json_data)
 
     def _read_json_file(self):
-        self.json_data = CrowdAnkiJsonWrapper(JsonFile.read_file(self.json_file_location))
-        self.note_models = list(map(NoteModel.from_crowdanki, self.json_data.note_models))
+        if SourceFile.is_file(self.json_file_location):
+            self.json_data = CrowdAnkiJsonWrapper(JsonFile.read_file(self.json_file_location))
+            self.note_models = list(map(NoteModel.from_crowdanki, self.json_data.note_models))
+        else:
+            self.write_to_files({})

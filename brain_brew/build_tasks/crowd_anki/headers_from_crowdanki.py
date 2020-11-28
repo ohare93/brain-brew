@@ -1,8 +1,8 @@
-from dataclasses import dataclass
-from typing import Union
+from dataclasses import dataclass, field
+from typing import Union, Optional
 
 from brain_brew.representation.build_config.build_task import BuildPartTask
-from brain_brew.representation.configuration.base_parts_from import BasePartsFrom
+from brain_brew.representation.configuration.representation_base import RepresentationBase
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.wrappers_for_crowd_anki import CA_NOTE_MODELS, CA_NOTES, CA_MEDIA_FILES, \
     CA_CHILDREN, CA_TYPE
@@ -18,7 +18,7 @@ headers_default_values = {
 
 
 @dataclass
-class HeadersFromCrowdAnki(BasePartsFrom, BuildPartTask):
+class HeadersFromCrowdAnki(BuildPartTask):
     @classmethod
     def task_name(cls) -> str:
         return r'headers_from_crowd_anki'
@@ -36,8 +36,10 @@ class HeadersFromCrowdAnki(BasePartsFrom, BuildPartTask):
         '''
 
     @dataclass
-    class Representation(BasePartsFrom.Representation):
+    class Representation(RepresentationBase):
         source: str
+        part_id: str
+        save_to_file: Optional[str] = field(default=None)
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
@@ -49,6 +51,8 @@ class HeadersFromCrowdAnki(BasePartsFrom, BuildPartTask):
         )
 
     ca_export: CrowdAnkiExport
+    part_id: str
+    save_to_file: Optional[str]
 
     def execute(self):
         ca_wrapper: CrowdAnkiJsonWrapper = self.ca_export.json_data

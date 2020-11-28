@@ -23,11 +23,11 @@ class CrowdAnkiJsonWrapper:
 
     @property
     def children(self) -> list:
-        return self.data[CA_CHILDREN]
+        return self.data.get(CA_CHILDREN, [])
 
     @property
     def note_models(self) -> list:
-        return self.data[CA_NOTE_MODELS]
+        return self.data.get(CA_NOTE_MODELS, [])
 
     @note_models.setter
     def note_models(self, value: list):
@@ -35,7 +35,7 @@ class CrowdAnkiJsonWrapper:
 
     @property
     def notes(self) -> list:
-        return self.data[CA_NOTES]
+        return self.data.get(CA_NOTES, [])
 
     @notes.setter
     def notes(self, value: list):
@@ -43,7 +43,7 @@ class CrowdAnkiJsonWrapper:
 
     @property
     def media_files(self) -> list:
-        return self.data[CA_MEDIA_FILES]
+        return self.data.get(CA_MEDIA_FILES, [])
 
     @media_files.setter
     def media_files(self, value: list):
@@ -51,7 +51,7 @@ class CrowdAnkiJsonWrapper:
 
     @property
     def name(self) -> list:
-        return self.data[CA_NAME]
+        return self.data.get(CA_NAME, [])
 
     @name.setter
     def name(self, value: list):
@@ -66,7 +66,7 @@ class CrowdAnkiNoteWrapper:
 
     @property
     def note_model(self) -> str:
-        return self.data[NOTE_MODEL]
+        return self.data.get(NOTE_MODEL)
 
     @note_model.setter
     def note_model(self, value: str):
@@ -74,7 +74,7 @@ class CrowdAnkiNoteWrapper:
 
     @property
     def flags(self) -> int:
-        return self.data[FLAGS]
+        return self.data.get(FLAGS)
 
     @flags.setter
     def flags(self, value: int):
@@ -82,7 +82,7 @@ class CrowdAnkiNoteWrapper:
 
     @property
     def guid(self) -> str:
-        return self.data[GUID]
+        return self.data.get(GUID)
 
     @guid.setter
     def guid(self, value: str):
@@ -90,7 +90,7 @@ class CrowdAnkiNoteWrapper:
 
     @property
     def tags(self) -> list:
-        return self.data[TAGS]
+        return self.data.get(TAGS, [])
 
     @tags.setter
     def tags(self, value: list):
@@ -98,7 +98,7 @@ class CrowdAnkiNoteWrapper:
 
     @property
     def fields(self) -> List[str]:
-        return self.data[FIELDS]
+        return self.data.get(FIELDS, [])
 
     @fields.setter
     def fields(self, value: List[str]):

@@ -61,18 +61,19 @@ class NoteModelMapping(YamlRepr):
     required_fields_definitions = [GUID, TAGS]
 
     @classmethod
-    def from_repr(cls, data: Representation):
-        note_models = [PartHolder.from_file_manager(model) for model in single_item_to_list(data.note_models)]
+    def from_repr(cls, data: Union[Representation, dict]):
+        rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
+        note_models = [PartHolder.from_file_manager(model) for model in single_item_to_list(rep.note_models)]
 
         return cls(
             columns=[FieldMapping(
                 field_type=FieldMapping.FieldMappingType.COLUMN,
                 field_name=field,
-                value=key) for key, field in data.columns_to_fields.items()],
+                value=key) for key, field in rep.columns_to_fields.items()],
             personal_fields=[FieldMapping(
                 field_type=FieldMapping.FieldMappingType.PERSONAL_FIELD,
                 field_name=field,
-                value="") for field in data.personal_fields],
+                value="") for field in rep.personal_fields],
             note_models=dict(map(lambda nm: (nm.part_id, nm), note_models))
         )
 

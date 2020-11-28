@@ -10,6 +10,10 @@ class BuildTask(YamlRepr, object, metaclass=ABCMeta):
         pass
 
     @classmethod
+    def accepts_list(cls) -> bool:
+        return True
+
+    @classmethod
     def task_regex(cls) -> str:
         return cls.task_name()
 

@@ -1,9 +1,8 @@
-from dataclasses import dataclass
-from typing import Dict, List, Union
+from dataclasses import dataclass, field
+from typing import Dict, List, Union, Optional
 
 from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
 from brain_brew.representation.build_config.build_task import BuildPartTask
-from brain_brew.representation.configuration.base_parts_from import BasePartsFrom
 from brain_brew.representation.configuration.csv_file_mapping import FileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 from brain_brew.representation.yaml.note_repr import Note, Notes
@@ -12,7 +11,7 @@ from brain_brew.utils import split_tags
 
 
 @dataclass
-class NotesFromCsvs(SharedBaseCsvs, BasePartsFrom, BuildPartTask):
+class NotesFromCsvs(SharedBaseCsvs, BuildPartTask):
     @classmethod
     def task_name(cls) -> str:
         return r'notes_from_csvs'
@@ -34,11 +33,10 @@ class NotesFromCsvs(SharedBaseCsvs, BasePartsFrom, BuildPartTask):
     def yamale_dependencies(cls) -> set:
         return {NoteModelMapping, FileMapping}
 
-    @dataclass(init=False)
-    class Representation(SharedBaseCsvs.Representation, BasePartsFrom.Representation):
-        def __init__(self, part_id, file_mappings, note_model_mappings, save_to_file=None):
-            SharedBaseCsvs.Representation.__init__(self, file_mappings, note_model_mappings)
-            BasePartsFrom.Representation.__init__(self, part_id, save_to_file)
+    @dataclass
+    class Representation(SharedBaseCsvs.Representation):
+        part_id: str
+        save_to_file: Optional[str] = field(default=None)
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
@@ -49,6 +47,9 @@ class NotesFromCsvs(SharedBaseCsvs, BasePartsFrom, BuildPartTask):
             file_mappings=rep.get_file_mappings(),
             note_model_mappings_to_read=rep.note_model_mappings
         )
+
+    part_id: str
+    save_to_file: Optional[str]
 
     def execute(self):
         self.setup_note_model_mappings()

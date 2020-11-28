@@ -35,13 +35,9 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
     notes_to_read: str  # TODO: Accept Multiple Note Parts
     notes: PartHolder[Notes] = field(default=None)
 
-    @dataclass(init=False)
+    @dataclass
     class Representation(SharedBaseCsvs.Representation):
         notes: str
-
-        def __init__(self, notes, file_mappings, note_model_mappings):
-            SharedBaseCsvs.Representation.__init__(self, file_mappings, note_model_mappings)
-            self.notes = notes
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
