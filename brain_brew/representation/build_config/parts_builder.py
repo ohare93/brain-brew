@@ -35,7 +35,7 @@ class PartsBuilder(RecipeBuilder, TopLevelBuildTask, metaclass=ABCMeta):
     @classmethod
     def from_repr(cls, data: List[dict]):
         if not isinstance(data, list):
-            raise TypeError(f"GenerateDeckParts needs a list")
+            raise TypeError(f"PartsBuilder needs a list")
         return cls.from_list(data)
 
     @classmethod

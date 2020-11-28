@@ -1,7 +1,7 @@
 list(
-  map(include('build_parts'), key=regex('build_part[s]?', ignore_case=True)),
-  map(include('generate_crowd_anki'), key=regex('generate_crowd_anki', ignore_case=True)),
-  map(include('generate_csvs'), key=regex('generate_csv[s]?', ignore_case=True))
+  map(any(include('build_parts'), list(include('build_parts'))), key=regex('build_part[s]?', ignore_case=True)),
+  map(any(include('generate_crowd_anki'), list(include('generate_crowd_anki'))), key=regex('generate_crowd_anki', ignore_case=True)),
+  map(any(include('generate_csvs'), list(include('generate_csvs'))), key=regex('generate_csv[s]?', ignore_case=True))
 )
 
 
@@ -9,16 +9,16 @@ list(
 
 build_parts:
     list(
-      map(include('headers_from_crowd_anki'), key=regex('header[s]?_from_crowd_anki', ignore_case=True)),
-      map(include('headers_from_yaml_part'), key=regex('header[s]?_from_yaml_part', ignore_case=True)),
-      map(include('media_group_from_crowd_anki'), key=regex('media_group_from_crowd_anki', ignore_case=True)),
-      map(include('media_group_from_folder'), key=regex('media_group_from_folder', ignore_case=True)),
-      map(include('media_group_from_yaml_part'), key=regex('media_group_from_yaml_part', ignore_case=True)),
-      map(include('note_models_from_crowd_anki'), key=regex('note_model[s]?_from_crowd_anki', ignore_case=True)),
-      map(include('note_models_from_yaml_part'), key=regex('note_model[s]?_from_yaml_part', ignore_case=True)),
-      map(include('notes_from_crowd_anki'), key=regex('notes_from_crowd_anki', ignore_case=True)),
-      map(include('notes_from_csvs'), key=regex('notes_from_csv[s]?', ignore_case=True)),
-      map(include('notes_from_yaml_part'), key=regex('notes_from_yaml_part', ignore_case=True))
+      map(any(include('headers_from_crowd_anki'), list(include('headers_from_crowd_anki'))), key=regex('header[s]?_from_crowd_anki', ignore_case=True)),
+      map(any(include('headers_from_yaml_part'), list(include('headers_from_yaml_part'))), key=regex('header[s]?_from_yaml_part', ignore_case=True)),
+      map(any(include('media_group_from_crowd_anki'), list(include('media_group_from_crowd_anki'))), key=regex('media_group_from_crowd_anki', ignore_case=True)),
+      map(any(include('media_group_from_folder'), list(include('media_group_from_folder'))), key=regex('media_group_from_folder', ignore_case=True)),
+      map(any(include('media_group_from_yaml_part'), list(include('media_group_from_yaml_part'))), key=regex('media_group_from_yaml_part', ignore_case=True)),
+      map(any(include('note_models_from_crowd_anki'), list(include('note_models_from_crowd_anki'))), key=regex('note_model[s]?_from_crowd_anki', ignore_case=True)),
+      map(any(include('note_models_from_yaml_part'), list(include('note_models_from_yaml_part'))), key=regex('note_model[s]?_from_yaml_part', ignore_case=True)),
+      map(any(include('notes_from_crowd_anki'), list(include('notes_from_crowd_anki'))), key=regex('notes_from_crowd_anki', ignore_case=True)),
+      map(any(include('notes_from_csvs'), list(include('notes_from_csvs'))), key=regex('notes_from_csv[s]?', ignore_case=True)),
+      map(any(include('notes_from_yaml_part'), list(include('notes_from_yaml_part'))), key=regex('notes_from_yaml_part', ignore_case=True))
     )
 
 generate_crowd_anki:

@@ -37,4 +37,4 @@ class YamlVerifier:
                 for error in result.errors:
                     print('\t%s' % error)
             exit(1)
-        logging.info(f"Builder file {filename} is ✔")
+        logging.info(f"Builder file {filename} is ✔ good")

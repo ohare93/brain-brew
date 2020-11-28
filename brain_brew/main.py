@@ -22,7 +22,7 @@ def main():
 
     # Parse Build Config File
     YamlVerifier()
-    recipe = TopLevelBuilder.parse_and_read(recipe_file_name)
+    recipe = TopLevelBuilder.parse_and_read(recipe_file_name, verify_only)
 
     if not verify_only:
         recipe.execute()

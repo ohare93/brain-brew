@@ -48,11 +48,14 @@ class TopLevelBuilder(YamlRepr, RecipeBuilder, metaclass=ABCMeta):
         return '\n'.join(builder)
 
     @classmethod
-    def parse_and_read(cls, filename) -> 'TopLevelBuilder':
+    def parse_and_read(cls, filename, verify_only: bool) -> 'TopLevelBuilder':
         recipe_data = cls.read_to_dict(filename)
 
         from brain_brew.yaml_verifier import YamlVerifier
         YamlVerifier.get_instance().verify_recipe(filename)
+
+        if verify_only:
+            return None
 
         return cls.from_list(recipe_data)
 
