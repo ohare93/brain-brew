@@ -15,7 +15,7 @@ class TestConstructor:
         assert isinstance(file, CrowdAnkiExport)
         assert file.folder_location == TestFiles.CrowdAnkiExport.TEST1_FOLDER
         assert file.json_file_location == TestFiles.CrowdAnkiExport.TEST1_JSON
-        assert len(file.read_json_file().data.keys()) == 13
+        assert len(file.json_data.data.keys()) == 13
 
 
 class TestFindJsonFileInFolder:
@@ -46,4 +46,4 @@ def temp_ca_export_file(tmpdir) -> CrowdAnkiExport:
     file = folder.join("file.json")
     file.write("{}")
 
-    return CrowdAnkiExport(folder.strpath, read_now=False)
+    return CrowdAnkiExport(folder.strpath)

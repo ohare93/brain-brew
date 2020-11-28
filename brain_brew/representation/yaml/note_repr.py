@@ -1,10 +1,11 @@
 import logging
-
-from brain_brew.representation.configuration.global_config import GlobalConfig
-from brain_brew.representation.yaml.my_yaml import YamlRepr
+from abc import ABCMeta
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Set
 
+from brain_brew.interfaces.media_container import MediaContainer
+from brain_brew.representation.configuration.global_config import GlobalConfig
+from brain_brew.representation.yaml.yaml_object import YamlObject
 from brain_brew.utils import find_media_in_field
 
 FIELDS = 'fields'
@@ -18,7 +19,7 @@ MEDIA_REFERENCES = "media_references"
 
 
 @dataclass
-class GroupableNoteData(YamlRepr):
+class GroupableNoteData(YamlObject, MediaContainer, metaclass=ABCMeta):
     note_model: Optional[str]
     tags: Optional[List[str]]
 
@@ -32,6 +33,10 @@ class GroupableNoteData(YamlRepr):
 
 @dataclass
 class Note(GroupableNoteData):
+    @classmethod
+    def from_yaml_file(cls, filename: str) -> 'Note':
+        return cls.from_dict(cls.read_to_dict(filename))
+
     fields: List[str]
     guid: str
     flags: int
@@ -54,13 +59,17 @@ class Note(GroupableNoteData):
         super().encode_groupable(data_dict)
         return data_dict
 
-    def get_media_references(self) -> Set[str]:
+    def get_all_media_references(self) -> Set[str]:
         return {entry for field in self.fields for entry in find_media_in_field(field)}
 
 
 @dataclass
 class NoteGrouping(GroupableNoteData):
     notes: List[Note]
+
+    @classmethod
+    def from_yaml_file(cls, filename: str) -> 'NoteGrouping':
+        return cls.from_dict(cls.read_to_dict(filename))
 
     @classmethod
     def from_dict(cls, data: dict):
@@ -92,7 +101,7 @@ class NoteGrouping(GroupableNoteData):
     def get_all_media_references(self) -> Set[str]:
         all_media = set()
         for note in self.notes:
-            media = note.get_media_references()
+            media = note.get_all_media_references()
             all_media = all_media.union(media)
         return all_media
 
@@ -145,11 +154,11 @@ class NoteGrouping(GroupableNoteData):
 
 
 @dataclass
-class Notes(YamlRepr):
+class Notes(YamlObject, MediaContainer):
     note_groupings: List[NoteGrouping]
 
     @classmethod
-    def from_file(cls, filename: str):
+    def from_yaml_file(cls, filename: str) -> 'Notes':
         return cls.from_dict(cls.read_to_dict(filename))
 
     @classmethod
@@ -169,8 +178,8 @@ class Notes(YamlRepr):
 
     def get_all_media_references(self) -> Set[str]:
         all_media = set()
-        for note in self.note_groupings:
-            media = note.get_all_media_references()
+        for note_group in self.note_groupings:
+            media = note_group.get_all_media_references()
             all_media = all_media.union(media)
         return all_media
 

@@ -3,7 +3,7 @@ import sys
 from textwrap import dedent
 from typing import List, Set
 from ruamel.yaml import round_trip_dump
-from brain_brew.representation.yaml.my_yaml import yaml_dump, yaml_load
+from brain_brew.representation.yaml.yaml_object import yaml_dump, yaml_load
 
 import pytest
 
@@ -327,7 +327,7 @@ class TestFunctionality:
             ])
             def test_all(self, fields, expected_count):
                 note = Note(fields=fields, note_model=None, guid="", tags=None, flags=0)
-                media_found = note.get_media_references()
+                media_found = note.get_all_media_references()
                 assert isinstance(media_found, Set)
                 assert len(media_found) == expected_count
 

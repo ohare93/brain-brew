@@ -2,11 +2,10 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Union
 
-from brain_brew.interfaces.verifiable import Verifiable
-from brain_brew.representation.build_config.representation_base import RepresentationBase
+from brain_brew.interfaces.yamale_verifyable import YamlRepr
+from brain_brew.representation.configuration.representation_base import RepresentationBase
 from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
 from brain_brew.utils import single_item_to_list, generate_anki_guid
-
 
 FILE = "csv_file"
 NOTE_MODEL = "note_model"
@@ -16,7 +15,21 @@ DERIVATIVES = "derivatives"
 
 
 @dataclass
-class FileMappingDerivative:
+class FileMappingDerivative(YamlRepr):
+    @classmethod
+    def task_name(cls) -> str:
+        return r'file_mapping'
+
+    @classmethod
+    def yamale_schema(cls) -> str:
+        return f'''\
+            file: str()
+            note_model: str(required=False)
+            sort_by_columns: list(str(), required=False)
+            reverse_sort: bool(required=False)
+            derivatives: list(include('{cls.task_name()}'), required=False)
+        '''
+
     @dataclass(init=False)
     class Representation(RepresentationBase):
         file: str
@@ -30,7 +43,8 @@ class FileMappingDerivative:
             self.note_model = note_model
             self.sort_by_columns = sort_by_columns
             self.reverse_sort = reverse_sort
-            self.derivatives = list(map(FileMappingDerivative.Representation.from_dict, derivatives)) if derivatives is not None else []
+            self.derivatives = list(map(FileMappingDerivative.Representation.from_dict, derivatives)) \
+                if derivatives is not None else []
 
     compiled_data: Dict[str, dict] = field(init=False)
 
@@ -108,13 +122,10 @@ class FileMappingDerivative:
 
 
 @dataclass
-class FileMapping(FileMappingDerivative, Verifiable):
+class FileMapping(FileMappingDerivative):
     note_model: str  # Override Optional on Parent
 
     data_set_has_changed: bool = field(init=False, default=False)
-
-    def verify_contents(self):
-        pass
 
     def compile_data(self):
         self.compiled_data = {}

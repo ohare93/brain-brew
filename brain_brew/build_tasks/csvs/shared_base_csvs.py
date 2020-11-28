@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Dict
 
-from brain_brew.representation.build_config.representation_base import RepresentationBase
+from brain_brew.representation.configuration.representation_base import RepresentationBase
 from brain_brew.representation.configuration.csv_file_mapping import FileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
 
@@ -26,7 +26,7 @@ class SharedBaseCsvs:
     note_model_mappings: Dict[str, NoteModelMapping] = field(init=False)
 
     def setup_note_model_mappings(self):
-        def map_nmm(nmm_to_map: str):
+        def map_nmm(nmm_to_map):
             nmm = NoteModelMapping.from_repr(nmm_to_map)
             return nmm.get_note_model_mapping_dict()
 
@@ -41,18 +41,11 @@ class SharedBaseCsvs:
             except KeyError as e:
                 errors.append(e)
 
-        for fm in self.file_mappings:
-            # Check all necessary key values are present
-            try:
-                fm.verify_contents()
-            except KeyError as e:
-                errors.append(e)
-
-            # Check all referenced note models have a mapping
-            for csv_map in self.file_mappings:
-                for nm in csv_map.get_used_note_model_names():
-                    if nm not in self.note_model_mappings.keys():
-                        errors.append(f"Missing Note Model Map for {nm}")
+        # Check all referenced note models have a mapping
+        for csv_map in self.file_mappings:
+            for nm in csv_map.get_used_note_model_names():
+                if nm not in self.note_model_mappings.keys():
+                    errors.append(f"Missing Note Model Map for {nm}")
 
         # Check each of the Csvs (or their derivatives) contain all the necessary columns for their stated note model
         for cfm in self.file_mappings:
@@ -63,7 +56,7 @@ class SharedBaseCsvs:
                                            key in note_model_names]
             for nm_map in referenced_note_models_maps:
                 for holder in nm_map.note_models.values():
-                    missing_columns = [col for col in holder.deck_part.field_names_lowercase if
+                    missing_columns = [col for col in holder.part.field_names_lowercase if
                                        col not in nm_map.csv_headers_map_to_note_fields(available_columns)]
                     if missing_columns:
                         logging.warning(f"Csvs are missing columns from {holder.part_id} {missing_columns}")

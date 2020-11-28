@@ -4,8 +4,8 @@ import re
 from enum import Enum
 from typing import List
 
-from brain_brew.utils import list_of_str_to_lowercase, sort_dict
 from brain_brew.representation.generic.source_file import SourceFile
+from brain_brew.utils import list_of_str_to_lowercase, sort_dict
 
 
 class CsvKeys(Enum):
@@ -40,7 +40,7 @@ class CsvFile(SourceFile):
 
     def write_file(self):
         logging.info(f"Writing to Csv '{self.file_location}'")
-        with open(self.file_location, mode='w') as csv_file:
+        with open(self.file_location, mode='w+') as csv_file:
             csv_writer = csv.DictWriter(csv_file, fieldnames=self.column_headers)
 
             csv_writer.writeheader()

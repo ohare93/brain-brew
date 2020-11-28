@@ -1,101 +1,126 @@
 list(
-    map(include('generate_deck_parts'), key=regex('build_deck_parts', ignore_case=True)),
-    map(include('generate_csv'), key=regex('generate_csvs', ignore_case=True)),
-    map(include('generate_crowd_anki'), key=regex('generate_crowd_anki', ignore_case=True))
+  map(include('build_parts'), key=regex('build_part[s]?', ignore_case=True)),
+  map(any(include('generate_crowd_anki'), list(include('generate_crowd_anki'))), key=regex('generate_crowd_anki', ignore_case=True)),
+  map(any(include('generate_csvs'), list(include('generate_csvs'))), key=regex('generate_csv[s]?', ignore_case=True))
 )
+
 
 ---
 
-generate_deck_parts:
-  list(
-    map(include('from_deck_parts'), key=regex('from_deck_parts', ignore_case=True)),
-    map(include('from_csv'), key=regex('from_csvs', ignore_case=True)),
-    map(include('from_crowd_anki'), key=regex('from_crowd_anki', ignore_case=True))
-  )
-
-
-
-from_crowd_anki:
-  folder: str()
-  notes: include('from_ca_notes', required=False)
-  note_models: list(include('from_ca_note_models'), required=False)
-  headers: include('from_ca_headers', required=False)
-  media: any(bool(), include('ca_media'), required=False)
-
+build_parts:
+    list(
+      map(any(include('headers_from_crowd_anki'), list(include('headers_from_crowd_anki'))), key=regex('header[s]?_from_crowd_anki', ignore_case=True)),
+      map(any(include('headers_from_yaml_part'), list(include('headers_from_yaml_part'))), key=regex('header[s]?_from_yaml_part', ignore_case=True)),
+      map(any(include('media_group_from_crowd_anki'), list(include('media_group_from_crowd_anki'))), key=regex('media_group_from_crowd_anki', ignore_case=True)),
+      map(any(include('media_group_from_folder'), list(include('media_group_from_folder'))), key=regex('media_group_from_folder', ignore_case=True)),
+      map(any(include('media_group_from_yaml_part'), list(include('media_group_from_yaml_part'))), key=regex('media_group_from_yaml_part', ignore_case=True)),
+      map(any(include('note_models_from_crowd_anki'), list(include('note_models_from_crowd_anki'))), key=regex('note_model[s]?_from_crowd_anki', ignore_case=True)),
+      map(any(include('note_models_from_yaml_part'), list(include('note_models_from_yaml_part'))), key=regex('note_model[s]?_from_yaml_part', ignore_case=True)),
+      map(any(include('notes_from_crowd_anki'), list(include('notes_from_crowd_anki'))), key=regex('notes_from_crowd_anki', ignore_case=True)),
+      map(any(include('notes_from_csvs'), list(include('notes_from_csvs'))), key=regex('notes_from_csv[s]?', ignore_case=True)),
+      map(any(include('notes_from_yaml_part'), list(include('notes_from_yaml_part'))), key=regex('notes_from_yaml_part', ignore_case=True)),
+      map(any(include('save_media_groups_to_folder'), list(include('save_media_groups_to_folder'))), key=regex('save_media_group[s]?_to_folder', ignore_case=True))
+    )
 
 generate_crowd_anki:
-  folder: str()
-  headers: str()
-  notes: include('notes_to_source')
-  note_models: include('note_models_to_source')
-  media: any(bool(), include('ca_media'), required=False)
+    folder: str()
+    headers: str()
+    notes: include('notes_to_crowd_anki')
+    note_models: include('note_models_to_crowd_anki')
+    media: include('media_group_to_crowd_anki', required=False)
+
+generate_csvs:
+    notes: str()
+    note_model_mappings: list(include('note_model_mapping'))
+    file_mappings: list(include('file_mapping'))
 
 
+---
 
-from_ca_notes:
-  part_id: str()
-  sort_order: list(str(), required=False)
-  save_to_file: str(required=False)
+file_mapping:
+    file: str()
+    note_model: str(required=False)
+    sort_by_columns: list(str(), required=False)
+    reverse_sort: bool(required=False)
+    derivatives: list(include('file_mapping'), required=False)
 
-from_ca_note_models:
-  part_id: str()
-  model_name: str(required=False)
-  save_to_file: str(required=False)
+headers_from_crowd_anki:
+    source: str()
+    part_id: str()
+    save_to_file: str(required=False)
 
-from_ca_headers:
-  part_id: str()
-  save_to_file: str(required=False)
+headers_from_yaml_part:
+    part_id: str()
+    file: str()
 
-ca_media:
-  from_notes: bool()
-  from_note_models: bool()
+media_group_from_crowd_anki:
+    part_id: str()
+    save_to_file: str(required=False)
+    source: str()
+    recursive: bool(required=False)
+    filter_whitelist_from_parts: list(str(), required=False)
+    filter_blacklist_from_parts: list(str(), required=False)
 
-note_models_to_source:
-  deck_parts: list(include('note_model_to_source'))
+media_group_from_folder:
+    part_id: str()
+    save_to_file: str(required=False)
+    source: str()
+    recursive: bool(required=False)
+    filter_whitelist_from_parts: list(str(), required=False)
+    filter_blacklist_from_parts: list(str(), required=False)
 
-note_model_to_source:
-  deck_part: str()
+media_group_from_yaml_part:
+    part_id: str()
+    file: str()
 
-notes_to_source:
-  deck_part: str()
-  sort_order: list(str(), required=False)
-  reverse_sort: bool(required=False)
-  additional_items_to_add: map(str(), key=str(), required=False)
+media_group_to_crowd_anki:
+    parts: list(str())
 
+note_model_mapping:
+    note_models: any(list(str()), str())
+    columns_to_fields: map(str(), key=str())
+    personal_fields: list(str())
 
+note_models_from_crowd_anki:
+    source: str()
+    part_id: str()
+    model_name: str(required=False)
+    save_to_file: str(required=False)
 
+note_models_from_yaml_part:
+    part_id: str()
+    file: str()
 
-from_deck_parts:
-  notes: list(include('deck_part_to_read'), required=False)
-  note_models: list(include('deck_part_to_read'), required=False)
-  headers: list(include('deck_part_to_read'), required=False)
+note_models_to_crowd_anki:
+    parts: list(include('note_models_to_crowd_anki_item'))
 
-deck_part_to_read:
-  part_id: str()
-  file: str()
+note_models_to_crowd_anki_item:
+    part_id: str()
 
+notes_from_crowd_anki:
+    source: str()
+    part_id: str()
+    sort_order: list(str(), required=False)
+    save_to_file: str(required=False)
+    reverse_sort: str(required=False)
 
-
-from_csv:
-  notes:
+notes_from_csvs:
     part_id: str()
     save_to_file: str(required=False)
     note_model_mappings: list(include('note_model_mapping'))
     file_mappings: list(include('file_mapping'))
 
-generate_csv:
-  notes: str()
-  note_model_mappings: list(include('note_model_mapping'))
-  file_mappings: list(include('file_mapping'))
+notes_from_yaml_part:
+    part_id: str()
+    file: str()
 
-note_model_mapping:
-  note_models: list(str())
-  columns_to_fields: map(str(), key=str())
-  personal_fields: list(str())
+notes_to_crowd_anki:
+    part_id: str()
+    sort_order: list(str(), required=False)
+    reverse_sort: bool(required=False)
+    additional_items_to_add: map(str(), key=str(), required=False)
 
-file_mapping:
-  file: str()
-  note_model: str(required=False)
-  sort_by_columns: list(str(), required=False)
-  reverse_sort: bool(required=False)
-  derivatives: list(include('file_mapping'), required=False)
+save_media_groups_to_folder:
+    parts: list(str())
+    folder: str()
+    clear_folder: bool(required=False)

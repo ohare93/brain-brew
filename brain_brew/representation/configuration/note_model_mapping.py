@@ -2,11 +2,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Union, Dict
 
-from brain_brew.interfaces.verifiable import Verifiable
-from brain_brew.representation.build_config.representation_base import RepresentationBase
-from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.interfaces.yamale_verifyable import YamlRepr
+from brain_brew.representation.configuration.representation_base import RepresentationBase
 from brain_brew.representation.yaml.note_model_repr import NoteModel
 from brain_brew.representation.yaml.note_repr import GUID, TAGS
+from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.utils import single_item_to_list
 
 
@@ -35,32 +35,45 @@ class FieldMapping:
 
 
 @dataclass
-class NoteModelMapping(Verifiable):
+class NoteModelMapping(YamlRepr):
+    @classmethod
+    def task_name(cls) -> str:
+        return r'note_model_mapping'
+
+    @classmethod
+    def yamale_schema(cls) -> str:
+        return f'''\
+            note_models: any(list(str()), str())
+            columns_to_fields: map(str(), key=str())
+            personal_fields: list(str())
+        '''
+
     @dataclass
     class Representation(RepresentationBase):
         note_models: Union[str, list]
         columns_to_fields: Dict[str, str]
         personal_fields: List[str]
 
-    note_models: Dict[str, DeckPartHolder[NoteModel]]
+    note_models: Dict[str, PartHolder[NoteModel]]
     columns: List[FieldMapping]
     personal_fields: List[FieldMapping]
 
     required_fields_definitions = [GUID, TAGS]
 
     @classmethod
-    def from_repr(cls, data: Representation):
-        note_models = [DeckPartHolder.from_deck_part_pool(model) for model in single_item_to_list(data.note_models)]
+    def from_repr(cls, data: Union[Representation, dict]):
+        rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
+        note_models = [PartHolder.from_file_manager(model) for model in single_item_to_list(rep.note_models)]
 
         return cls(
             columns=[FieldMapping(
                 field_type=FieldMapping.FieldMappingType.COLUMN,
                 field_name=field,
-                value=key) for key, field in data.columns_to_fields.items()],
+                value=key) for key, field in rep.columns_to_fields.items()],
             personal_fields=[FieldMapping(
                 field_type=FieldMapping.FieldMappingType.PERSONAL_FIELD,
                 field_name=field,
-                value="") for field in data.personal_fields],
+                value="") for field in rep.personal_fields],
             note_models=dict(map(lambda nm: (nm.part_id, nm), note_models))
         )
 
@@ -74,7 +87,7 @@ class NoteModelMapping(Verifiable):
                         if field.field_name not in self.required_fields_definitions]
 
         for holder in self.note_models.values():
-            model: NoteModel = holder.deck_part
+            model: NoteModel = holder.part
 
             # Check for Required Fields
             missing = []
@@ -104,7 +117,8 @@ class NoteModelMapping(Verifiable):
                 extra_fields = model.check_field_extra(extra_fields)
 
         if extra_fields:
-            errors.append(KeyError(f"Field(s) '{extra_fields} are defined as mappings, but match no Note Model's field"))
+            errors.append(
+                KeyError(f"Field(s) '{extra_fields} are defined as mappings, but match no Note Model's field"))
 
         if errors:
             raise Exception(errors)
@@ -157,5 +171,5 @@ class NoteModelMapping(Verifiable):
 
     def field_values_in_note_model_order(self, note_model_name, fields_from_csv):
         return [fields_from_csv[f] if f in fields_from_csv else ""
-                for f in self.note_models[note_model_name].deck_part.field_names_lowercase
-               ]
+                for f in self.note_models[note_model_name].part.field_names_lowercase
+                ]

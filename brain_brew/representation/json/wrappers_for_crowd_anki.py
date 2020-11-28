@@ -23,39 +23,39 @@ class CrowdAnkiJsonWrapper:
 
     @property
     def children(self) -> list:
-        return self.data[CA_CHILDREN]
+        return self.data.get(CA_CHILDREN, [])
 
     @property
     def note_models(self) -> list:
-        return self.data[CA_NOTE_MODELS]
+        return self.data.get(CA_NOTE_MODELS, [])
 
     @note_models.setter
     def note_models(self, value: list):
-        self.data.setdefault(CA_NOTE_MODELS, value)
+        self.data[CA_NOTE_MODELS] = value
 
     @property
     def notes(self) -> list:
-        return self.data[CA_NOTES]
+        return self.data.get(CA_NOTES, [])
 
     @notes.setter
     def notes(self, value: list):
-        self.data.setdefault(CA_NOTES, value)
+        self.data[CA_NOTES] = value
 
     @property
     def media_files(self) -> list:
-        return self.data[CA_MEDIA_FILES]
+        return self.data.get(CA_MEDIA_FILES, [])
 
     @media_files.setter
     def media_files(self, value: list):
-        self.data.setdefault(CA_MEDIA_FILES, value)
+        self.data[CA_MEDIA_FILES] = value
 
     @property
     def name(self) -> list:
-        return self.data[CA_NAME]
+        return self.data.get(CA_NAME, [])
 
     @name.setter
     def name(self, value: list):
-        self.data.setdefault(CA_NAME, value)
+        self.data[CA_NAME] = value
 
 
 class CrowdAnkiNoteWrapper:
@@ -66,40 +66,40 @@ class CrowdAnkiNoteWrapper:
 
     @property
     def note_model(self) -> str:
-        return self.data[NOTE_MODEL]
+        return self.data.get(NOTE_MODEL)
 
     @note_model.setter
     def note_model(self, value: str):
-        self.data.setdefault(NOTE_MODEL, value)
+        self.data[NOTE_MODEL] = value
 
     @property
     def flags(self) -> int:
-        return self.data[FLAGS]
+        return self.data.get(FLAGS)
 
     @flags.setter
     def flags(self, value: int):
-        self.data.setdefault(FLAGS, value)
+        self.data[FLAGS] = value
 
     @property
     def guid(self) -> str:
-        return self.data[GUID]
+        return self.data.get(GUID)
 
     @guid.setter
     def guid(self, value: str):
-        self.data.setdefault(GUID, value)
+        self.data[GUID] = value
 
     @property
     def tags(self) -> list:
-        return self.data[TAGS]
+        return self.data.get(TAGS, [])
 
     @tags.setter
     def tags(self, value: list):
-        self.data.setdefault(TAGS, value)
+        self.data[TAGS] = value
 
     @property
     def fields(self) -> List[str]:
-        return self.data[FIELDS]
+        return self.data.get(FIELDS, [])
 
     @fields.setter
     def fields(self, value: List[str]):
-        self.data.setdefault(FIELDS, value)
+        self.data[FIELDS] = value

@@ -3,26 +3,41 @@ from typing import List, Dict, Union
 
 from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
 from brain_brew.representation.build_config.build_task import TopLevelBuildTask
+from brain_brew.representation.configuration.csv_file_mapping import FileMapping
 from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
-from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.note_repr import Notes, Note
+from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.utils import join_tags
 
 
 @dataclass
 class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
-    task_regex = r'generate_csvs'
+    @classmethod
+    def task_name(cls) -> str:
+        return r'generate_csvs'
 
-    notes_to_read: str
-    notes: DeckPartHolder[Notes] = field(default=None)
+    @classmethod
+    def task_regex(cls) -> str:
+        return r'generate_csv[s]?'
 
-    @dataclass(init=False)
+    @classmethod
+    def yamale_schema(cls) -> str:
+        return f'''\
+            notes: str()
+            note_model_mappings: list(include('{NoteModelMapping.task_name()}'))
+            file_mappings: list(include('{FileMapping.task_name()}'))
+        '''
+
+    @classmethod
+    def yamale_dependencies(cls) -> set:
+        return {NoteModelMapping, FileMapping}
+
+    notes_to_read: str  # TODO: Accept Multiple Note Parts
+    notes: PartHolder[Notes] = field(default=None)
+
+    @dataclass
     class Representation(SharedBaseCsvs.Representation):
         notes: str
-
-        def __init__(self, notes, file_mappings, note_model_mappings):
-            SharedBaseCsvs.Representation.__init__(self, file_mappings, note_model_mappings)
-            self.notes = notes
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
@@ -35,10 +50,10 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
 
     def execute(self):
         self.setup_note_model_mappings()
-        self.notes = DeckPartHolder.from_deck_part_pool(self.notes_to_read)
+        self.notes = PartHolder.from_file_manager(self.notes_to_read)
         self.verify_contents()
 
-        notes: List[Note] = self.notes.deck_part.get_sorted_notes_copy(
+        notes: List[Note] = self.notes.part.get_sorted_notes_copy(
             sort_by_keys=[], reverse_sort=False, case_insensitive_sort=False)
         self.verify_notes_match_note_model_mappings(notes)
 
@@ -62,7 +77,7 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
     @staticmethod
     def note_to_csv_row(note: Note, note_model_mappings: Dict[str, NoteModelMapping]) -> dict:
         nm_name = note.note_model
-        row = note_model_mappings[nm_name].note_models[nm_name].deck_part.zip_field_to_data(note.fields)
+        row = note_model_mappings[nm_name].note_models[nm_name].part.zip_field_to_data(note.fields)
         row["guid"] = note.guid
         row["tags"] = join_tags(note.tags)
         # TODO: Flags?

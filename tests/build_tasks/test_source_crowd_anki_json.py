@@ -5,9 +5,9 @@
 # from brain_brew.constants.build_config_keys import BuildConfigKeys
 # from brain_brew.build_tasks.source_crowd_anki import SourceCrowdAnki, CrowdAnkiKeys
 # from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
-# from brain_brew.representation.json.deck_part_header import DeckPartHeader
+# from brain_brew.representation.json.part_header import DeckPartHeader
 # from brain_brew.representation.yaml.note_model_repr import DeckPartNoteModel
-# from brain_brew.representation.json.deck_part_notes import DeckPartNotes
+# from brain_brew.representation.json.part_notes import DeckPartNotes
 #
 #
 # def setup_ca_config(file, media, useless_note_keys, notes, headers):
@@ -91,7 +91,7 @@
 #             return dp_note_model_test1
 #
 #         with patch.object(DeckPartNoteModel, "create", side_effect=assert_note_model) as mock_nm:
-#             source_crowd_anki_test1.source_to_deck_parts()
+#             source_crowd_anki_test1.source_to_parts()
 #
 #             assert source_crowd_anki_test1.headers.get_data() == dp_headers_test1.get_data()
 #             assert source_crowd_anki_test1.notes.get_data() == dp_notes_test1.get_data()
@@ -108,6 +108,6 @@
 #         source_crowd_anki_test1.headers = dp_headers_test1
 #         source_crowd_anki_test1.notes = dp_notes_test1
 #
-#         source_crowd_anki_test1.deck_parts_to_source()  # Where the magic happens
+#         source_crowd_anki_test1.parts_to_source()  # Where the magic happens
 #
 #         assert temp_ca_export_file.get_data() == ca_export_test1.get_data()

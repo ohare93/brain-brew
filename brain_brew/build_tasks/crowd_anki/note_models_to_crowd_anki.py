@@ -1,21 +1,43 @@
 from dataclasses import dataclass, field
-from typing import Optional, Union, List
-import logging
+from typing import Union, List
 
-from brain_brew.representation.build_config.representation_base import RepresentationBase
-from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
-from brain_brew.representation.transformers.base_deck_part_from import BaseDeckPartsFrom
-from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
+from brain_brew.interfaces.yamale_verifyable import YamlRepr
+from brain_brew.representation.configuration.representation_base import RepresentationBase
 from brain_brew.representation.yaml.note_model_repr import NoteModel
+from brain_brew.representation.yaml.part_holder import PartHolder
 
 
 @dataclass
-class NoteModelsToCrowdAnki:
+class NoteModelsToCrowdAnki(YamlRepr):
+    @classmethod
+    def task_name(cls) -> str:
+        return r'note_models_to_crowd_anki'
+
+    @classmethod
+    def yamale_schema(cls) -> str:
+        return f'''\
+            parts: list(include('{cls.NoteModelListItem.task_name()}'))
+        '''
+
+    @classmethod
+    def yamale_dependencies(cls) -> set:
+        return {cls.NoteModelListItem}
+
     @dataclass
-    class NoteModelListItem:
+    class NoteModelListItem(YamlRepr):
+        @classmethod
+        def task_name(cls) -> str:
+            return r'note_models_to_crowd_anki_item'
+
+        @classmethod
+        def yamale_schema(cls) -> str:
+            return f'''\
+                part_id: str()
+            '''
+
         @dataclass
         class Representation(RepresentationBase):
-            deck_part: str
+            part_id: str
             # TODO: fields: Optional[List[str]]
             # TODO: templates: Optional[List[str]]
 
@@ -27,22 +49,22 @@ class NoteModelsToCrowdAnki:
             elif isinstance(data, dict):
                 rep = cls.Representation.from_dict(data)
             else:
-                rep = cls.Representation(deck_part=data)  # Support string
+                rep = cls.Representation(part_id=data)  # Support string
 
             return cls(
-                deck_part_to_read=rep.deck_part
+                part_to_read=rep.part_id
             )
 
         def get_note_model(self) -> NoteModel:
-            self.deck_part = DeckPartHolder.from_deck_part_pool(self.deck_part_to_read).deck_part
-            return self.deck_part  # Todo: add filters in here
+            self.part = PartHolder.from_file_manager(self.part_to_read).part
+            return self.part  # Todo: add filters in here
 
-        deck_part: NoteModel = field(init=False)
-        deck_part_to_read: str
+        part: NoteModel = field(init=False)
+        part_to_read: str
 
     @dataclass
     class Representation(RepresentationBase):
-        deck_parts: List[Union[dict, str]]
+        parts: List[Union[dict, str]]
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict, List[str]]):
@@ -52,9 +74,9 @@ class NoteModelsToCrowdAnki:
         elif isinstance(data, dict):
             rep = cls.Representation.from_dict(data)
         else:
-            rep = cls.Representation(deck_parts=data)  # Support list of Note Models
+            rep = cls.Representation(parts=data)  # Support list of Note Models
 
-        note_model_items = list(map(cls.NoteModelListItem.from_repr, rep.deck_parts))
+        note_model_items = list(map(cls.NoteModelListItem.from_repr, rep.parts))
         return cls(
             note_models=[nm.get_note_model() for nm in note_model_items]
         )

@@ -2,18 +2,32 @@ from dataclasses import dataclass, field
 from typing import Optional, Union, List
 
 from brain_brew.build_tasks.crowd_anki.shared_base_notes import SharedBaseNotes
-from brain_brew.representation.build_config.representation_base import RepresentationBase
+from brain_brew.interfaces.yamale_verifyable import YamlRepr
+from brain_brew.representation.configuration.representation_base import RepresentationBase
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiNoteWrapper
-from brain_brew.representation.yaml.deck_part_holder import DeckPartHolder
 from brain_brew.representation.yaml.note_repr import Notes, Note
+from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.utils import blank_str_if_none
 
 
 @dataclass
-class NotesToCrowdAnki(SharedBaseNotes):
+class NotesToCrowdAnki(YamlRepr, SharedBaseNotes):
+    @classmethod
+    def task_name(cls) -> str:
+        return r'notes_to_crowd_anki'
+
+    @classmethod
+    def yamale_schema(cls) -> str:
+        return f'''\
+            part_id: str()
+            sort_order: list(str(), required=False)
+            reverse_sort: bool(required=False)
+            additional_items_to_add: map(str(), key=str(), required=False)
+        '''
+
     @dataclass
     class Representation(RepresentationBase):
-        deck_part: str
+        part_id: str
         additional_items_to_add: Optional[dict] = field(default_factory=lambda: None)
         sort_order: Optional[List[str]] = field(default_factory=lambda: None)
         reverse_sort: Optional[bool] = field(default_factory=lambda: None)
@@ -22,7 +36,7 @@ class NotesToCrowdAnki(SharedBaseNotes):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
-            notes_to_read=rep.deck_part,
+            notes_to_read=rep.part_id,
             sort_order=SharedBaseNotes._get_sort_order(rep.sort_order),
             reverse_sort=SharedBaseNotes._get_reverse_sort(rep.reverse_sort),
             additional_items_to_add=rep.additional_items_to_add or {}
@@ -36,7 +50,7 @@ class NotesToCrowdAnki(SharedBaseNotes):
     reverse_sort: Optional[bool] = field(default_factory=lambda: None)
 
     def execute(self, nm_name_to_id: dict) -> List[dict]:
-        self.notes = DeckPartHolder.from_deck_part_pool(self.notes_to_read).deck_part
+        self.notes = PartHolder.from_file_manager(self.notes_to_read).part
 
         notes = self.notes.get_sorted_notes_copy(sort_by_keys=self.sort_order, reverse_sort=self.reverse_sort)
 

@@ -2,8 +2,9 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import List, Optional, Union, Dict, Set
 
-from brain_brew.representation.build_config.representation_base import RepresentationBase
-from brain_brew.representation.yaml.my_yaml import YamlRepr
+from brain_brew.interfaces.media_container import MediaContainer
+from brain_brew.representation.configuration.representation_base import RepresentationBase
+from brain_brew.representation.yaml.yaml_object import YamlObject
 from brain_brew.utils import list_of_str_to_lowercase, find_media_in_field
 
 
@@ -32,7 +33,10 @@ ORDINAL = AnkiField("ord", "ordinal")
 
 # Note Model
 CSS = AnkiField("css")
-LATEX_PRE = AnkiField("latexPre", "latex_pre", default_value="\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n")
+LATEX_PRE = AnkiField("latexPre", "latex_pre",
+                      default_value="\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage{"
+                                    "amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{"
+                                    "document}\n")
 LATEX_POST = AnkiField("latexPost", "latex_post", default_value="\\end{document}")
 REQUIRED_FIELDS_PER_TEMPLATE = AnkiField("req", "required_fields_per_template")
 FIELDS = AnkiField("flds", "fields")
@@ -62,11 +66,11 @@ class Template(RepresentationBase):
     @dataclass
     class CrowdAnki(RepresentationBase):
         name: str
-        ord: int
         qfmt: str
         afmt: str
         bqfmt: str = field(default=BROWSER_QUESTION_FORMAT.default_value)
         bafmt: str = field(default=BROWSER_ANSWER_FORMAT.default_value)
+        ord: int = field(default=None)
         did: Optional[int] = field(default=None)
 
     name: str
@@ -105,7 +109,7 @@ class Template(RepresentationBase):
 
         return data_dict
 
-    def encode_as_deck_part(self) -> dict:
+    def encode_as_part(self) -> dict:
         data_dict = {
             NAME.name: self.name,
             QUESTION_FORMAT.name: self.question_format,
@@ -124,7 +128,7 @@ class Field(RepresentationBase):
     @dataclass
     class CrowdAnki(RepresentationBase):
         name: str
-        ord: int
+        ord: int = field(default=None)
         font: str = field(default=FONT.default_value)
         media: List[str] = field(default_factory=lambda: MEDIA.default_value)
         rtl: bool = field(default=IS_RIGHT_TO_LEFT.default_value)
@@ -139,7 +143,7 @@ class Field(RepresentationBase):
     is_sticky: bool = field(default=IS_STICKY.default_value)
 
     @classmethod
-    def from_crowdanki(cls, data: Union[CrowdAnki, dict]):
+    def from_crowd_anki(cls, data: Union[CrowdAnki, dict]):
         ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
         return cls(
             name=ca.name, font=ca.font, media=ca.media,
@@ -159,7 +163,7 @@ class Field(RepresentationBase):
 
         return data_dict
 
-    def encode_as_deck_part(self) -> dict:
+    def encode_as_part(self) -> dict:
         data_dict = {
             NAME.name: self.name
         }
@@ -174,7 +178,7 @@ class Field(RepresentationBase):
 
 
 @dataclass
-class NoteModel(YamlRepr, RepresentationBase):
+class NoteModel(YamlObject, MediaContainer, RepresentationBase):
     @dataclass
     class CrowdAnki(RepresentationBase):
         name: str
@@ -207,7 +211,7 @@ class NoteModel(YamlRepr, RepresentationBase):
     version: list = field(default_factory=lambda: VERSION.default_value)  # Legacy version number. Deprecated in Anki
 
     @classmethod
-    def from_file(cls, filename: str):
+    def from_yaml_file(cls, filename: str):
         data = cls.read_to_dict(filename)
         return cls(
             fields=[Field(**f) for f in data.pop(FIELDS.name)],
@@ -216,10 +220,10 @@ class NoteModel(YamlRepr, RepresentationBase):
         )
 
     @classmethod
-    def from_crowdanki(cls, data: Union[CrowdAnki, dict]):  # TODO: field_whitelist: List[str] = None, note_model_whitelist: List[str] = None):
+    def from_crowdanki(cls, data: Union[CrowdAnki, dict]):  # TODO: field_whitelist, note_model_whitelist
         ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
         return cls(
-            fields=[Field.from_crowdanki(f) for f in ca.flds],
+            fields=[Field.from_crowd_anki(f) for f in ca.flds],
             templates=[Template.from_crowdanki(t) for t in ca.tmpls],
             is_cloze=bool(ca.type),
             name=ca.name, css=ca.css, latex_pre=ca.latexPre, latex_post=ca.latexPost,
@@ -259,8 +263,8 @@ class NoteModel(YamlRepr, RepresentationBase):
         LATEX_PRE.append_name_if_differs(data_dict, self.latex_pre)
         LATEX_POST.append_name_if_differs(data_dict, self.latex_post)
 
-        data_dict.setdefault(FIELDS.name, [f.encode_as_deck_part() for f in self.fields])
-        data_dict.setdefault(TEMPLATES.name, [t.encode_as_deck_part() for t in self.templates])
+        data_dict.setdefault(FIELDS.name, [f.encode_as_part() for f in self.fields])
+        data_dict.setdefault(TEMPLATES.name, [t.encode_as_part() for t in self.templates])
 
         # Useless
         TAGS.append_name_if_differs(data_dict, self.tags)
@@ -295,7 +299,8 @@ class NoteModel(YamlRepr, RepresentationBase):
 
     def zip_field_to_data(self, data: List[str]) -> dict:
         if len(self.fields) != len(data):
-            raise Exception(f"Data of length {len(data)} cannot map to fields of length {len(self.field_names_lowercase)}")
+            raise Exception(
+                f"Data of length {len(data)} cannot map to fields of length {len(self.field_names_lowercase)}")
         return dict(zip(self.field_names_lowercase, data))
 
 

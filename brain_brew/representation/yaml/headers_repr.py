@@ -1,15 +1,15 @@
 from dataclasses import dataclass
 
 from brain_brew.representation.json.wrappers_for_crowd_anki import CA_NAME
-from brain_brew.representation.yaml.my_yaml import YamlRepr
+from brain_brew.representation.yaml.yaml_object import YamlObject
 
 
 @dataclass
-class Headers(YamlRepr):
+class Headers(YamlObject):
     data: dict
 
     @classmethod
-    def from_file(cls, filename: str):
+    def from_yaml_file(cls, filename: str):
         return cls(data=cls.read_to_dict(filename))
 
     def encode(self) -> dict:

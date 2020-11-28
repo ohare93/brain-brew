@@ -1,10 +1,8 @@
 import copy
 from pathlib import Path
 
-from brain_brew.representation.configuration.global_config import GlobalConfig
 
-
-class SourceFile:
+class SourceFile(object):
     @classmethod
     def from_file_loc(cls, file_loc) -> 'SourceFile':
         pass
@@ -30,6 +28,9 @@ class SourceFile:
 
         if file is not None:
             return file
+
+        # if not cls.is_file(location) and not cls.is_dir(location):
+        #     raise FileNotFoundError(f"No file or folder '{location}' exists")
 
         file = cls.from_file_loc(location)
         _file_manager.register_file(formatted_location, file)
