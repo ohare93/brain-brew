@@ -1,5 +1,5 @@
 list(
-  map(include('build_parts'), key=regex('build_part[s]?', ignore_case=True)),
+  map(any(include('build_parts'), list(include('build_parts'))), key=regex('build_part[s]?', ignore_case=True)),
   map(any(include('generate_crowd_anki'), list(include('generate_crowd_anki'))), key=regex('generate_crowd_anki', ignore_case=True)),
   map(any(include('generate_csvs'), list(include('generate_csvs'))), key=regex('generate_csv[s]?', ignore_case=True))
 )
@@ -14,6 +14,8 @@ build_parts:
       map(any(include('media_group_from_crowd_anki'), list(include('media_group_from_crowd_anki'))), key=regex('media_group_from_crowd_anki', ignore_case=True)),
       map(any(include('media_group_from_folder'), list(include('media_group_from_folder'))), key=regex('media_group_from_folder', ignore_case=True)),
       map(any(include('media_group_from_yaml_part'), list(include('media_group_from_yaml_part'))), key=regex('media_group_from_yaml_part', ignore_case=True)),
+      map(any(include('note_model_from_html_parts'), list(include('note_model_from_html_parts'))), key=regex('note_model_from_html_parts', ignore_case=True)),
+      map(any(include('note_model_template_from_html'), list(include('note_model_template_from_html'))), key=regex('note_model_template[s]?_from_html', ignore_case=True)),
       map(any(include('note_models_from_crowd_anki'), list(include('note_models_from_crowd_anki'))), key=regex('note_model[s]?_from_crowd_anki', ignore_case=True)),
       map(any(include('note_models_from_yaml_part'), list(include('note_models_from_yaml_part'))), key=regex('note_model[s]?_from_yaml_part', ignore_case=True)),
       map(any(include('notes_from_crowd_anki'), list(include('notes_from_crowd_anki'))), key=regex('notes_from_crowd_anki', ignore_case=True)),
@@ -76,10 +78,34 @@ media_group_from_yaml_part:
 media_group_to_crowd_anki:
     parts: list(str())
 
+note_model_field:
+    name: str()
+    font: str(required=False)
+    font_size: int(required=False)
+    is_sticky: bool(required=False)
+    is_right_to_left: bool(required=False)
+
+note_model_from_html_parts:
+    part_id: str()
+    model_id: str()
+    css_file: str()
+    fields: list(include('note_model_field'))
+    templates: list(str())
+    model_name: str(required=False)
+    save_to_file: str(required=False)
+
 note_model_mapping:
     note_models: any(list(str()), str())
     columns_to_fields: map(str(), key=str())
     personal_fields: list(str())
+
+note_model_template_from_html:
+    part_id: str()
+    html_file: str()
+    template_name: str(required=False)
+    browser_html_file: str(required=False)
+    deck_override_id: int(required=False)
+    save_to_file: str(required=False)
 
 note_models_from_crowd_anki:
     source: str()

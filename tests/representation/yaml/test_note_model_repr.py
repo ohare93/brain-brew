@@ -1,6 +1,8 @@
 import pytest
 
-from brain_brew.representation.yaml.note_model_repr import NoteModel, Template, Field
+from brain_brew.representation.yaml.note_model_repr import NoteModel
+from brain_brew.representation.yaml.note_model_field import Field
+from brain_brew.representation.yaml.note_model_template import Template
 from brain_brew.representation.json.json_file import JsonFile
 from brain_brew.representation.yaml.yaml_object import YamlObject
 from tests.test_files import TestFiles

@@ -63,7 +63,7 @@ class CrowdAnkiGenerate(TopLevelBuildTask):
 
         note_models: List[dict] = self.note_model_transform.execute()
 
-        nm_name_to_id: dict = {model.name: model.id for model in self.note_model_transform.note_models}
+        nm_name_to_id: dict = {model.part_id: model.part.id for model in self.note_model_transform.note_models}
         notes = self.notes_transform.execute(nm_name_to_id)
 
         media_files: Set[MediaFile] = set()

@@ -29,7 +29,7 @@ class RecipeBuilder(YamlObject, metaclass=ABCMeta):
         task_list = []
         for c in sorted(subclasses, key=lambda x: x.task_name()):
             task_command = f"any(include('{c.task_name()}'), list(include('{c.task_name()}')))"\
-                if c.accepts_list() else f"include('{c.task_name()}')"
+                if c.accepts_list_of_self else f"include('{c.task_name()}')"
             task_list.append(f"map({task_command}, key=regex('{c.task_regex()}', ignore_case=True))")
 
         final_tasks: str = "list(\n" + indent(",\n".join(task_list), '  ') + "\n)\n"
@@ -59,13 +59,15 @@ class RecipeBuilder(YamlObject, metaclass=ABCMeta):
 
             matching_task = find_matching_task(task_name)
             if matching_task is not None:
-                if matching_task.accepts_list() and isinstance(task_arguments, list):
+                if matching_task.accepts_list_of_self and isinstance(task_arguments, list):
                     task_or_tasks = [matching_task.from_repr(t_arg) for t_arg in task_arguments]
                 else:
                     task_or_tasks = [matching_task.from_repr(task_arguments)]
 
                 for inner_task in task_or_tasks:
                     build_tasks.append(inner_task)
+                    if inner_task.execute_immediately:
+                        inner_task.execute()
             else:
                 raise KeyError(f"Unknown task '{task_name}'")  # TODO: check this first on all and return all errors
 

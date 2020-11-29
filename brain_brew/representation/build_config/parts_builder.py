@@ -13,6 +13,8 @@ from brain_brew.build_tasks.crowd_anki.media_group_from_crowd_anki import MediaG
 from brain_brew.build_tasks.crowd_anki.note_models_from_crowd_anki import NoteModelsFromCrowdAnki
 from brain_brew.build_tasks.crowd_anki.notes_from_crowd_anki import NotesFromCrowdAnki
 from brain_brew.build_tasks.deck_parts.media_group_to_folder import MediaGroupsToFolder
+from brain_brew.build_tasks.deck_parts.note_model_from_html_parts import NoteModelFromHTMLParts
+from brain_brew.build_tasks.deck_parts.note_model_template_from_html_files import TemplateFromHTML
 
 from brain_brew.representation.build_config.build_task import BuildTask, BuildPartTask, TopLevelBuildTask
 from brain_brew.representation.build_config.recipe_builder import RecipeBuilder
@@ -20,13 +22,11 @@ from brain_brew.representation.build_config.recipe_builder import RecipeBuilder
 
 @dataclass
 class PartsBuilder(RecipeBuilder, TopLevelBuildTask):
+    accepts_list_of_self: bool = False
+
     @classmethod
     def task_name(cls) -> str:
         return r'build_parts'
-
-    @classmethod
-    def accepts_list(cls) -> bool:
-        return False
 
     @classmethod
     def task_regex(cls) -> str:
@@ -59,5 +59,6 @@ class PartsBuilder(RecipeBuilder, TopLevelBuildTask):
             NotesFromCsvs,
             NotesFromYamlPart, HeadersFromYamlPart, NoteModelsFromYamlPart, MediaGroupFromYamlPart,
             MediaGroupFromFolder, MediaGroupsToFolder,
+            NoteModelFromHTMLParts, TemplateFromHTML,
             HeadersFromCrowdAnki, MediaGroupFromCrowdAnki, NoteModelsFromCrowdAnki, NotesFromCrowdAnki
         }
