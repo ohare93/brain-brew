@@ -2,7 +2,7 @@ import logging
 from typing import List, Set
 
 from brain_brew.representation.generic.media_file import MediaFile
-from brain_brew.representation.yaml.media_group_repr import MediaGroup
+from brain_brew.representation.yaml.media_group import MediaGroup
 from brain_brew.utils import create_path_if_not_exists
 
 

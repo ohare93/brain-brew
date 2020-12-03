@@ -1,17 +1,16 @@
 from abc import ABCMeta, abstractmethod
-from typing import Dict, List, Type, Tuple, Set
+from typing import Dict, Type, Set
 
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 
 
 class BuildTask(YamlRepr, object, metaclass=ABCMeta):
+    execute_immediately: bool = False
+    accepts_list_of_self: bool = True
+
     @abstractmethod
     def execute(self):
         pass
-
-    @classmethod
-    def accepts_list(cls) -> bool:
-        return True
 
     @classmethod
     def task_regex(cls) -> str:
@@ -38,4 +37,4 @@ class TopLevelBuildTask(BuildTask, metaclass=ABCMeta):
 
 
 class BuildPartTask(BuildTask, metaclass=ABCMeta):
-    pass
+    execute_immediately: bool = True

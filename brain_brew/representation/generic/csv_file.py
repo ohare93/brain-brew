@@ -1,6 +1,5 @@
 import csv
 import logging
-import re
 from enum import Enum
 from typing import List
 
@@ -20,7 +19,6 @@ class CsvFile(SourceFile):
 
     def __init__(self, file):
         self.file_location = file
-
         self.read_file()
 
     @classmethod
@@ -72,8 +70,7 @@ class CsvFile(SourceFile):
 
     @staticmethod
     def to_filename_csv(filename: str) -> str:
-        converted = re.sub(r'\s+', '-', filename).strip()
-        return converted + ".csv" if not converted.endswith(".csv") else converted
+        return filename + ".csv" if not filename.endswith(".csv") else filename
 
     @classmethod
     def formatted_file_location(cls, location):

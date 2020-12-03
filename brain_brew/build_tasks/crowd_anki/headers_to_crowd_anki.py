@@ -2,9 +2,9 @@ from dataclasses import dataclass, field
 from typing import Union
 
 from brain_brew.build_tasks.crowd_anki.headers_from_crowdanki import headers_default_values
-from brain_brew.representation.configuration.representation_base import RepresentationBase
-from brain_brew.representation.yaml.headers_repr import Headers
-from brain_brew.representation.yaml.part_holder import PartHolder
+from brain_brew.configuration.part_holder import PartHolder
+from brain_brew.configuration.representation_base import RepresentationBase
+from brain_brew.representation.yaml.headers import Headers
 
 
 @dataclass

@@ -1,12 +1,12 @@
 import logging
 
-from brain_brew.argument_reader import BBArgumentReader
-from brain_brew.file_manager import FileManager
-from brain_brew.representation.build_config.top_level_builder import TopLevelBuilder
-from brain_brew.representation.configuration.global_config import GlobalConfig
+from brain_brew.configuration.argument_reader import BBArgumentReader
+from brain_brew.configuration.build_config.top_level_builder import TopLevelBuilder
+from brain_brew.configuration.file_manager import FileManager
+from brain_brew.configuration.global_config import GlobalConfig
 # sys.path.append(os.path.join(os.path.dirname(__file__), "dist"))
 # sys.path.append(os.path.dirname(__file__))
-from brain_brew.yaml_verifier import YamlVerifier
+from brain_brew.configuration.yaml_verifier import YamlVerifier
 
 
 def main():

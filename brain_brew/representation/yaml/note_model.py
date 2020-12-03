@@ -1,27 +1,14 @@
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import List, Optional, Union, Dict, Set
+from typing import List, Union, Dict, Set
 
+from brain_brew.configuration.anki_field import AnkiField
+from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.interfaces.media_container import MediaContainer
-from brain_brew.representation.configuration.representation_base import RepresentationBase
+from brain_brew.representation.yaml.note_model_field import Field
+from brain_brew.representation.yaml.note_model_template import Template
 from brain_brew.representation.yaml.yaml_object import YamlObject
-from brain_brew.utils import list_of_str_to_lowercase, find_media_in_field
-
-
-class AnkiField:
-    name: str
-    anki_name: str
-    default_value: any
-
-    def __init__(self, anki_name, name=None, default_value=None):
-        self.anki_name = anki_name
-        self.name = name if name is not None else anki_name
-        self.default_value = default_value
-
-    def append_name_if_differs(self, dict_to_add_to: dict, value):
-        if value != self.default_value:
-            dict_to_add_to.setdefault(self.name, value)
-
+from brain_brew.utils import list_of_str_to_lowercase
 
 # CrowdAnki
 CROWDANKI_ID = AnkiField("crowdanki_uuid", "id")
@@ -62,122 +49,6 @@ DECK_OVERRIDE_ID = AnkiField("did", "deck_override_id", default_value=None)
 
 
 @dataclass
-class Template(RepresentationBase):
-    @dataclass
-    class CrowdAnki(RepresentationBase):
-        name: str
-        qfmt: str
-        afmt: str
-        bqfmt: str = field(default=BROWSER_QUESTION_FORMAT.default_value)
-        bafmt: str = field(default=BROWSER_ANSWER_FORMAT.default_value)
-        ord: int = field(default=None)
-        did: Optional[int] = field(default=None)
-
-    name: str
-    question_format: str
-    answer_format: str
-    question_format_in_browser: str = field(default=BROWSER_QUESTION_FORMAT.default_value)
-    answer_format_in_browser: str = field(default=BROWSER_ANSWER_FORMAT.default_value)
-    deck_override_id: Optional[int] = field(default=DECK_OVERRIDE_ID.default_value)
-
-    @classmethod
-    def from_crowdanki(cls, data: Union[CrowdAnki, dict]):
-        ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
-        return cls(
-            name=ca.name, question_format=ca.qfmt, answer_format=ca.afmt,
-            question_format_in_browser=ca.bqfmt, answer_format_in_browser=ca.bafmt, deck_override_id=ca.did
-        )
-
-    def get_all_media_references(self) -> Set[str]:
-        all_media = set()\
-            .union(find_media_in_field(self.question_format))\
-            .union(find_media_in_field(self.answer_format))\
-            .union(find_media_in_field(self.question_format_in_browser))\
-            .union(find_media_in_field(self.answer_format_in_browser))
-        return all_media
-
-    def encode_as_crowdanki(self, ordinal: int) -> dict:
-        data_dict = {
-            ANSWER_FORMAT.anki_name: self.answer_format,
-            BROWSER_ANSWER_FORMAT.anki_name: self.answer_format_in_browser,
-            BROWSER_QUESTION_FORMAT.anki_name: self.question_format_in_browser,
-            DECK_OVERRIDE_ID.anki_name: self.deck_override_id,
-            NAME.anki_name: self.name,
-            ORDINAL.anki_name: ordinal,
-            QUESTION_FORMAT.anki_name: self.question_format,
-        }
-
-        return data_dict
-
-    def encode_as_part(self) -> dict:
-        data_dict = {
-            NAME.name: self.name,
-            QUESTION_FORMAT.name: self.question_format,
-            ANSWER_FORMAT.name: self.answer_format
-        }
-
-        BROWSER_QUESTION_FORMAT.append_name_if_differs(data_dict, self.question_format_in_browser)
-        BROWSER_ANSWER_FORMAT.append_name_if_differs(data_dict, self.answer_format_in_browser)
-        DECK_OVERRIDE_ID.append_name_if_differs(data_dict, self.deck_override_id)
-
-        return data_dict
-
-
-@dataclass
-class Field(RepresentationBase):
-    @dataclass
-    class CrowdAnki(RepresentationBase):
-        name: str
-        ord: int = field(default=None)
-        font: str = field(default=FONT.default_value)
-        media: List[str] = field(default_factory=lambda: MEDIA.default_value)
-        rtl: bool = field(default=IS_RIGHT_TO_LEFT.default_value)
-        size: int = field(default=FONT_SIZE.default_value)
-        sticky: bool = field(default=IS_STICKY.default_value)
-
-    name: str
-    font: str = field(default=FONT.default_value)
-    media: List[str] = field(default_factory=lambda: MEDIA.default_value)  # Unused in Anki
-    is_right_to_left: bool = field(default=IS_RIGHT_TO_LEFT.default_value)
-    font_size: int = field(default=FONT_SIZE.default_value)
-    is_sticky: bool = field(default=IS_STICKY.default_value)
-
-    @classmethod
-    def from_crowd_anki(cls, data: Union[CrowdAnki, dict]):
-        ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
-        return cls(
-            name=ca.name, font=ca.font, media=ca.media,
-            is_right_to_left=ca.rtl, font_size=ca.size, is_sticky=ca.sticky
-        )
-
-    def encode_as_crowdanki(self, ordinal: int) -> dict:
-        data_dict = {
-            FONT.anki_name: self.font,
-            MEDIA.anki_name: self.media,
-            NAME.anki_name: self.name,
-            ORDINAL.anki_name: ordinal,
-            IS_RIGHT_TO_LEFT.anki_name: self.is_right_to_left,
-            FONT_SIZE.anki_name: self.font_size,
-            IS_STICKY.anki_name: self.is_sticky
-        }
-
-        return data_dict
-
-    def encode_as_part(self) -> dict:
-        data_dict = {
-            NAME.name: self.name
-        }
-
-        FONT.append_name_if_differs(data_dict, self.font)
-        MEDIA.append_name_if_differs(data_dict, self.media)
-        IS_RIGHT_TO_LEFT.append_name_if_differs(data_dict, self.is_right_to_left)
-        FONT_SIZE.append_name_if_differs(data_dict, self.font_size)
-        IS_STICKY.append_name_if_differs(data_dict, self.is_sticky)
-
-        return data_dict
-
-
-@dataclass
 class NoteModel(YamlObject, MediaContainer, RepresentationBase):
     @dataclass
     class CrowdAnki(RepresentationBase):
@@ -214,8 +85,8 @@ class NoteModel(YamlObject, MediaContainer, RepresentationBase):
     def from_yaml_file(cls, filename: str):
         data = cls.read_to_dict(filename)
         return cls(
-            fields=[Field(**f) for f in data.pop(FIELDS.name)],
-            templates=[Template(**t) for t in data.pop(TEMPLATES.name)],
+            fields=[Field.from_dict(f) for f in data.pop(FIELDS.name)],
+            templates=[Template.from_dict(t) for t in data.pop(TEMPLATES.name)],
             **data
         )
 
@@ -264,7 +135,7 @@ class NoteModel(YamlObject, MediaContainer, RepresentationBase):
         LATEX_POST.append_name_if_differs(data_dict, self.latex_post)
 
         data_dict.setdefault(FIELDS.name, [f.encode_as_part() for f in self.fields])
-        data_dict.setdefault(TEMPLATES.name, [t.encode_as_part() for t in self.templates])
+        data_dict.setdefault(TEMPLATES.name, [t.encode() for t in self.templates])
 
         # Useless
         TAGS.append_name_if_differs(data_dict, self.tags)

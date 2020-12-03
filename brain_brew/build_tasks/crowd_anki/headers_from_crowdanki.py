@@ -1,14 +1,14 @@
 from dataclasses import dataclass, field
 from typing import Union, Optional
 
-from brain_brew.representation.build_config.build_task import BuildPartTask
-from brain_brew.representation.configuration.representation_base import RepresentationBase
+from brain_brew.configuration.build_config.build_task import BuildPartTask
+from brain_brew.configuration.part_holder import PartHolder
+from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.json.wrappers_for_crowd_anki import CA_NOTE_MODELS, CA_NOTES, CA_MEDIA_FILES, \
     CA_CHILDREN, CA_TYPE
 from brain_brew.representation.json.wrappers_for_crowd_anki import CrowdAnkiJsonWrapper
-from brain_brew.representation.yaml.headers_repr import Headers
-from brain_brew.representation.yaml.part_holder import PartHolder
+from brain_brew.representation.yaml.headers import Headers
 
 headers_skip_keys = [CA_NOTE_MODELS, CA_NOTES, CA_MEDIA_FILES]
 headers_default_values = {

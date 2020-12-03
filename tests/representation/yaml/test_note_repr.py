@@ -1,13 +1,9 @@
-import json
-import sys
 from textwrap import dedent
 from typing import List, Set
-from ruamel.yaml import round_trip_dump
-from brain_brew.representation.yaml.yaml_object import yaml_dump, yaml_load
 
 import pytest
 
-from brain_brew.representation.yaml.note_repr import Note, NoteGrouping, Notes, \
+from brain_brew.representation.yaml.notes import Note, NoteGrouping, Notes, \
     NOTES, NOTE_GROUPINGS, FIELDS, GUID, NOTE_MODEL, TAGS, FLAGS
 
 working_notes = {

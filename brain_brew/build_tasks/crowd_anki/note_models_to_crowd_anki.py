@@ -1,10 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Union, List
 
+from brain_brew.configuration.part_holder import PartHolder
+from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
-from brain_brew.representation.configuration.representation_base import RepresentationBase
-from brain_brew.representation.yaml.note_model_repr import NoteModel
-from brain_brew.representation.yaml.part_holder import PartHolder
+from brain_brew.representation.yaml.note_model import NoteModel
 
 
 @dataclass
@@ -55,11 +55,11 @@ class NoteModelsToCrowdAnki(YamlRepr):
                 part_to_read=rep.part_id
             )
 
-        def get_note_model(self) -> NoteModel:
-            self.part = PartHolder.from_file_manager(self.part_to_read).part
+        def get_note_model(self) -> PartHolder[NoteModel]:
+            self.part = PartHolder.from_file_manager(self.part_to_read)
             return self.part  # Todo: add filters in here
 
-        part: NoteModel = field(init=False)
+        part: PartHolder[NoteModel] = field(init=False)
         part_to_read: str
 
     @dataclass
@@ -81,7 +81,7 @@ class NoteModelsToCrowdAnki(YamlRepr):
             note_models=[nm.get_note_model() for nm in note_model_items]
         )
 
-    note_models: List[NoteModel]
+    note_models: List[PartHolder[NoteModel]]
 
     def execute(self) -> List[dict]:
-        return [model.encode_as_crowdanki() for model in self.note_models]
+        return [model.part.encode_as_crowdanki() for model in self.note_models]

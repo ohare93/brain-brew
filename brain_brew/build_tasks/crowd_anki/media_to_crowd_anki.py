@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from typing import Union, List, Set
 
+from brain_brew.configuration.part_holder import PartHolder
+from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
-from brain_brew.representation.configuration.representation_base import RepresentationBase
 from brain_brew.representation.generic.media_file import MediaFile
-from brain_brew.representation.yaml.media_group_repr import MediaGroup
-from brain_brew.representation.yaml.part_holder import PartHolder
+from brain_brew.representation.yaml.media_group import MediaGroup
 from brain_brew.transformers.media_group_save_to_location import save_media_groups_to_location
 
 
