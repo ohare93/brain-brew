@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 from typing import List, Union
 
+from brain_brew.configuration.anki_field import AnkiField
+from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
-from brain_brew.representation.configuration.anki_field import AnkiField
-from brain_brew.representation.configuration.representation_base import RepresentationBase
 
 NAME = AnkiField("name")
 ORDINAL = AnkiField("ord", "ordinal")

@@ -1,5 +1,5 @@
-from dataclasses import dataclass
 import codecs
+from dataclasses import dataclass
 
 from brain_brew.representation.generic.source_file import SourceFile
 

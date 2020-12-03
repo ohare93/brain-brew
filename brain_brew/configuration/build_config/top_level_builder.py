@@ -1,15 +1,12 @@
-from abc import ABCMeta
-from typing import Dict, Type, List, Tuple, Set
 from textwrap import indent, dedent
+from typing import Dict, Type, List, Set
 
-# Build Tasks
 from brain_brew.build_tasks.crowd_anki.crowd_anki_generate import CrowdAnkiGenerate
 from brain_brew.build_tasks.csvs.csvs_generate import CsvsGenerate
-from brain_brew.representation.build_config.parts_builder import PartsBuilder
-
+from brain_brew.configuration.build_config.build_task import BuildTask, TopLevelBuildTask
+from brain_brew.configuration.build_config.parts_builder import PartsBuilder
+from brain_brew.configuration.build_config.recipe_builder import RecipeBuilder
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
-from brain_brew.representation.build_config.recipe_builder import RecipeBuilder
-from brain_brew.representation.build_config.build_task import BuildTask, TopLevelBuildTask
 
 
 class TopLevelBuilder(YamlRepr, RecipeBuilder):
@@ -51,7 +48,7 @@ class TopLevelBuilder(YamlRepr, RecipeBuilder):
     def parse_and_read(cls, filename, verify_only: bool) -> 'TopLevelBuilder':
         recipe_data = cls.read_to_dict(filename)
 
-        from brain_brew.yaml_verifier import YamlVerifier
+        from brain_brew.configuration.yaml_verifier import YamlVerifier
         YamlVerifier.get_instance().verify_recipe(filename)
 
         if verify_only:

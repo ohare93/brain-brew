@@ -1,10 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Optional, Union, List
 
-from brain_brew.representation.build_config.build_task import BuildPartTask
-from brain_brew.representation.configuration.representation_base import RepresentationBase
-from brain_brew.representation.yaml.media_group_repr import MediaGroup
-from brain_brew.representation.yaml.part_holder import PartHolder
+from brain_brew.configuration.build_config.build_task import BuildPartTask
+from brain_brew.configuration.part_holder import PartHolder
+from brain_brew.configuration.representation_base import RepresentationBase
+from brain_brew.representation.yaml.media_group import MediaGroup
 from brain_brew.transformers.media_group_from_location import create_media_group_from_location
 
 

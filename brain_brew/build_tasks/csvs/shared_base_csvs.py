@@ -2,9 +2,9 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Dict
 
-from brain_brew.representation.configuration.representation_base import RepresentationBase
-from brain_brew.representation.configuration.csv_file_mapping import FileMapping
-from brain_brew.representation.configuration.note_model_mapping import NoteModelMapping
+from brain_brew.configuration.representation_base import RepresentationBase
+from brain_brew.transformers.file_mapping import FileMapping
+from brain_brew.transformers.note_model_mapping import NoteModelMapping
 
 
 @dataclass

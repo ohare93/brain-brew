@@ -1,8 +1,8 @@
 from typing import List
 
+from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.interfaces.media_container import MediaContainer
-from brain_brew.representation.yaml.media_group_repr import MediaGroup
-from brain_brew.representation.yaml.part_holder import PartHolder
+from brain_brew.representation.yaml.media_group import MediaGroup
 
 
 def create_media_group_from_location(

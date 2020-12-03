@@ -1,4 +1,4 @@
-from brain_brew.representation.yaml.part_holder import PartHolder
+from brain_brew.configuration.part_holder import PartHolder
 
 
 def debug_write_part_to_file(part, filepath: str):

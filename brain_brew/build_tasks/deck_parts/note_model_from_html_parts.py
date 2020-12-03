@@ -1,14 +1,13 @@
 from dataclasses import dataclass, field
 from typing import Optional, Union, List
 
-from brain_brew.representation.build_config.build_task import BuildPartTask
-
-from brain_brew.representation.configuration.representation_base import RepresentationBase
+from brain_brew.configuration.build_config.build_task import BuildPartTask
+from brain_brew.configuration.part_holder import PartHolder
+from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.representation.generic.html_file import HTMLFile
-from brain_brew.representation.yaml.note_model_repr import NoteModel
+from brain_brew.representation.yaml.note_model import NoteModel
 from brain_brew.representation.yaml.note_model_field import Field
 from brain_brew.representation.yaml.note_model_template import Template
-from brain_brew.representation.yaml.part_holder import PartHolder
 
 
 @dataclass

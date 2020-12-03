@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Optional, Union, Set
 
-from brain_brew.representation.configuration.anki_field import AnkiField
-from brain_brew.representation.configuration.representation_base import RepresentationBase
+from brain_brew.configuration.anki_field import AnkiField
+from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.representation.yaml.yaml_object import YamlObject
 from brain_brew.utils import find_media_in_field
 

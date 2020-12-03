@@ -16,7 +16,7 @@ class PartHolder(Generic[T]):
     @classmethod
     def get_file_manager(cls):
         if not cls.file_manager:
-            from brain_brew.file_manager import FileManager
+            from brain_brew.configuration.file_manager import FileManager
             cls.file_manager = FileManager.get_instance()
         return cls.file_manager
 

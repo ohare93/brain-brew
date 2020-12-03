@@ -1,17 +1,3 @@
-import copy
-from typing import List
-from unittest.mock import patch
-
-import pytest
-
-from brain_brew.representation.configuration.csv_file_mapping import FileMappingDerivative, FileMapping, \
-    SORT_BY_COLUMNS, REVERSE_SORT, NOTE_MODEL, DERIVATIVES, FILE
-from brain_brew.representation.generic.csv_file import CsvFile
-from tests.test_file_manager import get_new_file_manager
-from tests.representation.generic.test_csv_file import csv_test1, csv_test2, csv_test3, csv_test1_split1,\
-    csv_test1_split2, csv_test2_missing_guids
-
-
 # def setup_csv_fm_config(csv: str, sort_by_columns: List[str] = None, reverse_sort: bool = None,
 #                         note_model_name: str = None, derivatives: List[dict] = None):
 #     cfm: dict = {

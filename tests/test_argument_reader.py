@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from brain_brew.argument_reader import BBArgumentReader
+from brain_brew.configuration.argument_reader import BBArgumentReader
 
 
 @pytest.fixture()

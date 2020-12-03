@@ -66,7 +66,7 @@ def split_tags(tags_value: str) -> list:
 
 
 def join_tags(tags_list: list) -> str:
-    from brain_brew.representation.configuration.global_config import GlobalConfig
+    from brain_brew.configuration.global_config import GlobalConfig
     return GlobalConfig.get_instance().join_values_with.join(tags_list)
 
 
@@ -92,7 +92,7 @@ def generate_anki_guid() -> str:
 
 
 def sort_dict(data, sort_by_keys, reverse_sort, case_insensitive_sort=None):
-    from brain_brew.representation.configuration.global_config import GlobalConfig
+    from brain_brew.configuration.global_config import GlobalConfig
     if case_insensitive_sort is None:
         case_insensitive_sort = GlobalConfig.get_instance().sort_case_insensitive
 

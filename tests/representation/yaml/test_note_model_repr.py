@@ -1,15 +1,14 @@
 import pytest
 
-from brain_brew.representation.yaml.note_model_repr import NoteModel
+from brain_brew.representation.json.json_file import JsonFile
+from brain_brew.representation.yaml.note_model import NoteModel
 from brain_brew.representation.yaml.note_model_field import Field
 from brain_brew.representation.yaml.note_model_template import Template
-from brain_brew.representation.json.json_file import JsonFile
 from brain_brew.representation.yaml.yaml_object import YamlObject
 from tests.test_files import TestFiles
 
 
 # CrowdAnki Files --------------------------------------------------------------------------
-from tests.test_helpers import debug_write_part_to_file
 
 
 @pytest.fixture

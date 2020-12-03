@@ -1,5 +1,5 @@
 from abc import ABCMeta, abstractmethod
-from typing import Dict, List, Type, Tuple, Set
+from typing import Dict, Type, Set
 
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 

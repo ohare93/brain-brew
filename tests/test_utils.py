@@ -1,6 +1,6 @@
 import pytest
 
-from brain_brew.utils import find_media_in_field, str_to_lowercase_no_separators, split_tags, join_tags
+from brain_brew.utils import find_media_in_field, str_to_lowercase_no_separators, split_tags
 
 
 class TestFindMedia:

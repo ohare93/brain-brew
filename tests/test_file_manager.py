@@ -1,6 +1,4 @@
-import pytest
-
-from brain_brew.file_manager import FileManager
+from brain_brew.configuration.file_manager import FileManager
 
 
 def get_new_file_manager():

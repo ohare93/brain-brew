@@ -3,8 +3,8 @@ from abc import ABCMeta
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Set
 
+from brain_brew.configuration.global_config import GlobalConfig
 from brain_brew.interfaces.media_container import MediaContainer
-from brain_brew.representation.configuration.global_config import GlobalConfig
 from brain_brew.representation.yaml.yaml_object import YamlObject
 from brain_brew.utils import find_media_in_field
 

@@ -1,7 +1,3 @@
-import os
-import shutil
-from unittest.mock import patch
-
 import pytest
 
 from brain_brew.representation.generic.media_file import MediaFile

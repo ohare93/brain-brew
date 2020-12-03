@@ -2,9 +2,9 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import List, Union, Dict, Set
 
+from brain_brew.configuration.anki_field import AnkiField
+from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.interfaces.media_container import MediaContainer
-from brain_brew.representation.configuration.anki_field import AnkiField
-from brain_brew.representation.configuration.representation_base import RepresentationBase
 from brain_brew.representation.yaml.note_model_field import Field
 from brain_brew.representation.yaml.note_model_template import Template
 from brain_brew.representation.yaml.yaml_object import YamlObject

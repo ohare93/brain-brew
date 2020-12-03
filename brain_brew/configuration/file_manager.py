@@ -1,7 +1,7 @@
 from typing import Dict, Union
 
+from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.representation.generic.source_file import SourceFile
-from brain_brew.representation.yaml.part_holder import PartHolder
 from brain_brew.representation.yaml.yaml_object import YamlObject
 
 

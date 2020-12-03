@@ -21,7 +21,7 @@ class SourceFile(object):
 
     @classmethod
     def create_or_get(cls, location):
-        from brain_brew.file_manager import FileManager
+        from brain_brew.configuration.file_manager import FileManager
         _file_manager = FileManager.get_instance()
         formatted_location = cls.formatted_file_location(location)
         file = _file_manager.file_if_exists(formatted_location)
