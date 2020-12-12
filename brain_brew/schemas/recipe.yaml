@@ -140,11 +140,15 @@ notes_from_yaml_part:
     part_id: str()
     file: str()
 
+notes_override:
+    note_model: str()
+
 notes_to_crowd_anki:
     part_id: str()
     sort_order: list(str(), required=False)
     reverse_sort: bool(required=False)
     additional_items_to_add: map(str(), key=str(), required=False)
+    override: include('notes_override', required=False)
 
 save_media_groups_to_folder:
     parts: list(str())
