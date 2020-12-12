@@ -22,15 +22,12 @@ class SharedBaseCsvs:
             return list(map(FileMapping.from_repr, self.file_mappings))
 
     file_mappings: List[FileMapping]
-    note_model_mappings_to_read: List[NoteModelMapping.Representation]
-    note_model_mappings: Dict[str, NoteModelMapping] = field(init=False)
+    note_model_mappings: Dict[str, NoteModelMapping]
 
-    def setup_note_model_mappings(self):
-        def map_nmm(nmm_to_map):
-            nmm = NoteModelMapping.from_repr(nmm_to_map)
-            return nmm.get_note_model_mapping_dict()
-
-        self.note_model_mappings = dict(*map(map_nmm, self.note_model_mappings_to_read))
+    @classmethod
+    def map_nmm(cls, nmm_to_map):
+        nmm = NoteModelMapping.from_repr(nmm_to_map)
+        return nmm.get_note_model_mapping_dict()
 
     def verify_contents(self):
         errors = []
