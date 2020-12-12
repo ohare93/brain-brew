@@ -39,7 +39,7 @@ class CrowdAnkiExport(SourceFile):
         return cls(file_loc)
 
     def find_json_file_in_folder(self):
-        files = glob.glob(self.folder_location + "*.json")
+        files = glob.glob(f"{glob.escape(self.folder_location)}*.json")
 
         if len(files) == 1:
             return files[0]
