@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Union, List
 
 from brain_brew.build_tasks.crowd_anki.shared_base_notes import SharedBaseNotes
+from brain_brew.build_tasks.overrides.notes_override import NotesOverride
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
@@ -23,7 +24,12 @@ class NotesToCrowdAnki(YamlRepr, SharedBaseNotes):
             sort_order: list(str(), required=False)
             reverse_sort: bool(required=False)
             additional_items_to_add: map(str(), key=str(), required=False)
+            override: include('{NotesOverride.task_name()}', required=False)
         '''
+
+    @classmethod
+    def yamale_dependencies(cls) -> set:
+        return {NotesOverride}
 
     @dataclass
     class Representation(RepresentationBase):
@@ -31,28 +37,31 @@ class NotesToCrowdAnki(YamlRepr, SharedBaseNotes):
         additional_items_to_add: Optional[dict] = field(default_factory=lambda: None)
         sort_order: Optional[List[str]] = field(default_factory=lambda: None)
         reverse_sort: Optional[bool] = field(default_factory=lambda: None)
+        override: Optional[dict] = field(default_factory=lambda: None)
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
-            notes_to_read=rep.part_id,
+            notes=PartHolder.from_file_manager(rep.part_id).part,
             sort_order=SharedBaseNotes._get_sort_order(rep.sort_order),
             reverse_sort=SharedBaseNotes._get_reverse_sort(rep.reverse_sort),
-            additional_items_to_add=rep.additional_items_to_add or {}
+            additional_items_to_add=rep.additional_items_to_add or {},
+            override=NotesOverride.from_repr(rep.override) if rep.override else None
         )
 
-    notes: Notes = field(init=False)
-
-    notes_to_read: str
+    notes: Notes
     additional_items_to_add: dict
     sort_order: Optional[List[str]] = field(default_factory=lambda: None)
     reverse_sort: Optional[bool] = field(default_factory=lambda: None)
+    override: Optional[NotesOverride] = field(default_factory=lambda: None)
 
     def execute(self, nm_name_to_id: dict) -> List[dict]:
-        self.notes = PartHolder.from_file_manager(self.notes_to_read).part
 
         notes = self.notes.get_sorted_notes_copy(sort_by_keys=self.sort_order, reverse_sort=self.reverse_sort)
+
+        if self.override:
+            notes = [self.override.override(note) for note in notes]
 
         note_dicts = [self.note_to_ca_note(note, nm_name_to_id, self.additional_items_to_add) for note in notes]
 

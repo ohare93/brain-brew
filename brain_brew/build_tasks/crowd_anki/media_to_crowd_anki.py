@@ -35,4 +35,4 @@ class MediaGroupToCrowdAnki(YamlRepr):
     parts: List[MediaGroup]
 
     def execute(self, ca_media_folder: str) -> Set[MediaFile]:
-        return save_media_groups_to_location(self.parts, ca_media_folder, True)
+        return save_media_groups_to_location(self.parts, ca_media_folder, True, False)

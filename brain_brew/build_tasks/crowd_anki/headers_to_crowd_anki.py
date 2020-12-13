@@ -24,15 +24,12 @@ class HeadersToCrowdAnki:
             rep = cls.Representation(part_id=data)  # Support single string being passed in
 
         return cls(
-            headers_to_read=rep.part_id
+            headers=PartHolder.from_file_manager(rep.part_id).part
         )
 
-    headers_to_read: str
-    headers: Headers = field(init=False)
+    headers: Headers
 
     def execute(self) -> dict:
-        self.headers = PartHolder.from_file_manager(self.headers_to_read).part
-
         headers = self.headers_to_crowd_anki(self.headers.data_without_name)
 
         return headers

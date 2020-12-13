@@ -7,7 +7,7 @@ from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.representation.generic.html_file import HTMLFile
 from brain_brew.representation.yaml.note_model_template import Template
 
-html_separator = '--'
+html_separator = '\n\n--\n\n'
 
 
 @dataclass
@@ -74,7 +74,7 @@ class TemplateFromHTML(BuildPartTask):
 
             browser_front, browser_back = tuple(browser_data.split(html_separator, maxsplit=1))
         else:
-            browser_front = browser_back = None
+            browser_front = browser_back = ""
 
         template = Template(
             name=self.template_name,

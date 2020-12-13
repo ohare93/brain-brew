@@ -5,7 +5,6 @@ from typing import Union
 from brain_brew.configuration.build_config.build_task import BuildPartTask
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.configuration.representation_base import RepresentationBase
-from brain_brew.representation.yaml.headers import Headers
 from brain_brew.representation.yaml.media_group import MediaGroup
 from brain_brew.representation.yaml.note_model import NoteModel
 from brain_brew.representation.yaml.notes import Notes
@@ -50,19 +49,6 @@ class NotesFromYamlPart(FromYamlPartBase):
         return r'notes_from_yaml_part'
 
     part_type = Notes
-
-
-@dataclass
-class HeadersFromYamlPart(FromYamlPartBase, BuildPartTask):
-    @classmethod
-    def task_name(cls) -> str:
-        return r'headers_from_yaml_part'
-
-    @classmethod
-    def task_regex(cls) -> str:
-        return r'header[s]?_from_yaml_part'
-
-    part_type = Headers
 
 
 @dataclass

@@ -75,4 +75,5 @@ class RecipeBuilder(YamlObject, metaclass=ABCMeta):
 
     def execute(self):
         for task in self.tasks:
-            task.execute()
+            if not task.execute_immediately:
+                task.execute()

@@ -6,8 +6,9 @@ from brain_brew.build_tasks.crowd_anki.media_group_from_crowd_anki import MediaG
 from brain_brew.build_tasks.crowd_anki.note_models_from_crowd_anki import NoteModelsFromCrowdAnki
 from brain_brew.build_tasks.crowd_anki.notes_from_crowd_anki import NotesFromCrowdAnki
 from brain_brew.build_tasks.csvs.notes_from_csvs import NotesFromCsvs
-from brain_brew.build_tasks.deck_parts.from_yaml_part import NotesFromYamlPart, HeadersFromYamlPart, \
-    NoteModelsFromYamlPart, MediaGroupFromYamlPart
+from brain_brew.build_tasks.deck_parts.from_yaml_part import NotesFromYamlPart, NoteModelsFromYamlPart, \
+    MediaGroupFromYamlPart
+from brain_brew.build_tasks.deck_parts.headers_from_yaml_part import HeadersFromYamlPart
 from brain_brew.build_tasks.deck_parts.media_group_from_folder import MediaGroupFromFolder
 from brain_brew.build_tasks.deck_parts.media_group_to_folder import MediaGroupsToFolder
 from brain_brew.build_tasks.deck_parts.note_model_from_html_parts import NoteModelFromHTMLParts

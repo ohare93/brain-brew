@@ -21,7 +21,7 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
         return r'generate_csv[s]?'
 
     @classmethod
-    def yamale_schema(cls) -> str:
+    def yamale_schema(cls) -> str:  # TODO: Use NotesOverride here, just as in NotesToCrowdAnki
         return f'''\
             notes: str()
             note_model_mappings: list(include('{NoteModelMapping.task_name()}'))
@@ -32,8 +32,7 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
     def yamale_dependencies(cls) -> set:
         return {NoteModelMapping, FileMapping}
 
-    notes_to_read: str  # TODO: Accept Multiple Note Parts
-    notes: PartHolder[Notes] = field(default=None)
+    notes: PartHolder[Notes]  # TODO: Accept Multiple Note Parts
 
     @dataclass
     class Representation(SharedBaseCsvs.Representation):
@@ -43,14 +42,12 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
-            notes_to_read=rep.notes,
+            notes=PartHolder.from_file_manager(rep.notes),
             file_mappings=rep.get_file_mappings(),
-            note_model_mappings_to_read=rep.note_model_mappings
+            note_model_mappings=dict(*map(cls.map_nmm, rep.note_model_mappings))
         )
 
     def execute(self):
-        self.setup_note_model_mappings()
-        self.notes = PartHolder.from_file_manager(self.notes_to_read)
         self.verify_contents()
 
         notes: List[Note] = self.notes.part.get_sorted_notes_copy(

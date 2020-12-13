@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Union, Optional
 
 from brain_brew.configuration.build_config.build_task import BuildPartTask
@@ -24,13 +24,15 @@ class MediaGroupsToFolder(BuildPartTask):
             parts: list(str())
             folder: str()
             clear_folder: bool(required=False)
+            recursive: bool(required=False)
         '''
 
     @dataclass
     class Representation(RepresentationBase):
         parts: List[str]
         folder: str
-        clear_folder: Optional[bool]
+        clear_folder: Optional[bool] = field(default=None)
+        recursive: Optional[bool] = field(default=None)
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
@@ -38,12 +40,14 @@ class MediaGroupsToFolder(BuildPartTask):
         return cls(
             parts=list(holder.part for holder in map(PartHolder.from_file_manager, rep.parts)),
             folder=rep.folder,
-            clear_folder=rep.clear_folder or False
+            clear_folder=rep.clear_folder or False,
+            recursive=rep.recursive or False
         )
 
     parts: List[MediaGroup]
     folder: str
     clear_folder: bool
+    recursive: bool
 
     def execute(self):
-        save_media_groups_to_location(self.parts, self.folder, self.clear_folder)
+        save_media_groups_to_location(self.parts, self.folder, self.clear_folder, self.recursive)
