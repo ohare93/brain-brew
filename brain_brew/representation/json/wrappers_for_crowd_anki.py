@@ -7,6 +7,7 @@ CA_MEDIA_FILES = "media_files"
 CA_CHILDREN = "children"
 CA_TYPE = "__type__"
 CA_NAME = "name"
+CA_DESCRIPTION = "desc"
 
 NOTE_MODEL = "note_model_uuid"
 FLAGS = "flags"

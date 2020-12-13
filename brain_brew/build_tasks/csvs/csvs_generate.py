@@ -21,7 +21,7 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
         return r'generate_csv[s]?'
 
     @classmethod
-    def yamale_schema(cls) -> str:
+    def yamale_schema(cls) -> str:  # TODO: Use NotesOverride here, just as in NotesToCrowdAnki
         return f'''\
             notes: str()
             note_model_mappings: list(include('{NoteModelMapping.task_name()}'))

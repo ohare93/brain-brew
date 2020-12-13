@@ -54,6 +54,10 @@ headers_from_crowd_anki:
 headers_from_yaml_part:
     part_id: str()
     file: str()
+    override: include('headers_override', required=False)
+
+headers_override:
+    deck_description_html_file: str(required=False)
 
 media_group_from_crowd_anki:
     part_id: str()
@@ -141,7 +145,7 @@ notes_from_yaml_part:
     file: str()
 
 notes_override:
-    note_model: str()
+    note_model: str(required=False)
 
 notes_to_crowd_anki:
     part_id: str()
