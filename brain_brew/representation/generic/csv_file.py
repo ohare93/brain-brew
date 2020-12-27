@@ -28,7 +28,7 @@ class CsvFile(SourceFile):
     def read_file(self):
         self._data = []
 
-        with open(self.file_location, mode='r') as csv_file:
+        with open(self.file_location, mode='r', newline='') as csv_file:
             csv_reader = csv.DictReader(csv_file)
 
             self.column_headers = list_of_str_to_lowercase(csv_reader.fieldnames)
@@ -38,8 +38,8 @@ class CsvFile(SourceFile):
 
     def write_file(self):
         logging.info(f"Writing to Csv '{self.file_location}'")
-        with open(self.file_location, mode='w+') as csv_file:
-            csv_writer = csv.DictWriter(csv_file, fieldnames=self.column_headers)
+        with open(self.file_location, mode='w+', newline='') as csv_file:
+            csv_writer = csv.DictWriter(csv_file, fieldnames=self.column_headers, lineterminator='\n')
 
             csv_writer.writeheader()
 
