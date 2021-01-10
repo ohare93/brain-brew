@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Union, Optional, List, Set
 
 from brain_brew.build_tasks.crowd_anki.headers_to_crowd_anki import HeadersToCrowdAnki
-from brain_brew.build_tasks.crowd_anki.media_to_crowd_anki import MediaGroupToCrowdAnki
+from brain_brew.build_tasks.crowd_anki.media_group_to_crowd_anki import MediaGroupToCrowdAnki
 from brain_brew.build_tasks.crowd_anki.note_models_to_crowd_anki import NoteModelsToCrowdAnki
 from brain_brew.build_tasks.crowd_anki.notes_to_crowd_anki import NotesToCrowdAnki
 from brain_brew.configuration.build_config.build_task import TopLevelBuildTask

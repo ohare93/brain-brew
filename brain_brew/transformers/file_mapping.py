@@ -127,7 +127,7 @@ class FileMapping(FileMappingDerivative):
 
     data_set_has_changed: bool = field(init=False, default=False)
 
-    def compile_data(self):
+    def compile_data(self, generate_guids: bool):
         self.compiled_data = {}
         self.data_set_has_changed = False
 
@@ -143,8 +143,11 @@ class FileMapping(FileMappingDerivative):
         for row in data_in_progress:
             guid = row[CsvKeys.GUID.value]
             if not guid:
-                guid = row[CsvKeys.GUID.value] = generate_anki_guid()
-                guids_generated += 1
+                if generate_guids:
+                    guid = row[CsvKeys.GUID.value] = generate_anki_guid()
+                    guids_generated += 1
+                else:
+                    raise KeyError("Some rows are missing guids")
             self.compiled_data.setdefault(guid, {key.lower(): row[key] for key in row})
 
         if guids_generated > 0:
@@ -175,4 +178,5 @@ class FileMapping(FileMappingDerivative):
                      f"added {added}, while {unchanged} were identical")
 
     def write_file_on_close(self):
-        self.write_to_csv(list(self.compiled_data.values()))
+        if self.data_set_has_changed:
+            self.write_to_csv(list(self.compiled_data.values()))

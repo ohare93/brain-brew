@@ -58,7 +58,7 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
         rows_by_guid = {row["guid"]: row for row in csv_data}
 
         for fm in self.file_mappings:
-            fm.compile_data()
+            fm.compile_data(False)
             fm.set_relevant_data(rows_by_guid)
             fm.write_file_on_close()
 

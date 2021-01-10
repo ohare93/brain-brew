@@ -5,6 +5,7 @@ verify_ssl = true
 
 [dev-packages]
 pytest = "==5.4.1"
+twine = "*"
 
 [packages]
 args = "==0.1.0"
@@ -13,7 +14,6 @@ coverage = "==4.5.4"
 "ruamel.yaml" = "==0.16.10"
 yamale = "==3.0.4"
 PyYaml = "*"
-twine = "*"
 
 [requires]
 python_version = "3.7"
