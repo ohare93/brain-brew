@@ -6,6 +6,7 @@ from typing import List
 from brain_brew.representation.generic.source_file import SourceFile
 from brain_brew.utils import list_of_str_to_lowercase, sort_dict
 
+_encoding = "utf-8"
 
 class CsvKeys(Enum):
     GUID = "guid"
@@ -28,7 +29,7 @@ class CsvFile(SourceFile):
     def read_file(self):
         self._data = []
 
-        with open(self.file_location, mode='r', newline='') as csv_file:
+        with open(self.file_location, mode='r', newline='', encoding=_encoding) as csv_file:
             csv_reader = csv.DictReader(csv_file)
 
             self.column_headers = list_of_str_to_lowercase(csv_reader.fieldnames)
@@ -38,7 +39,7 @@ class CsvFile(SourceFile):
 
     def write_file(self):
         logging.info(f"Writing to Csv '{self.file_location}'")
-        with open(self.file_location, mode='w+', newline='') as csv_file:
+        with open(self.file_location, mode='w+', newline='', encoding=_encoding) as csv_file:
             csv_writer = csv.DictWriter(csv_file, fieldnames=self.column_headers, lineterminator='\n')
 
             csv_writer.writeheader()
