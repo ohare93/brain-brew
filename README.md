@@ -7,9 +7,56 @@ Brain Brew is an open-source flashcard manipulation tool designed to allow users
 The goal is to facilitate collaboration and maximize user choice, with a powerful tool that minimizes effort.
 [CrowdAnki](https://github.com/Stvad/CrowdAnki) Exports and Csv(s) are the only supported file types as of now, but there will be more to come.
 
+
+[Anki Ultimate Geography](https://github.com/axelboc/anki-ultimate-geography/) is currently the best working example of a Flashcard repo using Brain Brew :tada:
+See there for inspiration!
+
+
+# Installation
+
 :exclamation: See the [Brain Brew Starter Project](https://github.com/ohare93/brain-brew-starter) for a working clone-able Git repo.
 
-Or you can install the latest version of [Brain Brew on PyPi.org](https://pypi.org/project/Brain-Brew/).
+Install the latest version of [Brain Brew on PyPi.org](https://pypi.org/project/Brain-Brew/)
+with `pip install brain-brew`. Virtual environment using `pipenv` is recommended!
+
+
+# Usage
+
+Brain Brew runs from the command line and takes a *Recipe.yaml* file to run.
+
+```bash
+brain-brew source_to_anki.yaml
+```
+
+Full usage help text:
+```bash
+usage: brain-brew [-h] [--config CONFIG_FILE] [--verify] recipe
+
+Manage Flashcards by Transforming them to various types
+
+positional arguments:
+  recipe                Yaml file to use as the recipe
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --config CONFIG_FILE, --global-config CONFIG_FILE, -c CONFIG_FILE
+                        Global config file to use
+  --verify, -v          Only verify the recipe contents, without running it.
+```
+
+
+## Recipes
+
+These are the instructions for how Brain Brew will ~~build~~ *brew* your data into another format.
+
+What's YAML? See the current spec [here](http://www.yaml.org/spec/1.2/spec.html).
+
+Run a recipe with `--verify` or `-v` to confirm your recipe is valid, without actually running it.
+A dry run of sorts.
+
+
+
+[//]: <> (Yamale)
 
 # The Why
 
@@ -27,7 +74,7 @@ You can see any changes that occur, go back in time should an mistake be discove
 
 However the current tools for managing Anki cards in source control 
 (such as [Anki-DM](https://github.com/OnkelTem/anki-dm), [GenAnki](https://github.com/kerrickstaley/genanki), 
-and [Remote Decks](https://github.com/c-okelly/anki-remote-decks)) are only one way direction.
+and [Remote Decks](https://github.com/c-okelly/anki-remote-decks)) are only one way.
 You generate cards from a csv into a file that can *only be imported* into Anki. 
 There is no way to export them back, meaning a user must manually copy their changes over, or simple not edit their cards anywhere other than in source control.
 
@@ -165,33 +212,4 @@ When run Brain Brew will perform the following steps for each derivative:
 See the [Brain Brew Starter Project](https://github.com/ohare93/brain-brew-starter) for an example of Csv Derivatives working.
 
 
-
-# This allows for 
-* Collaboration with many people
-* Freedom of tool choice
-    * Use any currently existing Anki add-on to edit or update your cards
-* User choice of file type
-
-
-
-# Limitations
-* Note Models cannot yet be generated, and are very ugly and hard to manage
-* Deck headers are terrible, and I hope to remove them entirely as a necessary Deck Part by making a PR in CrowdAnki
-
-
-# Planned Work
-
-#### Personal Fields
-Full support for Personal Fields included in CrowdAnki. Including the ability to set a default value for new cards.
-
-#### More Source Types
-* Markdown
-* Yaml
-* Google Sheets
-
-#### Note Model Generation / Syncing
-Two way Note Model building, so that users can change the Note Model somewhere other than Anki.
-
-#### Deck Header Removal
-Deck Headers should not be necessary for an import into CrowdAnki (or Anki itself). I hope to remove the need for them entirely.
 
