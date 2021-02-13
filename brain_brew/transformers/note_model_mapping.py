@@ -92,7 +92,7 @@ class NoteModelMapping(YamlRepr):
             # Check for Required Fields
             missing = []
             for req in self.required_fields_definitions:
-                if req not in [field.value for field in self.columns]:
+                if req not in [field.field_name for field in self.columns]:
                     missing.append(req)
 
             if missing:
