@@ -1,7 +1,8 @@
 list(
   map(include('build_parts'), key=regex('build_part[s]?', ignore_case=True)),
   map(any(include('generate_crowd_anki'), list(include('generate_crowd_anki'))), key=regex('generate_crowd_anki', ignore_case=True)),
-  map(any(include('generate_csvs'), list(include('generate_csvs'))), key=regex('generate_csv[s]?', ignore_case=True))
+  map(any(include('generate_csvs'), list(include('generate_csvs'))), key=regex('generate_csv[s]?', ignore_case=True)),
+  map(any(include('generate_guids_in_csvs'), list(include('generate_guids_in_csvs'))), key=regex('generate_guids_in_csv[s]?', ignore_case=True))
 )
 
 
@@ -35,6 +36,10 @@ generate_csvs:
     notes: str()
     note_model_mappings: list(include('note_model_mapping'))
     file_mappings: list(include('file_mapping'))
+
+generate_guids_in_csvs:
+    source: any(str(), list(str()))
+    columns: any(str(), list(str()))
 
 
 ---
@@ -139,7 +144,6 @@ notes_from_csvs:
     save_to_file: str(required=False)
     note_model_mappings: list(include('note_model_mapping'))
     file_mappings: list(include('file_mapping'))
-    generate_guids: bool(required=False)
 
 notes_from_yaml_part:
     part_id: str()

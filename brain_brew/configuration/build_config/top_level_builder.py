@@ -3,6 +3,7 @@ from typing import Dict, Type, List, Set
 
 from brain_brew.build_tasks.crowd_anki.crowd_anki_generate import CrowdAnkiGenerate
 from brain_brew.build_tasks.csvs.csvs_generate import CsvsGenerate
+from brain_brew.build_tasks.csvs.generate_guids_in_csvs import GenerateGuidsInCsvs
 from brain_brew.configuration.build_config.build_task import BuildTask, TopLevelBuildTask
 from brain_brew.configuration.build_config.parts_builder import PartsBuilder
 from brain_brew.configuration.build_config.recipe_builder import RecipeBuilder
@@ -77,4 +78,4 @@ class TopLevelBuilder(YamlRepr, RecipeBuilder):
 
     @classmethod
     def yamale_dependencies(cls) -> Set[Type[TopLevelBuildTask]]:
-        return {CrowdAnkiGenerate, CsvsGenerate, PartsBuilder}
+        return {CrowdAnkiGenerate, CsvsGenerate, PartsBuilder, GenerateGuidsInCsvs}
