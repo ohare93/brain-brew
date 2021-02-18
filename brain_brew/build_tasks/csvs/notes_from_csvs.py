@@ -27,7 +27,6 @@ class NotesFromCsvs(SharedBaseCsvs, BuildPartTask):
             save_to_file: str(required=False)
             note_model_mappings: list(include('{NoteModelMapping.task_name()}'))
             file_mappings: list(include('{FileMapping.task_name()}'))
-            generate_guids: bool(required=False)
         '''
 
     @classmethod
@@ -38,7 +37,6 @@ class NotesFromCsvs(SharedBaseCsvs, BuildPartTask):
     class Representation(SharedBaseCsvs.Representation):
         part_id: str
         save_to_file: Optional[str] = field(default=None)
-        generate_guids: Optional[bool] = field(default=False)
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
@@ -47,20 +45,18 @@ class NotesFromCsvs(SharedBaseCsvs, BuildPartTask):
             part_id=rep.part_id,
             save_to_file=rep.save_to_file,
             file_mappings=rep.get_file_mappings(),
-            note_model_mappings=dict(*map(cls.map_nmm, rep.note_model_mappings)),
-            generate_guids=rep.generate_guids
+            note_model_mappings=dict(*map(cls.map_nmm, rep.note_model_mappings))
         )
 
     part_id: str
     save_to_file: Optional[str]
-    generate_guids: bool
 
     def execute(self):
         self.verify_contents()
 
         csv_data_by_guid: Dict[str, dict] = {}
         for csv_map in self.file_mappings:
-            csv_map.compile_data(self.generate_guids)
+            csv_map.compile_data()
             csv_data_by_guid = {**csv_data_by_guid, **csv_map.compiled_data}
             csv_map.write_file_on_close()
         csv_rows: List[dict] = list(csv_data_by_guid.values())
