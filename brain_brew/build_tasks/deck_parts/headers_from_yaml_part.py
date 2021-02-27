@@ -1,9 +1,8 @@
 from dataclasses import dataclass
 from typing import Union
 
-from brain_brew.build_tasks.deck_parts.from_yaml_part import FromYamlPartBase
 from brain_brew.build_tasks.overrides.headers_override import HeadersOverride
-from brain_brew.configuration.build_config.build_task import BuildPartTask
+from brain_brew.commands.run_recipe.build_task import BuildPartTask
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.representation.yaml.headers import Headers

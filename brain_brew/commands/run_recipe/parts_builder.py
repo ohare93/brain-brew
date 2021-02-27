@@ -13,8 +13,8 @@ from brain_brew.build_tasks.deck_parts.media_group_from_folder import MediaGroup
 from brain_brew.build_tasks.deck_parts.media_group_to_folder import MediaGroupsToFolder
 from brain_brew.build_tasks.deck_parts.note_model_from_html_parts import NoteModelFromHTMLParts
 from brain_brew.build_tasks.deck_parts.note_model_template_from_html_files import TemplateFromHTML
-from brain_brew.configuration.build_config.build_task import BuildTask, BuildPartTask, TopLevelBuildTask
-from brain_brew.configuration.build_config.recipe_builder import RecipeBuilder
+from brain_brew.commands.run_recipe.build_task import BuildTask, BuildPartTask, TopLevelBuildTask
+from brain_brew.commands.run_recipe.recipe_builder import RecipeBuilder
 
 
 @dataclass

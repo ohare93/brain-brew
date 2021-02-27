@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from typing import List, Union
 
-from brain_brew.configuration.build_config.build_task import TopLevelBuildTask
+from brain_brew.commands.run_recipe.build_task import TopLevelBuildTask
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.representation.generic.csv_file import CsvFile
 from brain_brew.utils import single_item_to_list, generate_anki_guid

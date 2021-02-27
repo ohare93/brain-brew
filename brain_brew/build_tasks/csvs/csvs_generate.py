@@ -1,8 +1,8 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Dict, Union
 
 from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
-from brain_brew.configuration.build_config.build_task import TopLevelBuildTask
+from brain_brew.commands.run_recipe.build_task import TopLevelBuildTask
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.representation.yaml.notes import Notes, Note
 from brain_brew.transformers.file_mapping import FileMapping

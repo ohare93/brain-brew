@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from textwrap import indent
 from typing import Dict, List, Type, Set
 
-from brain_brew.configuration.build_config.build_task import BuildTask
+from brain_brew.commands.run_recipe.build_task import BuildTask
 from brain_brew.representation.yaml.yaml_object import YamlObject
 
 

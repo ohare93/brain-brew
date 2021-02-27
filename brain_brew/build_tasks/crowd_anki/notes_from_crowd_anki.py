@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Union, Optional, List
 
 from brain_brew.build_tasks.crowd_anki.shared_base_notes import SharedBaseNotes
-from brain_brew.configuration.build_config.build_task import BuildPartTask
+from brain_brew.commands.run_recipe.build_task import BuildPartTask
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport

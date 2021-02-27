@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Union, Optional
 
 from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
-from brain_brew.configuration.build_config.build_task import BuildPartTask
+from brain_brew.commands.run_recipe.build_task import BuildPartTask
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.representation.yaml.notes import Note, Notes
 from brain_brew.transformers.file_mapping import FileMapping
