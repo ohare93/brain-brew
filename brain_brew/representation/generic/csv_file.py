@@ -77,5 +77,5 @@ class CsvFile(SourceFile):
     def formatted_file_location(cls, location):
         return cls.to_filename_csv(location)
 
-    def sort_data(self, sort_by_keys, reverse_sort):
-        self._data = sort_dict(self._data, sort_by_keys, reverse_sort)
+    def sort_data(self, sort_by_keys, reverse_sort, case_insensitive_sort):
+        self._data = sort_dict(self._data, sort_by_keys, reverse_sort, case_insensitive_sort)

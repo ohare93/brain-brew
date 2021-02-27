@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Union
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
-from brain_brew.utils import single_item_to_list, generate_anki_guid
+from brain_brew.utils import single_item_to_list
 
 FILE = "csv_file"
 NOTE_MODEL = "note_model"
@@ -27,6 +27,7 @@ class FileMappingDerivative(YamlRepr):
             note_model: str(required=False)
             sort_by_columns: list(str(), required=False)
             reverse_sort: bool(required=False)
+            case_insensitive_sort: bool(required=False)
             derivatives: list(include('{cls.task_name()}'), required=False)
         '''
 
@@ -38,11 +39,12 @@ class FileMappingDerivative(YamlRepr):
         reverse_sort: Optional[bool]
         derivatives: Optional[List['FileMappingDerivative.Representation']]
 
-        def __init__(self, file, note_model=None, sort_by_columns=None, reverse_sort=None, derivatives=None):
+        def __init__(self, file, note_model=None, sort_by_columns=None, reverse_sort=None, case_insensitive_sort=None, derivatives=None):
             self.file = file
             self.note_model = note_model
             self.sort_by_columns = sort_by_columns
             self.reverse_sort = reverse_sort
+            self.case_insensitive_sort = case_insensitive_sort
             self.derivatives = list(map(FileMappingDerivative.Representation.from_dict, derivatives)) \
                 if derivatives is not None else []
 
@@ -51,8 +53,9 @@ class FileMappingDerivative(YamlRepr):
     csv_file: CsvFile
 
     note_model: Optional[str]
-    sort_by_columns: Optional[list]
-    reverse_sort: Optional[bool]
+    sort_by_columns: list
+    reverse_sort: bool
+    case_insensitive_sort: bool
     derivatives: Optional[List['FileMappingDerivative']]
 
     @classmethod
@@ -63,6 +66,7 @@ class FileMappingDerivative(YamlRepr):
             note_model=rep.note_model.strip() if rep.note_model else None,
             sort_by_columns=single_item_to_list(rep.sort_by_columns),
             reverse_sort=rep.reverse_sort or False,
+            case_insensitive_sort=rep.case_insensitive_sort or True,
             derivatives=list(map(cls.from_repr, rep.derivatives)) if rep.derivatives is not None else []
         )
 
@@ -114,7 +118,7 @@ class FileMappingDerivative(YamlRepr):
 
     def write_to_csv(self, data_to_set):
         self.csv_file.set_data_from_superset(data_to_set)
-        self.csv_file.sort_data(self.sort_by_columns, self.reverse_sort)
+        self.csv_file.sort_data(self.sort_by_columns, self.reverse_sort, self.case_insensitive_sort)
         self.csv_file.write_file()
 
         for der in self.derivatives:

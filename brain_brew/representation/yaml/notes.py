@@ -3,7 +3,6 @@ from abc import ABCMeta
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Set
 
-from brain_brew.configuration.global_config import GlobalConfig
 from brain_brew.interfaces.media_container import MediaContainer
 from brain_brew.representation.yaml.yaml_object import YamlObject
 from brain_brew.utils import find_media_in_field
@@ -105,10 +104,7 @@ class NoteGrouping(GroupableNoteData):
             all_media = all_media.union(media)
         return all_media
 
-    def get_sorted_notes(self, sort_by_keys, reverse_sort, case_insensitive_sort=None):
-        if case_insensitive_sort is None:
-            case_insensitive_sort = GlobalConfig.get_instance().sort_case_insensitive
-
+    def get_sorted_notes(self, sort_by_keys, reverse_sort, case_insensitive_sort):
         if sort_by_keys:
             def sort_method(i: Note):
                 def get_sort_tuple(attr_or_field):
@@ -132,7 +128,7 @@ class NoteGrouping(GroupableNoteData):
 
         return self.notes
     
-    def get_all_notes_copy(self, sort_by_keys, reverse_sort, case_insensitive_sort=None) -> List[Note]:
+    def get_all_notes_copy(self, sort_by_keys, reverse_sort, case_insensitive_sort) -> List[Note]:
         def join_tags(n_tags):
             if self.tags is None and n_tags is None:
                 return []
@@ -183,6 +179,6 @@ class Notes(YamlObject, MediaContainer):
             all_media = all_media.union(media)
         return all_media
 
-    def get_sorted_notes_copy(self, sort_by_keys, reverse_sort, case_insensitive_sort=None):
+    def get_sorted_notes_copy(self, sort_by_keys, reverse_sort, case_insensitive_sort):
         return [note for group in self.note_groupings
                 for note in group.get_all_notes_copy(sort_by_keys, reverse_sort, case_insensitive_sort)]

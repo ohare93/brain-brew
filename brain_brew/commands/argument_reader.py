@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import Tuple
 
 import sys
 from argparse import ArgumentParser
@@ -38,14 +37,6 @@ class BBArgumentReader(ArgumentParser):
             help="Yaml file to use as the recipe"
         )
         parser_run.add_argument(
-            "--config", "--global-config", "-c",
-            action="store",
-            dest="config_file",
-            default=None,
-            type=str,
-            help="Global config file to use"
-        )
-        parser_run.add_argument(
             "--verify", "-v",
             action="store_true",
             dest="verify_only",
@@ -72,12 +63,10 @@ class BBArgumentReader(ArgumentParser):
             recipe = self.error_if_blank(parsed_args.recipe)
 
             # Optional
-            config_file = parsed_args.config_file
             verify_only = parsed_args.verify_only
 
             return RunRecipe(
                 recipe_file_name=recipe,
-                global_config_file=config_file,
                 verify_only=verify_only
             )
 

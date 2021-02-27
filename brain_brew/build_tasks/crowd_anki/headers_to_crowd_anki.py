@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Union
 
 from brain_brew.build_tasks.crowd_anki.headers_from_crowdanki import headers_default_values

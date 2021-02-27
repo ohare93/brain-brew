@@ -60,4 +60,4 @@ class CrowdAnkiExport(SourceFile):
             self.note_models = list(map(NoteModel.from_crowdanki, self.json_data.note_models))
         else:
             self.write_to_files({})
-            self.json_data = {}
+            self.json_data = CrowdAnkiJsonWrapper({})

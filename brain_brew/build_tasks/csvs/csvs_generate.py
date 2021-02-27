@@ -51,7 +51,10 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
         self.verify_contents()
 
         notes: List[Note] = self.notes.part.get_sorted_notes_copy(
-            sort_by_keys=[], reverse_sort=False, case_insensitive_sort=False)
+            sort_by_keys=[],
+            reverse_sort=False,
+            case_insensitive_sort=True
+        )
         self.verify_notes_match_note_model_mappings(notes)
 
         csv_data: List[dict] = [self.note_to_csv_row(note, self.note_model_mappings) for note in notes]

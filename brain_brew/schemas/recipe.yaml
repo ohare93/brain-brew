@@ -49,6 +49,7 @@ file_mapping:
     note_model: str(required=False)
     sort_by_columns: list(str(), required=False)
     reverse_sort: bool(required=False)
+    case_insensitive_sort: bool(required=False)
     derivatives: list(include('file_mapping'), required=False)
 
 headers_from_crowd_anki:
@@ -158,6 +159,7 @@ notes_to_crowd_anki:
     reverse_sort: bool(required=False)
     additional_items_to_add: map(str(), key=str(), required=False)
     override: include('notes_override', required=False)
+    case_insensitive_sort: bool(required=False)
 
 save_media_groups_to_folder:
     parts: list(str())

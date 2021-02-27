@@ -3,7 +3,7 @@ from typing import Optional, Union
 
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
-from brain_brew.representation.yaml.notes import Notes, Note
+from brain_brew.representation.yaml.notes import Note
 
 
 @dataclass

@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Dict
 
 from brain_brew.configuration.representation_base import RepresentationBase
