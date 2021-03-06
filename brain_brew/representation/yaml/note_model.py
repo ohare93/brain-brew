@@ -107,7 +107,7 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
             name=rep.name, latex_pre=rep.latex_pre, latex_post=rep.latex_post,
             required_fields_per_template=rep.required_fields_per_template,
             tags=rep.tags, sort_field_num=rep.sort_field_num, version=rep.version,
-            id=rep.crowdanki_type, crowdanki_type=rep.crowdanki_type
+            id=rep.id, crowdanki_type=rep.crowdanki_type
         )
 
     @dataclass
