@@ -31,6 +31,10 @@ def filename_from_full_path(full_path):
     return re.findall(r'[^\\/:*?"<>|\r\n]+$', full_path)[0]
 
 
+def split_by_regex(str_to_split: str, pattern: str) -> List[str]:
+    return re.split(pattern, str_to_split)
+
+
 def find_media_in_field(field_value: str) -> List[str]:
     if not field_value:
         return []

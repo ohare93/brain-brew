@@ -8,3 +8,8 @@ class InitRepo(Command):
 
     def execute(self):
         pass
+
+        # Clone a setup repo structure
+        #   Use UG setup
+
+        # Populate the Recipe file with the

@@ -6,13 +6,12 @@ from brain_brew.build_tasks.crowd_anki.media_group_from_crowd_anki import MediaG
 from brain_brew.build_tasks.crowd_anki.note_models_from_crowd_anki import NoteModelsFromCrowdAnki
 from brain_brew.build_tasks.crowd_anki.notes_from_crowd_anki import NotesFromCrowdAnki
 from brain_brew.build_tasks.csvs.notes_from_csvs import NotesFromCsvs
-from brain_brew.build_tasks.deck_parts.from_yaml_part import NotesFromYamlPart, NoteModelsFromYamlPart, \
-    MediaGroupFromYamlPart
+from brain_brew.build_tasks.deck_parts.from_yaml_part import NotesFromYamlPart, MediaGroupFromYamlPart
+from brain_brew.build_tasks.deck_parts.note_model_from_yaml_part import NoteModelsFromYamlPart
 from brain_brew.build_tasks.deck_parts.headers_from_yaml_part import HeadersFromYamlPart
 from brain_brew.build_tasks.deck_parts.media_group_from_folder import MediaGroupFromFolder
 from brain_brew.build_tasks.deck_parts.media_group_to_folder import MediaGroupsToFolder
 from brain_brew.build_tasks.deck_parts.note_model_from_html_parts import NoteModelFromHTMLParts
-from brain_brew.build_tasks.deck_parts.note_model_template_from_html_files import TemplateFromHTML
 from brain_brew.commands.run_recipe.build_task import BuildTask, BuildPartTask, TopLevelBuildTask
 from brain_brew.commands.run_recipe.recipe_builder import RecipeBuilder
 
@@ -56,6 +55,6 @@ class PartsBuilder(RecipeBuilder, TopLevelBuildTask):
             NotesFromCsvs,
             NotesFromYamlPart, HeadersFromYamlPart, NoteModelsFromYamlPart, MediaGroupFromYamlPart,
             MediaGroupFromFolder, MediaGroupsToFolder,
-            NoteModelFromHTMLParts, TemplateFromHTML,
+            NoteModelFromHTMLParts, NoteModelsFromYamlPart,
             HeadersFromCrowdAnki, MediaGroupFromCrowdAnki, NoteModelsFromCrowdAnki, NotesFromCrowdAnki
         }

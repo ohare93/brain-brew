@@ -5,6 +5,8 @@ from typing import List, Union, Dict, Set
 from brain_brew.configuration.anki_field import AnkiField
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.interfaces.media_container import MediaContainer
+from brain_brew.interfaces.yamale_verifyable import YamlRepr
+from brain_brew.representation.generic.html_file import HTMLFile
 from brain_brew.representation.yaml.note_model_field import Field
 from brain_brew.representation.yaml.note_model_template import Template
 from brain_brew.representation.yaml.yaml_object import YamlObject
@@ -25,7 +27,7 @@ LATEX_PRE = AnkiField("latexPre", "latex_pre",
                                     "amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{"
                                     "document}\n")
 LATEX_POST = AnkiField("latexPost", "latex_post", default_value="\\end{document}")
-REQUIRED_FIELDS_PER_TEMPLATE = AnkiField("req", "required_fields_per_template")
+REQUIRED_FIELDS_PER_TEMPLATE = AnkiField("req", "required_fields_per_template", default_value=[])
 FIELDS = AnkiField("flds", "fields")
 TEMPLATES = AnkiField("tmpls", "templates")
 TAGS = AnkiField("tags", default_value=[])
@@ -49,7 +51,65 @@ DECK_OVERRIDE_ID = AnkiField("did", "deck_override_id", default_value=None)
 
 
 @dataclass
-class NoteModel(YamlObject, MediaContainer, RepresentationBase):
+class NoteModel(YamlObject, YamlRepr, MediaContainer):
+    @classmethod
+    def task_name(cls) -> str:
+        return r"note_model_from_yaml_repr_inner"
+
+    @classmethod
+    def yamale_schema(cls) -> str:
+        return f"""\
+            {NAME.name}: str()
+            {CROWDANKI_ID.name}: str()
+            css_file: str()
+            {FIELDS.name}: include({Field.task_name()}, required=False)
+            {TEMPLATES.name}: include({Template.task_name()}, required=False)
+            {REQUIRED_FIELDS_PER_TEMPLATE.name}: list(required=False)
+            {LATEX_POST.name}: str(required=False)
+            {LATEX_PRE.name}: str(required=False)
+            {SORT_FIELD_NUM.name}: int(required=False)
+            {IS_CLOZE.name}: bool(required=False)
+            {CROWDANKI_TYPE.name}: str(required=False)
+            {TAGS.name}: str(required=False)
+            {VERSION.name}: list(required=False)
+        """
+
+    @classmethod
+    def yamale_dependencies(cls) -> set:
+        return {Field, Template}
+
+    @dataclass
+    class Representation(RepresentationBase):
+        name: str
+        id: str
+        css_file: str
+        fields: List[dict]
+        templates: List[dict]
+
+        required_fields_per_template: List[list] = field(default_factory=lambda: [])
+        latex_post: str = field(default=LATEX_POST.default_value)
+        latex_pre: str = field(default=LATEX_PRE.default_value)
+        sort_field_num: int = field(default=SORT_FIELD_NUM.default_value)
+        is_cloze: bool = field(default=IS_CLOZE.default_value)
+        crowdanki_type: str = field(default=CROWDANKI_TYPE.default_value)  # Should always be "NoteModel"
+        tags: List[str] = field(default_factory=lambda: TAGS.default_value)  # Tags of the last added note
+        version: list = field(default_factory=lambda: VERSION.default_value)  # Legacy version number. Deprecated in Anki
+
+    @classmethod
+    def from_repr(cls, data: Union[Representation, dict]):
+        rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
+        return cls(
+            fields=[Field.from_repr(f) for f in rep.fields],
+            templates=[Template.from_html_files(t) for t in rep.templates],
+            css=HTMLFile.create_or_get(rep.css_file).get_data(deep_copy=False),
+
+            is_cloze=bool(rep.is_cloze),
+            name=rep.name, latex_pre=rep.latex_pre, latex_post=rep.latex_post,
+            required_fields_per_template=rep.required_fields_per_template,
+            tags=rep.tags, sort_field_num=rep.sort_field_num, version=rep.version,
+            id=rep.crowdanki_type, crowdanki_type=rep.crowdanki_type
+        )
+
     @dataclass
     class CrowdAnki(RepresentationBase):
         name: str
@@ -69,10 +129,10 @@ class NoteModel(YamlObject, MediaContainer, RepresentationBase):
     name: str
     id: str
     css: str
-    required_fields_per_template: List[list]
     fields: List[Field]
     templates: List[Template]
 
+    required_fields_per_template: List[list] = field(default_factory=lambda: REQUIRED_FIELDS_PER_TEMPLATE.default_value)
     latex_post: str = field(default=LATEX_POST.default_value)
     latex_pre: str = field(default=LATEX_PRE.default_value)
     sort_field_num: int = field(default=SORT_FIELD_NUM.default_value)
@@ -84,11 +144,7 @@ class NoteModel(YamlObject, MediaContainer, RepresentationBase):
     @classmethod
     def from_yaml_file(cls, filename: str):
         data = cls.read_to_dict(filename)
-        return cls(
-            fields=[Field.from_dict(f) for f in data.pop(FIELDS.name)],
-            templates=[Template.from_dict(t) for t in data.pop(TEMPLATES.name)],
-            **data
-        )
+        return cls.from_repr(data)
 
     @classmethod
     def from_crowdanki(cls, data: Union[CrowdAnki, dict]):  # TODO: field_whitelist, note_model_whitelist

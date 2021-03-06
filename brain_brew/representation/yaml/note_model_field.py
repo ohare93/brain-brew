@@ -32,7 +32,7 @@ class Field(RepresentationBase, YamlRepr):
 
     @classmethod
     def from_repr(cls, data: dict):
-        pass
+        return cls.from_dict(data)
 
     @dataclass
     class CrowdAnki(RepresentationBase):
