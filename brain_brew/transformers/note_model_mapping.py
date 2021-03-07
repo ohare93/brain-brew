@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Union, Dict
 
@@ -45,14 +45,14 @@ class NoteModelMapping(YamlRepr):
         return f'''\
             note_models: any(list(str()), str())
             columns_to_fields: map(str(), key=str())
-            personal_fields: list(str())
+            personal_fields: list(str(), required=False)
         '''
 
     @dataclass
     class Representation(RepresentationBase):
         note_models: Union[str, list]
         columns_to_fields: Dict[str, str]
-        personal_fields: List[str]
+        personal_fields: List[str] = field(default_factory=lambda: [])
 
     note_models: Dict[str, PartHolder[NoteModel]]
     columns: List[FieldMapping]
