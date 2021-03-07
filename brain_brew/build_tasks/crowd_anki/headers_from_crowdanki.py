@@ -59,7 +59,7 @@ class HeadersFromCrowdAnki(BuildPartTask):
 
         headers = Headers(self.crowd_anki_to_headers(ca_wrapper.data))
 
-        PartHolder.override_or_create(self.part_id, self.save_to_file, headers)
+        return PartHolder.override_or_create(self.part_id, self.save_to_file, headers)
 
     @staticmethod
     def crowd_anki_to_headers(ca_data: dict):

@@ -10,14 +10,10 @@ from brain_brew.representation.yaml.note_model import NoteModel
 
 
 @dataclass
-class NoteModelsFromCrowdAnki(BuildPartTask):
+class NoteModelSingleFromCrowdAnki(BuildPartTask):
     @classmethod
     def task_name(cls) -> str:
-        return r'note_models_from_crowd_anki'
-
-    @classmethod
-    def task_regex(cls) -> str:
-        return r'note_model[s]?_from_crowd_anki'
+        return r'note_model_from_crowd_anki'
 
     @classmethod
     def yamale_schema(cls) -> str:
@@ -61,4 +57,4 @@ class NoteModelsFromCrowdAnki(BuildPartTask):
             raise ReferenceError(f"Missing Note Model '{self.model_name}' in CrowdAnki file")
 
         part = NoteModel.from_crowdanki(note_models_dict[self.model_name])
-        PartHolder.override_or_create(self.part_id, self.save_to_file, part)
+        return PartHolder.override_or_create(self.part_id, self.save_to_file, part)

@@ -6,7 +6,7 @@ from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.generic.media_file import MediaFile
 from brain_brew.representation.yaml.media_group import MediaGroup
-from brain_brew.transformers.media_group_save_to_location import save_media_groups_to_location
+from brain_brew.transformers.save_media_group_to_location import save_media_groups_to_location
 
 
 @dataclass

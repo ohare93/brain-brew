@@ -15,13 +15,15 @@ build_parts:
       map(any(include('media_group_from_crowd_anki'), list(include('media_group_from_crowd_anki'))), key=regex('media_group_from_crowd_anki', ignore_case=True)),
       map(any(include('media_group_from_folder'), list(include('media_group_from_folder'))), key=regex('media_group_from_folder', ignore_case=True)),
       map(any(include('media_group_from_yaml_part'), list(include('media_group_from_yaml_part'))), key=regex('media_group_from_yaml_part', ignore_case=True)),
+      map(any(include('note_model_from_crowd_anki'), list(include('note_model_from_crowd_anki'))), key=regex('note_model_from_crowd_anki', ignore_case=True)),
       map(any(include('note_model_from_html_parts'), list(include('note_model_from_html_parts'))), key=regex('note_model_from_html_parts', ignore_case=True)),
-      map(any(include('note_models_from_crowd_anki'), list(include('note_models_from_crowd_anki'))), key=regex('note_model[s]?_from_crowd_anki', ignore_case=True)),
+      map(any(include('note_models_all_from_crowd_anki'), list(include('note_models_all_from_crowd_anki'))), key=regex('note_models_all_from_crowd_anki', ignore_case=True)),
       map(any(include('note_models_from_yaml_part'), list(include('note_models_from_yaml_part'))), key=regex('note_model[s]?_from_yaml_part', ignore_case=True)),
       map(any(include('notes_from_crowd_anki'), list(include('notes_from_crowd_anki'))), key=regex('notes_from_crowd_anki', ignore_case=True)),
       map(any(include('notes_from_csvs'), list(include('notes_from_csvs'))), key=regex('notes_from_csv[s]?', ignore_case=True)),
       map(any(include('notes_from_yaml_part'), list(include('notes_from_yaml_part'))), key=regex('notes_from_yaml_part', ignore_case=True)),
-      map(any(include('save_media_groups_to_folder'), list(include('save_media_groups_to_folder'))), key=regex('save_media_group[s]?_to_folder', ignore_case=True))
+      map(any(include('save_media_groups_to_folder'), list(include('save_media_groups_to_folder'))), key=regex('save_media_group[s]?_to_folder', ignore_case=True)),
+      map(any(include('save_note_models_to_folder'), list(include('save_note_models_to_folder'))), key=regex('save_note_models[s]?_to_folder', ignore_case=True))
     )
 
 generate_crowd_anki:
@@ -94,6 +96,12 @@ note_model_field:
     is_sticky: bool(required=False)
     is_right_to_left: bool(required=False)
 
+note_model_from_crowd_anki:
+    source: str()
+    part_id: str()
+    model_name: str(required=False)
+    save_to_file: str(required=False)
+
 note_model_from_html_parts:
     part_id: str()
     model_id: str()
@@ -108,11 +116,8 @@ note_model_mapping:
     columns_to_fields: map(str(), key=str())
     personal_fields: list(str(), required=False)
 
-note_models_from_crowd_anki:
+note_models_all_from_crowd_anki:
     source: str()
-    part_id: str()
-    model_name: str(required=False)
-    save_to_file: str(required=False)
 
 note_models_from_yaml_part:
     part_id: str()
@@ -157,3 +162,8 @@ save_media_groups_to_folder:
     folder: str()
     clear_folder: bool(required=False)
     recursive: bool(required=False)
+
+save_note_models_to_folder:
+    parts: list(str())
+    folder: str()
+    clear_existing: bool(required=False)

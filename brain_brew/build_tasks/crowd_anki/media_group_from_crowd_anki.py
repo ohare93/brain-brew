@@ -5,7 +5,7 @@ from brain_brew.build_tasks.deck_parts.media_group_from_folder import MediaGroup
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
 from brain_brew.representation.yaml.media_group import MediaGroup
-from brain_brew.transformers.media_group_from_location import create_media_group_from_location
+from brain_brew.transformers.create_media_group_from_location import create_media_group_from_location
 
 
 @dataclass
