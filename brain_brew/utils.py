@@ -2,6 +2,7 @@ import logging
 import os
 import random
 import re
+import shutil
 import string
 from pathlib import Path
 from typing import List
@@ -60,6 +61,18 @@ def create_path_if_not_exists(path):
     if not Path(dir_name).is_dir():
         logging.warning(f"Creating missing filepath '{dir_name}'")
         os.makedirs(dir_name, exist_ok=True)
+
+
+def clear_contents_of_folder(path):
+    for filename in os.listdir(path):
+        file_path = os.path.join(path, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
 
 
 def split_tags(tags_value: str) -> list:

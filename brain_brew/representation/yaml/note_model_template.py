@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 from typing import Optional, Union, Set
 
@@ -112,16 +113,16 @@ class Template(RepresentationBase, YamlObject, YamlRepr):
             question_format_in_browser=ca.bqfmt, answer_format_in_browser=ca.bafmt, deck_override_id=ca.did
         )
 
-    def encode_as_part(self):
-        if not self.html_file:
-            raise FileNotFoundError(f"No HTML file exists for the Template {self.name}")
+    def encode_as_part(self, folder: str):
+        file = os.path.join(folder, f"{self.name}.html")
+        b_file = os.path.join(folder, f"{self.name}_browser.html")
 
         data_dict = {
             NAME.name: self.name,
-            HTML_FILE.name: self.html_file
+            HTML_FILE.name: file
         }
 
-        BROWSER_HTML_FILE.append_name_if_differs(data_dict, self.browser_html_file)
+        BROWSER_HTML_FILE.append_name_if_differs(data_dict, b_file)
         DECK_OVERRIDE_ID.append_name_if_differs(data_dict, self.deck_override_id)
 
         return data_dict

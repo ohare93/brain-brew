@@ -31,7 +31,6 @@ class SaveNoteModelsToFolder(BuildPartTask):
         parts: List[str]
         folder: str
         clear_existing: Optional[bool] = field(default=None)
-        recursive: Optional[bool] = field(default=None)
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):

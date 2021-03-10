@@ -50,6 +50,9 @@ BROWSER_QUESTION_FORMAT = AnkiField("bqfmt", "browser_question_format", default_
 DECK_OVERRIDE_ID = AnkiField("did", "deck_override_id", default_value=None)
 
 
+CSS_FILE = AnkiField("css_file")
+
+
 @dataclass
 class NoteModel(YamlObject, YamlRepr, MediaContainer):
     @classmethod
@@ -61,7 +64,7 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
         return f"""\
             {NAME.name}: str()
             {CROWDANKI_ID.name}: str()
-            css_file: str()
+            {CSS_FILE.name}: str()
             {FIELDS.name}: include({Field.task_name()}, required=False)
             {TEMPLATES.name}: include({Template.task_name()}, required=False)
             {REQUIRED_FIELDS_PER_TEMPLATE.name}: list(required=False)
@@ -177,6 +180,29 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
         data_dict.setdefault(TEMPLATES.anki_name, [t.encode_as_crowdanki(num) for num, t in enumerate(self.templates)])
 
         return OrderedDict(sorted(data_dict.items()))
+
+    def encode_as_part_with_file_references(self, folder: str) -> dict:
+        data_dict: Dict[str, Union[str, list]] = {
+            NAME.name: self.name,
+            CROWDANKI_ID.name: self.id,
+            CSS_FILE.name: f"{folder}/style.css"
+        }
+
+        SORT_FIELD_NUM.append_name_if_differs(data_dict, self.sort_field_num)
+        IS_CLOZE.append_name_if_differs(data_dict, self.is_cloze)
+        LATEX_PRE.append_name_if_differs(data_dict, self.latex_pre)
+        LATEX_POST.append_name_if_differs(data_dict, self.latex_post)
+
+        data_dict.setdefault(FIELDS.name, [f.encode_as_part() for f in self.fields])
+        data_dict.setdefault(TEMPLATES.name, [t.encode_as_part() for t in self.templates])
+
+        # Useless
+        TAGS.append_name_if_differs(data_dict, self.tags)
+        VERSION.append_name_if_differs(data_dict, self.version)
+        CROWDANKI_TYPE.append_name_if_differs(data_dict, self.crowdanki_type)
+        data_dict.setdefault(REQUIRED_FIELDS_PER_TEMPLATE.name, self.required_fields_per_template)
+
+        return data_dict
 
     def encode(self) -> dict:
         data_dict: Dict[str, Union[str, list]] = {

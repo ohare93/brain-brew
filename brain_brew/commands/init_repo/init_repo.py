@@ -33,7 +33,7 @@ class InitRepo(Command):
         headers.dump_to_yaml(LOC_HEADERS + "header1.yaml")
 
         note_models = note_models_all_from_crowdanki.execute()
-        save_note_models_to_folder = SaveNoteModelsToFolder(note_models, LOC_NOTE_MODELS, True)
+        save_note_models_to_folder = SaveNoteModelsToFolder([m.part for m in note_models], LOC_NOTE_MODELS, True)
         save_note_models_to_folder.execute()
 
 

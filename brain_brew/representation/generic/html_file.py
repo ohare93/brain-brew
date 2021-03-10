@@ -26,7 +26,7 @@ class HTMLFile(SourceFile):
 
     @staticmethod
     def to_filename_html(filename: str) -> str:
-        return filename + ".csv" if not filename.endswith(".csv") else filename
+        return filename + ".html" if not filename.endswith(".html") else filename
 
     @classmethod
     def formatted_file_location(cls, location):
