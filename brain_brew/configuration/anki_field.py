@@ -11,3 +11,6 @@ class AnkiField:
     def append_name_if_differs(self, dict_to_add_to: dict, value):
         if value != self.default_value:
             dict_to_add_to.setdefault(self.name, value)
+
+    def does_differ(self, value):
+        return value != self.default_value

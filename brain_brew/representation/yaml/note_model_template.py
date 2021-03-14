@@ -88,7 +88,7 @@ class Template(RepresentationBase, YamlObject, YamlRepr):
             split = split_by_regex(the_data, html_separator_regex)
             if len(split) != 2:
                 raise ValueError(f"Cannot find" if len(split) < 2 else "More than one"
-                                 f" separator '---' in html file '{file.file_location}'")
+                                                                       f" separator '---' in html file '{file.file_location}'")
             return split[0], split[1]
 
         front, back = split_template(main_data, html_file)
@@ -113,16 +113,15 @@ class Template(RepresentationBase, YamlObject, YamlRepr):
             question_format_in_browser=ca.bqfmt, answer_format_in_browser=ca.bafmt, deck_override_id=ca.did
         )
 
-    def encode_as_part(self, folder: str):
-        file = os.path.join(folder, f"{self.name}.html")
-        b_file = os.path.join(folder, f"{self.name}_browser.html")
-
+    def encode_as_part(self):
         data_dict = {
             NAME.name: self.name,
-            HTML_FILE.name: file
+            HTML_FILE.name: ""
         }
 
-        BROWSER_HTML_FILE.append_name_if_differs(data_dict, b_file)
+        if self.has_browser_template():
+            data_dict.setdefault(BROWSER_HTML_FILE.name, "")
+
         DECK_OVERRIDE_ID.append_name_if_differs(data_dict, self.deck_override_id)
 
         return data_dict
@@ -154,9 +153,19 @@ class Template(RepresentationBase, YamlObject, YamlRepr):
         return data_dict
 
     def get_all_media_references(self) -> Set[str]:
-        all_media = set()\
-            .union(find_media_in_field(self.question_format))\
-            .union(find_media_in_field(self.answer_format))\
-            .union(find_media_in_field(self.question_format_in_browser))\
+        all_media = set() \
+            .union(find_media_in_field(self.question_format)) \
+            .union(find_media_in_field(self.answer_format)) \
+            .union(find_media_in_field(self.question_format_in_browser)) \
             .union(find_media_in_field(self.answer_format_in_browser))
         return all_media
+
+    def has_browser_template(self):
+        return BROWSER_QUESTION_FORMAT.does_differ(self.question_format_in_browser) \
+                or BROWSER_ANSWER_FORMAT.does_differ(self.answer_format_in_browser)
+
+    def get_template_files_data(self):
+        template = f"{self.question_format}\n\n--\n\n{self.answer_format}"
+        browser_template = f"{self.question_format}\n\n--\n\n{self.answer_format}" if self.has_browser_template() else None
+
+        return template, browser_template

@@ -181,11 +181,11 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
 
         return OrderedDict(sorted(data_dict.items()))
 
-    def encode_as_part_with_file_references(self, folder: str) -> dict:
+    def encode_as_part_with_empty_file_references(self) -> dict:
         data_dict: Dict[str, Union[str, list]] = {
             NAME.name: self.name,
             CROWDANKI_ID.name: self.id,
-            CSS_FILE.name: f"{folder}/style.css"
+            CSS_FILE.name: ""
         }
 
         SORT_FIELD_NUM.append_name_if_differs(data_dict, self.sort_field_num)
@@ -200,7 +200,7 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
         TAGS.append_name_if_differs(data_dict, self.tags)
         VERSION.append_name_if_differs(data_dict, self.version)
         CROWDANKI_TYPE.append_name_if_differs(data_dict, self.crowdanki_type)
-        data_dict.setdefault(REQUIRED_FIELDS_PER_TEMPLATE.name, self.required_fields_per_template)
+        REQUIRED_FIELDS_PER_TEMPLATE.append_name_if_differs(data_dict, self.required_fields_per_template)
 
         return data_dict
 

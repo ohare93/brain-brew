@@ -5,7 +5,7 @@ from brain_brew.commands.run_recipe.build_task import BuildPartTask
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.representation.yaml.note_model import NoteModel
-from brain_brew.transformers.save_note_models_to_location import save_note_models_to_location
+from brain_brew.transformers.save_note_models_to_location import save_note_model_to_location
 
 
 @dataclass
@@ -46,4 +46,5 @@ class SaveNoteModelsToFolder(BuildPartTask):
     clear_existing: bool
 
     def execute(self):
-        save_note_models_to_location(self.parts, self.folder, self.clear_existing)
+        for model in self.parts:
+            save_note_model_to_location(model, self.folder, self.clear_existing)
