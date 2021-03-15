@@ -34,6 +34,8 @@ class FieldMapping:
             self.value = value
 
 
+REQUIRED_FIELD_DEFINITIONS = [GUID, TAGS]
+
 @dataclass
 class NoteModelMapping(YamlRepr):
     @classmethod
@@ -54,11 +56,18 @@ class NoteModelMapping(YamlRepr):
         columns_to_fields: Dict[str, str]
         personal_fields: List[str] = field(default_factory=lambda: [])
 
+        @classmethod
+        def from_note_model(cls, model: NoteModel):
+            c_t_f = {f: f for f in REQUIRED_FIELD_DEFINITIONS}
+            c_t_f.update({m_field.name: m_field.name for m_field in model.fields})
+            return cls(
+                note_models=[model.name],
+                columns_to_fields=c_t_f
+            )
+
     note_models: Dict[str, PartHolder[NoteModel]]
     columns: List[FieldMapping]
     personal_fields: List[FieldMapping]
-
-    required_fields_definitions = [GUID, TAGS]
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
@@ -84,14 +93,14 @@ class NoteModelMapping(YamlRepr):
         errors = []
 
         extra_fields = [field.field_name for field in self.columns
-                        if field.field_name not in self.required_fields_definitions]
+                        if field.field_name not in REQUIRED_FIELD_DEFINITIONS]
 
         for holder in self.note_models.values():
             model: NoteModel = holder.part
 
             # Check for Required Fields
             missing = []
-            for req in self.required_fields_definitions:
+            for req in REQUIRED_FIELD_DEFINITIONS:
                 if req not in [field.field_name for field in self.columns]:
                     missing.append(req)
 
@@ -102,7 +111,7 @@ class NoteModelMapping(YamlRepr):
             # Check Fields Align with Note Type
             missing = model.check_field_overlap(
                 [field.field_name for field in self.columns
-                 if field.field_name not in self.required_fields_definitions]
+                 if field.field_name not in REQUIRED_FIELD_DEFINITIONS]
             )
             missing = [m for m in missing if m not in [field.field_name for field in self.personal_fields]]
 

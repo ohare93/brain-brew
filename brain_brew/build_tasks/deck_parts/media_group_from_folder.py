@@ -18,8 +18,8 @@ class MediaGroupFromFolder(BuildPartTask):
     def yamale_schema(cls) -> str:
         return f'''\
             part_id: str()
-            save_to_file: str(required=False)
             source: str()
+            save_to_file: str(required=False)
             recursive: bool(required=False)
             filter_whitelist_from_parts: list(str(), required=False)
             filter_blacklist_from_parts: list(str(), required=False)

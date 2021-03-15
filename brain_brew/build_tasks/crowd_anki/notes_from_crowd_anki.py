@@ -52,7 +52,7 @@ class NotesFromCrowdAnki(SharedBaseNotes, BuildPartTask):
     reverse_sort: Optional[bool]
     save_to_file: Optional[str]
 
-    def execute(self):
+    def execute(self) -> PartHolder[Note]:
         ca_wrapper: CrowdAnkiJsonWrapper = self.ca_export.json_data
         if ca_wrapper.children:
             logging.warning("Child Decks / Sub-decks are not currently supported.")
@@ -61,7 +61,7 @@ class NotesFromCrowdAnki(SharedBaseNotes, BuildPartTask):
         note_list = [self.ca_note_to_note(note, nm_id_to_name) for note in ca_wrapper.notes]
 
         notes = Notes.from_list_of_notes(note_list)  # TODO: pass in sort method
-        PartHolder.override_or_create(self.part_id, self.save_to_file, notes)
+        return PartHolder.override_or_create(self.part_id, self.save_to_file, notes)
 
     @staticmethod
     def ca_note_to_note(note: dict, nm_id_to_name: dict) -> Note:

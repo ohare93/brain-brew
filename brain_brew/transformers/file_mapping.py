@@ -127,7 +127,7 @@ class FileMappingDerivative(YamlRepr):
 
 @dataclass
 class FileMapping(FileMappingDerivative):
-    note_model: str  # Override Optional on Parent
+    note_model: str  # Override Optional on Children
 
     data_set_has_changed: bool = field(init=False, default=False)
 
