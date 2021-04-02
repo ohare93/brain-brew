@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Union, Optional
 
-from brain_brew.commands.run_recipe.build_task import BuildPartTask
+from brain_brew.commands.run_recipe.build_task import TopLevelBuildTask
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.representation.yaml.note_model import NoteModel
@@ -9,7 +9,7 @@ from brain_brew.transformers.save_note_model_to_location import save_note_model_
 
 
 @dataclass
-class SaveNoteModelsToFolder(BuildPartTask):
+class SaveNoteModelsToFolder(TopLevelBuildTask):
     @classmethod
     def task_name(cls) -> str:
         return r'save_note_models_to_folder'

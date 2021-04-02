@@ -20,6 +20,7 @@ from brain_brew.commands.run_recipe.recipe_builder import RecipeBuilder
 
 @dataclass
 class PartsBuilder(RecipeBuilder, TopLevelBuildTask):
+    tasks: List[BuildPartTask]
     accepts_list_of_self: bool = False
 
     @classmethod
@@ -56,7 +57,7 @@ class PartsBuilder(RecipeBuilder, TopLevelBuildTask):
         return {
             NotesFromCsvs,
             NotesFromYamlPart, HeadersFromYamlPart, NoteModelsFromYamlPart, MediaGroupFromYamlPart,
-            MediaGroupFromFolder, SaveMediaGroupsToFolder, SaveNoteModelsToFolder,
+            MediaGroupFromFolder,
             NoteModelFromHTMLParts, NoteModelsFromYamlPart, NoteModelSingleFromCrowdAnki, NoteModelsAllFromCrowdAnki,
             HeadersFromCrowdAnki, MediaGroupFromCrowdAnki, NotesFromCrowdAnki
         }

@@ -2,7 +2,9 @@ list(
   map(include('build_parts'), key=regex('build_part[s]?', ignore_case=True)),
   map(any(include('generate_crowd_anki'), list(include('generate_crowd_anki'))), key=regex('generate_crowd_anki', ignore_case=True)),
   map(any(include('generate_csvs'), list(include('generate_csvs'))), key=regex('generate_csv[s]?', ignore_case=True)),
-  map(any(include('generate_guids_in_csvs'), list(include('generate_guids_in_csvs'))), key=regex('generate_guids_in_csv[s]?', ignore_case=True))
+  map(any(include('generate_guids_in_csvs'), list(include('generate_guids_in_csvs'))), key=regex('generate_guids_in_csv[s]?', ignore_case=True)),
+  map(any(include('save_media_groups_to_folder'), list(include('save_media_groups_to_folder'))), key=regex('save_media_group[s]?_to_folder', ignore_case=True)),
+  map(any(include('save_note_models_to_folder'), list(include('save_note_models_to_folder'))), key=regex('save_note_models[s]?_to_folder', ignore_case=True))
 )
 
 
@@ -21,9 +23,7 @@ build_parts:
       map(any(include('note_models_from_yaml_part'), list(include('note_models_from_yaml_part'))), key=regex('note_model[s]?_from_yaml_part', ignore_case=True)),
       map(any(include('notes_from_crowd_anki'), list(include('notes_from_crowd_anki'))), key=regex('notes_from_crowd_anki', ignore_case=True)),
       map(any(include('notes_from_csvs'), list(include('notes_from_csvs'))), key=regex('notes_from_csv[s]?', ignore_case=True)),
-      map(any(include('notes_from_yaml_part'), list(include('notes_from_yaml_part'))), key=regex('notes_from_yaml_part', ignore_case=True)),
-      map(any(include('save_media_groups_to_folder'), list(include('save_media_groups_to_folder'))), key=regex('save_media_group[s]?_to_folder', ignore_case=True)),
-      map(any(include('save_note_models_to_folder'), list(include('save_note_models_to_folder'))), key=regex('save_note_models[s]?_to_folder', ignore_case=True))
+      map(any(include('notes_from_yaml_part'), list(include('notes_from_yaml_part'))), key=regex('notes_from_yaml_part', ignore_case=True))
     )
 
 generate_crowd_anki:
@@ -41,6 +41,17 @@ generate_csvs:
 generate_guids_in_csvs:
     source: any(str(), list(str()))
     columns: any(str(), list(str()))
+
+save_media_groups_to_folder:
+    parts: list(str())
+    folder: str()
+    clear_folder: bool(required=False)
+    recursive: bool(required=False)
+
+save_note_models_to_folder:
+    parts: list(str())
+    folder: str()
+    clear_existing: bool(required=False)
 
 
 ---
@@ -68,16 +79,16 @@ headers_override:
 
 media_group_from_crowd_anki:
     part_id: str()
-    save_to_file: str(required=False)
     source: str()
+    save_to_file: str(required=False)
     recursive: bool(required=False)
     filter_whitelist_from_parts: list(str(), required=False)
     filter_blacklist_from_parts: list(str(), required=False)
 
 media_group_from_folder:
     part_id: str()
-    save_to_file: str(required=False)
     source: str()
+    save_to_file: str(required=False)
     recursive: bool(required=False)
     filter_whitelist_from_parts: list(str(), required=False)
     filter_blacklist_from_parts: list(str(), required=False)
@@ -156,14 +167,3 @@ notes_to_crowd_anki:
     additional_items_to_add: map(str(), key=str(), required=False)
     override: include('notes_override', required=False)
     case_insensitive_sort: bool(required=False)
-
-save_media_groups_to_folder:
-    parts: list(str())
-    folder: str()
-    clear_folder: bool(required=False)
-    recursive: bool(required=False)
-
-save_note_models_to_folder:
-    parts: list(str())
-    folder: str()
-    clear_existing: bool(required=False)
