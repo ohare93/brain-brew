@@ -20,6 +20,7 @@ class MediaGroupFromCrowdAnki(MediaGroupFromFolder):
 
         cae: CrowdAnkiExport = CrowdAnkiExport.create_or_get(rep.source)
         return cls(
+            rep=rep,
             part=create_media_group_from_location(
                 part_id=rep.part_id,
                 save_to_file=rep.save_to_file,
@@ -31,6 +32,7 @@ class MediaGroupFromCrowdAnki(MediaGroupFromFolder):
             )
         )
 
+    rep: MediaGroupFromFolder.Representation
     part: MediaGroup
 
     def execute(self):

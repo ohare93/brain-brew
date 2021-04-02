@@ -45,6 +45,7 @@ class NotesToCrowdAnki(YamlRepr, SharedBaseNotes):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             notes=PartHolder.from_file_manager(rep.part_id).part,
             sort_order=SharedBaseNotes._get_sort_order(rep.sort_order),
             reverse_sort=SharedBaseNotes._get_reverse_sort(rep.reverse_sort),
@@ -53,6 +54,7 @@ class NotesToCrowdAnki(YamlRepr, SharedBaseNotes):
             case_insensitive_sort=rep.case_insensitive_sort or True
         )
 
+    rep: Representation
     notes: Notes
     additional_items_to_add: dict
     sort_order: Optional[List[str]] = field(default_factory=lambda: None)

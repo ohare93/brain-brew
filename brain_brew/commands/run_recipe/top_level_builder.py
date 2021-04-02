@@ -71,8 +71,8 @@ class TopLevelBuilder(YamlRepr, RecipeBuilder):
     def from_repr(cls, data: dict):
         pass
 
-    def encode(self) -> dict:
-        pass
+    def encode(self) -> list:
+        return self.tasks_to_encoded()
 
     @classmethod
     def from_yaml_file(cls, filename: str):

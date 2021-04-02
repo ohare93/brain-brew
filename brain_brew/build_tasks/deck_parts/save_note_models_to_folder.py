@@ -36,11 +36,13 @@ class SaveNoteModelsToFolder(TopLevelBuildTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             parts=list(holder.part for holder in map(PartHolder.from_file_manager, rep.parts)),
             folder=rep.folder,
             clear_existing=rep.clear_existing or False,
         )
 
+    rep: Representation
     parts: List[NoteModel]
     folder: str
     clear_existing: bool

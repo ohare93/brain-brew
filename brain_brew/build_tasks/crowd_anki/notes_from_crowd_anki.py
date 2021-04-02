@@ -39,6 +39,7 @@ class NotesFromCrowdAnki(SharedBaseNotes, BuildPartTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             ca_export=CrowdAnkiExport.create_or_get(rep.source),
             part_id=rep.part_id,
             sort_order=SharedBaseNotes._get_sort_order(rep.sort_order),
@@ -46,6 +47,7 @@ class NotesFromCrowdAnki(SharedBaseNotes, BuildPartTask):
             save_to_file=rep.save_to_file
         )
 
+    rep: Representation
     ca_export: CrowdAnkiExport
     part_id: str
     sort_order: Optional[List[str]]

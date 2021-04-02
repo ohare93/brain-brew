@@ -31,6 +31,7 @@ class FromYamlPartBase(BuildPartTask, metaclass=ABCMeta):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
 
         return cls(
+            rep=rep,
             part=PartHolder.override_or_create(
                 part_id=rep.part_id, save_to_file=None, part=cls.part_type.from_yaml_file(rep.file))
         )
@@ -38,6 +39,7 @@ class FromYamlPartBase(BuildPartTask, metaclass=ABCMeta):
     def execute(self):
         pass
 
+    rep: Representation
     part: YamlObject
 
 

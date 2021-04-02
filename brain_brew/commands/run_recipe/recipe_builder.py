@@ -12,6 +12,9 @@ from brain_brew.representation.yaml.yaml_object import YamlObject
 class RecipeBuilder(YamlObject, metaclass=ABCMeta):
     tasks: List[BuildTask]
 
+    def tasks_to_encoded(self) -> list:
+        return [{task.task_name(): task.encode_rep()} for task in self.tasks]
+
     @classmethod
     def from_list(cls, data: List[dict]):
         tasks = cls.read_tasks(data)

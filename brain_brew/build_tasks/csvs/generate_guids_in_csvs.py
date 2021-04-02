@@ -36,10 +36,12 @@ class GenerateGuidsInCsvs(TopLevelBuildTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             sources=[CsvFile.create_or_get(csv) for csv in single_item_to_list(rep.source)],
             columns=rep.columns
         )
 
+    rep: Representation
     sources: List[CsvFile]
     columns: List[str]
 

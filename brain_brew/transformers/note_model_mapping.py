@@ -34,7 +34,6 @@ class FieldMapping:
             self.value = value
 
 
-REQUIRED_FIELD_DEFINITIONS = [GUID, TAGS]
 
 @dataclass
 class NoteModelMapping(YamlRepr):
@@ -58,8 +57,9 @@ class NoteModelMapping(YamlRepr):
 
         @classmethod
         def from_note_model(cls, model: NoteModel):
-            c_t_f = {f: f for f in REQUIRED_FIELD_DEFINITIONS}
+            c_t_f = {GUID: GUID}
             c_t_f.update({m_field.name: m_field.name for m_field in model.fields})
+            c_t_f.update({TAGS: TAGS})
             return cls(
                 note_models=[model.name],
                 columns_to_fields=c_t_f
@@ -91,16 +91,17 @@ class NoteModelMapping(YamlRepr):
 
     def verify_contents(self):
         errors = []
+        required_field_definitions = [GUID, TAGS]
 
         extra_fields = [field.field_name for field in self.columns
-                        if field.field_name not in REQUIRED_FIELD_DEFINITIONS]
+                        if field.field_name not in required_field_definitions]
 
         for holder in self.note_models.values():
             model: NoteModel = holder.part
 
             # Check for Required Fields
             missing = []
-            for req in REQUIRED_FIELD_DEFINITIONS:
+            for req in required_field_definitions:
                 if req not in [field.field_name for field in self.columns]:
                     missing.append(req)
 
@@ -111,7 +112,7 @@ class NoteModelMapping(YamlRepr):
             # Check Fields Align with Note Type
             missing = model.check_field_overlap(
                 [field.field_name for field in self.columns
-                 if field.field_name not in REQUIRED_FIELD_DEFINITIONS]
+                 if field.field_name not in required_field_definitions]
             )
             missing = [m for m in missing if m not in [field.field_name for field in self.personal_fields]]
 

@@ -29,9 +29,11 @@ class MediaGroupToCrowdAnki(YamlRepr):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             parts=list(holder.part for holder in map(PartHolder.from_file_manager, rep.parts))
         )
 
+    rep: Representation
     parts: List[MediaGroup]
 
     def execute(self, ca_media_folder: str) -> Set[MediaFile]:

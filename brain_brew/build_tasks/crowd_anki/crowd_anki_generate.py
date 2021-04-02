@@ -44,6 +44,7 @@ class CrowdAnkiGenerate(TopLevelBuildTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             crowd_anki_export=CrowdAnkiExport.create_or_get(rep.folder),
             notes_transform=NotesToCrowdAnki.from_repr(rep.notes),
             note_model_transform=NoteModelsToCrowdAnki.from_repr(rep.note_models),
@@ -51,6 +52,7 @@ class CrowdAnkiGenerate(TopLevelBuildTask):
             media_transform=MediaGroupToCrowdAnki.from_repr(rep.media) if rep.media else None
         )
 
+    rep: Representation
     crowd_anki_export: CrowdAnkiExport
     notes_transform: NotesToCrowdAnki
     note_model_transform: NoteModelsToCrowdAnki

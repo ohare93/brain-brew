@@ -38,6 +38,7 @@ class MediaGroupFromFolder(BuildPartTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             part=create_media_group_from_location(
                 part_id=rep.part_id,
                 save_to_file=rep.save_to_file,
@@ -50,6 +51,7 @@ class MediaGroupFromFolder(BuildPartTask):
             )
         )
 
+    rep: Representation
     part: MediaGroup
 
     def execute(self):

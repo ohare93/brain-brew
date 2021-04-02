@@ -36,6 +36,7 @@ class NoteModelsFromYamlPart(FromYamlPartBase, BuildPartTask):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
 
         return cls(
+            rep=rep,
             part=PartHolder.override_or_create(
                 part_id=rep.part_id, save_to_file=None, part=NoteModel.from_yaml_file(rep.file))
         )

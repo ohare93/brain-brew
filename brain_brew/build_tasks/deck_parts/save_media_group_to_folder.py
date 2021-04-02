@@ -38,12 +38,14 @@ class SaveMediaGroupsToFolder(TopLevelBuildTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             parts=list(holder.part for holder in map(PartHolder.from_file_manager, rep.parts)),
             folder=rep.folder,
             clear_folder=rep.clear_folder or False,
             recursive=rep.recursive or False
         )
 
+    rep: Representation
     parts: List[MediaGroup]
     folder: str
     clear_folder: bool

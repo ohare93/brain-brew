@@ -102,6 +102,7 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             fields=[Field.from_repr(f) for f in rep.fields],
             templates=[Template.from_html_files(t) for t in rep.templates],
             css=HTMLFile.create_or_get(rep.css_file).get_data(deep_copy=False),
@@ -129,6 +130,8 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
         type: int = field(default=0)  # Is_Cloze Manually set to 0
         vers: list = field(default_factory=lambda: VERSION.default_value)
 
+    rep: Union[Representation, CrowdAnki]
+
     name: str
     id: str
     css: str
@@ -153,6 +156,7 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
     def from_crowdanki(cls, data: Union[CrowdAnki, dict]):  # TODO: field_whitelist, note_model_whitelist
         ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
         return cls(
+            rep=ca,
             fields=[Field.from_crowd_anki(f) for f in ca.flds],
             templates=[Template.from_crowdanki(t) for t in ca.tmpls],
             is_cloze=bool(ca.type),

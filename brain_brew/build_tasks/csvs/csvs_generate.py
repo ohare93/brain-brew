@@ -32,20 +32,29 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
     def yamale_dependencies(cls) -> set:
         return {NoteModelMapping, FileMapping}
 
-    notes: PartHolder[Notes]  # TODO: Accept Multiple Note Parts
-
     @dataclass
     class Representation(SharedBaseCsvs.Representation):
         notes: str
+
+        def encode(self):
+            return {
+                "notes": self.notes,
+                "file_mappings": [fm.encode() for fm in self.file_mappings],
+                "note_model_mappings": [nmm.encode() for nmm in self.note_model_mappings]
+            }
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             notes=PartHolder.from_file_manager(rep.notes),
             file_mappings=rep.get_file_mappings(),
             note_model_mappings=dict(*map(cls.map_nmm, rep.note_model_mappings))
         )
+
+    rep: Representation
+    notes: PartHolder[Notes]  # TODO: Accept Multiple Note Parts
 
     def execute(self):
         self.verify_contents()

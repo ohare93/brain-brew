@@ -39,8 +39,8 @@ class HeadersFromYamlPart(BuildPartTask):
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
-
         return cls(
+            rep=rep,
             headers=PartHolder.override_or_create(
                 part_id=rep.part_id,
                 save_to_file=None,
@@ -49,6 +49,7 @@ class HeadersFromYamlPart(BuildPartTask):
             override=HeadersOverride.from_repr(rep.override)
         )
 
+    rep: Representation
     headers: Headers
     override: HeadersOverride
 

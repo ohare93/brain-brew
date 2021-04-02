@@ -41,6 +41,6 @@ def save_note_model_to_location(
             HTMLFile.write_file(template_data[TEMPLATE_HTML_FILE.name], b_t_data)
 
     model_yaml_file_name = YamlObject.to_filename_yaml(os.path.join(nm_folder, model.name))
-    model.dump_to_yaml(model_yaml_file_name, model_encoded)
+    YamlObject.dump_to_yaml_file(model_yaml_file_name, model_encoded)
 
     return model_yaml_file_name

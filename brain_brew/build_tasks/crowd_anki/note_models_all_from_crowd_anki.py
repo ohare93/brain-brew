@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass, field
-from typing import Optional, Union
+from typing import Optional, Union, List
 
 from brain_brew.commands.run_recipe.build_task import BuildPartTask
 from brain_brew.configuration.part_holder import PartHolder
@@ -30,12 +30,14 @@ class NoteModelsAllFromCrowdAnki(BuildPartTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             ca_export=CrowdAnkiExport.create_or_get(rep.source)
         )
 
+    rep: Representation
     ca_export: CrowdAnkiExport
 
-    def execute(self):
+    def execute(self) -> List[PartHolder[NoteModel]]:
         ca_wrapper: CrowdAnkiJsonWrapper = self.ca_export.json_data
 
         note_models_dict = {model.get('name'): model for model in ca_wrapper.note_models}

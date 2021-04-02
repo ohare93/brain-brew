@@ -37,12 +37,14 @@ class NoteModelSingleFromCrowdAnki(BuildPartTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             ca_export=CrowdAnkiExport.create_or_get(rep.source),
             part_id=rep.part_id,
             model_name=rep.model_name or rep.part_id,
             save_to_file=rep.save_to_file
         )
 
+    rep: Representation
     ca_export: CrowdAnkiExport
     model_name: str
     part_id: str

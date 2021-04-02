@@ -38,16 +38,26 @@ class NotesFromCsvs(SharedBaseCsvs, BuildPartTask):
         part_id: str
         save_to_file: Optional[str] = field(default=None)
 
+        def encode(self):
+            return {
+                "part_id": self.part_id,
+                "save_to_file": self.save_to_file,
+                "file_mappings": [fm.encode() for fm in self.file_mappings],
+                "note_model_mappings": [nmm.encode() for nmm in self.note_model_mappings]
+            }
+
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             part_id=rep.part_id,
             save_to_file=rep.save_to_file,
             file_mappings=rep.get_file_mappings(),
             note_model_mappings=dict(*map(cls.map_nmm, rep.note_model_mappings))
         )
 
+    rep: Representation
     part_id: str
     save_to_file: Optional[str]
 

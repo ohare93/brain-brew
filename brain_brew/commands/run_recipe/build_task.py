@@ -1,12 +1,17 @@
 from abc import ABCMeta, abstractmethod
-from typing import Dict, Type, Set
+from typing import Dict, Type, Set, Optional
 
+from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 
 
 class BuildTask(YamlRepr, object, metaclass=ABCMeta):
     execute_immediately: bool = False
     accepts_list_of_self: bool = True
+    rep: Optional[RepresentationBase]
+
+    def encode_rep(self) -> Dict[str, any]:
+        return self.rep.encode()
 
     @abstractmethod
     def execute(self):

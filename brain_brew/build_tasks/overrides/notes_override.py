@@ -26,9 +26,11 @@ class NotesOverride(YamlRepr):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             note_model=rep.note_model
         )
 
+    rep: Representation
     note_model: Optional[str]
 
     def override(self, note: Note):

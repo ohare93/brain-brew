@@ -48,6 +48,21 @@ class FileMappingDerivative(YamlRepr):
             self.derivatives = list(map(FileMappingDerivative.Representation.from_dict, derivatives)) \
                 if derivatives is not None else []
 
+    @classmethod
+    def from_repr(cls, data: Union[Representation, dict]):
+        rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
+        return cls(
+            rep=rep,
+            csv_file=CsvFile.create_or_get(rep.file),
+            note_model=rep.note_model.strip() if rep.note_model else None,
+            sort_by_columns=single_item_to_list(rep.sort_by_columns),
+            reverse_sort=rep.reverse_sort or False,
+            case_insensitive_sort=rep.case_insensitive_sort or True,
+            derivatives=list(map(cls.from_repr, rep.derivatives)) if rep.derivatives is not None else []
+        )
+
+    rep: Representation
+
     compiled_data: Dict[str, dict] = field(init=False)
 
     csv_file: CsvFile
@@ -57,18 +72,6 @@ class FileMappingDerivative(YamlRepr):
     reverse_sort: bool
     case_insensitive_sort: bool
     derivatives: Optional[List['FileMappingDerivative']]
-
-    @classmethod
-    def from_repr(cls, data: Union[Representation, dict]):
-        rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
-        return cls(
-            csv_file=CsvFile.create_or_get(rep.file),
-            note_model=rep.note_model.strip() if rep.note_model else None,
-            sort_by_columns=single_item_to_list(rep.sort_by_columns),
-            reverse_sort=rep.reverse_sort or False,
-            case_insensitive_sort=rep.case_insensitive_sort or True,
-            derivatives=list(map(cls.from_repr, rep.derivatives)) if rep.derivatives is not None else []
-        )
 
     def get_available_columns(self):
         return self.csv_file.column_headers + [col for der in self.derivatives for col in der.get_available_columns()]

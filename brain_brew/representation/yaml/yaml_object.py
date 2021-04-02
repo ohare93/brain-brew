@@ -41,11 +41,15 @@ class YamlObject(ABC):
     def from_yaml_file(cls, filename: str) -> 'YamlObject':
         pass
 
-    def dump_to_yaml(self, filepath, override_data: dict = None):
+    def dump_to_yaml(self, filepath):
+        self.dump_to_yaml_file(filepath, self.encode())
+
+    @classmethod
+    def dump_to_yaml_file(cls, filepath, data):
         filepath = YamlObject.to_filename_yaml(filepath)
 
         create_path_if_not_exists(filepath)
 
         with open(filepath, 'w') as fp:
-            yaml_dump.dump(override_data or self.encode(), fp)
+            yaml_dump.dump(data, fp)
 

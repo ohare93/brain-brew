@@ -27,9 +27,11 @@ class HeadersOverride(YamlRepr):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             deck_desc_html_file=HTMLFile.create_or_get(rep.deck_description_html_file)
         )
 
+    rep: Representation
     deck_desc_html_file: Optional[HTMLFile]
 
     def override(self, header: Headers):
