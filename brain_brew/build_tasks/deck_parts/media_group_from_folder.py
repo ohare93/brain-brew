@@ -27,8 +27,8 @@ class MediaGroupFromFolder(BuildPartTask):
 
     @dataclass
     class Representation(RepresentationBase):
-        source: str
         part_id: str
+        source: str
         filter_blacklist_from_parts: List[str] = field(default_factory=list)
         filter_whitelist_from_parts: List[str] = field(default_factory=list)
         recursive: Optional[bool] = field(default=True)

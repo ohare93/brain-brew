@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Union
+from dataclasses import dataclass, field
+from typing import Union, Optional
 
 from brain_brew.build_tasks.overrides.headers_override import HeadersOverride
 from brain_brew.commands.run_recipe.build_task import BuildPartTask
@@ -34,7 +34,16 @@ class HeadersFromYamlPart(BuildPartTask):
     class Representation(RepresentationBase):
         part_id: str
         file: str
-        override: dict
+        override: Optional[dict] = field(default_factory=lambda: None)
+
+        def encode(self):
+            d = {
+                "part_id": self.part_id,
+                "file": self.file
+            }
+            if self.override:
+                d.setdefault("override", self.override)
+            return d
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
@@ -46,12 +55,12 @@ class HeadersFromYamlPart(BuildPartTask):
                 save_to_file=None,
                 part=Headers.from_yaml_file(rep.file)
             ).part,
-            override=HeadersOverride.from_repr(rep.override)
+            override=HeadersOverride.from_repr(rep.override) if rep.override else None
         )
 
     rep: Representation
     headers: Headers
-    override: HeadersOverride
+    override: Optional[HeadersOverride]
 
     def execute(self):
         if self.override:

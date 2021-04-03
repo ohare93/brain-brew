@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Dict
 
 from brain_brew.commands.run_recipe.build_task import TopLevelBuildTask
 from brain_brew.configuration.part_holder import PartHolder
@@ -47,10 +47,11 @@ class SaveNoteModelsToFolder(TopLevelBuildTask):
     folder: str
     clear_existing: bool
 
-    def execute(self) -> List[str]:
-        model_yaml_files: List[str] = []
+    def execute(self) -> Dict[str, str]:
+        model_yaml_files: Dict[str, str] = {}
         for model in self.parts:
-            model_yaml_files.append(
+            model_yaml_files.setdefault(
+                model.name,
                 save_note_model_to_location(model, self.folder, self.clear_existing)
             )
         return model_yaml_files
