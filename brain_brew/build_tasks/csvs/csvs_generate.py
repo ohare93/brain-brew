@@ -50,7 +50,7 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
             rep=rep,
             notes=PartHolder.from_file_manager(rep.notes),
             file_mappings=rep.get_file_mappings(),
-            note_model_mappings=dict(*map(cls.map_nmm, rep.note_model_mappings))
+            note_model_mappings={k: v for nm in rep.note_model_mappings for k, v in cls.map_nmm(nm).items()}
         )
 
     rep: Representation

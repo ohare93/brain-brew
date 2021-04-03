@@ -59,7 +59,8 @@ class InitRepo(Command):
 
         note_models = [m.part for m in note_models_all_ca.execute()]
 
-        notes_ca.execute()
+        notes = notes_ca.execute().part
+        used_note_models_in_notes = notes.get_all_known_note_model_names()
 
         media_group_ca.execute()
 
@@ -69,17 +70,18 @@ class InitRepo(Command):
         csv_files = []
 
         for model in note_models:
-            mapping_rep = NoteModelMapping.Representation.from_note_model(model)
-            csv_file_path = os.path.join(LOC_DATA, CsvFile.to_filename_csv(model.name))
-            CsvFile.create_file_with_headers(csv_file_path, list(mapping_rep.columns_to_fields.keys()))
+            if model.name in used_note_models_in_notes:
+                mapping_rep = NoteModelMapping.Representation.from_note_model(model)
+                csv_file_path = os.path.join(LOC_DATA, CsvFile.to_filename_csv(model.name))
+                CsvFile.create_file_with_headers(csv_file_path, list(mapping_rep.columns_to_fields.keys()))
 
-            note_model_mappings.append(mapping_rep)
-            file_mappings.append(FileMapping.Representation(
-                file=csv_file_path,
-                note_model=model.name
-            ))
+                note_model_mappings.append(mapping_rep)
+                file_mappings.append(FileMapping.Representation(
+                    file=csv_file_path,
+                    note_model=model.name
+                ))
 
-            csv_files.append(csv_file_path)
+                csv_files.append(csv_file_path)
 
         deck_path = os.path.join(LOC_BUILD, "deck")  # TODO: name the same as the file provided
 

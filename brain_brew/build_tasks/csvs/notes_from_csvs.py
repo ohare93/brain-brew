@@ -54,7 +54,7 @@ class NotesFromCsvs(SharedBaseCsvs, BuildPartTask):
             part_id=rep.part_id,
             save_to_file=rep.save_to_file,
             file_mappings=rep.get_file_mappings(),
-            note_model_mappings=dict(*map(cls.map_nmm, rep.note_model_mappings))
+            note_model_mappings={k: v for nm in rep.note_model_mappings for k, v in cls.map_nmm(nm).items()}
         )
 
     rep: Representation

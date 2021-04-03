@@ -54,7 +54,7 @@ class NotesFromCrowdAnki(SharedBaseNotes, BuildPartTask):
     reverse_sort: Optional[bool]
     save_to_file: Optional[str]
 
-    def execute(self) -> PartHolder[Note]:
+    def execute(self) -> PartHolder[Notes]:
         ca_wrapper: CrowdAnkiJsonWrapper = self.ca_export.json_data
         if ca_wrapper.children:
             logging.warning("Child Decks / Sub-decks are not currently supported.")

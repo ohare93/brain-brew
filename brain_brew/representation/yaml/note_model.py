@@ -264,7 +264,7 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
     def zip_field_to_data(self, data: List[str]) -> dict:
         if len(self.fields) != len(data):
             raise Exception(
-                f"Data of length {len(data)} cannot map to fields of length {len(self.field_names_lowercase)}")
+                f"Data of length {len(data)} cannot map to fields of length {len(self.field_names_lowercase)}", data, self.field_names_lowercase)
         return dict(zip(self.field_names_lowercase, data))
 
 
