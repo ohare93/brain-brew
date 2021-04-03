@@ -27,6 +27,7 @@ LATEX_PRE = AnkiField("latexPre", "latex_pre",
                                     "amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{"
                                     "document}\n")
 LATEX_POST = AnkiField("latexPost", "latex_post", default_value="\\end{document}")
+LATEX_SVG = AnkiField("latexSvg", "latex_svg", default_value=False)
 REQUIRED_FIELDS_PER_TEMPLATE = AnkiField("req", "required_fields_per_template", default_value=[])
 FIELDS = AnkiField("flds", "fields")
 TEMPLATES = AnkiField("tmpls", "templates")
@@ -92,6 +93,7 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
         required_fields_per_template: List[list] = field(default_factory=lambda: [])
         latex_post: str = field(default=LATEX_POST.default_value)
         latex_pre: str = field(default=LATEX_PRE.default_value)
+        latex_svg: bool = field(default=LATEX_SVG.default_value)
         sort_field_num: int = field(default=SORT_FIELD_NUM.default_value)
         is_cloze: bool = field(default=IS_CLOZE.default_value)
         crowdanki_type: str = field(default=CROWDANKI_TYPE.default_value)  # Should always be "NoteModel"
@@ -107,8 +109,8 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
             templates=[Template.from_html_files(t) for t in rep.templates],
             css=HTMLFile.create_or_get(rep.css_file).get_data(deep_copy=False),
 
-            is_cloze=bool(rep.is_cloze),
-            name=rep.name, latex_pre=rep.latex_pre, latex_post=rep.latex_post,
+            name=rep.name, is_cloze=bool(rep.is_cloze),
+            latex_pre=rep.latex_pre, latex_post=rep.latex_post, latex_svg=rep.latex_svg,
             required_fields_per_template=rep.required_fields_per_template,
             tags=rep.tags, sort_field_num=rep.sort_field_num, version=rep.version,
             id=rep.id, crowdanki_type=rep.crowdanki_type
@@ -124,6 +126,7 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
         tmpls: List[dict]
         latexPre: str = field(default=LATEX_PRE.default_value)
         latexPost: str = field(default=LATEX_POST.default_value)
+        latexsvg: bool = field(default=LATEX_SVG.default_value)  # TODO: Fix lowercase here in CrowdAnki
         __type__: str = field(default=CROWDANKI_TYPE.default_value)
         tags: List[str] = field(default_factory=lambda: TAGS.default_value)
         sortf: int = field(default=SORT_FIELD_NUM.default_value)
@@ -141,6 +144,7 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
     required_fields_per_template: List[list] = field(default_factory=lambda: REQUIRED_FIELDS_PER_TEMPLATE.default_value)
     latex_post: str = field(default=LATEX_POST.default_value)
     latex_pre: str = field(default=LATEX_PRE.default_value)
+    latex_svg: bool = field(default=LATEX_SVG.default_value)
     sort_field_num: int = field(default=SORT_FIELD_NUM.default_value)
     is_cloze: bool = field(default=IS_CLOZE.default_value)
     crowdanki_type: str = field(default=CROWDANKI_TYPE.default_value)  # Should always be "NoteModel"
@@ -173,6 +177,7 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
             REQUIRED_FIELDS_PER_TEMPLATE.anki_name: self.required_fields_per_template,
             LATEX_PRE.anki_name: self.latex_pre,
             LATEX_POST.anki_name: self.latex_post,
+            LATEX_SVG.anki_name: self.latex_svg,
             SORT_FIELD_NUM.anki_name: self.sort_field_num,
             CROWDANKI_TYPE.anki_name: self.crowdanki_type,
             TAGS.anki_name: self.tags,
@@ -196,6 +201,7 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
         IS_CLOZE.append_name_if_differs(data_dict, self.is_cloze)
         LATEX_PRE.append_name_if_differs(data_dict, self.latex_pre)
         LATEX_POST.append_name_if_differs(data_dict, self.latex_post)
+        LATEX_SVG.append_name_if_differs(data_dict, self.latex_svg)
 
         data_dict.setdefault(FIELDS.name, [f.encode_as_part() for f in self.fields])
         data_dict.setdefault(TEMPLATES.name, [t.encode_as_part() for t in self.templates])
@@ -219,6 +225,7 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
         IS_CLOZE.append_name_if_differs(data_dict, self.is_cloze)
         LATEX_PRE.append_name_if_differs(data_dict, self.latex_pre)
         LATEX_POST.append_name_if_differs(data_dict, self.latex_post)
+        LATEX_SVG.append_name_if_differs(data_dict, self.latex_svg)
 
         data_dict.setdefault(FIELDS.name, [f.encode_as_part() for f in self.fields])
         data_dict.setdefault(TEMPLATES.name, [t.encode() for t in self.templates])

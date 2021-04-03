@@ -18,16 +18,16 @@ class NoteModelSingleFromCrowdAnki(BuildPartTask):
     @classmethod
     def yamale_schema(cls) -> str:
         return f'''\
-            source: str()
             part_id: str()
+            source: str()
             model_name: str(required=False)
             save_to_file: str(required=False)
         '''
 
     @dataclass
     class Representation(RepresentationBase):
-        source: str
         part_id: str
+        source: str
         model_name: Optional[str] = field(default=None)
         save_to_file: Optional[str] = field(default=None)
         # TODO: fields: Optional[List[str]]
@@ -45,9 +45,9 @@ class NoteModelSingleFromCrowdAnki(BuildPartTask):
         )
 
     rep: Representation
+    part_id: str
     ca_export: CrowdAnkiExport
     model_name: str
-    part_id: str
     save_to_file: Optional[str]
 
     def execute(self):

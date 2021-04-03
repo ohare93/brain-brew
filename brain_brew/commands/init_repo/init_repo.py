@@ -76,8 +76,7 @@ class InitRepo(Command):
             note_model_mappings.append(mapping_rep)
             file_mappings.append(FileMapping.Representation(
                 file=csv_file_path,
-                note_model=model.name,
-                sort_by_columns=['guid']
+                note_model=model.name
             ))
 
             csv_files.append(csv_file_path)

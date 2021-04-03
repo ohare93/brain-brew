@@ -20,8 +20,8 @@ class NotesFromCrowdAnki(SharedBaseNotes, BuildPartTask):
     @classmethod
     def yamale_schema(cls) -> str:
         return f'''\
-            source: str()
             part_id: str()
+            source: str()
             sort_order: list(str(), required=False)
             save_to_file: str(required=False)
             reverse_sort: str(required=False)
@@ -29,8 +29,8 @@ class NotesFromCrowdAnki(SharedBaseNotes, BuildPartTask):
 
     @dataclass
     class Representation(RepresentationBase):
-        source: str
         part_id: str
+        source: str
         sort_order: Optional[List[str]] = field(default_factory=lambda: None)
         reverse_sort: Optional[bool] = field(default_factory=lambda: None)
         save_to_file: Optional[str] = field(default=None)
@@ -48,8 +48,8 @@ class NotesFromCrowdAnki(SharedBaseNotes, BuildPartTask):
         )
 
     rep: Representation
-    ca_export: CrowdAnkiExport
     part_id: str
+    ca_export: CrowdAnkiExport
     sort_order: Optional[List[str]]
     reverse_sort: Optional[bool]
     save_to_file: Optional[str]

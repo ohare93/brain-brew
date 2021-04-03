@@ -16,6 +16,9 @@ ANSWER_FORMAT = AnkiField("afmt", "answer_format")
 BROWSER_ANSWER_FORMAT = AnkiField("bafmt", "browser_answer_format", default_value="")
 BROWSER_QUESTION_FORMAT = AnkiField("bqfmt", "browser_question_format", default_value="")
 DECK_OVERRIDE_ID = AnkiField("did", "deck_override_id", default_value=None)
+BROWSER_FONT = AnkiField("bfont", "browser_font", default_value="")
+BROWSER_FONT_SIZE = AnkiField("bsize", "browser_font_size", default_value=0)
+SCRATCH_PAD = AnkiField("scratchPad", "scratch_pad", default_value=0)
 
 HTML_FILE = AnkiField("html_file")
 BROWSER_HTML_FILE = AnkiField("browser_html_file", default_value=None)
@@ -43,7 +46,10 @@ class Template(RepresentationBase, YamlObject, YamlRepr):
         name: str
         html_file: str
         browser_html_file: Optional[str] = field(default=None)
+        browser_font: str = field(default=BROWSER_FONT.default_value)
+        browser_font_size: int = field(default=BROWSER_FONT_SIZE.default_value)
         deck_override_id: Optional[int] = field(default=DECK_OVERRIDE_ID.default_value)
+        scratch_pad: int = field(default=SCRATCH_PAD.default_value)
 
     @classmethod
     def from_repr(cls, data: Union[HTML, dict]):
@@ -61,15 +67,21 @@ class Template(RepresentationBase, YamlObject, YamlRepr):
         afmt: str
         bqfmt: str = field(default=BROWSER_QUESTION_FORMAT.default_value)
         bafmt: str = field(default=BROWSER_ANSWER_FORMAT.default_value)
+        bfont: str = field(default=BROWSER_FONT.default_value)
+        bsize: int = field(default=BROWSER_FONT_SIZE.default_value)
         ord: int = field(default=None)
         did: Optional[int] = field(default=None)
+        scratchPad: int = field(default=SCRATCH_PAD.default_value)
 
     name: str
     question_format: str
     answer_format: str
     question_format_in_browser: str = field(default=BROWSER_QUESTION_FORMAT.default_value)
     answer_format_in_browser: str = field(default=BROWSER_ANSWER_FORMAT.default_value)
+    browser_font: str = field(default=BROWSER_FONT.default_value)
+    browser_font_size: int = field(default=BROWSER_FONT_SIZE.default_value)
     deck_override_id: Optional[int] = field(default=DECK_OVERRIDE_ID.default_value)
+    scratch_pad: int = field(default=SCRATCH_PAD.default_value)
 
     html_file: Optional[str] = field(default="")
     browser_html_file: Optional[str] = field(default="")
@@ -102,7 +114,10 @@ class Template(RepresentationBase, YamlObject, YamlRepr):
             answer_format_in_browser=browser_back,
             deck_override_id=html_rep.deck_override_id,
             html_file=html_rep.html_file,
-            browser_html_file=html_rep.browser_html_file
+            browser_html_file=html_rep.browser_html_file,
+            browser_font=html_rep.browser_font,
+            browser_font_size=html_rep.browser_font_size,
+            scratch_pad=html_rep.scratch_pad,
         )
 
     @classmethod
@@ -110,7 +125,8 @@ class Template(RepresentationBase, YamlObject, YamlRepr):
         ca: cls.CrowdAnki = data if isinstance(data, cls.CrowdAnki) else cls.CrowdAnki.from_dict(data)
         return cls(
             name=ca.name, question_format=ca.qfmt, answer_format=ca.afmt,
-            question_format_in_browser=ca.bqfmt, answer_format_in_browser=ca.bafmt, deck_override_id=ca.did
+            question_format_in_browser=ca.bqfmt, answer_format_in_browser=ca.bafmt,
+            deck_override_id=ca.did, browser_font=ca.bfont, browser_font_size=ca.bsize, scratch_pad=ca.scratchPad,
         )
 
     def encode_as_part(self):
@@ -123,6 +139,9 @@ class Template(RepresentationBase, YamlObject, YamlRepr):
             data_dict.setdefault(BROWSER_HTML_FILE.name, "")
 
         DECK_OVERRIDE_ID.append_name_if_differs(data_dict, self.deck_override_id)
+        BROWSER_FONT.append_name_if_differs(data_dict, self.browser_font)
+        BROWSER_FONT_SIZE.append_name_if_differs(data_dict, self.browser_font_size)
+        SCRATCH_PAD.append_name_if_differs(data_dict, self.scratch_pad)
 
         return data_dict
 
@@ -130,11 +149,14 @@ class Template(RepresentationBase, YamlObject, YamlRepr):
         data_dict = {
             ANSWER_FORMAT.anki_name: self.answer_format,
             BROWSER_ANSWER_FORMAT.anki_name: self.answer_format_in_browser,
+            BROWSER_FONT.anki_name: self.browser_font,
             BROWSER_QUESTION_FORMAT.anki_name: self.question_format_in_browser,
+            BROWSER_FONT_SIZE.anki_name: self.browser_font,
             DECK_OVERRIDE_ID.anki_name: self.deck_override_id,
             NAME.anki_name: self.name,
             ORDINAL.anki_name: ordinal,
             QUESTION_FORMAT.anki_name: self.question_format,
+            SCRATCH_PAD.anki_name: self.scratch_pad,
         }
 
         return data_dict
@@ -149,6 +171,9 @@ class Template(RepresentationBase, YamlObject, YamlRepr):
         BROWSER_QUESTION_FORMAT.append_name_if_differs(data_dict, self.question_format_in_browser)
         BROWSER_ANSWER_FORMAT.append_name_if_differs(data_dict, self.answer_format_in_browser)
         DECK_OVERRIDE_ID.append_name_if_differs(data_dict, self.deck_override_id)
+        BROWSER_FONT.append_name_if_differs(data_dict, self.browser_font)
+        BROWSER_FONT_SIZE.append_name_if_differs(data_dict, self.browser_font_size)
+        SCRATCH_PAD.append_name_if_differs(data_dict, self.scratch_pad)
 
         return data_dict
 

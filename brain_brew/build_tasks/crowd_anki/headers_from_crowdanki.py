@@ -30,15 +30,15 @@ class HeadersFromCrowdAnki(BuildPartTask):
     @classmethod
     def yamale_schema(cls) -> str:
         return f'''\
-            source: str()
             part_id: str()
+            source: str()
             save_to_file: str(required=False)
         '''
 
     @dataclass
     class Representation(RepresentationBase):
-        source: str
         part_id: str
+        source: str
         save_to_file: Optional[str] = field(default=None)
 
     @classmethod
@@ -52,8 +52,8 @@ class HeadersFromCrowdAnki(BuildPartTask):
         )
 
     rep: Representation
-    ca_export: CrowdAnkiExport
     part_id: str
+    ca_export: CrowdAnkiExport
     save_to_file: Optional[str]
 
     def execute(self):

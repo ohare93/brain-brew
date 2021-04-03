@@ -65,8 +65,8 @@ file_mapping:
     derivatives: list(include('file_mapping'), required=False)
 
 headers_from_crowd_anki:
-    source: str()
     part_id: str()
+    source: str()
     save_to_file: str(required=False)
 
 headers_from_yaml_part:
@@ -108,8 +108,8 @@ note_model_field:
     is_right_to_left: bool(required=False)
 
 note_model_from_crowd_anki:
-    source: str()
     part_id: str()
+    source: str()
     model_name: str(required=False)
     save_to_file: str(required=False)
 
@@ -141,8 +141,8 @@ note_models_to_crowd_anki_item:
     part_id: str()
 
 notes_from_crowd_anki:
-    source: str()
     part_id: str()
+    source: str()
     sort_order: list(str(), required=False)
     save_to_file: str(required=False)
     reverse_sort: str(required=False)
