@@ -20,14 +20,12 @@ class TestFiles:
         LOC = "tests/test_files/deck_parts/note_models/"
 
         TEST = "Test Model"
-        TEST_COMPLETE = LOC + "Test-Model.json"
 
-        LL_WORD = "LL Word"
-        LL_WORD_COMPLETE = LOC + "LL-Word.json"
+        LL_WORD = LOC + "LL Word"
 
-        LL_WORD_COMPLETE_ONLY_REQUIRED = LOC + "LL-Word-Only-Required.json"
+        LL_WORD_ONLY_REQUIRED = LOC + "LL Word Only Required"
 
-        LL_WORD_COMPLETE_NO_DEFAULTS = LOC + "LL-Word-No-Defaults.json"
+        LL_WORD_NO_DEFAULTS = LOC + "LL Word No Defaults"
 
     class NoteModels:
         LOC = "tests/test_files/deck_parts/yaml/note_models/"

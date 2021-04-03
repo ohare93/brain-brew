@@ -151,7 +151,7 @@ class Template(RepresentationBase, YamlObject, YamlRepr):
             BROWSER_ANSWER_FORMAT.anki_name: self.answer_format_in_browser,
             BROWSER_FONT.anki_name: self.browser_font,
             BROWSER_QUESTION_FORMAT.anki_name: self.question_format_in_browser,
-            BROWSER_FONT_SIZE.anki_name: self.browser_font,
+            BROWSER_FONT_SIZE.anki_name: self.browser_font_size,
             DECK_OVERRIDE_ID.anki_name: self.deck_override_id,
             NAME.anki_name: self.name,
             ORDINAL.anki_name: ordinal,

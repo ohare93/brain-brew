@@ -27,7 +27,7 @@ LATEX_PRE = AnkiField("latexPre", "latex_pre",
                                     "amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{"
                                     "document}\n")
 LATEX_POST = AnkiField("latexPost", "latex_post", default_value="\\end{document}")
-LATEX_SVG = AnkiField("latexSvg", "latex_svg", default_value=False)
+LATEX_SVG = AnkiField("latexsvg", "latex_svg", default_value=False)
 REQUIRED_FIELDS_PER_TEMPLATE = AnkiField("req", "required_fields_per_template", default_value=[])
 FIELDS = AnkiField("flds", "fields")
 TEMPLATES = AnkiField("tmpls", "templates")
@@ -121,9 +121,9 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
         name: str
         crowdanki_uuid: str
         css: str
-        req: List[list]
         flds: List[dict]
         tmpls: List[dict]
+        req: List[list] = field(default_factory=lambda: REQUIRED_FIELDS_PER_TEMPLATE.default_value)
         latexPre: str = field(default=LATEX_PRE.default_value)
         latexPost: str = field(default=LATEX_POST.default_value)
         latexsvg: bool = field(default=LATEX_SVG.default_value)  # TODO: Fix lowercase here in CrowdAnki
@@ -164,7 +164,7 @@ class NoteModel(YamlObject, YamlRepr, MediaContainer):
             fields=[Field.from_crowd_anki(f) for f in ca.flds],
             templates=[Template.from_crowdanki(t) for t in ca.tmpls],
             is_cloze=bool(ca.type),
-            name=ca.name, css=ca.css, latex_pre=ca.latexPre, latex_post=ca.latexPost,
+            name=ca.name, css=ca.css, latex_pre=ca.latexPre, latex_post=ca.latexPost, latex_svg=ca.latexsvg,
             required_fields_per_template=ca.req, tags=ca.tags, sort_field_num=ca.sortf, version=ca.vers,
             id=ca.crowdanki_uuid, crowdanki_type=ca.__type__
         )

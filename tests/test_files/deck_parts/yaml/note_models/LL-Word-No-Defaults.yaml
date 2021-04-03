@@ -141,31 +141,4 @@ tags:
 version:
 - TEST
 __type__: NoteModelTEST
-required_fields_per_template:
-- - 0
-  - all
-  - - 1
-- - 1
-  - all
-  - - 2
-- - 2
-  - all
-  - - 1
-    - 3
-- - 3
-  - all
-  - - 2
-    - 3
-- - 4
-  - all
-  - - 1
-    - 3
-- - 5
-  - all
-  - - 2
-    - 3
-- - 6
-  - all
-  - - 1
-    - 2
-    - 3
+required_fields_per_template: []

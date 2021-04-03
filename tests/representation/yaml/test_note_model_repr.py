@@ -9,11 +9,12 @@ from tests.test_files import TestFiles
 
 
 # CrowdAnki Files --------------------------------------------------------------------------
+from tests.test_helpers import debug_write_part_to_file
 
 
 @pytest.fixture
 def ca_nm_data_word():
-    return JsonFile.read_file(TestFiles.CrowdAnkiNoteModels.LL_WORD_COMPLETE)
+    return JsonFile.read_file(TestFiles.CrowdAnkiNoteModels.LL_WORD)
 
 
 @pytest.fixture
@@ -23,7 +24,7 @@ def ca_nm_word(ca_nm_data_word) -> NoteModel:
 
 @pytest.fixture
 def ca_nm_data_word_required_only():
-    return JsonFile.read_file(TestFiles.CrowdAnkiNoteModels.LL_WORD_COMPLETE_ONLY_REQUIRED)
+    return JsonFile.read_file(TestFiles.CrowdAnkiNoteModels.LL_WORD_ONLY_REQUIRED)
 
 
 @pytest.fixture
@@ -33,7 +34,7 @@ def ca_nm_word_required_only(ca_nm_data_word_required_only) -> NoteModel:
 
 @pytest.fixture
 def ca_nm_data_word_no_defaults():
-    return JsonFile.read_file(TestFiles.CrowdAnkiNoteModels.LL_WORD_COMPLETE_NO_DEFAULTS)
+    return JsonFile.read_file(TestFiles.CrowdAnkiNoteModels.LL_WORD_NO_DEFAULTS)
 
 
 @pytest.fixture
@@ -94,6 +95,7 @@ class TestCrowdAnkiNoteModel:
             model = ca_nm_word
 
             encoded = model.encode_as_crowdanki()
+            # JsonFile.write_file(TestFiles.CrowdAnkiNoteModels.LL_WORD, encoded)
 
             assert encoded == ca_nm_data_word
 
@@ -121,7 +123,6 @@ class TestCrowdAnkiNoteModel:
 
             encoded = model.encode()
 
-            # debug_write_part_to_file(model, TestFiles.NoteModels.LL_WORD_NO_DEFAULTS)
 
             assert encoded != ca_nm_data_word_no_defaults
             assert encoded == nm_data_word_no_defaults
