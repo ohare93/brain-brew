@@ -124,7 +124,7 @@ note_model_from_html_parts:
 
 note_model_mapping:
     note_models: any(list(str()), str())
-    columns_to_fields: map(str(), key=str())
+    columns_to_fields: map(str(), key=str(), required=False)
     personal_fields: list(str(), required=False)
 
 note_models_all_from_crowd_anki:

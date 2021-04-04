@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Optional
 
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.configuration.representation_base import RepresentationBase
@@ -45,28 +45,18 @@ class NoteModelMapping(YamlRepr):
     def yamale_schema(cls) -> str:
         return f'''\
             note_models: any(list(str()), str())
-            columns_to_fields: map(str(), key=str())
+            columns_to_fields: map(str(), key=str(), required=False)
             personal_fields: list(str(), required=False)
         '''
 
     @dataclass
     class Representation(RepresentationBase):
         note_models: Union[str, list]
-        columns_to_fields: Dict[str, str]
+        columns_to_fields: Optional[Dict[str, str]] = field(default=None)
         personal_fields: List[str] = field(default_factory=lambda: [])
 
-        @classmethod
-        def from_note_model(cls, model: NoteModel):
-            c_t_f = {GUID: GUID}
-            c_t_f.update({m_field.name: m_field.name for m_field in model.fields})
-            c_t_f.update({TAGS: TAGS})
-            return cls(
-                note_models=[model.name],
-                columns_to_fields=c_t_f
-            )
-
     note_models: Dict[str, PartHolder[NoteModel]]
-    columns: List[FieldMapping]
+    columns_manually_mapped: List[FieldMapping]
     personal_fields: List[FieldMapping]
 
     @classmethod
@@ -75,14 +65,15 @@ class NoteModelMapping(YamlRepr):
         note_models = [PartHolder.from_file_manager(model) for model in single_item_to_list(rep.note_models)]
 
         return cls(
-            columns=[FieldMapping(
+            columns_manually_mapped=[FieldMapping(
                 field_type=FieldMapping.FieldMappingType.COLUMN,
-                field_name=field,
-                value=key) for key, field in rep.columns_to_fields.items()],
+                field_name=f,
+                value=key) for key, f in rep.columns_to_fields.items()]
+            if rep.columns_to_fields else [],
             personal_fields=[FieldMapping(
                 field_type=FieldMapping.FieldMappingType.PERSONAL_FIELD,
-                field_name=field,
-                value="") for field in rep.personal_fields],
+                field_name=f,
+                value="") for f in rep.personal_fields],
             note_models=dict(map(lambda nm: (nm.part_id, nm), note_models))
         )
 
@@ -90,10 +81,13 @@ class NoteModelMapping(YamlRepr):
         return {model: self for model in self.note_models}
 
     def verify_contents(self):
+        if not self.columns_manually_mapped:  # No check needed if no manual mapping is performed
+            return
+
         errors = []
         required_field_definitions = [GUID, TAGS]
 
-        extra_fields = [field.field_name for field in self.columns
+        extra_fields = [field.field_name for field in self.columns_manually_mapped
                         if field.field_name not in required_field_definitions]
 
         for holder in self.note_models.values():
@@ -102,7 +96,7 @@ class NoteModelMapping(YamlRepr):
             # Check for Required Fields
             missing = []
             for req in required_field_definitions:
-                if req not in [field.field_name for field in self.columns]:
+                if req not in [field.field_name for field in self.columns_manually_mapped]:
                     missing.append(req)
 
             if missing:
@@ -111,7 +105,7 @@ class NoteModelMapping(YamlRepr):
 
             # Check Fields Align with Note Type
             missing = model.check_field_overlap(
-                [field.field_name for field in self.columns
+                [field.field_name for field in self.columns_manually_mapped
                  if field.field_name not in required_field_definitions]
             )
             missing = [m for m in missing if m not in [field.field_name for field in self.personal_fields]]
@@ -134,11 +128,11 @@ class NoteModelMapping(YamlRepr):
             raise Exception(errors)
 
     def csv_row_map_to_note_fields(self, row: dict) -> dict:
-        relevant_row_data = self.get_relevant_data(row)
+        relevant_row_data = self.filter_data_row_by_relevant_columns(row)
 
         for pf in self.personal_fields:  # Add in Personal Fields
             relevant_row_data.setdefault(pf.field_name, False)
-        for column in self.columns:  # Rename from Csv Column to Note Type Field
+        for column in self.columns_manually_mapped:  # Rename from Csv Column to Note Type Field
             if column.value in relevant_row_data:
                 relevant_row_data[column.field_name] = relevant_row_data.pop(column.value)
 
@@ -148,24 +142,23 @@ class NoteModelMapping(YamlRepr):
         return list(self.csv_row_map_to_note_fields({row_name: "" for row_name in row}).keys())
 
     def note_fields_map_to_csv_row(self, row):
-        for column in self.columns:  # Rename from Note Type Field to Csv Column
+        for column in self.columns_manually_mapped:  # Rename from Note Type Field to Csv Column
             if column.field_name in row:
                 row[column.value] = row.pop(column.field_name)
-
         for pf in self.personal_fields:  # Remove Personal Fields
             if pf.field_name in row:
                 del row[pf.field_name]
 
-        relevant_row_data = self.get_relevant_data(row)
+        relevant_row_data = self.filter_data_row_by_relevant_columns(row)
 
         return relevant_row_data
 
-    def get_relevant_data(self, row):
-        relevant_columns = [field.value for field in self.columns]
-        if not relevant_columns:
-            return []
-
+    def filter_data_row_by_relevant_columns(self, row):
         cols = list(row.keys())
+
+        relevant_columns = [f.value for f in self.columns_manually_mapped]
+        if not relevant_columns:
+            return row
 
         # errors = [KeyError(f"Missing column {rel_col}") for rel_col in relevant_columns if rel_col not in cols]
         # if errors:

@@ -66,10 +66,11 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
         )
         self.verify_notes_match_note_model_mappings(notes)
 
-        csv_data: List[dict] = [self.note_to_csv_row(note, self.note_model_mappings) for note in notes]
-        rows_by_guid = {row["guid"]: row for row in csv_data}
-
         for fm in self.file_mappings:
+            csv_data: List[dict] = [self.note_to_csv_row(note, self.note_model_mappings) for note in notes
+                                    if note.note_model in fm.get_used_note_model_names()]
+            rows_by_guid = {row["guid"]: row for row in csv_data}
+
             fm.compile_data()
             fm.set_relevant_data(rows_by_guid)
             fm.write_file_on_close()

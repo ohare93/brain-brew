@@ -49,14 +49,15 @@ class SharedBaseCsvs:
             note_model_names = cfm.get_used_note_model_names()
             available_columns = cfm.get_available_columns()
 
-            referenced_note_models_maps = [value for key, value in self.note_model_mappings.items() if
-                                           key in note_model_names]
+            referenced_note_models_maps = [value for key, value in self.note_model_mappings.items()
+                                           if key in note_model_names]
             for nm_map in referenced_note_models_maps:
                 for holder in nm_map.note_models.values():
-                    missing_columns = [col for col in holder.part.field_names_lowercase if
-                                       col not in nm_map.csv_headers_map_to_note_fields(available_columns)]
-                    if missing_columns:
-                        logging.warning(f"Csvs are missing columns from {holder.part_id} {missing_columns}")
+                    if holder.part.name in note_model_names:
+                        missing_columns = [col for col in holder.part.field_names_lowercase if
+                                           col not in nm_map.csv_headers_map_to_note_fields(available_columns)]
+                        if missing_columns:
+                            logging.warning(f"Csvs are missing columns from {holder.part_id} {missing_columns}")
 
         if errors:
             raise Exception(errors)

@@ -64,18 +64,17 @@ class InitRepo(Command):
 
         media_group_ca.execute()
 
-        note_model_mappings: List[NoteModelMapping.Representation] = []
+        note_model_mappings = [NoteModelMapping.Representation([model.name for model in note_models])]
         file_mappings: List[FileMapping.Representation] = []
 
         csv_files = []
 
         for model in note_models:
             if model.name in used_note_models_in_notes:
-                mapping_rep = NoteModelMapping.Representation.from_note_model(model)
                 csv_file_path = os.path.join(LOC_DATA, CsvFile.to_filename_csv(model.name))
-                CsvFile.create_file_with_headers(csv_file_path, list(mapping_rep.columns_to_fields.keys()))
+                column_headers = ["guid"] + model.field_names_lowercase + ["tags"]
+                CsvFile.create_file_with_headers(csv_file_path, column_headers)
 
-                note_model_mappings.append(mapping_rep)
                 file_mappings.append(FileMapping.Representation(
                     file=csv_file_path,
                     note_model=model.name
