@@ -59,8 +59,11 @@ class NotesFromCrowdAnki(SharedBaseNotes, BuildPartTask):
         if ca_wrapper.children:
             logging.warning("Child Decks / Sub-decks are not currently supported.")
 
-        nm_id_to_name: dict = {model.id: model.name for model in self.ca_export.note_models}
-        note_list = [self.ca_note_to_note(note, nm_id_to_name) for note in ca_wrapper.notes]
+        ca_models = self.ca_export.note_models
+        ca_notes = ca_wrapper.notes
+
+        nm_id_to_name: dict = {model.id: model.name for model in ca_models}
+        note_list = [self.ca_note_to_note(note, nm_id_to_name) for note in ca_notes]
 
         notes = Notes.from_list_of_notes(note_list)  # TODO: pass in sort method
         return PartHolder.override_or_create(self.part_id, self.save_to_file, notes)

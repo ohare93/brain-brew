@@ -171,8 +171,8 @@ class FileMapping(FileMappingDerivative):
         if changed > 0 or added > 0:
             self.data_set_has_changed = True
 
-        logging.info(f"Set {self.csv_file.file_location} data; changed {changed}, "
-                     f"added {added}, while {unchanged} were identical")
+            logging.info(f"Set {self.csv_file.file_location} data; changed {changed}, "
+                         f"added {added}, while {unchanged} were identical")
 
     def write_file_on_close(self):
         if self.data_set_has_changed:

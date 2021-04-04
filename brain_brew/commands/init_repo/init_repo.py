@@ -172,7 +172,7 @@ class InitRepo(Command):
         tl_builder = TopLevelBuilder(top_tasks)
 
         encoded_top_level_tasks = tl_builder.encode()
-        print(encoded_top_level_tasks)
+        # print(encoded_top_level_tasks)
 
         model_yaml_file_name = YamlObject.to_filename_yaml(filepath)
         YamlObject.dump_to_yaml_file(model_yaml_file_name, encoded_top_level_tasks)
