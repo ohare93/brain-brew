@@ -34,7 +34,6 @@ class FieldMapping:
             self.value = value
 
 
-
 @dataclass
 class NoteModelMapping(YamlRepr):
     @classmethod
@@ -100,8 +99,9 @@ class NoteModelMapping(YamlRepr):
                     missing.append(req)
 
             if missing:
-                errors.append(KeyError(f"""Note model(s) "{holder.part_id}" to Csv config error: \
-                                   Definitions for fields {missing} are required."""))
+                errors.append(KeyError(f"""Error in note_model_mappings part with note model "{holder.part_id}". \
+                                           When mapping columns_to_fields you must map all fields. \
+                                           Mapping is missing for for fields: {missing}"""))
 
             # Check Fields Align with Note Type
             missing = model.check_field_overlap(
@@ -111,10 +111,9 @@ class NoteModelMapping(YamlRepr):
             missing = [m for m in missing if m not in [field.field_name for field in self.personal_fields]]
 
             if missing:
-                errors.append(
-                    KeyError(f"Note model '{holder.part_id}' to Csv config error. "
-                             f"It expected {[field.name for field in model.fields]} but was missing: {missing}")
-                )
+                errors.append(KeyError(f"""Error in note_model_mappings part with note model "{holder.part_id}". \
+                                           When mapping columns_to_fields you must map all fields. \
+                                           Mapping is missing for for fields: {missing}"""))
 
             # Find mappings which do not exist on any note models
             if extra_fields:
@@ -122,7 +121,8 @@ class NoteModelMapping(YamlRepr):
 
         if extra_fields:
             errors.append(
-                KeyError(f"Field(s) '{extra_fields} are defined as mappings, but match no Note Model's field"))
+                KeyError(f"""Error in note_model_mappings part. \
+                             Field(s) '{extra_fields}' are defined as mappings, but match no Note Model fields"""))
 
         if errors:
             raise Exception(errors)
