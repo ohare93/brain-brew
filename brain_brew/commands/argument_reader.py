@@ -18,8 +18,7 @@ class BBArgumentReader(ArgumentParser):
     def __init__(self):
         super().__init__(
             prog="brainbrew",
-            description='Manage Flashcards by transforming them to various types. Currently supported: \
-                         Csv(s) and CrowdAnki Exports'
+            description='Manage Flashcards by transforming them to various types.'
         )
 
         self._set_parser_arguments()

@@ -28,7 +28,7 @@ from brain_brew.representation.yaml.note_model import NoteModel
 from brain_brew.representation.yaml.yaml_object import YamlObject
 from brain_brew.transformers.file_mapping import FileMapping
 from brain_brew.transformers.note_model_mapping import NoteModelMapping
-from brain_brew.utils import create_path_if_not_exists
+from brain_brew.utils import create_path_if_not_exists, filename_from_full_path, folder_name_from_full_path
 
 RECIPE_MEDIA = "deck_media"
 RECIPE_HEADERS = "deck_headers"
@@ -82,7 +82,7 @@ class InitRepo(Command):
 
                 csv_files.append(csv_file_path)
 
-        deck_path = os.path.join(LOC_BUILD, "deck")  # TODO: name the same as the file provided
+        deck_path = os.path.join(LOC_BUILD, folder_name_from_full_path(self.crowdanki_folder))  # TODO: name the same as the file provided
 
         # Generate the Source files that will be kept in the repo
         save_note_models_to_folder = SaveNoteModelsToFolder.from_repr(SaveNoteModelsToFolder.Representation(
@@ -165,7 +165,10 @@ class InitRepo(Command):
         ))
 
         top_level_tasks: List[TopLevelBuildTask] = [generate_guids_in_csv, dp_builder, generate_crowdanki]
-        self.create_yaml_from_top_level(top_level_tasks, os.path.join(LOC_RECIPES, "source_to_anki"))
+        source_to_anki_path = os.path.join(LOC_RECIPES, "source_to_anki")
+        self.create_yaml_from_top_level(top_level_tasks, source_to_anki_path)
+
+        print(f"\nRepo Init complete. You should now run `brainbrew run {source_to_anki_path}`")
 
     @staticmethod
     def create_yaml_from_top_level(top_tasks: List[TopLevelBuildTask], filepath: str):

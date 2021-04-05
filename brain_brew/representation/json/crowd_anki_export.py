@@ -44,7 +44,7 @@ class CrowdAnkiExport(SourceFile):
         if len(files) == 1:
             return files[0]
         elif not files:
-            file_loc = self.folder_location + self.folder_location.split("/")[-2] + ".json"
+            file_loc = self.folder_location + "deck.json"
             logging.warning(f"Creating missing json file '{file_loc}'")
             return file_loc
         else:
