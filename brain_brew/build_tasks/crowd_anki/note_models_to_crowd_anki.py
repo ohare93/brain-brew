@@ -52,6 +52,7 @@ class NoteModelsToCrowdAnki(YamlRepr):
                 rep = cls.Representation(part_id=data)  # Support string
 
             return cls(
+                rep=rep,
                 part_to_read=rep.part_id
             )
 
@@ -59,6 +60,7 @@ class NoteModelsToCrowdAnki(YamlRepr):
             self.part = PartHolder.from_file_manager(self.part_to_read)
             return self.part  # Todo: add filters in here
 
+        rep: Representation
         part: PartHolder[NoteModel] = field(init=False)
         part_to_read: str
 
@@ -78,9 +80,11 @@ class NoteModelsToCrowdAnki(YamlRepr):
 
         note_model_items = list(map(cls.NoteModelListItem.from_repr, rep.parts))
         return cls(
+            rep=rep,
             note_models=[nm.get_note_model() for nm in note_model_items]
         )
 
+    rep: Representation
     note_models: List[PartHolder[NoteModel]]
 
     def execute(self) -> List[dict]:

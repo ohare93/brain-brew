@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from typing import List, Union
 
-from brain_brew.configuration.build_config.build_task import TopLevelBuildTask
+from brain_brew.commands.run_recipe.build_task import TopLevelBuildTask
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.representation.generic.csv_file import CsvFile
 from brain_brew.utils import single_item_to_list, generate_anki_guid
@@ -36,10 +36,12 @@ class GenerateGuidsInCsvs(TopLevelBuildTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             sources=[CsvFile.create_or_get(csv) for csv in single_item_to_list(rep.source)],
             columns=rep.columns
         )
 
+    rep: Representation
     sources: List[CsvFile]
     columns: List[str]
 

@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Union
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.generic.csv_file import CsvFile, CsvKeys
-from brain_brew.utils import single_item_to_list, generate_anki_guid
+from brain_brew.utils import single_item_to_list
 
 FILE = "csv_file"
 NOTE_MODEL = "note_model"
@@ -27,6 +27,7 @@ class FileMappingDerivative(YamlRepr):
             note_model: str(required=False)
             sort_by_columns: list(str(), required=False)
             reverse_sort: bool(required=False)
+            case_insensitive_sort: bool(required=False)
             derivatives: list(include('{cls.task_name()}'), required=False)
         '''
 
@@ -38,33 +39,39 @@ class FileMappingDerivative(YamlRepr):
         reverse_sort: Optional[bool]
         derivatives: Optional[List['FileMappingDerivative.Representation']]
 
-        def __init__(self, file, note_model=None, sort_by_columns=None, reverse_sort=None, derivatives=None):
+        def __init__(self, file, note_model=None, sort_by_columns=None, reverse_sort=None, case_insensitive_sort=None, derivatives=None):
             self.file = file
             self.note_model = note_model
             self.sort_by_columns = sort_by_columns
             self.reverse_sort = reverse_sort
+            self.case_insensitive_sort = case_insensitive_sort
             self.derivatives = list(map(FileMappingDerivative.Representation.from_dict, derivatives)) \
                 if derivatives is not None else []
+
+    @classmethod
+    def from_repr(cls, data: Union[Representation, dict]):
+        rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
+        return cls(
+            rep=rep,
+            csv_file=CsvFile.create_or_get(rep.file),
+            note_model=rep.note_model.strip() if rep.note_model else None,
+            sort_by_columns=single_item_to_list(rep.sort_by_columns),
+            reverse_sort=rep.reverse_sort or False,
+            case_insensitive_sort=rep.case_insensitive_sort or True,
+            derivatives=list(map(cls.from_repr, rep.derivatives)) if rep.derivatives is not None else []
+        )
+
+    rep: Representation
 
     compiled_data: Dict[str, dict] = field(init=False)
 
     csv_file: CsvFile
 
     note_model: Optional[str]
-    sort_by_columns: Optional[list]
-    reverse_sort: Optional[bool]
+    sort_by_columns: list
+    reverse_sort: bool
+    case_insensitive_sort: bool
     derivatives: Optional[List['FileMappingDerivative']]
-
-    @classmethod
-    def from_repr(cls, data: Union[Representation, dict]):
-        rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
-        return cls(
-            csv_file=CsvFile.create_or_get(rep.file),
-            note_model=rep.note_model.strip() if rep.note_model else None,
-            sort_by_columns=single_item_to_list(rep.sort_by_columns),
-            reverse_sort=rep.reverse_sort or False,
-            derivatives=list(map(cls.from_repr, rep.derivatives)) if rep.derivatives is not None else []
-        )
 
     def get_available_columns(self):
         return self.csv_file.column_headers + [col for der in self.derivatives for col in der.get_available_columns()]
@@ -114,7 +121,7 @@ class FileMappingDerivative(YamlRepr):
 
     def write_to_csv(self, data_to_set):
         self.csv_file.set_data_from_superset(data_to_set)
-        self.csv_file.sort_data(self.sort_by_columns, self.reverse_sort)
+        self.csv_file.sort_data(self.sort_by_columns, self.reverse_sort, self.case_insensitive_sort)
         self.csv_file.write_file()
 
         for der in self.derivatives:
@@ -123,7 +130,7 @@ class FileMappingDerivative(YamlRepr):
 
 @dataclass
 class FileMapping(FileMappingDerivative):
-    note_model: str  # Override Optional on Parent
+    note_model: str  # Override Optional on Children
 
     data_set_has_changed: bool = field(init=False, default=False)
 
@@ -164,8 +171,8 @@ class FileMapping(FileMappingDerivative):
         if changed > 0 or added > 0:
             self.data_set_has_changed = True
 
-        logging.info(f"Set {self.csv_file.file_location} data; changed {changed}, "
-                     f"added {added}, while {unchanged} were identical")
+            logging.info(f"Set {self.csv_file.file_location} data; changed {changed}, "
+                         f"added {added}, while {unchanged} were identical")
 
     def write_file_on_close(self):
         if self.data_set_has_changed:

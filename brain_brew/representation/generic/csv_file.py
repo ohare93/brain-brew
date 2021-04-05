@@ -77,5 +77,12 @@ class CsvFile(SourceFile):
     def formatted_file_location(cls, location):
         return cls.to_filename_csv(location)
 
-    def sort_data(self, sort_by_keys, reverse_sort):
-        self._data = sort_dict(self._data, sort_by_keys, reverse_sort)
+    def sort_data(self, sort_by_keys, reverse_sort, case_insensitive_sort):
+        self._data = sort_dict(self._data, sort_by_keys, reverse_sort, case_insensitive_sort)
+
+    @classmethod
+    def create_file_with_headers(cls, filepath: str, headers: List[str]):
+        with open(filepath, mode='w+', newline='', encoding=_encoding) as csv_file:
+            csv_writer = csv.DictWriter(csv_file, fieldnames=headers, lineterminator='\n')
+
+            csv_writer.writeheader()

@@ -28,7 +28,8 @@ class CrowdAnkiJsonWrapper:
 
     @property
     def note_models(self) -> list:
-        return self.data.get(CA_NOTE_MODELS, [])
+        return CrowdAnkiJsonWrapper.get_from_self_and_children_recursively(self.data, [], CA_NOTE_MODELS)
+
 
     @note_models.setter
     def note_models(self, value: list):
@@ -36,7 +37,7 @@ class CrowdAnkiJsonWrapper:
 
     @property
     def notes(self) -> list:
-        return self.data.get(CA_NOTES, [])
+        return CrowdAnkiJsonWrapper.get_from_self_and_children_recursively(self.data, [], CA_NOTES)
 
     @notes.setter
     def notes(self, value: list):
@@ -44,7 +45,7 @@ class CrowdAnkiJsonWrapper:
 
     @property
     def media_files(self) -> list:
-        return self.data.get(CA_MEDIA_FILES, [])
+        return CrowdAnkiJsonWrapper.get_from_self_and_children_recursively(self.data, [], CA_MEDIA_FILES)
 
     @media_files.setter
     def media_files(self, value: list):
@@ -57,6 +58,15 @@ class CrowdAnkiJsonWrapper:
     @name.setter
     def name(self, value: list):
         self.data[CA_NAME] = value
+
+    @staticmethod
+    def get_from_self_and_children_recursively(data: dict, running_data: list, key_name: str):
+        running_data += data.get(key_name, [])
+        children = data.get(CA_CHILDREN, [])
+        if isinstance(children, list):
+            for child in children:
+                running_data = CrowdAnkiJsonWrapper.get_from_self_and_children_recursively(child, running_data, key_name)
+        return running_data
 
 
 class CrowdAnkiNoteWrapper:

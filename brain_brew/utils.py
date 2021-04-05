@@ -2,6 +2,7 @@ import logging
 import os
 import random
 import re
+import shutil
 import string
 from pathlib import Path
 from typing import List
@@ -31,6 +32,14 @@ def filename_from_full_path(full_path):
     return re.findall(r'[^\\/:*?"<>|\r\n]+$', full_path)[0]
 
 
+def folder_name_from_full_path(full_path):
+    return re.findall(r'[^\\/:*?"<>|\r\n]+[/]?$', full_path)[0]
+
+
+def split_by_regex(str_to_split: str, pattern: str) -> List[str]:
+    return re.split(pattern, str_to_split)
+
+
 def find_media_in_field(field_value: str) -> List[str]:
     if not field_value:
         return []
@@ -58,6 +67,18 @@ def create_path_if_not_exists(path):
         os.makedirs(dir_name, exist_ok=True)
 
 
+def clear_contents_of_folder(path):
+    for filename in os.listdir(path):
+        file_path = os.path.join(path, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
+
+
 def split_tags(tags_value: str) -> list:
     split = [entry.strip() for entry in re.split(r';\s*|,\s*|\s+', tags_value)]
     while "" in split:
@@ -66,8 +87,7 @@ def split_tags(tags_value: str) -> list:
 
 
 def join_tags(tags_list: list) -> str:
-    from brain_brew.configuration.global_config import GlobalConfig
-    return GlobalConfig.get_instance().join_values_with.join(tags_list)
+    return ", ".join(tags_list)  # TODO: Make configurable
 
 
 def generate_anki_guid() -> str:
@@ -91,11 +111,7 @@ def generate_anki_guid() -> str:
     return base91(random.randint(0, 2 ** 64 - 1))
 
 
-def sort_dict(data, sort_by_keys, reverse_sort, case_insensitive_sort=None):
-    from brain_brew.configuration.global_config import GlobalConfig
-    if case_insensitive_sort is None:
-        case_insensitive_sort = GlobalConfig.get_instance().sort_case_insensitive
-
+def sort_dict(data, sort_by_keys, reverse_sort, case_insensitive_sort):
     if sort_by_keys:
         if case_insensitive_sort:
             def sort_method(i):

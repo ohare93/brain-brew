@@ -4,13 +4,16 @@ from dataclasses import dataclass
 from textwrap import indent
 from typing import Dict, List, Type, Set
 
-from brain_brew.configuration.build_config.build_task import BuildTask
+from brain_brew.commands.run_recipe.build_task import BuildTask
 from brain_brew.representation.yaml.yaml_object import YamlObject
 
 
 @dataclass
 class RecipeBuilder(YamlObject, metaclass=ABCMeta):
     tasks: List[BuildTask]
+
+    def tasks_to_encoded(self) -> list:
+        return [{task.task_name(): task.encode_rep()} for task in self.tasks]
 
     @classmethod
     def from_list(cls, data: List[dict]):

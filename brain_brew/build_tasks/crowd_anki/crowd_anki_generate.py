@@ -5,7 +5,7 @@ from brain_brew.build_tasks.crowd_anki.headers_to_crowd_anki import HeadersToCro
 from brain_brew.build_tasks.crowd_anki.media_group_to_crowd_anki import MediaGroupToCrowdAnki
 from brain_brew.build_tasks.crowd_anki.note_models_to_crowd_anki import NoteModelsToCrowdAnki
 from brain_brew.build_tasks.crowd_anki.notes_to_crowd_anki import NotesToCrowdAnki
-from brain_brew.configuration.build_config.build_task import TopLevelBuildTask
+from brain_brew.commands.run_recipe.build_task import TopLevelBuildTask
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.representation.generic.media_file import MediaFile
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
@@ -44,6 +44,7 @@ class CrowdAnkiGenerate(TopLevelBuildTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             crowd_anki_export=CrowdAnkiExport.create_or_get(rep.folder),
             notes_transform=NotesToCrowdAnki.from_repr(rep.notes),
             note_model_transform=NoteModelsToCrowdAnki.from_repr(rep.note_models),
@@ -51,6 +52,7 @@ class CrowdAnkiGenerate(TopLevelBuildTask):
             media_transform=MediaGroupToCrowdAnki.from_repr(rep.media) if rep.media else None
         )
 
+    rep: Representation
     crowd_anki_export: CrowdAnkiExport
     notes_transform: NotesToCrowdAnki
     note_model_transform: NoteModelsToCrowdAnki

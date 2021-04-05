@@ -1,8 +1,8 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Dict, Union
 
 from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
-from brain_brew.configuration.build_config.build_task import TopLevelBuildTask
+from brain_brew.commands.run_recipe.build_task import TopLevelBuildTask
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.representation.yaml.notes import Notes, Note
 from brain_brew.transformers.file_mapping import FileMapping
@@ -32,32 +32,45 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
     def yamale_dependencies(cls) -> set:
         return {NoteModelMapping, FileMapping}
 
-    notes: PartHolder[Notes]  # TODO: Accept Multiple Note Parts
-
     @dataclass
     class Representation(SharedBaseCsvs.Representation):
         notes: str
+
+        def encode(self):
+            return {
+                "notes": self.notes,
+                "file_mappings": [fm.encode() for fm in self.file_mappings],
+                "note_model_mappings": [nmm.encode() for nmm in self.note_model_mappings]
+            }
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             notes=PartHolder.from_file_manager(rep.notes),
             file_mappings=rep.get_file_mappings(),
-            note_model_mappings=dict(*map(cls.map_nmm, rep.note_model_mappings))
+            note_model_mappings={k: v for nm in rep.note_model_mappings for k, v in cls.map_nmm(nm).items()}
         )
+
+    rep: Representation
+    notes: PartHolder[Notes]  # TODO: Accept Multiple Note Parts
 
     def execute(self):
         self.verify_contents()
 
         notes: List[Note] = self.notes.part.get_sorted_notes_copy(
-            sort_by_keys=[], reverse_sort=False, case_insensitive_sort=False)
+            sort_by_keys=[],
+            reverse_sort=False,
+            case_insensitive_sort=True
+        )
         self.verify_notes_match_note_model_mappings(notes)
 
-        csv_data: List[dict] = [self.note_to_csv_row(note, self.note_model_mappings) for note in notes]
-        rows_by_guid = {row["guid"]: row for row in csv_data}
-
         for fm in self.file_mappings:
+            csv_data: List[dict] = [self.note_to_csv_row(note, self.note_model_mappings) for note in notes
+                                    if note.note_model in fm.get_used_note_model_names()]
+            rows_by_guid = {row["guid"]: row for row in csv_data}
+
             fm.compile_data()
             fm.set_relevant_data(rows_by_guid)
             fm.write_file_on_close()

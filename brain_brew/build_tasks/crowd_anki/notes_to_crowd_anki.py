@@ -25,6 +25,7 @@ class NotesToCrowdAnki(YamlRepr, SharedBaseNotes):
             reverse_sort: bool(required=False)
             additional_items_to_add: map(str(), key=str(), required=False)
             override: include('{NotesOverride.task_name()}', required=False)
+            case_insensitive_sort: bool(required=False)
         '''
 
     @classmethod
@@ -38,27 +39,36 @@ class NotesToCrowdAnki(YamlRepr, SharedBaseNotes):
         sort_order: Optional[List[str]] = field(default_factory=lambda: None)
         reverse_sort: Optional[bool] = field(default_factory=lambda: None)
         override: Optional[dict] = field(default_factory=lambda: None)
+        case_insensitive_sort: Optional[bool] = field(default_factory=lambda: None)
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             notes=PartHolder.from_file_manager(rep.part_id).part,
             sort_order=SharedBaseNotes._get_sort_order(rep.sort_order),
             reverse_sort=SharedBaseNotes._get_reverse_sort(rep.reverse_sort),
             additional_items_to_add=rep.additional_items_to_add or {},
-            override=NotesOverride.from_repr(rep.override) if rep.override else None
+            override=NotesOverride.from_repr(rep.override) if rep.override else None,
+            case_insensitive_sort=rep.case_insensitive_sort or True
         )
 
+    rep: Representation
     notes: Notes
     additional_items_to_add: dict
     sort_order: Optional[List[str]] = field(default_factory=lambda: None)
     reverse_sort: Optional[bool] = field(default_factory=lambda: None)
     override: Optional[NotesOverride] = field(default_factory=lambda: None)
+    case_insensitive_sort: bool = field(default=True)
 
     def execute(self, nm_name_to_id: dict) -> List[dict]:
 
-        notes = self.notes.get_sorted_notes_copy(sort_by_keys=self.sort_order, reverse_sort=self.reverse_sort)
+        notes = self.notes.get_sorted_notes_copy(
+            sort_by_keys=self.sort_order,
+            reverse_sort=self.reverse_sort,
+            case_insensitive_sort=self.case_insensitive_sort
+        )
 
         if self.override:
             notes = [self.override.override(note) for note in notes]

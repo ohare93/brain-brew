@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Union, Optional
 
-from brain_brew.configuration.build_config.build_task import BuildPartTask
+from brain_brew.commands.run_recipe.build_task import BuildPartTask
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.representation.json.crowd_anki_export import CrowdAnkiExport
@@ -30,28 +30,30 @@ class HeadersFromCrowdAnki(BuildPartTask):
     @classmethod
     def yamale_schema(cls) -> str:
         return f'''\
-            source: str()
             part_id: str()
+            source: str()
             save_to_file: str(required=False)
         '''
 
     @dataclass
     class Representation(RepresentationBase):
-        source: str
         part_id: str
+        source: str
         save_to_file: Optional[str] = field(default=None)
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             ca_export=CrowdAnkiExport.create_or_get(rep.source),
             part_id=rep.part_id,
             save_to_file=rep.save_to_file
         )
 
-    ca_export: CrowdAnkiExport
+    rep: Representation
     part_id: str
+    ca_export: CrowdAnkiExport
     save_to_file: Optional[str]
 
     def execute(self):
@@ -59,7 +61,7 @@ class HeadersFromCrowdAnki(BuildPartTask):
 
         headers = Headers(self.crowd_anki_to_headers(ca_wrapper.data))
 
-        PartHolder.override_or_create(self.part_id, self.save_to_file, headers)
+        return PartHolder.override_or_create(self.part_id, self.save_to_file, headers)
 
     @staticmethod
     def crowd_anki_to_headers(ca_data: dict):

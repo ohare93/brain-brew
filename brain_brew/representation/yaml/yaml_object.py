@@ -18,7 +18,7 @@ yaml_dump.representer.ignore_aliases = lambda *data: True
 class YamlObject(ABC):
     @staticmethod
     def read_to_dict(filename: str):
-        filename = YamlObject.append_yaml_if_needed(filename)
+        filename = YamlObject.to_filename_yaml(filename)
 
         if not Path(filename).is_file():
             raise FileNotFoundError(filename)
@@ -27,7 +27,7 @@ class YamlObject(ABC):
             return yaml_load.load(file)
 
     @staticmethod
-    def append_yaml_if_needed(filename: str):
+    def to_filename_yaml(filename: str):
         if filename[-5:] != ".yaml" and filename[-4:] != ".yml":
             return filename + ".yaml"
         return filename
@@ -42,10 +42,14 @@ class YamlObject(ABC):
         pass
 
     def dump_to_yaml(self, filepath):
-        filepath = YamlObject.append_yaml_if_needed(filepath)
+        self.dump_to_yaml_file(filepath, self.encode())
+
+    @classmethod
+    def dump_to_yaml_file(cls, filepath, data):
+        filepath = YamlObject.to_filename_yaml(filepath)
 
         create_path_if_not_exists(filepath)
 
         with open(filepath, 'w') as fp:
-            yaml_dump.dump(self.encode(), fp)
+            yaml_dump.dump(data, fp)
 

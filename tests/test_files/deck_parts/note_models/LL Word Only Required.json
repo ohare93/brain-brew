@@ -40,63 +40,6 @@
         }
     ],
     "name": "LL Word",
-    "req": [
-        [
-            0,
-            "all",
-            [
-                1
-            ]
-        ],
-        [
-            1,
-            "all",
-            [
-                2
-            ]
-        ],
-        [
-            2,
-            "all",
-            [
-                1,
-                3
-            ]
-        ],
-        [
-            3,
-            "all",
-            [
-                2,
-                3
-            ]
-        ],
-        [
-            4,
-            "all",
-            [
-                1,
-                3
-            ]
-        ],
-        [
-            5,
-            "all",
-            [
-                2,
-                3
-            ]
-        ],
-        [
-            6,
-            "all",
-            [
-                1,
-                2,
-                3
-            ]
-        ]
-    ],
     "tmpls": [
         {
             "afmt": "{{#X Word}}\n\t<span class=\"word\">{{X Word}}</span>\n{{/X Word}}\n\n<hr id=answer>\n\n{{Picture}}\n\n{{#X Pronunciation (Recording and/or IPA)}}\n\t<br><span class=\"pronunciation\">{{X Pronunciation (Recording and/or IPA)}}</span>\n{{/X Pronunciation (Recording and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n{{/Extra}}",

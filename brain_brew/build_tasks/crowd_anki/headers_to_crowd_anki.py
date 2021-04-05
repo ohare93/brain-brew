@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Union
 
 from brain_brew.build_tasks.crowd_anki.headers_from_crowdanki import headers_default_values
@@ -24,9 +24,11 @@ class HeadersToCrowdAnki:
             rep = cls.Representation(part_id=data)  # Support single string being passed in
 
         return cls(
+            rep=rep,
             headers=PartHolder.from_file_manager(rep.part_id).part
         )
 
+    rep: Representation
     headers: Headers
 
     def execute(self) -> dict:

@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Union, Optional
 
 from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
-from brain_brew.configuration.build_config.build_task import BuildPartTask
+from brain_brew.commands.run_recipe.build_task import BuildPartTask
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.representation.yaml.notes import Note, Notes
 from brain_brew.transformers.file_mapping import FileMapping
@@ -38,16 +38,26 @@ class NotesFromCsvs(SharedBaseCsvs, BuildPartTask):
         part_id: str
         save_to_file: Optional[str] = field(default=None)
 
+        def encode(self):
+            return {
+                "part_id": self.part_id,
+                "save_to_file": self.save_to_file,
+                "file_mappings": [fm.encode() for fm in self.file_mappings],
+                "note_model_mappings": [nmm.encode() for nmm in self.note_model_mappings]
+            }
+
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             part_id=rep.part_id,
             save_to_file=rep.save_to_file,
             file_mappings=rep.get_file_mappings(),
-            note_model_mappings=dict(*map(cls.map_nmm, rep.note_model_mappings))
+            note_model_mappings={k: v for nm in rep.note_model_mappings for k, v in cls.map_nmm(nm).items()}
         )
 
+    rep: Representation
     part_id: str
     save_to_file: Optional[str]
 

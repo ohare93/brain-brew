@@ -25,8 +25,13 @@ class HTMLFile(SourceFile):
         return self.get_deep_copy(self._data) if deep_copy else self._data
 
     @staticmethod
+    def write_file(file_location, data):
+        with open(file_location, "w+") as file:
+            file.write(data)
+
+    @staticmethod
     def to_filename_html(filename: str) -> str:
-        return filename + ".csv" if not filename.endswith(".csv") else filename
+        return filename + ".html" if not filename.endswith(".html") else filename
 
     @classmethod
     def formatted_file_location(cls, location):

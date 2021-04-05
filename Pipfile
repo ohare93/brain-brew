@@ -13,7 +13,6 @@ clint = "==0.5.1"
 coverage = "==4.5.4"
 "ruamel.yaml" = "==0.16.10"
 yamale = "==3.0.4"
-PyYaml = "*"
 
 [requires]
 python_version = "3.7"

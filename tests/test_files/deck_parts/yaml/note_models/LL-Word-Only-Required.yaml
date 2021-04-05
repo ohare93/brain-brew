@@ -76,31 +76,4 @@ templates:
     >{{Y Pronunciation (Recording and/or IPA)}}</span>\n{{/Y Pronunciation (Recording\
     \ and/or IPA)}}\n\n<br>\n{{#Extra}}\n\t<br><span class=\"extrainfo\">{{Extra}}</span>\n\
     {{/Extra}}"
-required_fields_per_template:
-- - 0
-  - all
-  - - 1
-- - 1
-  - all
-  - - 2
-- - 2
-  - all
-  - - 1
-    - 3
-- - 3
-  - all
-  - - 2
-    - 3
-- - 4
-  - all
-  - - 1
-    - 3
-- - 5
-  - all
-  - - 2
-    - 3
-- - 6
-  - all
-  - - 1
-    - 2
-    - 3
+required_fields_per_template: []

@@ -1,6 +1,7 @@
 import pytest
 
-from brain_brew.utils import find_media_in_field, str_to_lowercase_no_separators, split_tags
+from brain_brew.representation.yaml.note_model_template import html_separator_regex
+from brain_brew.utils import find_media_in_field, str_to_lowercase_no_separators, split_tags, split_by_regex
 
 
 class TestFindMedia:
@@ -54,6 +55,22 @@ class TestSplitTags:
     ])
     def test_runs(self, str_to_split, expected_result):
         assert split_tags(str_to_split) == expected_result
+
+
+class TestSplitByRegex:
+    @pytest.mark.parametrize("str_to_split, split_by, expected_result", [
+        ("testbabyhighfive", "baby", ["test", "highfive"]),
+        ("testbabyhighfive", "(baby)", ["test", "baby", "highfive"]),
+        ("testbabyhighfive", html_separator_regex, ["testbabyhighfive"]),
+        ("test\n---\nhighfive", html_separator_regex, ["test", "highfive"]),
+        ("test\n---\n\nhighfive", html_separator_regex, ["test", "highfive"]),
+        ("test\n-\nhighfive", html_separator_regex, ["test", "highfive"]),
+        ("test\n\n\n\n-\nhighfive", html_separator_regex, ["test", "highfive"]),
+        ("test\n\n\n\n---\n\n\n\nhighfive", html_separator_regex, ["test", "highfive"]),
+        ("test\n\n\n\n---\n\n\n\nhighfive\n\n--\n\nbackflip", html_separator_regex, ["test", "highfive", "backflip"]),
+    ])
+    def test_runs(self, str_to_split, split_by, expected_result):
+        assert split_by_regex(str_to_split, split_by) == expected_result
 
 
 # class TestJoinTags:

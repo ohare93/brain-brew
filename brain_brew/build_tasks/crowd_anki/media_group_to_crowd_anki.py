@@ -6,7 +6,7 @@ from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 from brain_brew.representation.generic.media_file import MediaFile
 from brain_brew.representation.yaml.media_group import MediaGroup
-from brain_brew.transformers.media_group_save_to_location import save_media_groups_to_location
+from brain_brew.transformers.save_media_group_to_location import save_media_groups_to_location
 
 
 @dataclass
@@ -29,9 +29,11 @@ class MediaGroupToCrowdAnki(YamlRepr):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             parts=list(holder.part for holder in map(PartHolder.from_file_manager, rep.parts))
         )
 
+    rep: Representation
     parts: List[MediaGroup]
 
     def execute(self, ca_media_folder: str) -> Set[MediaFile]:

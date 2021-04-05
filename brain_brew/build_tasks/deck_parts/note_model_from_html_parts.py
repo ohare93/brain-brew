@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional, Union, List
 
-from brain_brew.configuration.build_config.build_task import BuildPartTask
+from brain_brew.commands.run_recipe.build_task import BuildPartTask
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.representation.generic.html_file import HTMLFile
@@ -46,6 +46,7 @@ class NoteModelFromHTMLParts(BuildPartTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             part_id=rep.part_id,
             model_id=rep.model_id,
             css=HTMLFile.create_or_get(rep.css_file).get_data(deep_copy=True),
@@ -55,6 +56,7 @@ class NoteModelFromHTMLParts(BuildPartTask):
             save_to_file=rep.save_to_file
         )
 
+    rep: Representation
     part_id: str
     model_id: str
     css: str

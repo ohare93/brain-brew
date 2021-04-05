@@ -4,9 +4,11 @@ from typing import Dict, Type, List, Set
 from brain_brew.build_tasks.crowd_anki.crowd_anki_generate import CrowdAnkiGenerate
 from brain_brew.build_tasks.csvs.csvs_generate import CsvsGenerate
 from brain_brew.build_tasks.csvs.generate_guids_in_csvs import GenerateGuidsInCsvs
-from brain_brew.configuration.build_config.build_task import BuildTask, TopLevelBuildTask
-from brain_brew.configuration.build_config.parts_builder import PartsBuilder
-from brain_brew.configuration.build_config.recipe_builder import RecipeBuilder
+from brain_brew.build_tasks.deck_parts.save_media_group_to_folder import SaveMediaGroupsToFolder
+from brain_brew.build_tasks.deck_parts.save_note_models_to_folder import SaveNoteModelsToFolder
+from brain_brew.commands.run_recipe.build_task import BuildTask, TopLevelBuildTask
+from brain_brew.commands.run_recipe.parts_builder import PartsBuilder
+from brain_brew.commands.run_recipe.recipe_builder import RecipeBuilder
 from brain_brew.interfaces.yamale_verifyable import YamlRepr
 
 
@@ -69,8 +71,8 @@ class TopLevelBuilder(YamlRepr, RecipeBuilder):
     def from_repr(cls, data: dict):
         pass
 
-    def encode(self) -> dict:
-        pass
+    def encode(self) -> list:
+        return self.tasks_to_encoded()
 
     @classmethod
     def from_yaml_file(cls, filename: str):
@@ -78,4 +80,8 @@ class TopLevelBuilder(YamlRepr, RecipeBuilder):
 
     @classmethod
     def yamale_dependencies(cls) -> Set[Type[TopLevelBuildTask]]:
-        return {CrowdAnkiGenerate, CsvsGenerate, PartsBuilder, GenerateGuidsInCsvs}
+        return {
+            PartsBuilder,
+            CrowdAnkiGenerate, CsvsGenerate,
+            GenerateGuidsInCsvs, SaveMediaGroupsToFolder, SaveNoteModelsToFolder
+        }

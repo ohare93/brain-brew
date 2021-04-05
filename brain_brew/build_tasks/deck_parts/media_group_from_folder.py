@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
 from typing import Optional, Union, List
 
-from brain_brew.configuration.build_config.build_task import BuildPartTask
+from brain_brew.commands.run_recipe.build_task import BuildPartTask
 from brain_brew.configuration.part_holder import PartHolder
 from brain_brew.configuration.representation_base import RepresentationBase
 from brain_brew.representation.yaml.media_group import MediaGroup
-from brain_brew.transformers.media_group_from_location import create_media_group_from_location
+from brain_brew.transformers.create_media_group_from_location import create_media_group_from_location
 
 
 @dataclass
@@ -18,8 +18,8 @@ class MediaGroupFromFolder(BuildPartTask):
     def yamale_schema(cls) -> str:
         return f'''\
             part_id: str()
-            save_to_file: str(required=False)
             source: str()
+            save_to_file: str(required=False)
             recursive: bool(required=False)
             filter_whitelist_from_parts: list(str(), required=False)
             filter_blacklist_from_parts: list(str(), required=False)
@@ -27,8 +27,8 @@ class MediaGroupFromFolder(BuildPartTask):
 
     @dataclass
     class Representation(RepresentationBase):
-        source: str
         part_id: str
+        source: str
         filter_blacklist_from_parts: List[str] = field(default_factory=list)
         filter_whitelist_from_parts: List[str] = field(default_factory=list)
         recursive: Optional[bool] = field(default=True)
@@ -38,6 +38,7 @@ class MediaGroupFromFolder(BuildPartTask):
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
         return cls(
+            rep=rep,
             part=create_media_group_from_location(
                 part_id=rep.part_id,
                 save_to_file=rep.save_to_file,
@@ -50,6 +51,7 @@ class MediaGroupFromFolder(BuildPartTask):
             )
         )
 
+    rep: Representation
     part: MediaGroup
 
     def execute(self):
