@@ -14,34 +14,45 @@ See there for inspiration!
 
 # Installation
 
-:exclamation: See the [Brain Brew Starter Project](https://github.com/ohare93/brain-brew-starter) for a working clone-able Git repo.
 
 Install the latest version of [Brain Brew on PyPi.org](https://pypi.org/project/Brain-Brew/)
 with `pip install brain-brew`. Virtual environment using `pipenv` is recommended!
 
+:exclamation: See the [Brain Brew Starter Project][BrainBrewStarter]for a working clone-able Git repo.
+From this repo you can now create a functional Brain Brew setup automatically, 
+with your own flashcards! Simply by running
+
+```bash
+brainbrew init [Your CrowdAnki Export Folder]
+```
+
+This will generate the entire working repo for you, including the recipe files, source files, and build folder.
+For bi-directional sync: Anki <-> Source!
+
+See [the starter repo][BrainBrewStarter] for a step-by-step guide for all of this.
 
 # Usage
 
 Brain Brew runs from the command line and takes a *Recipe.yaml* file to run.
 
 ```bash
-brain-brew source_to_anki.yaml
+brainbrew run source_to_anki.yaml
 ```
 
 Full usage help text:
 ```bash
-usage: brain-brew [-h] [--config CONFIG_FILE] [--verify] recipe
+Brain Brew vx.y.z
+usage: brainbrew [-h] {run,init} ...
 
-Manage Flashcards by Transforming them to various types
+Manage Flashcards by transforming them to various types.
 
 positional arguments:
-  recipe                Yaml file to use as the recipe
+  {run,init}  Commands that can be run
+    run       Run a recipe file. This will convert some data to another format, based on the instructions in the recipe file.
+    init      Initialise a Brain Brew repository, using a CrowdAnki export as the base data.
 
 optional arguments:
-  -h, --help            show this help message and exit
-  --config CONFIG_FILE, --global-config CONFIG_FILE, -c CONFIG_FILE
-                        Global config file to use
-  --verify, -v          Only verify the recipe contents, without running it.
+  -h, --help  show this help message and exit
 ```
 
 
@@ -53,6 +64,13 @@ What's YAML? See the current spec [here](http://www.yaml.org/spec/1.2/spec.html)
 
 Run a recipe with `--verify` or `-v` to confirm your recipe is valid, without actually running it.
 A dry run of sorts.
+
+### Tasks
+
+A recipe is made of many individual tasks, which do specific functions. 
+Full detailed list coming soon™️, but see the [Yamale recipe schema](https://github.com/ohare93/brain-brew/blob/master/brain_brew/schemas/recipe.yaml) 
+(local file: `brain_brew/schemas/recipe.yaml`) in the meantime :+1:
+
 
 
 
@@ -114,28 +132,43 @@ Reusable subconfig files allow for minor changes without breaking the DRY princi
 -->
 
 ```Yaml
-# Build tasks to run
-tasks:
-  # Convert a collection of csvs into Deck Parts
-  - csv_collection_to_parts:
-      notes: words.json
+- generate_guids_in_csv:
+    source: src/data/words.csv
+    columns: [ guid ]
 
-      # List of Note Models
-      # How each Note Model used is built up from the csv data
+- build_parts:
+  - note_model_from_yaml_part:
+      part_id: LL Word
+      file: src/note_models/LL Word.yaml
+
+  - headers_from_yaml_part:
+      part_id: default header
+      file: src/headers/default.yaml
+      override:  # Optional
+        deck_description_html_file: src/headers/desc.html
+
+  - media_group_from_folder:
+      part_id: all_media
+      source: src/media
+      recursive: true  # Optional
+
+  - notes_from_csvs:
+      part_id: english-to-danish
+
       note_model_mappings:
-        - note_model: LL Word
-          csv_columns_to_fields:  # Map of csv column to note model field
+        - note_models:
+            - LL Word
+          columns_to_fields:  # Optional
             guid: guid
             tags: tags
 
             english: English
             danish: Word
-            danish audio: Pronunciation (Recording and/or IPA)
             picture: Picture
-
-      # List of csvs to use
-      csv_file_mappings:
-        - csv: csvs/words.csv
+            danish audio: Pronunciation (Recording and/or IPA)
+      
+      file_mappings:
+        - file: src/data/words.csv
           note_model: LL Word
           sort_by_columns: [english]  # Optional
           reverse_sort: no  # Optional
@@ -180,15 +213,20 @@ The two following csv files contain information about England, but split into di
 Brain Brew can be told that `data-capital` is a derivative of `data-main` in the build config file as such:
 
 ```yaml
-- csv: src/data/data-main.csv               # <---- Main
+- file: src/data/data-main.csv               # <---- Main
   note_model: Ultimate Geography
   derivatives:
-    - csv: src/data/data-country.csv
-    - csv: src/data/data-country-info.csv
-    - csv: src/data/data-capital.csv        # <---- Capital
-    - csv: src/data/data-capital-info.csv
-    - csv: src/data/data-capital-hint.csv
-    - csv: src/data/data-flag-similarity.csv
+    - file: src/data/data-country.csv
+    - file: src/data/data-country-info.csv
+    - file: src/data/data-capital.csv        # <---- Capital
+    - file: src/data/data-capital-info.csv
+    - file: src/data/data-capital-hint.csv
+    # note_model: different_note_model
+    # derivatives:
+    # - file: derivative-of-a-derivative.csv
+      # derivatives:
+      # - file: infinite-nesting.csv
+    - file: src/data/data-flag-similarity.csv
 ```
 
 When run Brain Brew will perform the following steps for each derivative:
@@ -209,7 +247,8 @@ When run Brain Brew will perform the following steps for each derivative:
 
 1. **Derivatives can be given a Note Model**, which overrides their parent's note model for all the matched rows.
 
-See the [Brain Brew Starter Project](https://github.com/ohare93/brain-brew-starter) for an example of Csv Derivatives working.
+See the [Brain Brew Starter Project][BrainBrewStarter] for an example of Csv Derivatives working.
 
 
 
+[BrainBrewStarter]: https://github.com/ohare93/brain-brew-starter
