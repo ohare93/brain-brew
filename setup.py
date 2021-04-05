@@ -1,11 +1,16 @@
 import setuptools
 
+
+def latest_version_number():
+    return "0.3.3"
+
+
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="Brain-Brew",
-    version="0.3.2",
+    version=latest_version_number(),
     author="Jordan Munch O'Hare",
     author_email="brainbrew@jordan.munchohare.com",
     description="Automated Anki flashcard creation and extraction to/from Csv ",

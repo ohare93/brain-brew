@@ -3,6 +3,7 @@ from enum import Enum
 import sys
 from argparse import ArgumentParser
 
+from setup import latest_version_number
 from brain_brew.commands.init_repo.init_repo import InitRepo
 from brain_brew.commands.run_recipe.run_recipe import RunRecipe
 from brain_brew.interfaces.command import Command
@@ -16,8 +17,9 @@ class Commands(Enum):
 class BBArgumentReader(ArgumentParser):
     def __init__(self):
         super().__init__(
-            prog="Brain Brew",
-            description='Manage Flashcards by Transforming them to various types'
+            prog=f"Brain Brew v{latest_version_number()}",
+            description='Manage Flashcards by transforming them to various types. Currently supported: \
+                         Csv(s) and CrowdAnki Exports'
         )
 
         self._set_parser_arguments()
@@ -46,7 +48,7 @@ class BBArgumentReader(ArgumentParser):
 
         parser_init = subparsers.add_parser(
             Commands.INIT_REPO.value,
-            help="Initialise a Brain Brew repository, using a CrowdAnki file for the base data."
+            help="Initialise a Brain Brew repository, using a CrowdAnki export as the base data."
         )
         parser_init.add_argument(
             "crowdanki_folder",
