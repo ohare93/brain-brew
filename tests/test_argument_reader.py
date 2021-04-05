@@ -8,7 +8,7 @@ from brain_brew.commands.argument_reader import BBArgumentReader, Commands
 
 @pytest.fixture()
 def arg_reader_test1():
-    return BBArgumentReader()
+    return BBArgumentReader(test_mode=True)
 
 
 def test_constructor(arg_reader_test1):

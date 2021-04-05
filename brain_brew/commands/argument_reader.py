@@ -15,7 +15,7 @@ class Commands(Enum):
 
 
 class BBArgumentReader(ArgumentParser):
-    def __init__(self):
+    def __init__(self, test_mode=False):
         super().__init__(
             prog="brainbrew",
             description='Manage Flashcards by transforming them to various types.'
@@ -23,10 +23,9 @@ class BBArgumentReader(ArgumentParser):
 
         self._set_parser_arguments()
 
-        if len(sys.argv) == 1:
+        if not test_mode and len(sys.argv) == 1:
             self.print_help(sys.stderr)
             sys.exit(1)
-
 
     def _set_parser_arguments(self):
 
