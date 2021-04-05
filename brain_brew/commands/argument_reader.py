@@ -3,7 +3,7 @@ from enum import Enum
 import sys
 from argparse import ArgumentParser
 
-from setup import latest_version_number
+from front_matter import latest_version_number
 from brain_brew.commands.init_repo.init_repo import InitRepo
 from brain_brew.commands.run_recipe.run_recipe import RunRecipe
 from brain_brew.interfaces.command import Command
@@ -17,12 +17,17 @@ class Commands(Enum):
 class BBArgumentReader(ArgumentParser):
     def __init__(self):
         super().__init__(
-            prog=f"Brain Brew v{latest_version_number()}",
+            prog="brainbrew",
             description='Manage Flashcards by transforming them to various types. Currently supported: \
                          Csv(s) and CrowdAnki Exports'
         )
 
         self._set_parser_arguments()
+
+        if len(sys.argv) == 1:
+            self.print_help(sys.stderr)
+            sys.exit(1)
+
 
     def _set_parser_arguments(self):
 
@@ -91,3 +96,7 @@ class BBArgumentReader(ArgumentParser):
         sys.stderr.write('error: %s\n' % message)
         self.print_help()
         sys.exit(2)
+
+    def print_help(self, message=None):
+        print(f"Brain Brew v{latest_version_number()}")
+        super().print_help(message)

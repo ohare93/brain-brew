@@ -1,9 +1,5 @@
 import setuptools
-
-
-def latest_version_number():
-    return "0.3.3"
-
+from front_matter import latest_version_number
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
