@@ -1,5 +1,5 @@
 import setuptools
-from front_matter import latest_version_number
+from brain_brew.front_matter import latest_version_number
 
 with open("README.md", "r") as fh:
     long_description = fh.read()

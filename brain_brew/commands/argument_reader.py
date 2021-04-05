@@ -3,7 +3,7 @@ from enum import Enum
 import sys
 from argparse import ArgumentParser
 
-from front_matter import latest_version_number
+from brain_brew.front_matter import latest_version_number
 from brain_brew.commands.init_repo.init_repo import InitRepo
 from brain_brew.commands.run_recipe.run_recipe import RunRecipe
 from brain_brew.interfaces.command import Command
