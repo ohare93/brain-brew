@@ -82,7 +82,7 @@ class InitRepo(Command):
 
                 csv_files.append(csv_file_path)
 
-        deck_path = os.path.join(LOC_BUILD, folder_name_from_full_path(self.crowdanki_folder))  # TODO: name the same as the file provided
+        deck_path = os.path.join(LOC_BUILD, folder_name_from_full_path(self.crowdanki_folder))
 
         # Generate the Source files that will be kept in the repo
         save_note_models_to_folder = SaveNoteModelsToFolder.from_repr(SaveNoteModelsToFolder.Representation(
