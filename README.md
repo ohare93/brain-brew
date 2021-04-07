@@ -18,7 +18,7 @@ See there for inspiration!
 Install the latest version of [Brain Brew on PyPi.org](https://pypi.org/project/Brain-Brew/)
 with `pip install brain-brew`. Virtual environment using `pipenv` is recommended!
 
-:exclamation: See the [Brain Brew Starter Project][BrainBrewStarter]for a working clone-able Git repo.
+:exclamation: See the [Brain Brew Starter Project][BrainBrewStarter] for a working clone-able Git repo.
 From this repo you can now create a functional Brain Brew setup automatically, 
 with your own flashcards! Simply by running
 
