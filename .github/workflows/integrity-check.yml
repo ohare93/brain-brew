@@ -14,13 +14,11 @@ jobs:
       with:
         command: install -d
 
+    - name: Enter pipenv
+      run: pipenv shell
+
     - name: Run tests
-      uses: VaultVulp/action-pipenv@v2.0.1
-      with:
-        command: run unit_tests
+      run: py.test
 
     - name: Build Yamale Recipe
-      uses: VaultVulp/action-pipenv@v2.0.1
-      with:
-        command: run check_yamale_recipes
-
+      run: python scripts/yamale_build.py

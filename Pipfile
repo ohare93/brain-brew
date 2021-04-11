@@ -18,5 +18,8 @@ yamale = "==3.0.4"
 python_version = "3.7"
 
 [scripts]
-check_yamale_recipes = "python scripts/yamale_build.py && git diff --quiet -- || (echo \"::error file=yamale,line=0,col=0::You need to run `python scripts/yamale_build.py`\" && exit 1)"
+build_yamale = "python scripts/yamale_build.py"
+check_for_changes = '''
+    git diff --quiet -- || (echo "::error file=yamale,line=0,col=0::You need to run `python scripts/yamale_build.py`" && exit 1)
+'''
 unit_tests = "py.test"
