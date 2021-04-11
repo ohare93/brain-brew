@@ -14,11 +14,6 @@ jobs:
       with:
         command: install
 
-    - name: Validate
-      uses: VaultVulp/action-pipenv@v2.0.1
-      with:
-        command: run build
-
     - name: Run tests
       run: py.test
 
