@@ -14,11 +14,16 @@ jobs:
       with:
         command: install -d
 
-    - name: Enter pipenv
-      run: pipenv shell
-
     - name: Run tests
-      run: py.test
+      uses: VaultVulp/action-pipenv@v2.0.1
+      with:
+        command: run unit_tests
 
     - name: Build Yamale Recipe
-      run: python scripts/yamale_build.py
+      uses: VaultVulp/action-pipenv@v2.0.1
+      with:
+        command: run build_yamale
+
+    - name: Build Yamale Recipe
+      run: git diff --quiet -- || (echo "::error file=yamale,line=0,col=0::You need to run `python scripts/yamale_build.py`" && exit 1)
+
