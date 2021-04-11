@@ -15,10 +15,16 @@ jobs:
         command: install
 
     - name: Run tests
-      run: py.test
+      uses: VaultVulp/action-pipenv@v2.0.1
+      with:
+        command: py.test
 
     - name: Build Yamale Recipe
-      run: python scripts/yamale_build.py
+      uses: VaultVulp/action-pipenv@v2.0.1
+      with:
+        command: python scripts/yamale_build.py
 
     - name: Check diff
-      run: git diff --quiet -- || (echo "::error file=yamale,line=0,col=0::You need to run \`python scripts/yamale_build.py\`" && exit 1)
+      uses: VaultVulp/action-pipenv@v2.0.1
+      with:
+        command: git diff --quiet -- || (echo "::error file=yamale,line=0,col=0::You need to run \`python scripts/yamale_build.py\`" && exit 1)
