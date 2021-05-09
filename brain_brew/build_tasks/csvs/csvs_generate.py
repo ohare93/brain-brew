@@ -23,7 +23,7 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
     @classmethod
     def yamale_schema(cls) -> str:  # TODO: Use NotesOverride here, just as in NotesToCrowdAnki
         return f'''\
-            notes3: str()
+            notes: str()
             note_model_mappings: list(include('{NoteModelMapping.task_name()}'))
             file_mappings: list(include('{FileMapping.task_name()}'))
         '''
