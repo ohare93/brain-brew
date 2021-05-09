@@ -8,22 +8,22 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
-    - name: Set up Python 3.8
-      uses: actions/setup-python@v1
-      with:
-        python-version: 3.8
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
 
+    - name: Install dependecies
+      uses: VaultVulp/action-pipenv@v2.0.1
+      with:
+        command: install -d
 
     - name: Run tests
-      run: py.test
+      uses: VaultVulp/action-pipenv@v2.0.1
+      with:
+        command: run unit_tests
 
-
-    - uses: actions/checkout@v1
     - name: Build Yamale Recipe
-      run: python scripts/yamale_build.py
-    - name: Check diff
-      run: git diff --quiet -- || (echo "::error file=yamale,line=0,col=0::You need to run \`python scripts/yamale_build.py\`" && exit 1)
+      uses: VaultVulp/action-pipenv@v2.0.1
+      with:
+        command: run build_yamale
+
+    - name: Check Yamale Recipe for changes
+      run: git diff --quiet -- || (echo "::error file=yamale,line=0,col=0::You need to run 'python scripts/yamale_build.py'" && exit 1)
+

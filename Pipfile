@@ -6,13 +6,21 @@ verify_ssl = true
 [dev-packages]
 pytest = "==5.4.1"
 twine = "*"
-
-[packages]
 args = "==0.1.0"
 clint = "==0.5.1"
 coverage = "==4.5.4"
+typing-extensions = "==3.10.0.0"
+
+[packages]
 "ruamel.yaml" = "==0.16.10"
 yamale = "==3.0.4"
 
 [requires]
 python_version = "3.7"
+
+[scripts]
+build_yamale = "python scripts/yamale_build.py"
+check_for_changes = '''
+    git diff --quiet -- || (echo "::error file=yamale,line=0,col=0::You need to run `python scripts/yamale_build.py`" && exit 1)
+'''
+unit_tests = "py.test"
