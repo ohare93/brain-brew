@@ -1,3 +1,5 @@
+import re
+
 import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Union
@@ -29,6 +31,7 @@ class FileMappingDerivative(YamlRepr):
             reverse_sort: bool(required=False)
             case_insensitive_sort: bool(required=False)
             derivatives: list(include('{cls.task_name()}'), required=False)
+            delimiter: str(required=False)
         '''
 
     @dataclass(init=False)
@@ -38,8 +41,9 @@ class FileMappingDerivative(YamlRepr):
         sort_by_columns: Optional[Union[list, str]]
         reverse_sort: Optional[bool]
         derivatives: Optional[List['FileMappingDerivative.Representation']]
+        delimiter: Optional[str]
 
-        def __init__(self, file, note_model=None, sort_by_columns=None, reverse_sort=None, case_insensitive_sort=None, derivatives=None):
+        def __init__(self, file, note_model=None, sort_by_columns=None, reverse_sort=None, case_insensitive_sort=None, derivatives=None, delimiter=None):
             self.file = file
             self.note_model = note_model
             self.sort_by_columns = sort_by_columns
@@ -47,18 +51,29 @@ class FileMappingDerivative(YamlRepr):
             self.case_insensitive_sort = case_insensitive_sort
             self.derivatives = list(map(FileMappingDerivative.Representation.from_dict, derivatives)) \
                 if derivatives is not None else []
+            self.delimiter = delimiter
+
+        def encode_filter(self, key, value):
+            if not super().encode_filter(key, value):
+                return False
+            if key == 'delimiter' and CsvFile.delimiter_matches_file_type(value, self.file):
+                return False
+            return True
 
     @classmethod
     def from_repr(cls, data: Union[Representation, dict]):
         rep: cls.Representation = data if isinstance(data, cls.Representation) else cls.Representation.from_dict(data)
+        csv = CsvFile.create_or_get(rep.file)
+        csv.set_delimiter(rep.delimiter)
+        csv.read_file()
         return cls(
             rep=rep,
-            csv_file=CsvFile.create_or_get(rep.file),
+            csv_file=csv,
             note_model=rep.note_model.strip() if rep.note_model else None,
             sort_by_columns=single_item_to_list(rep.sort_by_columns),
             reverse_sort=rep.reverse_sort or False,
             case_insensitive_sort=rep.case_insensitive_sort or True,
-            derivatives=list(map(cls.from_repr, rep.derivatives)) if rep.derivatives is not None else []
+            derivatives=list(map(cls.from_repr, rep.derivatives)) if rep.derivatives is not None else [],
         )
 
     rep: Representation

@@ -46,6 +46,11 @@ class TestFiles:
         TEST2_MISSING_GUIDS = LOC + "test2_missing_guids.csv"
         TEST3 = LOC + "test3.csv"
 
+    class TsvFiles:
+        LOC = "tests/test_files/tsv/"
+
+        TEST1 = LOC + "test1.tsv"
+
     class CrowdAnkiExport:
         LOC = "tests/test_files/crowd_anki/"
 

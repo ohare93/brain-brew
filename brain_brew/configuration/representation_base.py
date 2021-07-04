@@ -20,8 +20,7 @@ class RepresentationBase:
     def encode(self):
         return {key: value for key, value in self.__dict__.items() if self.encode_filter(key, value)}
 
-    @classmethod
-    def encode_filter(cls, key, value):
+    def encode_filter(self, key, value):
         if value is None:
             return False
         if not value:

@@ -59,6 +59,20 @@ class BBArgumentReader(ArgumentParser):
             type=str,
             help="The folder that stores the CrowdAnki files to build this repo from"
         )
+        parser_init.add_argument(
+            '--delimiter',
+            dest='delimiter',
+            action='store',
+            help="Set the delimiter for Csv files to specific character",
+            type=str
+        )
+        parser_init.add_argument(
+            "--delimitertab", "--tab",
+            action="store_true",
+            dest="delimiter_tab",
+            default=False,
+            help="Use tabs as the delimiter for Csv files"
+        )
 
     def get_parsed(self, override_args=None) -> Command:
         parsed_args = self.parse_args(args=override_args)
@@ -78,9 +92,12 @@ class BBArgumentReader(ArgumentParser):
         if parsed_args.command == Commands.INIT_REPO.value:
             # Required
             crowdanki_folder = parsed_args.crowdanki_folder
+            delimiter = parsed_args.delimiter
+            delimiter_tab = parsed_args.delimiter_tab
 
             return InitRepo(
-                crowdanki_folder=crowdanki_folder
+                crowdanki_folder=crowdanki_folder,
+                delimiter="\t" if delimiter_tab else delimiter
             )
 
         raise KeyError("Unknown Command")
