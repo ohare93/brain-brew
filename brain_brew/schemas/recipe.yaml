@@ -41,6 +41,7 @@ generate_csvs:
 generate_guids_in_csvs:
     source: any(str(), list(str()))
     columns: any(str(), list(str()))
+    delimiter: str(required=False)
 
 save_media_groups_to_folder:
     parts: list(str())
@@ -63,6 +64,7 @@ file_mapping:
     reverse_sort: bool(required=False)
     case_insensitive_sort: bool(required=False)
     derivatives: list(include('file_mapping'), required=False)
+    delimiter: str(required=False)
 
 headers_from_crowd_anki:
     part_id: str()

@@ -45,6 +45,7 @@ LOC_MEDIA = "src/media/"
 @dataclass
 class InitRepo(Command):
     crowdanki_folder: str
+    delimiter: str
 
     def execute(self):
         self.setup_repo_structure()
@@ -71,13 +72,14 @@ class InitRepo(Command):
 
         for model in note_models:
             if model.name in used_note_models_in_notes:
-                csv_file_path = os.path.join(LOC_DATA, CsvFile.to_filename_csv(model.name))
+                csv_file_path = os.path.join(LOC_DATA, CsvFile.to_filename_csv(model.name, self.delimiter))
                 column_headers = ["guid"] + model.field_names_lowercase + ["tags"]
-                CsvFile.create_file_with_headers(csv_file_path, column_headers)
+                CsvFile.create_file_with_headers(csv_file_path, column_headers, delimiter=self.delimiter)
 
                 file_mappings.append(FileMapping.Representation(
                     file=csv_file_path,
-                    note_model=model.name
+                    note_model=model.name,
+                    delimiter=self.delimiter
                 ))
 
                 csv_files.append(csv_file_path)
@@ -146,7 +148,7 @@ class InitRepo(Command):
         dp_builder = PartsBuilder(build_part_tasks)
 
         generate_guids_in_csv = GenerateGuidsInCsvs.from_repr(GenerateGuidsInCsvs.Representation(
-            source=csv_files, columns=["guid"]
+            source=csv_files, columns=["guid"], delimiter=self.delimiter
         ))
 
         generate_crowdanki = CrowdAnkiGenerate.from_repr(CrowdAnkiGenerate.Representation(
