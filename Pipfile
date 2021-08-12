@@ -13,7 +13,7 @@ typing-extensions = "==3.10.0.0"
 
 [packages]
 "ruamel.yaml" = "==0.16.10"
-yamale = "==3.0.4"
+yamale = "==3.0.8"
 
 [requires]
 python_version = "3.7"
