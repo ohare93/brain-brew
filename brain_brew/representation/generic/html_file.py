@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from brain_brew.representation.generic.source_file import SourceFile
 
+_encoding = "utf-8"
 
 @dataclass
 class HTMLFile(SourceFile):
@@ -18,7 +19,7 @@ class HTMLFile(SourceFile):
         return cls(file_loc)
 
     def read_file(self):
-        r = codecs.open(self.file_location, 'r')
+        r = codecs.open(self.file_location, 'r', encoding=_encoding)
         self._data = r.read()
 
     def get_data(self, deep_copy=False) -> str:
@@ -26,7 +27,7 @@ class HTMLFile(SourceFile):
 
     @staticmethod
     def write_file(file_location, data):
-        with open(file_location, "w+") as file:
+        with open(file_location, "w+", encoding=_encoding) as file:
             file.write(data)
 
     @staticmethod
