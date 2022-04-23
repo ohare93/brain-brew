@@ -1,4 +1,3 @@
-import codecs
 from dataclasses import dataclass
 
 from brain_brew.representation.generic.source_file import SourceFile
@@ -19,7 +18,7 @@ class HTMLFile(SourceFile):
         return cls(file_loc)
 
     def read_file(self):
-        r = codecs.open(self.file_location, 'r', encoding=_encoding)
+        r = open(self.file_location, 'r', encoding=_encoding)
         self._data = r.read()
 
     def get_data(self, deep_copy=False) -> str:
