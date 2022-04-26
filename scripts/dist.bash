@@ -1,2 +1,4 @@
+# See credentials in ~/.pypirc
+
 # Upload
-twine upload dist/*
+twine upload dist/* --verbose
