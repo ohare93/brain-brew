@@ -17,7 +17,7 @@ jobs:
     - name: Install dependencies
       run: |
         python3 -m pip install --upgrade pipenv
-        pipenv install
+        pipenv install --dev
 
     - name: Run tests
       run: |
