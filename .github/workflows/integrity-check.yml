@@ -9,20 +9,23 @@ jobs:
     steps:
     - uses: actions/checkout@v1
 
-    - name: Install dependecies
-      uses: VaultVulp/action-pipenv@v2.0.1
+    - name: Set up Python 3.7
+      uses: actions/setup-python@v2
       with:
-        command: install -d
+        python-version: 3.7
+
+    - name: Install dependencies
+      run: |
+        python3 -m pip install --upgrade pipenv
+        pipenv install --dev
 
     - name: Run tests
-      uses: VaultVulp/action-pipenv@v2.0.1
-      with:
-        command: run unit_tests
+      run: |
+        pipenv run unit_tests
 
     - name: Build Yamale Recipe
-      uses: VaultVulp/action-pipenv@v2.0.1
-      with:
-        command: run build_yamale
+      run: |
+        pipenv run build_yamale
 
     - name: Check Yamale Recipe for changes
       run: git diff --quiet -- || (echo "::error file=yamale,line=0,col=0::You need to run 'python scripts/yamale_build.py'" && exit 1)
