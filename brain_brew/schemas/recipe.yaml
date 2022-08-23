@@ -77,8 +77,8 @@ headers_from_yaml_part:
     override: include('headers_override', required=False)
 
 headers_override:
-    deck_description_html_file: str(required=False)
     crowdanki_uuid: str(required=False)
+    deck_description_html_file: str(required=False)
     name: str(required=False)
 
 media_group_from_crowd_anki:
