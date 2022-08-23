@@ -78,6 +78,8 @@ headers_from_yaml_part:
 
 headers_override:
     deck_description_html_file: str(required=False)
+    crowdanki_uuid: str(required=False)
+    name: str(required=False)
 
 media_group_from_crowd_anki:
     part_id: str()
