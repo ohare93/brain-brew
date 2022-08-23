@@ -41,4 +41,4 @@ class Headers(YamlObject):
 
     @property
     def data_without_name(self) -> dict:
-        return {k: v for k, v in self.data.items() if k != CA_NAME}
+        return {k: v for k, v in sorted(self.data.items()) if k != CA_NAME}
