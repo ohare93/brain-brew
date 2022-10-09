@@ -167,7 +167,7 @@ class InitRepo(Command):
         ))
 
         top_level_tasks: List[TopLevelBuildTask] = [generate_guids_in_csv, dp_builder, generate_crowdanki]
-        source_to_anki_path = os.path.join(LOC_RECIPES, "source_to_anki")
+        source_to_anki_path = os.path.join(LOC_RECIPES, "source_to_anki.yaml")
         self.create_yaml_from_top_level(top_level_tasks, source_to_anki_path)
 
         print(f"\nRepo Init complete. You should now run `brainbrew run {source_to_anki_path}`")
