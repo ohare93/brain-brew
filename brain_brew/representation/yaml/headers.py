@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from brain_brew.representation.json.wrappers_for_crowd_anki import CA_NAME, CA_DESCRIPTION
+from brain_brew.representation.json.wrappers_for_crowd_anki import CA_NAME, CA_DESCRIPTION, CA_UUID
 from brain_brew.representation.yaml.yaml_object import YamlObject
 
 
@@ -19,6 +19,10 @@ class Headers(YamlObject):
     def name(self) -> str:
         return self.data[CA_NAME]
 
+    @name.setter
+    def name(self, desc: str):
+        self.data[CA_NAME] = desc
+
     @property
     def description(self) -> str:
         return self.data.get(CA_DESCRIPTION, "")
@@ -28,5 +32,13 @@ class Headers(YamlObject):
         self.data[CA_DESCRIPTION] = desc
 
     @property
+    def crowdanki_uuid(self) -> str:
+        return self.data.get(CA_UUID, "")
+
+    @crowdanki_uuid.setter
+    def crowdanki_uuid(self, desc: str):
+        self.data[CA_UUID] = desc
+
+    @property
     def data_without_name(self) -> dict:
-        return {k: v for k, v in self.data.items() if k != CA_NAME}
+        return {k: v for k, v in sorted(self.data.items()) if k != CA_NAME}
