@@ -23,7 +23,7 @@ SCRATCH_PAD = AnkiField("scratchPad", "scratch_pad", default_value=0)
 HTML_FILE = AnkiField("html_file")
 BROWSER_HTML_FILE = AnkiField("browser_html_file", default_value=None)
 
-html_separator_regex = r'[(\r\n|\r|\n)]{1,}[-]{1,}[(\r\n|\r|\n)]{1,}'
+html_separator_regex = r'(?:\r\n|\r|\n){1,}[-]{1,}(?:\r\n|\r|\n){1,}'
 
 
 @dataclass
