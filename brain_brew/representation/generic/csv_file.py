@@ -1,11 +1,12 @@
 import csv
+from pathlib import Path
 import re
 import logging
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 from brain_brew.representation.generic.source_file import SourceFile
-from brain_brew.utils import list_of_str_to_lowercase, sort_dict
+from brain_brew.utils import create_path_if_not_exists, list_of_str_to_lowercase, sort_dict
 
 _encoding = "utf-8"
 
@@ -35,8 +36,12 @@ class CsvFile(SourceFile):
     def from_file_loc(cls, file_loc) -> 'CsvFile':
         return cls(file_loc)
 
-    def read_file(self):
+    def read_file(self, create_if_not_exists: Optional[bool] = True):
         self._data = []
+
+        if create_if_not_exists:
+            create_path_if_not_exists(self.file_location)
+            Path(self.file_location).touch()
 
         with open(self.file_location, mode='r', newline='', encoding=_encoding) as csv_file:
             csv_reader = csv.DictReader(csv_file, delimiter=self.delimiter)
@@ -72,8 +77,9 @@ class CsvFile(SourceFile):
             for column in self.column_headers:
                 new_row[column] = row[column]
             data_to_set.append(new_row)
+        
+        self._data = data_to_set
 
-        self.set_data(data_to_set)
 
     def get_data(self, deep_copy=False) -> List[dict]:
         return self.get_deep_copy(self._data) if deep_copy else self._data

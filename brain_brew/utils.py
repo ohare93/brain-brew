@@ -13,6 +13,8 @@ def blank_str_if_none(s):
 
 
 def list_of_str_to_lowercase(list_of_strings):
+    if not list_of_strings:
+        return []
     return [entry.lower() for entry in list_of_strings]
 
 

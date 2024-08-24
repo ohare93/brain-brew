@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import logging
 from typing import List, Dict, Union
 
 from brain_brew.build_tasks.csvs.shared_base_csvs import SharedBaseCsvs
@@ -65,6 +66,11 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
             case_insensitive_sort=True
         )
         self.verify_notes_match_note_model_mappings(notes)
+
+        if not self.file_mappings[0].csv_file.column_headers:
+            logging.warning("Empty top level csv found. Populating headers automatically.")
+            model_name = self.file_mappings[0].note_model
+            self.file_mappings[0].csv_file.set_data_from_superset({}, column_header_override=list(f.value for f in self.note_model_mappings[model_name].columns_manually_mapped))
 
         for fm in self.file_mappings:
             csv_data: List[dict] = [self.note_to_csv_row(note, self.note_model_mappings) for note in notes
