@@ -18,7 +18,7 @@ class NotesFromCsvs(SharedBaseCsvs, BuildPartTask):
 
     @classmethod
     def task_regex(cls) -> str:
-        return r'notes_from_csv[s]?'
+        return r'notes_from_csvs?'
 
     @classmethod
     def yamale_schema(cls) -> str:

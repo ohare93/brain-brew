@@ -16,7 +16,7 @@ class NoteModelsFromYamlPart(FromYamlPartBase, BuildPartTask):
 
     @classmethod
     def task_regex(cls) -> str:
-        return r'note_model[s]?_from_yaml_part'
+        return r'note_models?_from_yaml_part'
 
     @classmethod
     def yamale_schema(cls) -> str:

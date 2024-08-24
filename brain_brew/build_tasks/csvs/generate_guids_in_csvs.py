@@ -18,7 +18,7 @@ class GenerateGuidsInCsvs(TopLevelBuildTask):
 
     @classmethod
     def task_regex(cls) -> str:
-        return r'generate_guids_in_csv[s]?'
+        return r'generate_guids_in_csvs?'
 
     @classmethod
     def yamale_schema(cls) -> str:

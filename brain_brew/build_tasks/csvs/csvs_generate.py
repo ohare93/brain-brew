@@ -18,7 +18,7 @@ class CsvsGenerate(SharedBaseCsvs, TopLevelBuildTask):
 
     @classmethod
     def task_regex(cls) -> str:
-        return r'generate_csv[s]?'
+        return r'generate_csvs?'
 
     @classmethod
     def yamale_schema(cls) -> str:  # TODO: Use NotesOverride here, just as in NotesToCrowdAnki

@@ -28,7 +28,7 @@ class HeadersFromYamlPart(BuildPartTask):
 
     @classmethod
     def task_regex(cls) -> str:
-        return r'header[s]?_from_yaml_part'
+        return r'headers?_from_yaml_part'
 
     @dataclass
     class Representation(RepresentationBase):

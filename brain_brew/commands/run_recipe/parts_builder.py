@@ -27,7 +27,7 @@ class PartsBuilder(RecipeBuilder, TopLevelBuildTask):
 
     @classmethod
     def task_regex(cls) -> str:
-        return r'build_part[s]?'
+        return r'build_parts?'
 
     @classmethod
     def known_task_dict(cls) -> Dict[str, Type[BuildTask]]:

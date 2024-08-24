@@ -16,7 +16,7 @@ class SaveMediaGroupsToFolder(TopLevelBuildTask):
 
     @classmethod
     def task_regex(cls) -> str:
-        return r"save_media_group[s]?_to_folder"
+        return r"save_media_groups?_to_folder"
 
     @classmethod
     def yamale_schema(cls) -> str:

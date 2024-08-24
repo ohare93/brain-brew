@@ -16,7 +16,7 @@ class SaveNoteModelsToFolder(TopLevelBuildTask):
 
     @classmethod
     def task_regex(cls) -> str:
-        return r"save_note_models[s]?_to_folder"
+        return r"save_note_models?_to_folder"
 
     @classmethod
     def yamale_schema(cls) -> str:
