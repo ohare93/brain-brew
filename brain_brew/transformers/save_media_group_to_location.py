@@ -13,12 +13,13 @@ def save_media_groups_to_location(
         recursive: bool
 ) -> Set[MediaFile]:
 
+    create_path_if_not_exists(folder, is_path_override=True)
+    
     existing_media_group = MediaGroup.from_directory(folder, recursive)
     all_media_group = MediaGroup.from_many(parts)
 
     in_both, to_move, to_delete = all_media_group.compare(existing_media_group)
 
-    create_path_if_not_exists(folder)
     for filename, media_file in all_media_group.media_files.items():
         if filename in in_both:
             media_file.copy_self_to_target(existing_media_group.media_files[filename].file_path)
