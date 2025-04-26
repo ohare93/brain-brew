@@ -38,7 +38,7 @@ def save_note_model_to_location(
 
         if TEMPLATE_BROWSER_HTML_FILE.name in template_data and b_t_data is not None:
             template_data[TEMPLATE_BROWSER_HTML_FILE.name] = os.path.join(nm_folder, HTMLFile.to_filename_html(name + "_browser"))
-            HTMLFile.write_file(template_data[TEMPLATE_HTML_FILE.name], b_t_data)
+            HTMLFile.write_file(template_data[TEMPLATE_BROWSER_HTML_FILE.name], b_t_data)
 
     model_yaml_file_name = YamlObject.to_filename_yaml(os.path.join(nm_folder, model.name))
     YamlObject.dump_to_yaml_file(model_yaml_file_name, model_encoded)
