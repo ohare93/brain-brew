@@ -68,7 +68,7 @@ A dry run of sorts.
 ### Tasks
 
 A recipe is made of many individual tasks, which do specific functions. 
-Full detailed list coming soon™️, but see the [Yamale recipe schema](https://github.com/ohare93/brain-brew/blob/master/brain_brew/schemas/recipe.yaml) 
+Full detailed list coming soon™️, but see the [Yamale recipe schema](https://github.com/jeprecated/brain-brew/blob/master/brain_brew/schemas/recipe.yaml) 
 (local file: `brain_brew/schemas/recipe.yaml`) in the meantime :+1:
 
 
@@ -251,4 +251,4 @@ See the [Brain Brew Starter Project][BrainBrewStarter] for an example of Csv Der
 
 
 
-[BrainBrewStarter]: https://github.com/ohare93/brain-brew-starter
+[BrainBrewStarter]: https://github.com/jeprecated/brain-brew-starter

@@ -12,7 +12,7 @@ setuptools.setup(
     description="Automated Anki flashcard creation and extraction to/from Csv ",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/ohare93/brain-brew",
+    url="https://github.com/jeprecated/brain-brew",
     packages=setuptools.find_packages(),
     include_package_data=True,
     entry_points={
