@@ -26,7 +26,7 @@ Scaffolding can exist without tests, but domain behavior, format behavior, adapt
 
 - `brain-brew-core`: pure domain only. No YAML, CrowdAnki, filesystem, terminal, or CLI dependencies.
 - `brain-brew-formats`: reusable YAML/CrowdAnki codecs over core types.
-- `brain-brew-cli`: thin command-line wrapper, filesystem access, prompts, and report rendering.
+- `brainbrew`: thin command-line package in `crates/brain-brew-cli`, filesystem access, prompts, and report rendering.
 
 ## Commands
 

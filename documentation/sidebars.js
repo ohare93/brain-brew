@@ -53,6 +53,7 @@ const sidebars = {
         'reference/cli',
         'reference/lockfile',
         'reference/release-oracle',
+        'reference/releasing',
         'reference/project-scope',
         {
           type: 'category',

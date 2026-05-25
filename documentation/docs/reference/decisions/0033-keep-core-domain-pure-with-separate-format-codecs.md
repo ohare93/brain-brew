@@ -10,7 +10,7 @@ The Rust workspace needs a reusable core for future CLI, UI, and possible Anki i
 
 ## Decision
 
-Start with three crates: `brain-brew-core` for the pure domain model, validation, composition, and semantic diffing; `brain-brew-formats` for YAML and CrowdAnki codecs/adapters over in-memory values; and `brain-brew-cli` as a thin command-line interface.
+Start with three packages: `brain-brew-core` for the pure domain model, validation, composition, and semantic diffing; `brain-brew-formats` for YAML and CrowdAnki codecs/adapters over in-memory values; and `brainbrew` as a thin command-line interface in `crates/brain-brew-cli`.
 
 ## Rationale
 
@@ -20,4 +20,4 @@ This keeps the core deterministic and dependency-light while still making format
 
 - `brain-brew-core` must not depend on format-specific crates.
 - `brain-brew-formats` depends on `brain-brew-core`.
-- `brain-brew-cli` depends on both core and formats, and owns filesystem and terminal interaction.
+- `brainbrew` depends on both core and formats, and owns filesystem and terminal interaction.

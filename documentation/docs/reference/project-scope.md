@@ -32,7 +32,7 @@ The maintained product surface is:
 ```text
 brain-brew-core     pure domain model, validation, compose, semantic diff
 brain-brew-formats  YAML, CrowdAnki, manifest, lockfile, media codecs
-brain-brew-cli      filesystem, terminal output, command wiring
+brainbrew           filesystem, terminal output, command wiring (in crates/brain-brew-cli)
 ```
 
 `brain-brew-core` must not depend on YAML, CrowdAnki, filesystem, terminal, or CLI concerns.

@@ -37,29 +37,37 @@ brainbrew diff deck.yaml edited.yaml --as-overlay --id overlay.patch.capitals --
 
 See the dedicated documentation site in [`documentation/`](documentation/) for manifest, source variable, translation dictionary, overlay, locking, and example workflows. Lock update/verify uses Rust-native fetching and NAR hashing; Nix is only an optional install/build path.
 
-## Install the CLI with Nix
+## Install the CLI
 
-Run the CLI directly from this flake:
+The easiest install path is the GitHub Release installer:
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/jeprecated/brain-brew/releases/download/v0.1.0-alpha.1/brainbrew-installer.sh \
+  | sh
+brainbrew --version
+```
+
+Homebrew users can install from the tap once the preview release is published:
+
+```bash
+brew install jeprecated/tap/brainbrew
+```
+
+Rust users can install directly from the release tag:
+
+```bash
+cargo install --git https://github.com/jeprecated/brain-brew --tag v0.1.0-alpha.1 brainbrew --locked
+```
+
+Nix remains available as an optional build/install path:
 
 ```bash
 nix run . -- --help
-```
-
-Build a local binary:
-
-```bash
 nix build .#brainbrew
-./result/bin/brainbrew --help
 ```
 
-Install into your user profile:
-
-```bash
-nix profile install .#brainbrew
-brainbrew --help
-```
-
-See [`documentation/docs/getting-started/install.md`](documentation/docs/getting-started/install.md) for install options and an edit/export loop for trying changes against a Federated Deck workspace.
+See [`documentation/docs/getting-started/install.md`](documentation/docs/getting-started/install.md) for all install options and an edit/export loop for trying changes against a Federated Deck workspace.
 
 ## Workspace
 
@@ -67,7 +75,7 @@ See [`documentation/docs/getting-started/install.md`](documentation/docs/getting
 crates/
   brain-brew-core/     Pure domain model, validation, composition, semantic diffing
   brain-brew-formats/  Reusable YAML and CrowdAnki codecs
-  brain-brew-cli/      Thin `brainbrew` command-line interface
+  brain-brew-cli/      Thin `brainbrew` command-line package
 ```
 
 ## Development

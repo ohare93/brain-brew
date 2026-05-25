@@ -30,7 +30,7 @@ Use these public names by default:
 - CLI binary: `brainbrew`;
 - manifest file: `brainbrew.yaml`;
 - lock file: `brainbrew.lock`;
-- Rust crates: `brain-brew-core`, `brain-brew-formats`, and `brain-brew-cli`;
+- Rust packages: `brain-brew-core`, `brain-brew-formats`, and the `brainbrew` CLI package in `crates/brain-brew-cli`;
 - Nix package and app: `brainbrew`.
 
 Keep the repository licensed under the Unlicense.
