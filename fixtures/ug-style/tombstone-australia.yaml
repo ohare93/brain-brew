@@ -1,0 +1,6 @@
+id: overlay.patch.remove-australia
+kind: patch
+notes:
+  note.australia:
+    intent: remove
+    expected_base: entity_present

@@ -1,0 +1,736 @@
+use brain_brew_core::{ChangeIntent, ExpectedBase, OverlayKind, StableId};
+use brain_brew_formats::canonical_yaml;
+
+#[test]
+fn formatter_canonicalizes_overlay_yaml() {
+    let formatted = canonical_yaml::overlay_format_str(
+        r#"kind: extension
+id: overlay.extension.extended
+note_types:
+  note-type.country:
+    card_templates:
+      template.country-flag:
+        template:
+          answer_format: '{{Flag}}'
+          question_format: '{{Country}}'
+          name: Country - Flag
+        insert_after: template.capital-country
+        intent: add
+    styling:
+      value: |
+        .card { font-family: serif; }
+      intent: replace
+      expected_base:
+        value: |
+          .card { font-family: sans-serif; }
+    intent: merge
+"#,
+    )
+    .expect("overlay formats");
+
+    assert!(formatted.starts_with("id: overlay.extension.extended\nkind: extension\n"));
+    assert!(formatted.contains("    styling:\n      intent: replace\n"));
+    assert!(formatted.contains("      template.country-flag:\n        intent: add\n"));
+    assert!(formatted.contains("        insert_after: template.capital-country\n"));
+    canonical_yaml::overlay_from_str(&formatted).expect("formatted overlay parses");
+}
+
+#[test]
+fn parses_sparse_overlay_yaml_with_field_expected_base() {
+    let overlay = canonical_yaml::overlay_from_str(
+        r#"id: overlay.patch.capital
+kind: patch
+notes:
+  note.finland:
+    intent: merge
+    fields:
+      field.capital:
+        intent: replace
+        value: Helsingfors
+        expected_base:
+          value: Helsinki
+"#,
+    )
+    .expect("overlay parses");
+
+    assert_eq!(overlay.id, sid("overlay.patch.capital"));
+    assert_eq!(overlay.kind, OverlayKind::Patch);
+    let note_change = overlay.note_changes.get(&sid("note.finland")).unwrap();
+    assert_eq!(note_change.intent, ChangeIntent::Merge);
+    let field_change = note_change.fields.get(&sid("field.capital")).unwrap();
+    assert_eq!(field_change.intent, ChangeIntent::Replace);
+    assert_eq!(field_change.value.as_deref(), Some("Helsingfors"));
+    assert_eq!(
+        field_change.expected_base,
+        Some(ExpectedBase::Value("Helsinki".to_owned()))
+    );
+}
+
+#[test]
+fn parses_note_type_field_addition_overlay() {
+    let overlay = canonical_yaml::overlay_from_str(
+        r#"id: overlay.extension.population
+kind: extension
+note_types:
+  note-type.country:
+    intent: merge
+    fields:
+      field.population:
+        intent: add
+        name: Population
+notes: {}
+"#,
+    )
+    .expect("overlay parses");
+
+    assert_eq!(overlay.kind, OverlayKind::Extension);
+    let note_type_change = overlay
+        .note_type_changes
+        .get(&sid("note-type.country"))
+        .unwrap();
+    let field_change = note_type_change
+        .fields
+        .get(&sid("field.population"))
+        .unwrap();
+    assert_eq!(field_change.intent, ChangeIntent::Add);
+    assert_eq!(field_change.field.as_ref().unwrap().name, "Population");
+}
+
+#[test]
+fn parses_note_type_addition_overlay_with_payload() {
+    let formatted = canonical_yaml::overlay_format_str(
+        r#"id: overlay.extension.regions
+kind: extension
+note_types:
+  note-type.region:
+    intent: add
+    note_type:
+      name: Region Geography
+      field_order:
+        - field.region
+        - field.map
+      fields:
+        field.map:
+          name: Map
+        field.region:
+          name: Region
+      card_template_order:
+        - template.region-map
+      card_templates:
+        template.region-map:
+          name: Region - Map
+          question_format: '{{Region}}'
+          answer_format: '{{Map}}'
+      styling: |
+        .card { font-family: sans-serif; }
+"#,
+    )
+    .expect("overlay formats");
+
+    let overlay = canonical_yaml::overlay_from_str(&formatted).expect("formatted overlay parses");
+    let change = overlay
+        .note_type_changes
+        .get(&sid("note-type.region"))
+        .unwrap();
+    assert_eq!(change.intent, ChangeIntent::Add);
+    let note_type = change.note_type.as_ref().unwrap();
+    assert_eq!(note_type.name, "Region Geography");
+    assert_eq!(note_type.fields[0].id, sid("field.region"));
+    assert_eq!(note_type.card_templates[0].id, sid("template.region-map"));
+    assert!(formatted.contains("    note_type:\n      name: Region Geography\n"));
+}
+
+#[test]
+fn parses_field_additions_shorthand_for_multiple_fields() {
+    let overlay = canonical_yaml::overlay_from_str(
+        r#"id: overlay.extension.population
+kind: extension
+field_additions:
+  note-type.country:
+    fields:
+      field.population: Population
+      field.area: Area
+    values:
+      note.australia:
+        field.population: 25.0 million
+        field.area: 7.69 million km²
+      note.austria:
+        field.population: 16.0 million
+"#,
+    )
+    .expect("overlay parses");
+
+    let note_type_change = overlay
+        .note_type_changes
+        .get(&sid("note-type.country"))
+        .unwrap();
+    assert_eq!(note_type_change.intent, ChangeIntent::Merge);
+    assert_eq!(
+        note_type_change
+            .fields
+            .get(&sid("field.population"))
+            .unwrap()
+            .field
+            .as_ref()
+            .unwrap()
+            .name,
+        "Population"
+    );
+    assert_eq!(
+        note_type_change
+            .fields
+            .get(&sid("field.area"))
+            .unwrap()
+            .field
+            .as_ref()
+            .unwrap()
+            .name,
+        "Area"
+    );
+
+    let note_change = overlay.note_changes.get(&sid("note.australia")).unwrap();
+    assert_eq!(note_change.intent, ChangeIntent::Merge);
+    assert_eq!(
+        note_change
+            .fields
+            .get(&sid("field.population"))
+            .unwrap()
+            .value
+            .as_deref(),
+        Some("25.0 million")
+    );
+    assert_eq!(
+        note_change
+            .fields
+            .get(&sid("field.area"))
+            .unwrap()
+            .value
+            .as_deref(),
+        Some("7.69 million km²")
+    );
+}
+
+#[test]
+fn field_additions_shorthand_matches_verbose_overlay_semantics() {
+    let base = canonical_yaml::from_str(
+        r#"deck:
+  id: deck.demo
+  name: Demo
+  description: ''
+note_types:
+  note-type.country:
+    name: Country
+    field_order:
+      - field.country
+    fields:
+      field.country:
+        name: Country
+    card_template_order:
+      - template.country
+    card_templates:
+      template.country:
+        name: Country
+        question_format: '{{Country}}'
+        answer_format: '{{Country}}'
+    styling: ''
+notes:
+  note.australia:
+    note_type_id: note-type.country
+    fields:
+      field.country: Australia
+    tags: []
+  note.austria:
+    note_type_id: note-type.country
+    fields:
+      field.country: Austria
+    tags: []
+media: {}
+tombstones: []
+"#,
+    )
+    .expect("base parses");
+    let concise = canonical_yaml::overlay_from_str(
+        r#"id: overlay.extension.population
+kind: extension
+field_additions:
+  note-type.country:
+    fields:
+      field.population: Population
+      field.area: Area
+    values:
+      note.australia:
+        field.population: 25.0 million
+        field.area: 7.69 million km²
+      note.austria:
+        field.population: 16.0 million
+        field.area: 83,879 km²
+"#,
+    )
+    .expect("concise overlay parses");
+    let verbose = canonical_yaml::overlay_from_str(
+        r#"id: overlay.extension.population
+kind: extension
+note_types:
+  note-type.country:
+    intent: merge
+    fields:
+      field.population:
+        intent: add
+        name: Population
+      field.area:
+        intent: add
+        name: Area
+notes:
+  note.australia:
+    intent: merge
+    fields:
+      field.population:
+        intent: add
+        value: 25.0 million
+      field.area:
+        intent: add
+        value: 7.69 million km²
+  note.austria:
+    intent: merge
+    fields:
+      field.population:
+        intent: add
+        value: 16.0 million
+      field.area:
+        intent: add
+        value: 83,879 km²
+"#,
+    )
+    .expect("verbose overlay parses");
+
+    assert_eq!(concise, verbose);
+    let concise_deck = base.compose(&[concise]).expect("concise composes");
+    let verbose_deck = base.compose(&[verbose]).expect("verbose composes");
+    assert!(concise_deck.semantic_diff(&verbose_deck).is_empty());
+}
+
+#[test]
+fn formatter_prefers_field_additions_shorthand() {
+    let formatted = canonical_yaml::overlay_format_str(
+        r#"id: overlay.extension.population
+kind: extension
+note_types:
+  note-type.country:
+    intent: merge
+    fields:
+      field.population:
+        intent: add
+        name: Population
+notes:
+  note.australia:
+    intent: merge
+    fields:
+      field.population:
+        intent: add
+        value: 25.0 million
+"#,
+    )
+    .expect("overlay formats");
+
+    assert_eq!(
+        formatted,
+        "id: overlay.extension.population\nkind: extension\nfield_additions:\n  note-type.country:\n    fields:\n      field.population: Population\n    values:\n      note.australia:\n        field.population: 25.0 million\n"
+    );
+}
+
+#[test]
+fn parses_field_fills_shorthand_for_existing_blank_fields() {
+    let overlay = canonical_yaml::overlay_from_str(
+        r#"id: overlay.extension.hardcore.fills.en
+kind: extension
+field_fills:
+  note.anguilla:
+    field.capital: The Valley
+    field.flag: '<img src="ug-flag-anguilla.svg" />'
+"#,
+    )
+    .expect("overlay parses");
+
+    let note_change = overlay.note_changes.get(&sid("note.anguilla")).unwrap();
+    assert_eq!(note_change.intent, ChangeIntent::Merge);
+    let capital = note_change.fields.get(&sid("field.capital")).unwrap();
+    assert_eq!(capital.intent, ChangeIntent::Replace);
+    assert_eq!(capital.value.as_deref(), Some("The Valley"));
+    assert_eq!(
+        capital.expected_base,
+        Some(ExpectedBase::Value(String::new()))
+    );
+}
+
+#[test]
+fn field_fills_shorthand_matches_verbose_overlay_semantics() {
+    let concise = canonical_yaml::overlay_from_str(
+        r#"id: overlay.extension.hardcore.fills.en
+kind: extension
+field_fills:
+  note.anguilla:
+    field.capital: The Valley
+    field.flag: '<img src="ug-flag-anguilla.svg" />'
+"#,
+    )
+    .expect("concise overlay parses");
+    let verbose = canonical_yaml::overlay_from_str(
+        r#"id: overlay.extension.hardcore.fills.en
+kind: extension
+notes:
+  note.anguilla:
+    intent: merge
+    fields:
+      field.capital:
+        intent: replace
+        value: The Valley
+        expected_base:
+          value: ''
+      field.flag:
+        intent: replace
+        value: '<img src="ug-flag-anguilla.svg" />'
+        expected_base:
+          value: ''
+"#,
+    )
+    .expect("verbose overlay parses");
+
+    assert_eq!(concise, verbose);
+}
+
+#[test]
+fn formatter_prefers_field_fills_shorthand() {
+    let formatted = canonical_yaml::overlay_format_str(
+        r#"id: overlay.extension.hardcore.fills.en
+kind: extension
+notes:
+  note.anguilla:
+    intent: merge
+    fields:
+      field.capital:
+        intent: replace
+        value: The Valley
+        expected_base:
+          value: ''
+"#,
+    )
+    .expect("overlay formats");
+
+    assert_eq!(
+        formatted,
+        "id: overlay.extension.hardcore.fills.en\nkind: extension\nfield_fills:\n  note.anguilla:\n    field.capital: The Valley\n"
+    );
+}
+
+#[test]
+fn formatter_orders_translation_dictionary_sections_deterministically() {
+    let formatted = canonical_yaml::overlay_format_str(
+        r#"id: overlay.translation.de
+kind: translation
+translations:
+  additions:
+    notes.note.anguilla.fields.field.capital: The Valley
+  adapter_ids:
+    crowdanki:guid:
+      old-guid: new-guid
+  changes:
+    Germany: Deutschland
+"#,
+    )
+    .expect("overlay formats");
+
+    assert!(
+        formatted.find("  changes:\n").unwrap() < formatted.find("  additions:\n").unwrap(),
+        "changes are emitted before additions"
+    );
+    assert!(
+        formatted.find("  additions:\n").unwrap() < formatted.find("  adapter_ids:\n").unwrap(),
+        "additions are emitted before adapter_ids"
+    );
+}
+
+#[test]
+fn parses_metadata_and_adapter_id_overlay_changes() {
+    let overlay = canonical_yaml::overlay_from_str(
+        r#"id: overlay.translation.de
+kind: translation
+deck:
+  name:
+    intent: replace
+    value: Ultimate Geography [DE]
+    expected_base:
+      value: Ultimate Geography
+  adapter_ids:
+    crowdanki:uuid:
+      intent: replace
+      value: de-deck-uuid
+      expected_base:
+        value: en-deck-uuid
+note_types:
+  note-type.country:
+    intent: merge
+    name:
+      intent: replace
+      value: Ultimate Geography [DE]
+      expected_base:
+        value: Ultimate Geography
+    adapter_ids:
+      crowdanki:model_id:
+        intent: replace
+        value: de-model-id
+        expected_base:
+          value: en-model-id
+    card_templates:
+      template.country-capital:
+        intent: merge
+        adapter_ids:
+          crowdanki:ord:
+            intent: add
+            value: '0'
+notes:
+  note.finland:
+    intent: merge
+    adapter_ids:
+      crowdanki:guid:
+        intent: replace
+        value: ug-finland-de-guid
+        expected_base:
+          value: ug-finland-guid
+"#,
+    )
+    .expect("overlay parses");
+
+    let deck_change = overlay.deck_change.as_ref().unwrap();
+    assert_eq!(
+        deck_change.name.as_ref().unwrap().value.as_deref(),
+        Some("Ultimate Geography [DE]")
+    );
+    assert_eq!(
+        deck_change
+            .adapter_ids
+            .get("crowdanki:uuid")
+            .unwrap()
+            .value
+            .as_deref(),
+        Some("de-deck-uuid")
+    );
+
+    let note_type_change = overlay
+        .note_type_changes
+        .get(&sid("note-type.country"))
+        .unwrap();
+    assert_eq!(
+        note_type_change.name.as_ref().unwrap().value.as_deref(),
+        Some("Ultimate Geography [DE]")
+    );
+    assert_eq!(
+        note_type_change
+            .adapter_ids
+            .get("crowdanki:model_id")
+            .unwrap()
+            .value
+            .as_deref(),
+        Some("de-model-id")
+    );
+    assert_eq!(
+        note_type_change
+            .card_templates
+            .get(&sid("template.country-capital"))
+            .unwrap()
+            .adapter_ids
+            .get("crowdanki:ord")
+            .unwrap()
+            .value
+            .as_deref(),
+        Some("0")
+    );
+
+    let note_change = overlay.note_changes.get(&sid("note.finland")).unwrap();
+    assert_eq!(
+        note_change
+            .adapter_ids
+            .get("crowdanki:guid")
+            .unwrap()
+            .value
+            .as_deref(),
+        Some("ug-finland-de-guid")
+    );
+}
+
+#[test]
+fn parses_add_note_overlay_payload() {
+    let overlay = canonical_yaml::overlay_from_str(
+        r#"id: overlay.extension.sweden
+kind: extension
+notes:
+  note.sweden:
+    intent: add
+    note:
+      note_type_id: note-type.country
+      fields:
+        field.country: Sweden
+        field.capital: Stockholm
+      tags: [Europe, Nordic]
+      adapter_ids:
+        crowdanki:guid: ug-sweden-guid
+"#,
+    )
+    .expect("overlay parses");
+
+    let note_change = overlay.note_changes.get(&sid("note.sweden")).unwrap();
+    let note = note_change.note.as_ref().unwrap();
+    assert_eq!(note.id, sid("note.sweden"));
+    assert_eq!(note.note_type_id, sid("note-type.country"));
+    assert_eq!(note.fields.get(&sid("field.capital")).unwrap(), "Stockholm");
+    assert_eq!(
+        note.adapter_ids.get("crowdanki:guid"),
+        Some("ug-sweden-guid")
+    );
+}
+
+#[test]
+fn parses_card_template_and_styling_overlay_changes() {
+    let overlay = canonical_yaml::overlay_from_str(
+        r#"id: overlay.extension.extended
+kind: extension
+note_types:
+  note-type.country:
+    intent: merge
+    styling:
+      intent: replace
+      value: |
+        .card { font-family: serif; }
+      expected_base:
+        value: |
+          .card { font-family: sans-serif; }
+    card_templates:
+      template.country-flag:
+        intent: add
+        insert_after: template.capital-country
+        template:
+          name: Country - Flag
+          question_format: '{{Country}}'
+          answer_format: '{{Flag}}'
+          adapter_ids: {}
+      template.country-capital:
+        intent: merge
+        question_format:
+          intent: replace
+          value: '{{Land}}'
+          expected_base:
+            value: '{{Country}}'
+"#,
+    )
+    .expect("overlay parses");
+
+    let note_type_change = overlay
+        .note_type_changes
+        .get(&sid("note-type.country"))
+        .unwrap();
+    assert_eq!(
+        note_type_change.styling.as_ref().unwrap().value.as_deref(),
+        Some(".card { font-family: serif; }\n")
+    );
+    let add_template = note_type_change
+        .card_templates
+        .get(&sid("template.country-flag"))
+        .unwrap();
+    assert_eq!(
+        add_template.insert_after,
+        Some(sid("template.capital-country"))
+    );
+    assert_eq!(
+        add_template.template.as_ref().unwrap().name,
+        "Country - Flag"
+    );
+    let replace_template = note_type_change
+        .card_templates
+        .get(&sid("template.country-capital"))
+        .unwrap();
+    assert_eq!(
+        replace_template
+            .question_format
+            .as_ref()
+            .unwrap()
+            .value
+            .as_deref(),
+        Some("{{Land}}")
+    );
+}
+
+#[test]
+fn parses_tag_and_media_overlay_changes() {
+    let overlay = canonical_yaml::overlay_from_str(
+        r#"id: overlay.extension.tags-media
+kind: extension
+notes:
+  note.finland:
+    intent: merge
+    tags:
+      UG::Nordic:
+        intent: add
+      Nordic:
+        intent: remove
+        expected_base: entity_present
+media:
+  media.flag.sweden:
+    intent: add
+    path: flags/se.png
+    sha256: abcdef
+"#,
+    )
+    .expect("overlay parses");
+
+    let note_change = overlay.note_changes.get(&sid("note.finland")).unwrap();
+    assert_eq!(
+        note_change.tags.get("UG::Nordic").unwrap().intent,
+        ChangeIntent::Add
+    );
+    assert_eq!(
+        note_change.tags.get("Nordic").unwrap().expected_base,
+        Some(ExpectedBase::EntityPresent)
+    );
+
+    let media_change = overlay
+        .media_changes
+        .get(&sid("media.flag.sweden"))
+        .unwrap();
+    assert_eq!(media_change.intent, ChangeIntent::Add);
+    assert_eq!(media_change.media.as_ref().unwrap().path, "flags/se.png");
+}
+
+#[test]
+fn parses_remove_overlay_with_entity_present_expected_base() {
+    let overlay = canonical_yaml::overlay_from_str(
+        r#"id: overlay.patch.remove-finland
+kind: patch
+notes:
+  note.finland:
+    intent: remove
+    expected_base: entity_present
+"#,
+    )
+    .expect("overlay parses");
+
+    let note_change = overlay.note_changes.get(&sid("note.finland")).unwrap();
+    assert_eq!(note_change.intent, ChangeIntent::Remove);
+    assert_eq!(note_change.expected_base, Some(ExpectedBase::EntityPresent));
+}
+
+#[test]
+fn rejects_unknown_overlay_fields() {
+    let error = canonical_yaml::overlay_from_str(
+        r#"id: overlay.patch.capital
+kind: patch
+unsupported: true
+notes: {}
+"#,
+    )
+    .expect_err("unknown overlay fields must fail");
+
+    assert!(error.to_string().contains("unsupported"));
+}
+
+fn sid(value: &str) -> StableId {
+    StableId::new(value).expect("test stable id is valid")
+}

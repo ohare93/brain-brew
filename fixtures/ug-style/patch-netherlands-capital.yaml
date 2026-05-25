@@ -1,0 +1,11 @@
+id: overlay.patch.netherlands-capital
+kind: patch
+notes:
+  note.netherlands:
+    intent: merge
+    fields:
+      field.capital:
+        intent: replace
+        value: 'Amsterdam (constitutional capital)'
+        expected_base:
+          value: Amsterdam

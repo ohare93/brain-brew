@@ -1,0 +1,57 @@
+id: overlay.extension.population
+kind: extension
+field_additions:
+  note-type.country:
+    fields:
+      field.population: Population
+    values:
+      note.australia:
+        field.population: 25.0 million
+      note.austria:
+        field.population: 16.0 million
+      note.belgium:
+        field.population: 19.0 million
+      note.canada:
+        field.population: 22.0 million
+      note.czechia:
+        field.population: 15.0 million
+      note.denmark:
+        field.population: 4.0 million
+      note.estonia:
+        field.population: 6.0 million
+      note.finland:
+        field.population: 1.0 million
+      note.france:
+        field.population: 10.0 million
+      note.germany:
+        field.population: 9.0 million
+      note.iceland:
+        field.population: 5.0 million
+      note.ireland:
+        field.population: 20.0 million
+      note.italy:
+        field.population: 13.0 million
+      note.japan:
+        field.population: 24.0 million
+      note.latvia:
+        field.population: 7.0 million
+      note.lithuania:
+        field.population: 8.0 million
+      note.mexico:
+        field.population: 23.0 million
+      note.netherlands:
+        field.population: 18.0 million
+      note.norway:
+        field.population: 3.0 million
+      note.poland:
+        field.population: 14.0 million
+      note.portugal:
+        field.population: 12.0 million
+      note.spain:
+        field.population: 11.0 million
+      note.sweden:
+        field.population: 2.0 million
+      note.switzerland:
+        field.population: 17.0 million
+      note.united-kingdom:
+        field.population: 21.0 million

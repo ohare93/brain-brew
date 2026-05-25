@@ -1,0 +1,9 @@
+id: overlay.personal.finland-hint
+kind: personal
+notes:
+  note.finland:
+    intent: merge
+    fields:
+      field.capital-hint:
+        intent: merge
+        value: Starts with H
