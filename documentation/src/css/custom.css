@@ -1,0 +1,23 @@
+:root {
+  --ifm-color-primary: #3657d8;
+  --ifm-color-primary-dark: #2949c7;
+  --ifm-color-primary-darker: #2542b8;
+  --ifm-color-primary-darkest: #1f3698;
+  --ifm-color-primary-light: #536fe0;
+  --ifm-color-primary-lighter: #667fe4;
+  --ifm-color-primary-lightest: #8ca0ec;
+  --ifm-code-font-size: 92%;
+}
+
+.hero--primary {
+  --ifm-hero-background-color: #17203f;
+  --ifm-hero-text-color: #fff;
+}
+
+.markdown h2 {
+  margin-top: 2rem;
+}
+
+.markdown table code {
+  white-space: nowrap;
+}

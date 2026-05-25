@@ -27,3 +27,6 @@
 
 # Local generated/downloaded caches
 /.cache/
+
+# Local agent task queues
+/.frontloop/
