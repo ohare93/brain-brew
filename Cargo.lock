@@ -36,8 +36,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "brain-brew-cli"
-version = "0.1.0"
+name = "brain-brew-core"
+version = "0.1.0-alpha.1"
+
+[[package]]
+name = "brain-brew-formats"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "brain-brew-core",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+]
+
+[[package]]
+name = "brainbrew"
+version = "0.1.0-alpha.1"
 dependencies = [
  "base64",
  "brain-brew-core",
@@ -49,21 +64,6 @@ dependencies = [
  "tar",
  "tempfile",
  "ureq",
-]
-
-[[package]]
-name = "brain-brew-core"
-version = "0.1.0"
-
-[[package]]
-name = "brain-brew-formats"
-version = "0.1.0"
-dependencies = [
- "brain-brew-core",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
 ]
 
 [[package]]

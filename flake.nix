@@ -31,7 +31,7 @@
 
             cargoBuildFlags = [
               "-p"
-              "brain-brew-cli"
+              "brainbrew"
               "--bin"
               "brainbrew"
             ];
