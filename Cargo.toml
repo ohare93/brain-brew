@@ -1,0 +1,25 @@
+[workspace]
+members = [
+    "crates/brain-brew-core",
+    "crates/brain-brew-formats",
+    "crates/brain-brew-cli",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+license = "Unlicense"
+authors = ["Brain Brew contributors"]
+repository = "https://github.com/jeprecated/brain-brew"
+
+[workspace.dependencies]
+brain-brew-core = { path = "crates/brain-brew-core" }
+brain-brew-formats = { path = "crates/brain-brew-formats" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"

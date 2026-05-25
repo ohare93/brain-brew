@@ -1,0 +1,28 @@
+[package]
+name = "brain-brew-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "brainbrew"
+path = "src/main.rs"
+
+[dependencies]
+base64 = "0.22"
+flate2 = "1"
+nix-nar = "0.4"
+brain-brew-core.workspace = true
+brain-brew-formats.workspace = true
+serde_json = "1"
+sha2 = "0.10"
+tar = "0.4"
+tempfile = "3"
+ureq = "2"
+
+[lints]
+workspace = true
