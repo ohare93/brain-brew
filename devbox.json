@@ -5,7 +5,8 @@
     "cargo@latest",
     "rustfmt@latest",
     "clippy@latest",
-    "nodejs@20"
+    "nodejs@20",
+    "cargo-dist@0.30.4"
   ],
   "shell": {
     "init_hook": [
@@ -35,6 +36,12 @@
       ],
       "docs:build": [
         "npm --prefix documentation run build"
+      ],
+      "dist:generate": [
+        "dist generate"
+      ],
+      "dist:plan": [
+        "dist manifest --tag v0.1.0-alpha.1 --artifacts=all --no-local-paths --output-format=json"
       ],
       "ci": [
         "cargo fmt --all -- --check",
