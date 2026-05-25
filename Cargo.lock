@@ -37,11 +37,11 @@ dependencies = [
 
 [[package]]
 name = "brain-brew-core"
-version = "0.1.0-alpha.1"
+version = "1.0.0-alpha.1"
 
 [[package]]
 name = "brain-brew-formats"
-version = "0.1.0-alpha.1"
+version = "1.0.0-alpha.1"
 dependencies = [
  "brain-brew-core",
  "serde",
@@ -52,7 +52,7 @@ dependencies = [
 
 [[package]]
 name = "brainbrew"
-version = "0.1.0-alpha.1"
+version = "1.0.0-alpha.1"
 dependencies = [
  "base64",
  "brain-brew-core",

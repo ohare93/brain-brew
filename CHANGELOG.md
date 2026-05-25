@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.0-alpha.1
+## v1.0.0-alpha.1
 
 Initial Rust-based Brain Brew preview release.
 

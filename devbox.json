@@ -41,7 +41,7 @@
         "dist generate"
       ],
       "dist:plan": [
-        "dist manifest --tag v0.1.0-alpha.1 --artifacts=all --no-local-paths --output-format=json"
+        "dist manifest --tag v1.0.0-alpha.1 --artifacts=all --no-local-paths --output-format=json"
       ],
       "ci": [
         "cargo fmt --all -- --check",

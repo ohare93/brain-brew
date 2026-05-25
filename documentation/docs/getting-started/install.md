@@ -14,7 +14,7 @@ macOS and Linux:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/jeprecated/brain-brew/releases/download/v0.1.0-alpha.1/brainbrew-installer.sh \
+  https://github.com/jeprecated/brain-brew/releases/download/v1.0.0-alpha.1/brainbrew-installer.sh \
   | sh
 brainbrew --version
 ```
@@ -22,7 +22,7 @@ brainbrew --version
 Windows PowerShell:
 
 ```powershell
-irm https://github.com/jeprecated/brain-brew/releases/download/v0.1.0-alpha.1/brainbrew-installer.ps1 | iex
+irm https://github.com/jeprecated/brain-brew/releases/download/v1.0.0-alpha.1/brainbrew-installer.ps1 | iex
 brainbrew --version
 ```
 
@@ -44,7 +44,7 @@ The Homebrew formula is generated from the same release artifacts as the shell i
 If you already have Rust installed:
 
 ```bash
-cargo install --git https://github.com/jeprecated/brain-brew --tag v0.1.0-alpha.1 brainbrew --locked
+cargo install --git https://github.com/jeprecated/brain-brew --tag v1.0.0-alpha.1 brainbrew --locked
 brainbrew --version
 ```
 

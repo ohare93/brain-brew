@@ -43,7 +43,7 @@ The easiest install path is the GitHub Release installer:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/jeprecated/brain-brew/releases/download/v0.1.0-alpha.1/brainbrew-installer.sh \
+  https://github.com/jeprecated/brain-brew/releases/download/v1.0.0-alpha.1/brainbrew-installer.sh \
   | sh
 brainbrew --version
 ```
@@ -57,7 +57,7 @@ brew install jeprecated/tap/brainbrew
 Rust users can install directly from the release tag:
 
 ```bash
-cargo install --git https://github.com/jeprecated/brain-brew --tag v0.1.0-alpha.1 brainbrew --locked
+cargo install --git https://github.com/jeprecated/brain-brew --tag v1.0.0-alpha.1 brainbrew --locked
 ```
 
 Nix remains available as an optional build/install path:
