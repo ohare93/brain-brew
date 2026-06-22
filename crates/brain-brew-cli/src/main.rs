@@ -26,6 +26,8 @@ fn run() -> Result<(), String> {
         return Ok(());
     };
 
+    let command = canonical_command(command);
+
     if args
         .get(1)
         .is_some_and(|arg| arg == "--help" || arg == "-h")
@@ -55,8 +57,39 @@ fn run() -> Result<(), String> {
             println!("brainbrew {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
-        other => Err(format!("unknown command {other:?}")),
+        other => Err(unknown_command_error(other)),
     }
+}
+
+fn canonical_command(command: &str) -> &str {
+    match command {
+        "translate" | "translation" => "translations",
+        other => other,
+    }
+}
+
+fn unknown_command_error(command: &str) -> String {
+    if command.starts_with("translat") || levenshtein_one_or_two(command, "translations") {
+        format!("unknown command {command:?}\n\nDid you mean:\n  brainbrew translations")
+    } else {
+        format!("unknown command {command:?}")
+    }
+}
+
+fn levenshtein_one_or_two(left: &str, right: &str) -> bool {
+    let mut previous = (0..=right.len()).collect::<Vec<_>>();
+    let mut current = vec![0; right.len() + 1];
+    for (left_index, left_char) in left.chars().enumerate() {
+        current[0] = left_index + 1;
+        for (right_index, right_char) in right.chars().enumerate() {
+            let substitution = usize::from(left_char != right_char);
+            current[right_index + 1] = (previous[right_index + 1] + 1)
+                .min(current[right_index] + 1)
+                .min(previous[right_index] + substitution);
+        }
+        std::mem::swap(&mut previous, &mut current);
+    }
+    previous[right.len()] <= 2
 }
 
 fn print_usage() {

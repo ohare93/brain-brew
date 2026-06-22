@@ -124,16 +124,26 @@ translations:
 
 ## Complete coverage, translator context, and sync/apply
 
-Use `brainbrew translations` to inspect coverage before editing a translated overlay:
+Use `brainbrew translate` (aliases: `translation`, `translations`) to inspect coverage before editing a translated overlay. In an interactive terminal, running it with missing choices opens a manifest-aware selector:
+
+```bash
+brainbrew translate
+brainbrew translate --manifest fixtures/ultimate-geography/brainbrew.yaml
+```
+
+The interactive workflow lets you choose from the known manifests, targets, languages, translation overlays, notes, fields, path prefixes, and report/apply mode. It prints the equivalent non-interactive command before running so the same review can be repeated in CI or shared with another maintainer.
+
+For scripts and CI, pass the scope explicitly:
 
 ```bash
 brainbrew translations --manifest brainbrew.yaml --target de-standard
 brainbrew translations --manifest brainbrew.yaml --all-targets --language de
 brainbrew translations --manifest brainbrew.yaml --target de-standard --note note.berlin
 brainbrew translations --manifest brainbrew.yaml --target de-standard --path-prefix notes.note.berlin.fields.field.country
+brainbrew translations --manifest brainbrew.yaml --target de-standard --json
 ```
 
-Report mode is the default and never modifies files. It groups extracted text into direct translations, contextual overrides, target-language additions, stale/invalid keys, and missing/untranslated fallbacks. Missing fallbacks are source strings that would currently pass through unchanged in a translated target.
+Report mode is the default and never modifies files. It groups extracted text into direct translations, contextual overrides, target-language additions, ignored entries, stale/invalid keys, and missing/untranslated fallbacks. Human output is colored when terminal color is enabled; JSON output is stable and uncolored. Missing fallbacks are source strings that would currently pass through unchanged in a translated target.
 
 To seed translator work after adding English notes or fields, run apply explicitly:
 
@@ -141,7 +151,7 @@ To seed translator work after adding English notes or fields, run apply explicit
 brainbrew translations --manifest brainbrew.yaml --target de-standard --apply
 ```
 
-`--apply` inserts deterministic `source: source` stubs into `translations.direct` for the missing fallbacks in scope. It keeps direct reusable translations distinct from `contextual` overrides and does not invent target-language additions for blank source fields. Existing comments and layout are preserved where practical; run `brainbrew fmt overlays/languages/de.yaml` when you want fully canonical formatting.
+Non-interactive `--apply` inserts deterministic `source: source` stubs into `translations.direct` for the missing fallbacks in scope. Interactive apply is selective: choose rows, then choose direct `source: source`, contextual `source: source` at the suggested safe context, an `ignore_paths` entry, or skip. It keeps direct reusable translations distinct from `contextual` overrides and does not invent target-language additions for blank source fields. Existing comments and layout are preserved where practical; run `brainbrew fmt overlays/languages/de.yaml` when you want fully canonical formatting.
 
 When `require_complete: true`, composition fails if any extracted non-empty translatable string is not translated by `direct`, translated by a matching `contextual` entry, or matched by `ignore_paths`. For release workflows, prefer target-level verification policy in `brainbrew.yaml`:
 

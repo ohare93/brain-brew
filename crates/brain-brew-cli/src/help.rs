@@ -13,7 +13,7 @@ pub(crate) fn general() -> String {
             "  import    Import CrowdAnki into CanonicalDeck YAML\n",
             "  lock      Update or verify locked federated package inputs\n",
             "  targets   List manifest targets\n",
-            "  translations Report or apply translation coverage stubs\n",
+            "  translations Report/apply translation coverage stubs (aliases: translate, translation)\n",
             "  verify    Run manifest formatting, composition, validation, media, and golden checks\n",
             "  explain   Explain a manifest target and its overlay stack\n",
             "  diff      Compare decks semantically, or emit an overlay draft\n\n",
@@ -24,7 +24,7 @@ pub(crate) fn general() -> String {
             "  brainbrew compose --manifest america/brainbrew.yaml --include ultimate-geography/brainbrew.yaml --target en-america\n",
             "  brainbrew lock update --package anki-geo.ultimate-geography --path ../ultimate-geography\n",
             "  brainbrew export crowdanki --manifest brainbrew.yaml --target de-extended --media-root media/\n",
-            "  brainbrew translations --manifest brainbrew.yaml --target de-standard\n",
+            "  brainbrew translate --manifest brainbrew.yaml --target de-standard\n",
             "  brainbrew verify --manifest brainbrew.yaml --all-targets\n\n",
             "Run `brainbrew <command> --help` for command-specific examples.\n",
         ),
@@ -55,8 +55,8 @@ pub(crate) fn command(name: &str) -> Option<&'static str> {
         "targets" => Some(
             "Usage:\n  brainbrew targets [--manifest brainbrew.yaml] [--include package/brainbrew.yaml ...] [--package-root packages/] [--json]\n\nExamples:\n  brainbrew targets --manifest brainbrew.yaml\n  brainbrew targets --manifest brainbrew.yaml --json\n  brainbrew targets --package-root ../packages\n",
         ),
-        "translations" => Some(
-            "Usage:\n  brainbrew translations [--manifest brainbrew.yaml] [--target <target> | --all-targets] [--language <code>] [--overlay <id-or-file>] [--note <note-id>] [--field <field-id>] [--path-prefix <deck-path>] [--apply] [--json]\n\nExamples:\n  brainbrew translations --manifest brainbrew.yaml --target da-standard\n  brainbrew translations --manifest brainbrew.yaml --all-targets --language de\n  brainbrew translations --manifest brainbrew.yaml --target de-standard --note note.finland --field field.country\n  brainbrew translations --manifest brainbrew.yaml --target da-standard --apply\n\nReport mode is the default and never edits files. --apply inserts source->source stubs for missing untranslated fallbacks into translations.direct. Use --path-prefix with paths from a diff to scope a changed-base review.\n",
+        "translations" | "translate" | "translation" => Some(
+            "Usage:\n  brainbrew translate [--manifest brainbrew.yaml] [--target <target> | --all-targets] [--language <code>] [--overlay <id-or-file>] [--note <note-id>] [--field <field-id>] [--path-prefix <deck-path>] [--apply] [--interactive | --no-interactive] [--json]\n\nInteractive examples:\n  brainbrew translate\n  brainbrew translate --manifest fixtures/ultimate-geography/brainbrew.yaml\n  brainbrew translate --interactive\n\nScriptable examples:\n  brainbrew translations --manifest brainbrew.yaml --target da-standard\n  brainbrew translations --manifest brainbrew.yaml --all-targets --language de\n  brainbrew translations --manifest brainbrew.yaml --target de-standard --note note.finland --field field.country\n  brainbrew translations --manifest brainbrew.yaml --target da-standard --apply\n  brainbrew translations --manifest brainbrew.yaml --target da-standard --json\n\nReport mode is the default and never edits files. In an interactive terminal, missing choices open manifest-aware selectors for target, language, overlay, scope, and mode; the equivalent non-interactive command is printed. --apply inserts source->source stubs for missing untranslated fallbacks into translations.direct in non-interactive mode, while interactive apply lets you choose direct, contextual, ignore-path, or skip actions. Use --path-prefix with paths from a diff to scope a changed-base review.\n",
         ),
         "verify" => Some(
             "Usage:\n  brainbrew verify [--manifest brainbrew.yaml] (--all-targets | --target <target>) [--include package/brainbrew.yaml ...] [--package-root packages/] [--media-root media/] [--translation-coverage lenient|strict]\n\nExamples:\n  brainbrew verify --manifest brainbrew.yaml --all-targets\n  brainbrew verify --manifest brainbrew.yaml --target da-standard\n  brainbrew verify --manifest america/brainbrew.yaml --include ultimate-geography/brainbrew.yaml --target en-america\n  brainbrew verify --manifest brainbrew.yaml --all-targets --media-root media/\n  brainbrew verify --manifest brainbrew.yaml --target de-release --translation-coverage strict\n",

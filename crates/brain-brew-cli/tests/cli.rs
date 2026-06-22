@@ -1,6 +1,7 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use flate2::Compression;
@@ -903,6 +904,175 @@ fn verify_checks_all_manifest_targets() {
 }
 
 #[test]
+fn translate_aliases_run_translation_reports() {
+    let dir = temp_dir("translate-aliases");
+    write_translation_workspace(&dir);
+
+    for command in ["translate", "translation"] {
+        let output = run([
+            command,
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--target",
+            "da-standard",
+            "--json",
+        ]);
+
+        assert!(
+            output.status.success(),
+            "{command} stderr: {}",
+            stderr(&output)
+        );
+        let json: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+        assert_eq!(json["reports"][0]["target"], "da-standard");
+    }
+}
+
+#[test]
+fn unknown_translate_like_command_suggests_translations() {
+    let output = run(["translatons"]);
+
+    assert!(!output.status.success());
+    let err = stderr(&output);
+    assert!(err.contains("unknown command"));
+    assert!(err.contains("Did you mean:"));
+    assert!(err.contains("brainbrew translations"));
+}
+
+#[test]
+fn translations_missing_manifest_lists_nearby_manifests() {
+    let dir = temp_dir("translations-missing-manifest");
+    let workspace = dir.join("decks/sample");
+    fs::create_dir_all(&workspace).unwrap();
+    write_translation_workspace(&workspace);
+
+    let output = run_in_dir(["translations", "--no-interactive"], &dir);
+
+    assert!(!output.status.success());
+    let err = stderr(&output);
+    assert!(err.contains("No Brain Brew manifest found at brainbrew.yaml"));
+    assert!(err.contains("Found possible manifests:"));
+    assert!(err.contains("decks/sample/brainbrew.yaml"));
+    assert!(err.contains("brainbrew translations --manifest decks/sample/brainbrew.yaml"));
+}
+
+#[test]
+fn translations_human_output_can_be_colored_but_json_stays_plain() {
+    let dir = temp_dir("translations-color");
+    write_translation_workspace(&dir);
+    let manifest = dir.join("brainbrew.yaml");
+
+    let colored = run_with_env(
+        [
+            "translations",
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--target",
+            "da-standard",
+        ],
+        &[("BRAINBREW_COLOR", "always")],
+    );
+    assert!(colored.status.success(), "stderr: {}", stderr(&colored));
+    assert!(stdout(&colored).contains("\u{1b}["));
+
+    let json = run_with_env(
+        [
+            "translations",
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--target",
+            "da-standard",
+            "--json",
+        ],
+        &[("BRAINBREW_COLOR", "always")],
+    );
+    assert!(json.status.success(), "stderr: {}", stderr(&json));
+    assert!(!stdout(&json).contains("\u{1b}["));
+}
+
+#[test]
+fn translations_interactive_derives_selector_options_and_prints_equivalent_command() {
+    let dir = temp_dir("translations-interactive-selectors");
+    write_translation_workspace(&dir);
+
+    let output = run_with_stdin(
+        [
+            "translate",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--interactive",
+        ],
+        "2\n\n\n\n\n",
+    );
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("Brain Brew translation coverage"));
+    assert!(out.contains("Target:"));
+    assert!(out.contains("da-release"));
+    assert!(out.contains("da-standard"));
+    assert!(out.contains("Translation overlay:"));
+    assert!(out.contains("overlay.translation.da"));
+    assert!(out.contains("Scope:"));
+    assert!(out.contains("Equivalent command:"));
+    assert!(out.contains("brainbrew translations"));
+    assert!(out.contains("--target da-standard"));
+}
+
+#[test]
+fn translations_interactive_apply_can_insert_contextual_stub() {
+    let dir = temp_dir("translations-interactive-contextual");
+    write_translation_workspace(&dir);
+    let overlay_path = dir.join("da.yaml");
+
+    let output = run_with_stdin(
+        [
+            "translations",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--target",
+            "da-standard",
+            "--path-prefix",
+            "notes.note.sweden.fields.field.country",
+            "--apply",
+            "--interactive",
+        ],
+        "\n\n\nc\ny\n",
+    );
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let updated = fs::read_to_string(overlay_path).unwrap();
+    assert!(updated.contains("    notes.note.sweden:\n      Sweden: Sweden\n"));
+}
+
+#[test]
+fn translations_interactive_apply_can_insert_ignore_path() {
+    let dir = temp_dir("translations-interactive-ignore");
+    write_translation_workspace(&dir);
+    let overlay_path = dir.join("da.yaml");
+
+    let output = run_with_stdin(
+        [
+            "translations",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--target",
+            "da-standard",
+            "--path-prefix",
+            "notes.note.sweden.fields.field.country",
+            "--apply",
+            "--interactive",
+        ],
+        "\n\n\ni\ny\n",
+    );
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let updated = fs::read_to_string(overlay_path).unwrap();
+    assert!(updated.contains("  ignore_paths:\n"));
+    assert!(updated.contains("    - notes.note.sweden.fields.field.country\n"));
+}
+
+#[test]
 fn translations_reports_missing_stale_contextual_and_additions_without_modifying() {
     let dir = temp_dir("translations-report");
     write_translation_workspace(&dir);
@@ -1634,6 +1804,40 @@ fn run<const N: usize>(args: [&str; N]) -> std::process::Output {
         .args(args)
         .output()
         .expect("command runs")
+}
+
+fn run_in_dir<const N: usize>(args: [&str; N], cwd: &Path) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_brainbrew"))
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .expect("command runs")
+}
+
+fn run_with_env<const N: usize>(args: [&str; N], envs: &[(&str, &str)]) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_brainbrew"));
+    command.args(args);
+    for (name, value) in envs {
+        command.env(name, value);
+    }
+    command.output().expect("command runs")
+}
+
+fn run_with_stdin<const N: usize>(args: [&str; N], stdin: &str) -> std::process::Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_brainbrew"))
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("command spawns");
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin is piped")
+        .write_all(stdin.as_bytes())
+        .expect("stdin writes");
+    child.wait_with_output().expect("command runs")
 }
 
 fn run_with_cache<const N: usize>(args: [&str; N], cache: &Path) -> std::process::Output {
