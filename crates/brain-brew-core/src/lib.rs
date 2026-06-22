@@ -196,6 +196,14 @@ impl CanonicalDeck {
             .map(|translations| translation_coverage_report(self, overlay, translations))
     }
 
+    /// Build translator-facing note/field/card context for one coverage report.
+    pub fn translation_context(
+        &self,
+        report: &TranslationCoverageReport,
+    ) -> TranslationContextView {
+        translation_context_view(self, report)
+    }
+
     /// Validate strict core invariants that do not require filesystem or format access.
     pub fn validate(&self) -> Result<(), ValidationReport> {
         let mut errors = Vec::new();
@@ -706,6 +714,197 @@ impl TranslationCoverageBuilder<'_> {
             entries: self.entries,
         }
     }
+}
+
+fn translation_context_view(
+    deck: &CanonicalDeck,
+    report: &TranslationCoverageReport,
+) -> TranslationContextView {
+    let mut source_counts = BTreeMap::<String, usize>::new();
+    for entry in &report.entries {
+        if !entry.source.is_empty() {
+            *source_counts.entry(entry.source.clone()).or_insert(0) += 1;
+        }
+    }
+
+    let entries_by_path = report
+        .entries
+        .iter()
+        .map(|entry| (entry.path.as_str(), entry))
+        .collect::<BTreeMap<_, _>>();
+    let units = report
+        .entries
+        .iter()
+        .map(|entry| translation_context_unit(deck, entry, &source_counts, &entries_by_path))
+        .collect::<Vec<_>>();
+
+    TranslationContextView {
+        overlay_id: report.overlay_id.clone(),
+        units,
+    }
+}
+
+fn translation_context_unit(
+    deck: &CanonicalDeck,
+    entry: &TranslationCoverageEntry,
+    source_counts: &BTreeMap<String, usize>,
+    entries_by_path: &BTreeMap<&str, &TranslationCoverageEntry>,
+) -> TranslationContextUnit {
+    let note_id = note_id_from_translation_path(&entry.path);
+    let note_type_id = note_id
+        .as_ref()
+        .and_then(|note_id| {
+            deck.notes
+                .get(note_id)
+                .map(|note| note.note_type_id.clone())
+        })
+        .or_else(|| note_type_id_from_translation_path(&entry.path));
+    let note_type = note_type_id
+        .as_ref()
+        .and_then(|note_type_id| deck.note_types.get(note_type_id));
+    let field_id = field_id_from_translation_path(&entry.path, note_type);
+    let note = note_id.as_ref().and_then(|note_id| deck.notes.get(note_id));
+    let field_name = note_type
+        .zip(field_id.as_ref())
+        .and_then(|(note_type, field_id)| field_definition_name(note_type, field_id))
+        .map(str::to_owned);
+    let note_fields = note
+        .zip(note_type)
+        .zip(note_id.as_ref())
+        .map(|((note, note_type), note_id)| {
+            note_field_contexts(note, note_type, note_id, entries_by_path)
+        })
+        .unwrap_or_default();
+    let card_templates = note_type
+        .zip(field_name.as_deref())
+        .map(|(note_type, field_name)| card_contexts_for_field(note_type, field_name))
+        .unwrap_or_default();
+
+    TranslationContextUnit {
+        category: entry.category,
+        path: entry.path.clone(),
+        source: entry.source.clone(),
+        translated: entry.translated.clone(),
+        context: entry.context.clone(),
+        note_id,
+        note_type_id,
+        field_id,
+        field_name,
+        note_fields,
+        card_templates,
+        source_occurrences: source_counts.get(&entry.source).copied().unwrap_or(0),
+    }
+}
+
+fn note_id_from_translation_path(path: &str) -> Option<StableId> {
+    let rest = path.strip_prefix("notes.")?;
+    let end = [".fields.", ".tags.", ".variables.", ".adapter_ids."]
+        .into_iter()
+        .filter_map(|marker| rest.find(marker))
+        .min()
+        .unwrap_or(rest.len());
+    StableId::new(rest[..end].to_owned()).ok()
+}
+
+fn note_type_id_from_translation_path(path: &str) -> Option<StableId> {
+    let rest = path.strip_prefix("note_types.")?;
+    let end = [
+        ".fields.",
+        ".card_templates.",
+        ".variables.",
+        ".adapter_ids.",
+    ]
+    .into_iter()
+    .filter_map(|marker| rest.find(marker))
+    .min()
+    .unwrap_or(rest.len());
+    StableId::new(rest[..end].to_owned()).ok()
+}
+
+fn field_id_from_translation_path(path: &str, note_type: Option<&NoteType>) -> Option<StableId> {
+    let rest = path.split_once(".fields.")?.1;
+    if let Some(note_type) = note_type {
+        return note_type
+            .fields
+            .iter()
+            .filter(|field| {
+                rest == field.id.as_str() || rest.starts_with(&format!("{}.", field.id))
+            })
+            .max_by_key(|field| field.id.as_str().len())
+            .map(|field| field.id.clone());
+    }
+    StableId::new(rest.strip_suffix(".name").unwrap_or(rest).to_owned()).ok()
+}
+
+fn field_definition_name<'a>(note_type: &'a NoteType, field_id: &StableId) -> Option<&'a str> {
+    note_type
+        .fields
+        .iter()
+        .find(|field| &field.id == field_id)
+        .map(|field| field.name.as_str())
+}
+
+fn note_field_contexts(
+    note: &Note,
+    note_type: &NoteType,
+    note_id: &StableId,
+    entries_by_path: &BTreeMap<&str, &TranslationCoverageEntry>,
+) -> Vec<TranslationNoteFieldContext> {
+    note_type
+        .fields
+        .iter()
+        .map(|field| {
+            let source = note.fields.get(&field.id).cloned().unwrap_or_default();
+            let path = format!("notes.{note_id}.fields.{}", field.id);
+            let entry = entries_by_path.get(path.as_str()).copied();
+            TranslationNoteFieldContext {
+                field_id: field.id.clone(),
+                field_name: field.name.clone(),
+                source: source.clone(),
+                translated: entry
+                    .and_then(|entry| entry.translated.clone())
+                    .unwrap_or(source),
+                category: entry.map(|entry| entry.category),
+            }
+        })
+        .collect()
+}
+
+fn card_contexts_for_field(note_type: &NoteType, field_name: &str) -> Vec<TranslationCardContext> {
+    note_type
+        .card_templates
+        .iter()
+        .filter_map(|template| {
+            let mut sides = BTreeSet::new();
+            if template_uses_field(&template.question_format, field_name) {
+                sides.insert(CardTemplateSide::Question);
+            }
+            if template_uses_field(&template.answer_format, field_name) {
+                sides.insert(CardTemplateSide::Answer);
+            }
+            if sides.is_empty() {
+                None
+            } else {
+                Some(TranslationCardContext {
+                    template_id: template.id.clone(),
+                    template_name: template.name.clone(),
+                    sides,
+                })
+            }
+        })
+        .collect()
+}
+
+fn template_uses_field(template_text: &str, field_name: &str) -> bool {
+    [
+        format!("{{{{{field_name}}}}}"),
+        format!("{{{{#{field_name}}}}}"),
+        format!("{{{{/{field_name}}}}}"),
+        format!("{{{{^{field_name}}}}}"),
+        format!("{{{{type:{field_name}}}}}"),
+    ]
+    .iter()
+    .any(|marker| template_text.contains(marker))
 }
 
 fn apply_translation_dictionary(
@@ -2894,6 +3093,64 @@ pub struct TranslationCoverageEntry {
     pub source: String,
     pub translated: Option<String>,
     pub context: Option<String>,
+}
+
+/// Translator-facing contextual view for one translation coverage report.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranslationContextView {
+    pub overlay_id: StableId,
+    pub units: Vec<TranslationContextUnit>,
+}
+
+/// One translatable unit annotated with note, field, card template, and status context.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranslationContextUnit {
+    pub category: TranslationCoverageCategory,
+    pub path: String,
+    pub source: String,
+    pub translated: Option<String>,
+    pub context: Option<String>,
+    pub note_id: Option<StableId>,
+    pub note_type_id: Option<StableId>,
+    pub field_id: Option<StableId>,
+    pub field_name: Option<String>,
+    pub note_fields: Vec<TranslationNoteFieldContext>,
+    pub card_templates: Vec<TranslationCardContext>,
+    pub source_occurrences: usize,
+}
+
+/// Sibling note-field context shown around a translatable unit.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranslationNoteFieldContext {
+    pub field_id: StableId,
+    pub field_name: String,
+    pub source: String,
+    pub translated: String,
+    pub category: Option<TranslationCoverageCategory>,
+}
+
+/// Card/template context in which a note field can be seen by a translator.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranslationCardContext {
+    pub template_id: StableId,
+    pub template_name: String,
+    pub sides: BTreeSet<CardTemplateSide>,
+}
+
+/// Card side where a translated field appears.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum CardTemplateSide {
+    Question,
+    Answer,
+}
+
+impl CardTemplateSide {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Question => "question",
+            Self::Answer => "answer",
+        }
+    }
 }
 
 /// Maintainer-facing classification for translation coverage entries.

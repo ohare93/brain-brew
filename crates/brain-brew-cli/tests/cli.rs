@@ -976,6 +976,177 @@ fn translations_reports_when_selected_target_has_no_dictionary_overlays() {
 }
 
 #[test]
+fn translations_context_view_shows_missing_note_field_card_context() {
+    let dir = temp_dir("translations-context-missing");
+    write_translation_workspace(&dir);
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--context",
+        "--source",
+        "Sweden",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("Translation context for target da-standard language da"));
+    assert!(out.contains("missing_translation notes.note.sweden.fields.field.country"));
+    assert!(out.contains("note: note.sweden"));
+    assert!(out.contains("field: field.country (Country)"));
+    assert!(out.contains("note fields (source/en | target/da):"));
+    assert!(out.contains("* field.country (Country)"));
+    assert!(out.contains("cards: template.country-capital [question]"));
+    assert!(out.contains("source/en"));
+    assert!(out.contains("target/da"));
+    assert!(out.contains("Sweden"));
+}
+
+#[test]
+fn translations_context_view_shows_ug_repeated_country_info_occurrences() {
+    let manifest = workspace_root().join("fixtures/ultimate-geography/brainbrew.yaml");
+    let output = run([
+        "translations",
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--target",
+        "es-standard",
+        "--overlay",
+        "overlay.translation.es",
+        "--context",
+        "--source",
+        "Island of Indonesia.",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("duplicate source group: 3 occurrence(s)"));
+    assert!(out.contains("note: note.bali"));
+    assert!(out.contains("note: note.java"));
+    assert!(out.contains("note: note.sumatra"));
+    assert!(out.contains("field: field.country-info (Country info)"));
+    assert!(out.contains("template.capital-country [answer]"));
+    assert!(out.contains("template.country-capital [question+answer]"));
+    assert!(out.contains("Island of Indonesia."));
+    assert!(out.contains("Isla de Indonesia."));
+}
+
+#[test]
+fn translations_context_view_wraps_long_ug_flag_similarity_context() {
+    let manifest = workspace_root().join("fixtures/ultimate-geography/brainbrew.yaml");
+    let output = run([
+        "translations",
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--target",
+        "es-standard",
+        "--overlay",
+        "overlay.translation.es",
+        "--context",
+        "--source",
+        "Iceland (blue background",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("note: note.faroe-islands"));
+    assert!(out.contains("field: field.flag-similarity (Flag similarity)"));
+    assert!(out.contains("template.flag-country [answer]"));
+    assert!(out.contains("Iceland (blue background,"));
+    assert!(out.contains("Noruega (fondo rojo, cruz"));
+}
+
+#[test]
+fn translations_context_view_json_exposes_reusable_context_model() {
+    let manifest = workspace_root().join("fixtures/ultimate-geography/brainbrew.yaml");
+    let output = run([
+        "translations",
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--target",
+        "es-standard",
+        "--overlay",
+        "overlay.translation.es",
+        "--context",
+        "--source",
+        "Autonomous community of Spain.",
+        "--json",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    let unit = &json["contexts"][0]["units"][0];
+    assert_eq!(unit["status"], "direct_translation");
+    assert_eq!(unit["note_id"], "note.canary-islands");
+    assert_eq!(unit["field_id"], "field.country-info");
+    assert_eq!(unit["field_name"], "Country info");
+    assert_eq!(unit["note_fields"][0]["field_id"], "field.country");
+    assert_eq!(unit["note_fields"][0]["source"], "Canary Islands");
+    assert_eq!(unit["note_fields"][0]["translated"], "Canarias");
+    assert_eq!(unit["source"], "Autonomous community of Spain.");
+    assert_eq!(unit["translated"], "Comunidad autónoma de España.");
+    assert!(unit["card_templates"].as_array().unwrap().len() >= 4);
+}
+
+#[test]
+fn translations_context_apply_uses_existing_translation_apply_path() {
+    let dir = temp_dir("translations-context-apply");
+    write_translation_workspace(&dir);
+    let overlay_path = dir.join("da.yaml");
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--context",
+        "--source",
+        "Sweden",
+        "--apply",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let updated = fs::read_to_string(overlay_path).unwrap();
+    assert!(updated.contains("    Sweden: Sweden\n"));
+}
+
+#[test]
+fn translations_context_view_can_filter_duplicate_missing_and_language() {
+    let dir = temp_dir("translations-context-filters");
+    write_translation_workspace(&dir);
+    let deck_path = dir.join("deck.yaml");
+    let deck = fs::read_to_string(&deck_path)
+        .unwrap()
+        .replace("field.country: Finland", "field.country: Sweden");
+    fs::write(&deck_path, deck).unwrap();
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+        "--language",
+        "da",
+        "--context",
+        "--duplicates",
+        "--status",
+        "missing",
+        "--field",
+        "field.country",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("missing_translation notes.note.sweden.fields.field.country"));
+    assert!(out.contains("duplicate source group: 2 occurrence(s)"));
+    assert!(!out.contains("notes.note.finland.fields.field.capital"));
+}
+
+#[test]
 fn translations_summary_exports_compact_counts_by_language() {
     let dir = temp_dir("translations-summary");
     write_translation_workspace(&dir);

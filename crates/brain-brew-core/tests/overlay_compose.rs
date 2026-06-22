@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
-    AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, ChangeIntent,
-    ComposeErrorKind, DeckChange, ExpectedBase, FieldChange, FieldDefinition,
+    AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, CardTemplateSide,
+    ChangeIntent, ComposeErrorKind, DeckChange, ExpectedBase, FieldChange, FieldDefinition,
     FieldDefinitionChange, MediaChange, MediaReference, Note, NoteChange, NoteType, NoteTypeChange,
     Overlay, OverlayKind, PropertyChange, StableId, TagChange, TranslationCoverageCategory,
     TranslationDictionary,
@@ -398,6 +398,73 @@ fn translation_dictionary_no_change_counts_as_reviewed_without_modifying_output(
             && entry.path == "notes.note.finland.fields.field.capital"
             && entry.source == "Helsinki"
     }));
+}
+
+#[test]
+fn translation_context_identifies_note_field_card_and_duplicate_status() {
+    let mut base = ug_style_deck();
+    base.notes.insert(sid("note.sweden"), sweden_note());
+    let overlay = Overlay {
+        id: sid("overlay.translation.da"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::from([("Europe".to_owned(), "Europa".to_owned())]),
+            contextual: BTreeMap::new(),
+            no_change: BTreeSet::new(),
+            target_additions: BTreeMap::new(),
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            require_complete: false,
+            ignore_paths: BTreeSet::from([
+                "deck.*".to_owned(),
+                "note_types.*".to_owned(),
+                "notes.*.fields.field.flag".to_owned(),
+            ]),
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let report = base
+        .translation_coverage(&overlay)
+        .expect("translation overlay has coverage");
+    let context = base.translation_context(&report);
+    let finland = context
+        .units
+        .iter()
+        .find(|unit| unit.path == "notes.note.finland.fields.field.country")
+        .expect("Finland field has context");
+
+    assert_eq!(
+        finland.category,
+        TranslationCoverageCategory::UntranslatedFallback
+    );
+    assert_eq!(finland.note_id.as_ref().unwrap().as_str(), "note.finland");
+    assert_eq!(
+        finland.note_type_id.as_ref().unwrap().as_str(),
+        "note-type.country"
+    );
+    assert_eq!(finland.field_id.as_ref().unwrap().as_str(), "field.country");
+    assert_eq!(finland.field_name.as_deref(), Some("Country"));
+    assert_eq!(finland.note_fields.len(), 3);
+    assert_eq!(finland.note_fields[0].field_id.as_str(), "field.country");
+    assert_eq!(finland.note_fields[0].source, "Finland");
+    assert_eq!(finland.note_fields[0].translated, "Finland");
+    assert_eq!(finland.source_occurrences, 1);
+    assert!(finland.card_templates.iter().any(|card| {
+        card.template_id.as_str() == "template.country-to-capital"
+            && card.sides.contains(&CardTemplateSide::Question)
+    }));
+
+    let europe_units = context
+        .units
+        .iter()
+        .filter(|unit| unit.source == "Europe")
+        .collect::<Vec<_>>();
+    assert_eq!(europe_units.len(), 2);
+    assert!(europe_units.iter().all(|unit| unit.source_occurrences == 2));
 }
 
 #[test]

@@ -5,8 +5,8 @@ use std::io::{self, IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 
 use brain_brew_core::{
-    CanonicalDeck, Overlay, OverlayKind, TranslationCoverageCategory, TranslationCoverageEntry,
-    TranslationCoverageReport,
+    CanonicalDeck, Overlay, OverlayKind, TranslationContextUnit, TranslationContextView,
+    TranslationCoverageCategory, TranslationCoverageEntry, TranslationCoverageReport,
 };
 use brain_brew_formats::manifest::FederatedDeckManifest;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -65,7 +65,15 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         }
     }
 
-    if args.summary {
+    if args.context {
+        if args.json_output {
+            print_json_contexts(&reports);
+        } else if reports.is_empty() {
+            print_no_translation_reports(&args)?;
+        } else {
+            print_human_contexts(&reports, args.full);
+        }
+    } else if args.summary {
         if args.json_output {
             print_json_summary(&reports);
         } else if reports.is_empty() {
@@ -111,6 +119,10 @@ struct TranslationArgs {
     interactive: Option<bool>,
     full: bool,
     summary: bool,
+    context: bool,
+    source: Option<String>,
+    duplicates: bool,
+    status: Option<String>,
 }
 
 fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
@@ -130,6 +142,10 @@ fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
         interactive: None,
         full: false,
         summary: false,
+        context: false,
+        source: None,
+        duplicates: false,
+        status: None,
     };
     let mut index = 0;
     while index < args.len() {
@@ -217,6 +233,29 @@ fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
                 parsed.summary = true;
                 index += 1;
             }
+            "--context" => {
+                parsed.context = true;
+                index += 1;
+            }
+            "--source" => {
+                let Some(source) = args.get(index + 1) else {
+                    return Err("--source requires text to match".to_owned());
+                };
+                parsed.source = Some(source.clone());
+                index += 2;
+            }
+            "--duplicates" => {
+                parsed.duplicates = true;
+                index += 1;
+            }
+            "--status" => {
+                let Some(status) = args.get(index + 1) else {
+                    return Err("--status requires a status filter".to_owned());
+                };
+                validate_status_filter(status)?;
+                parsed.status = Some(status.clone());
+                index += 2;
+            }
             "--interactive" => {
                 parsed.interactive = Some(true);
                 index += 1;
@@ -236,6 +275,9 @@ fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
     }
     if parsed.summary && parsed.apply {
         return Err("choose --summary or --apply, not both".to_owned());
+    }
+    if parsed.summary && parsed.context {
+        return Err("choose --summary or --context, not both".to_owned());
     }
     Ok(parsed)
 }
@@ -818,6 +860,7 @@ struct ScopedTranslationReport {
     overlay_file: String,
     overlay_path: PathBuf,
     report: TranslationCoverageReport,
+    context: TranslationContextView,
 }
 
 fn collect_translation_reports(
@@ -840,20 +883,28 @@ fn collect_translation_reports(
                 if overlay_matches_scope(target, planned, overlay, args)
                     && let Some(report) = current.translation_coverage(overlay)
                 {
-                    let entries = report
+                    let full_context = current.translation_context(&report);
+                    let mut entries = report
                         .entries
-                        .into_iter()
+                        .iter()
                         .filter(|entry| entry_matches_scope(entry, args))
+                        .cloned()
                         .collect::<Vec<_>>();
+                    if args.duplicates {
+                        retain_duplicate_source_entries(&mut entries);
+                    }
+                    let scoped_report = TranslationCoverageReport {
+                        overlay_id: report.overlay_id,
+                        entries,
+                    };
+                    let context = filter_context_to_report(full_context, &scoped_report);
                     reports.push(ScopedTranslationReport {
                         target: target.clone(),
                         overlay_id: planned.id.clone(),
                         overlay_file: planned.display_file.clone(),
                         overlay_path: planned.file.clone(),
-                        report: TranslationCoverageReport {
-                            overlay_id: report.overlay_id,
-                            entries,
-                        },
+                        report: scoped_report,
+                        context,
                     });
                 }
                 current = compose_lenient_translation_overlay(&current, overlay)?;
@@ -1188,7 +1239,40 @@ fn language_matches(
             .any(|part| part == language || part == format!("{language}.yaml"))
 }
 
+fn filter_context_to_report(
+    mut context: TranslationContextView,
+    report: &TranslationCoverageReport,
+) -> TranslationContextView {
+    context.units.retain(|unit| {
+        report.entries.iter().any(|entry| {
+            entry.path == unit.path
+                && entry.category == unit.category
+                && entry.source == unit.source
+                && entry.context.as_deref() == unit.context.as_deref()
+        })
+    });
+    context
+}
+
+fn retain_duplicate_source_entries(entries: &mut Vec<TranslationCoverageEntry>) {
+    let mut counts = BTreeMap::<String, usize>::new();
+    for entry in entries.iter().filter(|entry| !entry.source.is_empty()) {
+        *counts.entry(entry.source.clone()).or_insert(0) += 1;
+    }
+    entries.retain(|entry| counts.get(&entry.source).copied().unwrap_or(0) > 1);
+}
+
 fn entry_matches_scope(entry: &TranslationCoverageEntry, args: &TranslationArgs) -> bool {
+    if let Some(source) = &args.source
+        && !entry.source.contains(source)
+    {
+        return false;
+    }
+    if let Some(status) = &args.status
+        && !status_matches_filter(entry.category, status)
+    {
+        return false;
+    }
     if let Some(note) = &args.note {
         let full = if note.starts_with("note.") {
             note.clone()
@@ -1528,6 +1612,87 @@ fn is_stale_or_invalid(category: TranslationCoverageCategory) -> bool {
     )
 }
 
+fn validate_status_filter(status: &str) -> Result<(), String> {
+    if status_filter_is_known(status) {
+        Ok(())
+    } else {
+        Err(format!(
+            "invalid translation status {status:?}; expected missing, stale, translated, changed, direct, contextual, no-change, addition, variable, adapter-id, ignored, or a coverage category name"
+        ))
+    }
+}
+
+fn status_filter_is_known(status: &str) -> bool {
+    let normalized = normalized_status_filter(status);
+    matches!(
+        normalized.as_str(),
+        "missing"
+            | "untranslated"
+            | "stale"
+            | "invalid"
+            | "translated"
+            | "covered"
+            | "changed"
+            | "direct"
+            | "contextual"
+            | "no_change"
+            | "addition"
+            | "variable"
+            | "adapter_id"
+            | "ignored"
+            | "direct_translation"
+            | "contextual_override"
+            | "target_language_addition"
+            | "variable_translation"
+            | "adapter_id_translation"
+            | "ignored_source"
+            | "untranslated_fallback"
+            | "stale_direct_key"
+            | "stale_contextual_key"
+            | "stale_no_change_key"
+            | "stale_target_addition"
+            | "stale_variable_key"
+            | "stale_adapter_id_key"
+            | "invalid_target_addition"
+    )
+}
+
+fn status_matches_filter(category: TranslationCoverageCategory, status: &str) -> bool {
+    let normalized = normalized_status_filter(status);
+    match normalized.as_str() {
+        "missing" | "untranslated" => category == TranslationCoverageCategory::UntranslatedFallback,
+        "stale" | "invalid" => is_stale_or_invalid(category),
+        "translated" | "covered" => matches!(
+            category,
+            TranslationCoverageCategory::DirectTranslation
+                | TranslationCoverageCategory::ContextualOverride
+                | TranslationCoverageCategory::NoChange
+                | TranslationCoverageCategory::TargetLanguageAddition
+                | TranslationCoverageCategory::VariableTranslation
+                | TranslationCoverageCategory::AdapterIdTranslation
+        ),
+        "changed" => matches!(
+            category,
+            TranslationCoverageCategory::DirectTranslation
+                | TranslationCoverageCategory::ContextualOverride
+                | TranslationCoverageCategory::TargetLanguageAddition
+                | TranslationCoverageCategory::VariableTranslation
+        ),
+        "direct" => category == TranslationCoverageCategory::DirectTranslation,
+        "contextual" => category == TranslationCoverageCategory::ContextualOverride,
+        "no_change" => category == TranslationCoverageCategory::NoChange,
+        "addition" => category == TranslationCoverageCategory::TargetLanguageAddition,
+        "variable" => category == TranslationCoverageCategory::VariableTranslation,
+        "adapter_id" => category == TranslationCoverageCategory::AdapterIdTranslation,
+        "ignored" => category == TranslationCoverageCategory::IgnoredSource,
+        other => category.as_str() == other,
+    }
+}
+
+fn normalized_status_filter(status: &str) -> String {
+    status.trim().to_ascii_lowercase().replace(['-', ' '], "_")
+}
+
 fn print_json_reports(reports: &[ScopedTranslationReport], applied: &BTreeMap<String, usize>) {
     let reports_json = reports
         .iter()
@@ -1549,6 +1714,246 @@ fn print_json_reports(reports: &[ScopedTranslationReport], applied: &BTreeMap<St
         }))
         .expect("translation report JSON serializes")
     );
+}
+
+fn print_json_contexts(reports: &[ScopedTranslationReport]) {
+    let contexts_json = reports
+        .iter()
+        .map(|report| {
+            json!({
+                "target": report.target,
+                "language": inferred_report_language(report),
+                "overlay": report.overlay_id,
+                "file": report.overlay_file,
+                "units": report.context.units.iter().map(context_unit_json).collect::<Vec<_>>(),
+            })
+        })
+        .collect::<Vec<_>>();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json!({ "contexts": contexts_json }))
+            .expect("translation context JSON serializes")
+    );
+}
+
+fn context_unit_json(unit: &TranslationContextUnit) -> serde_json::Value {
+    json!({
+        "status": unit.category.as_str(),
+        "path": unit.path,
+        "source": unit.source,
+        "translated": unit.translated,
+        "context": unit.context,
+        "note_id": unit.note_id.as_ref().map(|id| id.as_str()),
+        "note_type_id": unit.note_type_id.as_ref().map(|id| id.as_str()),
+        "field_id": unit.field_id.as_ref().map(|id| id.as_str()),
+        "field_name": unit.field_name,
+        "source_occurrences": unit.source_occurrences,
+        "note_fields": unit.note_fields.iter().map(|field| json!({
+            "field_id": field.field_id.as_str(),
+            "field_name": field.field_name,
+            "source": field.source,
+            "translated": field.translated,
+            "status": field.category.map(|category| category.as_str()),
+        })).collect::<Vec<_>>(),
+        "card_templates": unit.card_templates.iter().map(|card| json!({
+            "template_id": card.template_id.as_str(),
+            "template_name": card.template_name,
+            "sides": card.sides.iter().map(|side| side.as_str()).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
+    })
+}
+
+fn print_human_contexts(reports: &[ScopedTranslationReport], full: bool) {
+    for report in reports {
+        let language = inferred_report_language(report);
+        let units = report
+            .context
+            .units
+            .iter()
+            .filter(|unit| full || default_context_includes_unit(unit))
+            .collect::<Vec<_>>();
+        println!(
+            "{}",
+            color_stdout(
+                &format!(
+                    "Translation context for target {} language {} overlay {} ({})",
+                    report.target, language, report.overlay_id, report.overlay_file
+                ),
+                "1;36"
+            )
+        );
+        if units.is_empty() {
+            println!("  no context units matched this scope");
+            continue;
+        }
+        for unit in units {
+            print_context_unit(unit, &language);
+        }
+    }
+}
+
+fn default_context_includes_unit(unit: &TranslationContextUnit) -> bool {
+    is_stale_or_invalid(unit.category)
+        || (unit.note_id.is_some()
+            && unit.field_id.is_some()
+            && !is_media_or_structural_field_path(&unit.path)
+            && !looks_like_media_markup(&unit.source))
+}
+
+fn print_context_unit(unit: &TranslationContextUnit, language: &str) {
+    println!(
+        "  - {} {}",
+        color_category(unit.category, display_category_name(unit.category)),
+        unit.path
+    );
+    if unit.source_occurrences > 1 {
+        println!(
+            "    duplicate source group: {} occurrence(s) of {}",
+            unit.source_occurrences,
+            yaml_scalar(&unit.source)
+        );
+    }
+    if let Some(note_id) = &unit.note_id {
+        println!("    note: {note_id}");
+    }
+    if let Some(note_type_id) = &unit.note_type_id {
+        println!("    note type: {note_type_id}");
+    }
+    if let Some(field_id) = &unit.field_id {
+        let field_name = unit
+            .field_name
+            .as_ref()
+            .map(|name| format!(" ({name})"))
+            .unwrap_or_default();
+        println!("    field: {field_id}{field_name}");
+    }
+    if !unit.note_fields.is_empty() {
+        print_note_field_context(unit, language);
+    }
+    if let Some(context) = &unit.context {
+        println!("    dictionary context: {context}");
+    }
+    if !unit.card_templates.is_empty() {
+        let cards = unit
+            .card_templates
+            .iter()
+            .map(|card| {
+                let sides = card
+                    .sides
+                    .iter()
+                    .map(|side| side.as_str())
+                    .collect::<Vec<_>>()
+                    .join("+");
+                format!("{} [{}]", card.template_id, sides)
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!("    cards: {cards}");
+    }
+    for line in side_by_side_lines(
+        "source/en",
+        &unit.source,
+        &format!("target/{language}"),
+        unit.translated.as_deref().unwrap_or(""),
+    ) {
+        println!("    {line}");
+    }
+}
+
+fn print_note_field_context(unit: &TranslationContextUnit, language: &str) {
+    println!("    note fields (source/en | target/{language}):");
+    for field in unit.note_fields.iter().filter(|field| {
+        !field.source.is_empty()
+            && !looks_like_media_markup(&field.source)
+            && !is_media_or_structural_field_id(field.field_id.as_str())
+    }) {
+        let marker = if unit.field_id.as_ref() == Some(&field.field_id) {
+            "*"
+        } else {
+            " "
+        };
+        println!(
+            "    {marker} {:<24} {} | {}",
+            format!("{} ({})", field.field_id, field.field_name),
+            compact_context_value(&field.source),
+            compact_context_value(&field.translated)
+        );
+    }
+}
+
+fn is_media_or_structural_field_id(field_id: &str) -> bool {
+    field_id == "field.flag" || field_id == "field.map"
+}
+
+fn compact_context_value(value: &str) -> String {
+    let collapsed = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    const LIMIT: usize = 42;
+    if collapsed.chars().count() <= LIMIT {
+        collapsed
+    } else {
+        let mut truncated = collapsed
+            .chars()
+            .take(LIMIT.saturating_sub(1))
+            .collect::<String>();
+        truncated.push('…');
+        truncated
+    }
+}
+
+fn side_by_side_lines(
+    left_header: &str,
+    left: &str,
+    right_header: &str,
+    right: &str,
+) -> Vec<String> {
+    const COLUMN_WIDTH: usize = 38;
+    let mut lines = vec![format!(
+        "{left_header:<COLUMN_WIDTH$} | {right_header:<COLUMN_WIDTH$}"
+    )];
+    let left_lines = wrap_context_cell(left, COLUMN_WIDTH);
+    let right_lines = wrap_context_cell(right, COLUMN_WIDTH);
+    let row_count = left_lines.len().max(right_lines.len());
+    for index in 0..row_count {
+        let left_cell = left_lines
+            .get(index)
+            .map(String::as_str)
+            .unwrap_or_default();
+        let right_cell = right_lines
+            .get(index)
+            .map(String::as_str)
+            .unwrap_or_default();
+        lines.push(format!(
+            "{left_cell:<COLUMN_WIDTH$} | {right_cell:<COLUMN_WIDTH$}"
+        ));
+    }
+    lines
+}
+
+fn wrap_context_cell(text: &str, width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    for raw_line in text.lines().flat_map(|line| line.split("\n")) {
+        let mut current = String::new();
+        for word in raw_line.split_whitespace() {
+            let separator = usize::from(!current.is_empty());
+            if current.chars().count() + separator + word.chars().count() > width
+                && !current.is_empty()
+            {
+                lines.push(current);
+                current = String::new();
+            }
+            if !current.is_empty() {
+                current.push(' ');
+            }
+            current.push_str(word);
+        }
+        if !current.is_empty() {
+            lines.push(current);
+        }
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
