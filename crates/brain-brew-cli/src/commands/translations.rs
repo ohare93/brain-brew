@@ -409,27 +409,17 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
     }
 
     fn message(&mut self, message: &str) -> Result<(), String> {
-        if self.raw_mode {
-            self.clear()?;
-            writeln!(self.writer, "{}", color_stdout(message, "1;36"))
-                .map_err(|error| error.to_string())?;
-            writeln!(self.writer).map_err(|error| error.to_string())?;
-        } else {
-            writeln!(self.writer, "{}", color_stdout(message, "1;36"))
-                .map_err(|error| error.to_string())?;
-            writeln!(self.writer).map_err(|error| error.to_string())?;
-        }
+        self.clear_if_raw()?;
+        self.write_line(&color_stdout(message, "1;36"))?;
+        self.blank_line()?;
         self.writer.flush().map_err(|error| error.to_string())
     }
 
     fn finish_with_equivalent_command(&mut self, args: &TranslationArgs) -> Result<(), String> {
-        if self.raw_mode {
-            self.clear()?;
-        }
-        writeln!(self.writer, "Equivalent command:").map_err(|error| error.to_string())?;
-        writeln!(self.writer, "  {}", equivalent_command(args))
-            .map_err(|error| error.to_string())?;
-        writeln!(self.writer).map_err(|error| error.to_string())?;
+        self.clear_if_raw()?;
+        self.write_line("Equivalent command:")?;
+        self.write_line(&format!("  {}", equivalent_command(args)))?;
+        self.blank_line()?;
         self.writer.flush().map_err(|error| error.to_string())
     }
 
@@ -520,9 +510,8 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
         selected: usize,
     ) -> Result<(), String> {
         self.clear_if_raw()?;
-        writeln!(self.writer, "{}", color_stdout(label, "1;36"))
-            .map_err(|error| error.to_string())?;
-        writeln!(self.writer).map_err(|error| error.to_string())?;
+        self.write_line(&color_stdout(label, "1;36"))?;
+        self.blank_line()?;
         for (index, option) in options.iter().enumerate() {
             let marker = if index == selected { "›" } else { " " };
             let option = if index == selected {
@@ -530,11 +519,10 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
             } else {
                 option.clone()
             };
-            writeln!(self.writer, "  {marker} {option}").map_err(|error| error.to_string())?;
+            self.write_line(&format!("  {marker} {option}"))?;
         }
-        writeln!(self.writer).map_err(|error| error.to_string())?;
-        writeln!(self.writer, "↑/↓ move • Enter select • q cancel")
-            .map_err(|error| error.to_string())?;
+        self.blank_line()?;
+        self.write_line("↑/↓ move • Enter select • q cancel")?;
         self.writer.flush().map_err(|error| error.to_string())
     }
 
@@ -546,9 +534,8 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
         cursor: usize,
     ) -> Result<(), String> {
         self.clear_if_raw()?;
-        writeln!(self.writer, "{}", color_stdout(label, "1;36"))
-            .map_err(|error| error.to_string())?;
-        writeln!(self.writer).map_err(|error| error.to_string())?;
+        self.write_line(&color_stdout(label, "1;36"))?;
+        self.blank_line()?;
         for (index, option) in options.iter().enumerate() {
             let cursor_marker = if index == cursor { "›" } else { " " };
             let selected_marker = if selected[index] { "[x]" } else { "[ ]" };
@@ -558,14 +545,10 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
             } else {
                 line
             };
-            writeln!(self.writer, "  {cursor_marker} {line}").map_err(|error| error.to_string())?;
+            self.write_line(&format!("  {cursor_marker} {line}"))?;
         }
-        writeln!(self.writer).map_err(|error| error.to_string())?;
-        writeln!(
-            self.writer,
-            "↑/↓ move • Space toggle • a toggle all • Enter confirm • q cancel"
-        )
-        .map_err(|error| error.to_string())?;
+        self.blank_line()?;
+        self.write_line("↑/↓ move • Space toggle • a toggle all • Enter confirm • q cancel")?;
         self.writer.flush().map_err(|error| error.to_string())
     }
 
@@ -576,19 +559,17 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
         input: &str,
     ) -> Result<(), String> {
         self.clear_if_raw()?;
-        writeln!(self.writer, "{}", color_stdout(label, "1;36"))
-            .map_err(|error| error.to_string())?;
-        writeln!(self.writer).map_err(|error| error.to_string())?;
+        self.write_line(&color_stdout(label, "1;36"))?;
+        self.blank_line()?;
         for line in body {
-            writeln!(self.writer, "{line}").map_err(|error| error.to_string())?;
+            self.write_line(line)?;
         }
         if !body.is_empty() {
-            writeln!(self.writer).map_err(|error| error.to_string())?;
+            self.blank_line()?;
         }
-        writeln!(self.writer, "> {input}").map_err(|error| error.to_string())?;
-        writeln!(self.writer).map_err(|error| error.to_string())?;
-        writeln!(self.writer, "Type text • Enter confirm • Esc cancel")
-            .map_err(|error| error.to_string())?;
+        self.write_line(&format!("> {input}"))?;
+        self.blank_line()?;
+        self.write_line("Type text • Enter confirm • Esc cancel")?;
         self.writer.flush().map_err(|error| error.to_string())
     }
 
@@ -603,12 +584,26 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
         write!(self.writer, "\x1b[2J\x1b[H").map_err(|error| error.to_string())
     }
 
+    fn write_line(&mut self, text: &str) -> Result<(), String> {
+        write!(self.writer, "{}{}", text, terminal_line_end(self.raw_mode))
+            .map_err(|error| error.to_string())
+    }
+
+    fn blank_line(&mut self) -> Result<(), String> {
+        write!(self.writer, "{}", terminal_line_end(self.raw_mode))
+            .map_err(|error| error.to_string())
+    }
+
     fn read_key(&mut self) -> Result<TuiKey, String> {
         if self.raw_mode {
             return read_terminal_key();
         }
         read_scripted_key(self.reader)
     }
+}
+
+fn terminal_line_end(raw_mode: bool) -> &'static str {
+    if raw_mode { "\r\n" } else { "\n" }
 }
 
 impl<R: Read, W: Write> Drop for TerminalUi<'_, R, W> {
@@ -1720,5 +1715,35 @@ fn color_enabled(is_terminal: bool) -> bool {
         Ok(value) if value == "always" => true,
         Ok(value) if value == "never" => false,
         _ => env::var_os("NO_COLOR").is_none() && is_terminal,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn raw_mode_uses_crlf_line_endings() {
+        assert_eq!(terminal_line_end(false), "\n");
+        assert_eq!(terminal_line_end(true), "\r\n");
+    }
+
+    #[test]
+    fn raw_mode_rendering_returns_cursor_to_column_zero() {
+        let mut input = io::empty();
+        let mut output = Vec::new();
+        {
+            let mut ui = TerminalUi {
+                reader: &mut input,
+                writer: &mut output,
+                raw_mode: true,
+            };
+            ui.render_select_one("Title", &["one".to_owned(), "two".to_owned()], 0)
+                .unwrap();
+        }
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("Title\r\n\r\n"));
+        assert!(output.contains("  › one\r\n"));
+        assert!(output.contains("    two\r\n"));
     }
 }
