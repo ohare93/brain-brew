@@ -94,7 +94,7 @@ sd release crates cli --mode publish --yes
 
 The same commands are backed by `scripts/publish_crates.sh`; use it directly if neither Devenv nor `sd` is available.
 
-After `brainbrew` is published, Rust users can install without Nix and without a Git checkout:
+The current preview crate is published, so Rust users can install without Nix and without a Git checkout:
 
 ```bash
 cargo install brainbrew --version 1.0.0-alpha.1 --locked

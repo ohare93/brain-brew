@@ -6,7 +6,7 @@ title: Install the CLI
 
 Brain Brew is a Rust CLI named `brainbrew`.
 
-The primary install path is a prebuilt GitHub Release binary. You do **not** need Rust or Nix to test a released Brain Brew build. Deck projects such as Ultimate Geography can link to this page and recommend a specific Brain Brew release tag instead of asking contributors to run Brain Brew through a Nix flake.
+The normal install paths are the published crates.io package and prebuilt GitHub Release binaries. You do **not** need Nix to test a released Brain Brew build. Deck projects such as Ultimate Geography can link to this page and recommend a specific Brain Brew version instead of asking contributors to run Brain Brew through a Nix flake.
 
 ## Recommended version for deck contributors
 
@@ -16,7 +16,18 @@ Use the version recommended by the deck repository you are contributing to. For 
 brainbrew --version
 ```
 
-If a deck needs a newer Brain Brew behavior, update its docs to name the new Brain Brew tag or release URL. Nix users can still pin a flake revision for reproducible CI, but normal deck editing should start from the release installer, Homebrew, or Cargo install commands below.
+If a deck needs a newer Brain Brew behavior, update its docs to name the new Brain Brew version, tag, or release URL. Nix users can still pin a flake revision for reproducible CI, but normal deck editing should start from the Cargo, release installer, or Homebrew commands below.
+
+## Cargo install
+
+If you already have Rust installed, install the published crate from crates.io:
+
+```bash
+cargo install brainbrew --version 1.0.0-alpha.1 --locked
+brainbrew --version
+```
+
+Use the explicit `--version` while Brain Brew is in preview so deck docs and CI can pin the expected behavior.
 
 ## GitHub Release installer
 
@@ -49,23 +60,16 @@ brainbrew --version
 
 The Homebrew formula is generated from the same release artifacts as the shell installer.
 
-## Cargo install
+## Install from a Git tag
 
-If you already have Rust installed, install the pinned release from crates.io after the preview crate is published:
-
-```bash
-cargo install brainbrew --version 1.0.0-alpha.1 --locked
-brainbrew --version
-```
-
-Before the crates.io package is published, or if you need to test the exact GitHub tag, install directly from the same release tag:
+If you need to test the exact GitHub tag instead of the crates.io package, install directly from the same release tag:
 
 ```bash
 cargo install --git https://github.com/jeprecated/brain-brew --tag v1.0.0-alpha.1 brainbrew --locked
 brainbrew --version
 ```
 
-Both commands are normal non-Nix install paths, but the prebuilt release installer is preferred for users who do not already have Rust.
+This is also a normal non-Nix install path, but `cargo install brainbrew --version ...` is preferred for Rust users now that the crate is published.
 
 For unreleased branch testing:
 

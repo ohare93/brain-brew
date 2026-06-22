@@ -39,9 +39,16 @@ See the dedicated documentation site in [`documentation/`](documentation/) for m
 
 ## Install the CLI
 
-For normal deck users and contributors, install a released `brainbrew` binary. You do not need Nix to edit or verify a Federated Deck workspace, and downstream projects such as Ultimate Geography can link to the release tag they recommend.
+For normal deck users and contributors, install the released `brainbrew` CLI from crates.io or a GitHub Release. You do not need Nix to edit or verify a Federated Deck workspace, and downstream projects such as Ultimate Geography can link to the release version they recommend.
 
-The easiest install path is the GitHub Release installer:
+Rust users can install the published crate:
+
+```bash
+cargo install brainbrew --version 1.0.0-alpha.1 --locked
+brainbrew --version
+```
+
+The easiest no-Rust install path is the GitHub Release installer:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
@@ -56,13 +63,7 @@ Homebrew users can install from the tap once the preview release is published:
 brew install jeprecated/tap/brainbrew
 ```
 
-Rust users can install from crates.io once the preview crate is published:
-
-```bash
-cargo install brainbrew --version 1.0.0-alpha.1 --locked
-```
-
-Before the crates.io package is published, Rust users can install directly from the pinned release tag:
+To test the exact GitHub tag instead of the crates.io package, install directly from the pinned release tag:
 
 ```bash
 cargo install --git https://github.com/jeprecated/brain-brew --tag v1.0.0-alpha.1 brainbrew --locked
