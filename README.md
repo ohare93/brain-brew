@@ -56,7 +56,13 @@ Homebrew users can install from the tap once the preview release is published:
 brew install jeprecated/tap/brainbrew
 ```
 
-Rust users can install directly from the pinned release tag:
+Rust users can install from crates.io once the preview crate is published:
+
+```bash
+cargo install brainbrew --version 1.0.0-alpha.1 --locked
+```
+
+Before the crates.io package is published, Rust users can install directly from the pinned release tag:
 
 ```bash
 cargo install --git https://github.com/jeprecated/brain-brew --tag v1.0.0-alpha.1 brainbrew --locked

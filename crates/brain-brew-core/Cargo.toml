@@ -6,7 +6,8 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-publish = false
+description = "Pure domain model for Brain Brew local-first Anki-compatible deck federation"
+homepage = "https://github.com/jeprecated/brain-brew"
 
 [lints]
 workspace = true

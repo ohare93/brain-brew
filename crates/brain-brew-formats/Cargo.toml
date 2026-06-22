@@ -6,7 +6,8 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-publish = false
+description = "YAML and CrowdAnki codecs for Brain Brew local-first deck federation"
+homepage = "https://github.com/jeprecated/brain-brew"
 
 [dependencies]
 brain-brew-core.workspace = true

@@ -51,14 +51,21 @@ The Homebrew formula is generated from the same release artifacts as the shell i
 
 ## Cargo install
 
-If you already have Rust installed, install the same release tag directly from GitHub:
+If you already have Rust installed, install the pinned release from crates.io after the preview crate is published:
+
+```bash
+cargo install brainbrew --version 1.0.0-alpha.1 --locked
+brainbrew --version
+```
+
+Before the crates.io package is published, or if you need to test the exact GitHub tag, install directly from the same release tag:
 
 ```bash
 cargo install --git https://github.com/jeprecated/brain-brew --tag v1.0.0-alpha.1 brainbrew --locked
 brainbrew --version
 ```
 
-This is a normal non-Nix install path, but the prebuilt release installer is preferred for users who do not already have Rust.
+Both commands are normal non-Nix install paths, but the prebuilt release installer is preferred for users who do not already have Rust.
 
 For unreleased branch testing:
 

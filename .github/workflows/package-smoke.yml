@@ -11,6 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      - name: Check crates.io package metadata
+        run: scripts/check_cratesio_metadata.py
       - name: Install packaged CLI without Nix
         run: |
           cargo install --path crates/brain-brew-cli --locked --root "$RUNNER_TEMP/brainbrew-install"
