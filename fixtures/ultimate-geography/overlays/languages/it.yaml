@@ -1,7 +1,7 @@
 id: overlay.translation.it
 kind: translation
 translations:
-  changes:
+  direct:
     'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.': Esiste una disputa sul nome del mare tra i paesi confinanti, con la Corea del Sud che in particolare sostiene il nome di Mare orientale.
     Abkhazia: Abcasia
     Addis Ababa: Addis Abeba
@@ -86,9 +86,6 @@ translations:
     'Colombia (no coat of arms)': 'Colombia (senza stemma)'
     Colombo is often referred to as the capital but Sri Jayawardenepura Kotte, a suburb of Colombo, is the official, legislative capital.: 'Colombo è spesso considerata la capitale ma Sri Jayawardenepura Kotte, un sobborgo di Colombo, è la capitale ufficiale e legislativa.'
     Comoros: Comore
-    Constituent country in the Kingdom of Denmark.:
-      notes.note.faroe-islands.fields.field.country-info: 'Nazione costitutiva del Regno di Danimarca; conosciute anche come Isole Faroe.'
-      notes.note.greenland.fields.field.country-info: Nazione costitutiva del Regno di Danimarca.
     Constituent country of the Kingdom of the Netherlands.: Nazione costitutiva del Regno dei Paesi Bassi.
     Constituent country of the United Kingdom.: Nazione costitutiva del Regno Unito.
     Cook Islands: Isole Cook
@@ -215,9 +212,6 @@ translations:
     Mogadishu: Mogadiscio
     Moldova: Moldavia
     'Moldova (wider, coat of arms with eagle)': 'Moldavia (più larga, stemma con un''aquila)'
-    Monaco:
-      notes.note.monaco.fields.field.capital: Comune di Monaco
-      notes.note.monaco.fields.field.country: Principato di Monaco
     'Monaco (narrower, darker red), Poland (red and white flipped, darker red)': 'Monaco (più stretta, rosso più scuro), Polonia (rosso e bianco invertiti, rosso più scuro)'
     Morocco: Marocco
     Moscow: Mosca
@@ -371,7 +365,17 @@ translations:
     Yerevan: Erevan
     Zagreb: Zagabria
     'Åland Islands': 'Isole Åland'
-  additions:
+  contextual:
+    notes.note:
+      faroe-islands.fields.field.country-info:
+        Constituent country in the Kingdom of Denmark.: 'Nazione costitutiva del Regno di Danimarca; conosciute anche come Isole Faroe.'
+      greenland.fields.field.country-info:
+        Constituent country in the Kingdom of Denmark.: Nazione costitutiva del Regno di Danimarca.
+      monaco.fields.field.capital:
+        Monaco: Comune di Monaco
+      monaco.fields.field.country:
+        Monaco: Principato di Monaco
+  target_additions:
     notes.note.arctic-ocean.fields.field.country-info: Conosciuto a livello internazionale come Oceano Artico.
   variables:
     label.capital:

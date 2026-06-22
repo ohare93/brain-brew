@@ -9,6 +9,7 @@ pub mod crowdanki;
 pub mod lockfile;
 pub mod manifest;
 pub mod media;
+pub mod source_includes;
 
 pub use brain_brew_core as core;
 

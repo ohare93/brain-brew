@@ -1,7 +1,7 @@
 id: overlay.translation.da
 kind: translation
 translations:
-  changes:
+  direct:
     'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.': 'Der eksisterer en navnekonflikt mellem landene ved havet, hvor Sydkorea især støtter navnet Østhavet.'
     Abkhazia: Abkhasien
     Addis Ababa: Addis Abeba
@@ -42,9 +42,6 @@ translations:
     Autonomous region of Finland.: Selvstyrende region i Finland.
     Autonomous region of Italy.: Selvstyrende region i Italien.
     Autonomous region of Papua New Guinea.: Selvstyrende region i Papua New Guinea.
-    Autonomous region of Portugal.:
-      notes.note.azores.fields.field.country-info: 'Selvstændig region Autonomous region i Portugal.'
-      notes.note.madeira.fields.field.country-info: 'Selvstændig region i Portugal.'
     Azerbaijan: Aserbajdsjan
     Azores: Azorerne
     Baghdad: Bagdad
@@ -230,20 +227,6 @@ translations:
     'Officially Côte d''Ivoire.': 'Officielt Cote d’Ivoire.'
     Officially Luxembourg.: ''
     Overseas department of France.: 'Fransk oversøisk departement.'
-    Overseas territory of France.:
-      notes.note.french-polynesia.fields.field.country-info: 'Fransk oversøisk territorie.'
-      notes.note.new-caledonia.fields.field.country-info: 'Fransk oversøisk departement.'
-      notes.note.saint-martin.fields.field.country-info: 'Fransk oversøisk departement.'
-      notes.note.wallis-and-futuna.fields.field.country-info: 'Fransk oversøisk departement.'
-    Overseas territory of the United Kingdom.:
-      notes.note.akrotiri-and-dhekelia.fields.field.country-info: 'Britisk oversøisk territorie.'
-      notes.note.anguilla.fields.field.country-info: 'Oversøisk territorie i Storbritannien.'
-      notes.note.bermuda.fields.field.country-info: Delvis selvstyrende nation i Storbritannien.
-      notes.note.british-virgin-islands.fields.field.country-info: 'Oversøisk territorie i Storbritannien.'
-      notes.note.cayman-islands.fields.field.country-info: 'Oversøisk territorie i Storbritannien.'
-      notes.note.falkland-islands.fields.field.country-info: 'Britisk oversøisk territorie.'
-      notes.note.gibraltar.fields.field.country-info: 'Oversøisk territorie i Storbritannien.'
-      notes.note.turks-and-caicos-islands.fields.field.country-info: 'Oversøisk territorie i Storbritannien.'
     Pacific Ocean: Stillehavet
     Palestine: 'Palæstina'
     'Palestine (black/white/green, red arrow)': 'Palæstina (sort/hvid/grøn, rød pil)'
@@ -359,7 +342,37 @@ translations:
     Yellow Sea: Gule Hav
     Yerevan: Jerevan
     'Åland Islands': 'Åland'
-  additions:
+  contextual:
+    notes.note:
+      akrotiri-and-dhekelia.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Britisk oversøisk territorie.'
+      anguilla.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Oversøisk territorie i Storbritannien.'
+      azores.fields.field.country-info:
+        Autonomous region of Portugal.: 'Selvstændig region Autonomous region i Portugal.'
+      bermuda.fields.field.country-info:
+        Overseas territory of the United Kingdom.: Delvis selvstyrende nation i Storbritannien.
+      british-virgin-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Oversøisk territorie i Storbritannien.'
+      cayman-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Oversøisk territorie i Storbritannien.'
+      falkland-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Britisk oversøisk territorie.'
+      french-polynesia.fields.field.country-info:
+        Overseas territory of France.: 'Fransk oversøisk territorie.'
+      gibraltar.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Oversøisk territorie i Storbritannien.'
+      madeira.fields.field.country-info:
+        Autonomous region of Portugal.: 'Selvstændig region i Portugal.'
+      new-caledonia.fields.field.country-info:
+        Overseas territory of France.: 'Fransk oversøisk departement.'
+      saint-martin.fields.field.country-info:
+        Overseas territory of France.: 'Fransk oversøisk departement.'
+      turks-and-caicos-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Oversøisk territorie i Storbritannien.'
+      wallis-and-futuna.fields.field.country-info:
+        Overseas territory of France.: 'Fransk oversøisk departement.'
+  target_additions:
     notes.note.arctic-ocean.fields.field.country-info: 'Også kendt som Det Arktiske Ocean.'
     notes.note.balkan-peninsula.fields.field.country-info: 'Også kendt som Balkan.'
     notes.note.baltic-sea.fields.field.country-info: 'Også kaldt Baltiske Hav.'

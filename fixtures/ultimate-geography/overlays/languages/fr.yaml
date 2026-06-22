@@ -1,7 +1,7 @@
 id: overlay.translation.fr
 kind: translation
 translations:
-  changes:
+  direct:
     'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.': 'Il y a un contentieux sur le nom de cette mer entre les pays qui l''entourent, la Corée du Sud l''appelant notamment Mer de l''Est.'
     Abkhazia: Abkhazie
     Abu Dhabi: Abou Dabi
@@ -196,10 +196,6 @@ translations:
     'Iraq (text instead of emblem), Yemen (no emblem)': 'Irak (texte à la place de l''emblème), Yémen (pas d''emblème)'
     Ireland: Irlande
     'Ireland (orange and green flipped, wider)': 'Irlande (orange et vert inversés, plus large)'
-    Island of Indonesia.:
-      notes.note.bali.fields.field.country-info: 'Île d''Indonésie.'
-      notes.note.java.fields.field.country-info: 'Île d''Indonésie.'
-      notes.note.sumatra.fields.field.country-info: 'Île indonésienne.'
     Isle of Man: 'Île de Man'
     Israel: 'Israël'
     Italy: Italie
@@ -285,11 +281,6 @@ translations:
     'Officially Côte d''Ivoire.': ''
     Officially Luxembourg.: ''
     Overseas department of France.: 'Département français d''outre-mer.'
-    Overseas territory of France.:
-      notes.note.french-polynesia.fields.field.country-info: 'Collectivité française d''outre-mer.'
-      notes.note.new-caledonia.fields.field.country-info: 'Territoire français d''outre-mer.'
-      notes.note.saint-martin.fields.field.country-info: 'Collectivité française d''outre-mer.'
-      notes.note.wallis-and-futuna.fields.field.country-info: 'Collectivité française d''outre-mer.'
     Overseas territory of the United Kingdom.: 'Territoire britannique d''outre-mer.'
     Pacific Ocean: 'Océan Pacifique'
     Palau: Palaos
@@ -428,7 +419,23 @@ translations:
     Yerevan: Erevan
     Zambia: Zambie
     'Åland Islands': 'Åland'
-  additions:
+  contextual:
+    notes.note:
+      bali.fields.field.country-info:
+        Island of Indonesia.: 'Île d''Indonésie.'
+      french-polynesia.fields.field.country-info:
+        Overseas territory of France.: 'Collectivité française d''outre-mer.'
+      java.fields.field.country-info:
+        Island of Indonesia.: 'Île d''Indonésie.'
+      new-caledonia.fields.field.country-info:
+        Overseas territory of France.: 'Territoire français d''outre-mer.'
+      saint-martin.fields.field.country-info:
+        Overseas territory of France.: 'Collectivité française d''outre-mer.'
+      sumatra.fields.field.country-info:
+        Island of Indonesia.: 'Île indonésienne.'
+      wallis-and-futuna.fields.field.country-info:
+        Overseas territory of France.: 'Collectivité française d''outre-mer.'
+  target_additions:
     notes.note.celebes-sea.fields.field.country-info: Aussi connu comme la mer de Sulawesi.
   variables:
     label.capital:

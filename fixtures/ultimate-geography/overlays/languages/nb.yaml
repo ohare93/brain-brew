@@ -1,7 +1,7 @@
 id: overlay.translation.nb
 kind: translation
 translations:
-  changes:
+  direct:
     'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.': ''
     Abkhazia: Abkhasia
     Addis Ababa: Addis Abeba
@@ -84,20 +84,12 @@ translations:
     Colombo is often referred to as the capital but Sri Jayawardenepura Kotte, a suburb of Colombo, is the official, legislative capital.: 'Regjeringen har sete i Colombo. Sri Jayawardenepura Kotte (kalt Kotte) er en forstad til Colombo der nasjonalforsamlingen har sete. Kotte er altså lovgivende hovedstad.'
     Comoros: Komorene
     Constituent country in the Kingdom of Denmark.: 'Land som utgjør en del av kongeriket Danmark.'
-    Constituent country of the Kingdom of the Netherlands.:
-      notes.note.aruba.fields.field.country-info: '«Land» som sammen med Nederland, Curaçao og Sint Maarten utgjør føderasjonen Kongeriket Nederlandene.'
-      notes.note.cura-ao.fields.field.country-info: '«Land» som sammen med Nederland, Aruba og Sint Maarten utgjør føderasjonen Kongeriket Nederlandene.'
-      notes.note.sint-maarten.fields.field.country-info: '«Land» som sammen med Nederland, Curaçao og Aruba utgjør føderasjonen Kongeriket Nederlandene.'
     Constituent country of the United Kingdom.: 'Land som utgjør en del av Storbritannia.'
     Cook Islands: 'Cookøyene'
     Copenhagen: 'København'
     Coral Sea: Korallhavet
     Corsica: Korsika
     Croatia: Kroatia
-    Crown dependency of the United Kingdom.:
-      notes.note.guernsey.fields.field.country-info: 'Kanaløy underlagt britisk kronbesittelse.'
-      notes.note.isle-of-man.fields.field.country-info: 'Også kalt Isle of Man. Kanaløy underlagt britisk kronbesittelse. Hverken del av Storbritannia eller EU.'
-      notes.note.jersey.fields.field.country-info: 'Kanaløy underlagt britisk kronbesittelse.'
     'Cuba (red triangle, blue stripes)': 'Cuba (rød trekant, blå striper)'
     'Curaçao (two stars in top-left corner)': 'Curaçao (to stjerner i øverste venstre hjørne)'
     Cyprus: Kypros
@@ -224,26 +216,6 @@ translations:
     Official capital was moved from Malabo to Ciudad de la Paz in 2026.: Hovedstad flyttet til Ciudad de la Paz fra Malabo i 2026.
     'Officially Côte d''Ivoire.': ''
     Officially Luxembourg.: ''
-    Overseas department of France.:
-      notes.note.french-guiana.fields.field.country-info: 'Fransk oversjøisk departement og del av EU.'
-      notes.note.guadeloupe.fields.field.country-info: 'Fransk oversjøisk departement.'
-      notes.note.martinique.fields.field.country-info: 'Fransk oversjøisk departement.'
-      notes.note.mayotte.fields.field.country-info: 'Fransk oversjøisk territorium.'
-      notes.note.r-union.fields.field.country-info: 'Fransk oversjøisk departement.'
-    Overseas territory of France.:
-      notes.note.french-polynesia.fields.field.country-info: 'Fransk oversjøisk land.'
-      notes.note.new-caledonia.fields.field.country-info: 'Fransk oversjøisk territorium i det sørvestlige Stillehavet.'
-      notes.note.saint-martin.fields.field.country-info: 'Fransk oversjøisk land.'
-      notes.note.wallis-and-futuna.fields.field.country-info: 'Fransk oversjøisk land.'
-    Overseas territory of the United Kingdom.:
-      notes.note.akrotiri-and-dhekelia.fields.field.country-info: 'Britisk oversjøisk territorium.'
-      notes.note.anguilla.fields.field.country-info: 'Selvstyrt britisk oversjøisk territorium i Karibia.'
-      notes.note.bermuda.fields.field.country-info: 'Selvstyrt britisk oversjøisk territorium.'
-      notes.note.british-virgin-islands.fields.field.country-info: 'Selvstyrt britisk oversjøisk territorium i Karibia.'
-      notes.note.cayman-islands.fields.field.country-info: 'Selvstyrt britisk oversjøisk territorium i Karibia.'
-      notes.note.falkland-islands.fields.field.country-info: 'Britisk øygruppe.'
-      notes.note.gibraltar.fields.field.country-info: Britisk kronkoloni.
-      notes.note.turks-and-caicos-islands.fields.field.country-info: 'Selvstyrt britisk oversjøisk territorium i Karibia.'
     Pacific Ocean: Stillehavet
     Palestine: Palestina
     'Palestine (black/white/green, red arrow)': 'Palestina (svart/hvit/grønn, rød trekant)'
@@ -297,9 +269,6 @@ translations:
     Southern Ocean: 'Sørishavet'
     Sovereign country: Selvstendig land
     Spain: Spania
-    Special Administrative Region of China.:
-      notes.note.hong-kong.fields.field.country-info: 'Også kjent som Hong Kong. Spesiell administrativ region i Kina.'
-      notes.note.macau.fields.field.country-info: 'Også kalt Macau. Spesiell administrativ region i Kina.'
     Sri Jayawardenepura Kotte: Colombo
     'St. John''s': 'Saint John’s'
     State of the United States.: USAs delstat.
@@ -350,7 +319,59 @@ translations:
     Yemen: Jemen
     Yerevan: Jerevan
     'Åland Islands': 'Åland'
-  additions:
+  contextual:
+    notes.note:
+      akrotiri-and-dhekelia.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Britisk oversjøisk territorium.'
+      anguilla.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Selvstyrt britisk oversjøisk territorium i Karibia.'
+      aruba.fields.field.country-info:
+        Constituent country of the Kingdom of the Netherlands.: '«Land» som sammen med Nederland, Curaçao og Sint Maarten utgjør føderasjonen Kongeriket Nederlandene.'
+      bermuda.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Selvstyrt britisk oversjøisk territorium.'
+      british-virgin-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Selvstyrt britisk oversjøisk territorium i Karibia.'
+      cayman-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Selvstyrt britisk oversjøisk territorium i Karibia.'
+      cura-ao.fields.field.country-info:
+        Constituent country of the Kingdom of the Netherlands.: '«Land» som sammen med Nederland, Aruba og Sint Maarten utgjør føderasjonen Kongeriket Nederlandene.'
+      falkland-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Britisk øygruppe.'
+      french-guiana.fields.field.country-info:
+        Overseas department of France.: 'Fransk oversjøisk departement og del av EU.'
+      french-polynesia.fields.field.country-info:
+        Overseas territory of France.: 'Fransk oversjøisk land.'
+      gibraltar.fields.field.country-info:
+        Overseas territory of the United Kingdom.: Britisk kronkoloni.
+      guadeloupe.fields.field.country-info:
+        Overseas department of France.: 'Fransk oversjøisk departement.'
+      guernsey.fields.field.country-info:
+        Crown dependency of the United Kingdom.: 'Kanaløy underlagt britisk kronbesittelse.'
+      hong-kong.fields.field.country-info:
+        Special Administrative Region of China.: 'Også kjent som Hong Kong. Spesiell administrativ region i Kina.'
+      isle-of-man.fields.field.country-info:
+        Crown dependency of the United Kingdom.: 'Også kalt Isle of Man. Kanaløy underlagt britisk kronbesittelse. Hverken del av Storbritannia eller EU.'
+      jersey.fields.field.country-info:
+        Crown dependency of the United Kingdom.: 'Kanaløy underlagt britisk kronbesittelse.'
+      macau.fields.field.country-info:
+        Special Administrative Region of China.: 'Også kalt Macau. Spesiell administrativ region i Kina.'
+      martinique.fields.field.country-info:
+        Overseas department of France.: 'Fransk oversjøisk departement.'
+      mayotte.fields.field.country-info:
+        Overseas department of France.: 'Fransk oversjøisk territorium.'
+      new-caledonia.fields.field.country-info:
+        Overseas territory of France.: 'Fransk oversjøisk territorium i det sørvestlige Stillehavet.'
+      r-union.fields.field.country-info:
+        Overseas department of France.: 'Fransk oversjøisk departement.'
+      saint-martin.fields.field.country-info:
+        Overseas territory of France.: 'Fransk oversjøisk land.'
+      sint-maarten.fields.field.country-info:
+        Constituent country of the Kingdom of the Netherlands.: '«Land» som sammen med Nederland, Curaçao og Aruba utgjør føderasjonen Kongeriket Nederlandene.'
+      turks-and-caicos-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Selvstyrt britisk oversjøisk territorium i Karibia.'
+      wallis-and-futuna.fields.field.country-info:
+        Overseas territory of France.: 'Fransk oversjøisk land.'
+  target_additions:
     notes.note.arabian-sea.fields.field.country-info: 'Også kalt Arabiahavet.'
     notes.note.balkan-peninsula.fields.field.country-info: 'Også kalt Balkanhalvøya.'
     notes.note.baltic-sea.fields.field.country-info: 'Også kalt Det baltiske hav.'

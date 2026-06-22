@@ -1244,6 +1244,243 @@ fn diff_reports_human_readable_before_and_after_values() {
 }
 
 #[test]
+fn file_includes_work_across_validate_compose_export_verify_diff_and_fmt() {
+    let dir = temp_dir("file-includes-workflows");
+    write_include_workspace(&dir);
+    let manifest = dir.join("brainbrew.yaml");
+
+    let validate = run([
+        "validate",
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--target",
+        "localized",
+    ]);
+    assert!(validate.status.success(), "stderr: {}", stderr(&validate));
+
+    let resolved = dir.join("resolved.yaml");
+    let compose = run([
+        "compose",
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--target",
+        "localized",
+        "--out",
+        resolved.to_str().unwrap(),
+    ]);
+    assert!(compose.status.success(), "stderr: {}", stderr(&compose));
+    let resolved_source = fs::read_to_string(&resolved).unwrap();
+    assert!(resolved_source.contains("Overlay description from Markdown."));
+    assert!(resolved_source.contains("<section class=\"front\">{{Country}}</section>"));
+    assert!(resolved_source.contains("font-family: sans-serif"));
+    assert!(!resolved_source.contains("!include"));
+
+    let export_dir = dir.join("crowdanki");
+    let export = run([
+        "export",
+        "crowdanki",
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--target",
+        "localized",
+        "--out",
+        export_dir.to_str().unwrap(),
+    ]);
+    assert!(export.status.success(), "stderr: {}", stderr(&export));
+    assert!(
+        fs::read_to_string(export_dir.join("deck.json"))
+            .unwrap()
+            .contains("<section class=\\\"front\\\">{{Country}}</section>")
+    );
+
+    let verify = run([
+        "verify",
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--all-targets",
+    ]);
+    assert!(verify.status.success(), "stderr: {}", stderr(&verify));
+
+    let base_resolved = dir.join("base-resolved.yaml");
+    let compose_base = run([
+        "compose",
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--target",
+        "base",
+        "--out",
+        base_resolved.to_str().unwrap(),
+    ]);
+    assert!(
+        compose_base.status.success(),
+        "stderr: {}",
+        stderr(&compose_base)
+    );
+    let diff = run([
+        "diff",
+        dir.join("deck.yaml").to_str().unwrap(),
+        base_resolved.to_str().unwrap(),
+    ]);
+    assert!(diff.status.success(), "stderr: {}", stderr(&diff));
+    assert!(stdout(&diff).contains("no semantic changes"));
+
+    let deck_for_fmt = dir.join("deck-to-format.yaml");
+    fs::copy(dir.join("deck.yaml"), &deck_for_fmt).unwrap();
+    let fmt = run(["fmt", deck_for_fmt.to_str().unwrap()]);
+    assert!(fmt.status.success(), "stderr: {}", stderr(&fmt));
+    let formatted = fs::read_to_string(deck_for_fmt).unwrap();
+    assert!(formatted.contains("Base deck description."));
+    assert!(formatted.contains("<section class=\"front\">{{Country}}</section>"));
+    assert!(!formatted.contains("!include"));
+}
+
+#[test]
+fn file_include_errors_name_referring_yaml_path_and_included_path() {
+    let dir = temp_dir("file-include-errors");
+    write_include_workspace(&dir);
+    let deck_path = dir.join("deck.yaml");
+    let deck = fs::read_to_string(&deck_path).unwrap();
+    fs::write(
+        &deck_path,
+        deck.replace(
+            "description: !include ./content/../content/base-description.md",
+            "description: !include content/missing.md",
+        ),
+    )
+    .unwrap();
+
+    let output = run([
+        "validate",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "base",
+    ]);
+
+    assert!(!output.status.success());
+    let err = stderr(&output);
+    assert!(err.contains("deck.description"), "stderr: {err}");
+    assert!(err.contains("content/missing.md"), "stderr: {err}");
+}
+
+#[test]
+fn file_includes_reject_package_root_escape_unless_safe_root_is_configured() {
+    let root = temp_dir("file-include-roots");
+    let package = root.join("package");
+    let shared = root.join("shared");
+    fs::create_dir_all(&package).unwrap();
+    fs::create_dir_all(&shared).unwrap();
+    write_include_workspace(&package);
+    fs::write(
+        shared.join("description.md"),
+        "Shared safe-root description.\n",
+    )
+    .unwrap();
+    let deck_path = package.join("deck.yaml");
+    let deck = fs::read_to_string(&deck_path).unwrap();
+    fs::write(
+        &deck_path,
+        deck.replace(
+            "description: !include ./content/../content/base-description.md",
+            "description: !include ../shared/description.md",
+        ),
+    )
+    .unwrap();
+
+    let rejected = run([
+        "validate",
+        "--manifest",
+        package.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "base",
+    ]);
+    assert!(!rejected.status.success());
+    let err = stderr(&rejected);
+    assert!(err.contains("deck.description"), "stderr: {err}");
+    assert!(err.contains("../shared/description.md"), "stderr: {err}");
+    assert!(err.contains("escapes package root"), "stderr: {err}");
+
+    let manifest_path = package.join("brainbrew.yaml");
+    fs::write(
+        &manifest_path,
+        fs::read_to_string(&manifest_path).unwrap().replace(
+            "base: deck.yaml\n",
+            "base: deck.yaml\ninclude_roots:\n  - ../shared\n",
+        ),
+    )
+    .unwrap();
+    let accepted = run([
+        "validate",
+        "--manifest",
+        manifest_path.to_str().unwrap(),
+        "--target",
+        "base",
+    ]);
+    assert!(accepted.status.success(), "stderr: {}", stderr(&accepted));
+}
+
+#[test]
+fn file_include_cycles_are_reported_with_yaml_path_and_include_chain() {
+    let dir = temp_dir("file-include-cycle");
+    write_include_workspace(&dir);
+    fs::write(dir.join("content/a.md"), "!include content/b.md\n").unwrap();
+    fs::write(dir.join("content/b.md"), "!include content/a.md\n").unwrap();
+    let deck_path = dir.join("deck.yaml");
+    let deck = fs::read_to_string(&deck_path).unwrap();
+    fs::write(
+        &deck_path,
+        deck.replace(
+            "description: !include ./content/../content/base-description.md",
+            "description: !include content/a.md",
+        ),
+    )
+    .unwrap();
+
+    let output = run([
+        "validate",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "base",
+    ]);
+
+    assert!(!output.status.success());
+    let err = stderr(&output);
+    assert!(err.contains("deck.description"), "stderr: {err}");
+    assert!(err.contains("content/a.md"), "stderr: {err}");
+    assert!(err.contains("cyclic"), "stderr: {err}");
+}
+
+#[test]
+fn file_includes_are_rejected_outside_scalar_content_fields() {
+    let dir = temp_dir("file-include-invalid-target");
+    fs::create_dir_all(dir.join("content")).unwrap();
+    fs::write(dir.join("content/not-notes.yaml"), "{}\n").unwrap();
+    let deck_path = dir.join("invalid.yaml");
+    fs::write(
+        &deck_path,
+        r#"deck:
+  id: deck.invalid-include
+  name: Invalid Include
+  description: Valid scalar description.
+note_types: {}
+notes: !include content/not-notes.yaml
+media: {}
+tombstones: []
+"#,
+    )
+    .unwrap();
+
+    let output = run(["validate", deck_path.to_str().unwrap()]);
+
+    assert!(!output.status.success());
+    let err = stderr(&output);
+    assert!(err.contains("notes"), "stderr: {err}");
+    assert!(err.contains("content/not-notes.yaml"), "stderr: {err}");
+    assert!(err.contains("scalar content"), "stderr: {err}");
+}
+
+#[test]
 fn export_and_import_crowdanki_deck_folder() {
     let dir = temp_dir("crowdanki-roundtrip");
     let deck_path = dir.join("deck.yaml");
@@ -1310,6 +1547,114 @@ fn write_manifest_workspace(dir: &Path) {
     fs::write(dir.join("capital.yaml"), CAPITAL_OVERLAY_YAML).unwrap();
     fs::write(dir.join("noop.yaml"), NOOP_OVERLAY_YAML).unwrap();
     fs::write(dir.join("brainbrew.yaml"), MANIFEST_YAML).unwrap();
+}
+
+fn write_include_workspace(dir: &Path) {
+    fs::create_dir_all(dir.join("content")).unwrap();
+    fs::create_dir_all(dir.join("templates")).unwrap();
+    fs::create_dir_all(dir.join("styles")).unwrap();
+    fs::create_dir_all(dir.join("overlays")).unwrap();
+    fs::write(
+        dir.join("content/base-description.md"),
+        "Base deck description.\nWritten in Markdown.\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("content/overlay-description.md"),
+        "Overlay description from Markdown.\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("templates/front.html"),
+        "<section class=\"front\">{{Country}}</section>\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("templates/back.html"),
+        "{{FrontSide}}\n<hr id=\"answer\">\n<section class=\"back\">{{Capital}}</section>\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("styles/card.css"),
+        ".card {\n  font-family: sans-serif;\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("deck.yaml"),
+        r#"deck:
+  id: deck.include-fixture
+  name: Include Fixture
+  description: !include ./content/../content/base-description.md
+  adapter_ids:
+    crowdanki:uuid: include-fixture-deck-uuid
+note_types:
+  note-type.country:
+    name: Country
+    field_order:
+      - field.country
+      - field.capital
+    fields:
+      field.capital:
+        name: Capital
+      field.country:
+        name: Country
+    card_template_order:
+      - template.country-capital
+    card_templates:
+      template.country-capital:
+        name: Country - Capital
+        question_format: !include templates/front.html
+        answer_format: !include templates/back.html
+        adapter_ids: {}
+    styling: !include styles/card.css
+    adapter_ids:
+      crowdanki:uuid: include-fixture-note-type-uuid
+notes:
+  note.finland:
+    note_type_id: note-type.country
+    fields:
+      field.capital: Helsinki
+      field.country: Finland
+    tags:
+      - Europe
+    adapter_ids:
+      crowdanki:guid: include-fixture-note-guid
+media: {}
+tombstones: []
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("overlays/description.yaml"),
+        r#"id: overlay.patch.description
+kind: patch
+deck:
+  description:
+    intent: replace
+    value: !include content/overlay-description.md
+    expected_base:
+      value: |
+        Base deck description.
+        Written in Markdown.
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.patch.description:
+    file: overlays/description.yaml
+    kind: patch
+targets:
+  base:
+    overlays: []
+  localized:
+    overlays:
+      - overlay.patch.description
+"#,
+    )
+    .unwrap();
 }
 
 fn write_tar_gz(path: &Path, root_name: &str, source_dir: &Path) {

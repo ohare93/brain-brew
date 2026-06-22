@@ -55,7 +55,7 @@ Create `overlays/languages/de.yaml`:
 id: overlay.translation.de
 kind: translation
 translations:
-  changes:
+  direct:
     France: Frankreich
     Paris: Paris
 ```

@@ -6,20 +6,90 @@ use brain_brew_formats::core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplateChange, ChangeIntent, DeckChange,
     ExpectedBase, FieldChange, FieldDefinition, FieldDefinitionChange, MediaChange, MediaReference,
     Note, NoteChange, NoteTypeChange, Overlay, OverlayKind, PropertyChange, StableId, TagChange,
-    TranslationChange,
 };
-use brain_brew_formats::{canonical_yaml, crowdanki, manifest, media};
+use brain_brew_formats::{canonical_yaml, crowdanki, manifest, media, source_includes};
+
+#[test]
+fn ultimate_geography_fixture_uses_file_includes_for_large_source_text() {
+    let root = fixture_root();
+    let deck_source = fs::read_to_string(root.join("deck.yaml")).unwrap();
+    assert!(
+        deck_source.contains("description: !include source/descriptions/en.html"),
+        "deck description should live outside deck.yaml"
+    );
+    assert!(
+        deck_source.contains(
+            "question_format: !include source/templates/standard/capital-country-question.html"
+        ),
+        "standard template HTML should live outside deck.yaml"
+    );
+    assert!(
+        deck_source.contains("styling: !include source/styles/standard.css"),
+        "note type CSS should live outside deck.yaml"
+    );
+    assert!(root.join("source/descriptions/en.html").exists());
+    assert!(
+        root.join("source/templates/standard/country-capital-answer.html")
+            .exists()
+    );
+    assert!(root.join("source/styles/standard.css").exists());
+
+    let extended_source = fs::read_to_string(root.join("overlays/variants/extended.yaml")).unwrap();
+    assert!(
+        extended_source.contains(
+            "question_format: !include source/templates/extended/country-flag-question.html"
+        ),
+        "shared Extended template HTML should live outside overlay YAML"
+    );
+    assert!(
+        root.join("source/templates/extended/country-map-answer.html")
+            .exists()
+    );
+
+    let experimental_source =
+        fs::read_to_string(root.join("overlays/variants/experimental.yaml")).unwrap();
+    assert!(
+        experimental_source
+            .contains("value: !include source/templates/experimental/country-map-question.html"),
+        "Experimental interactive map template HTML should live outside overlay YAML"
+    );
+    assert!(
+        root.join("source/templates/experimental/country-map-answer.html")
+            .exists()
+    );
+
+    for language in ["es", "sv", "zh", "zh-tw"] {
+        let overlay_source =
+            fs::read_to_string(root.join(format!("overlays/languages/{language}.yaml"))).unwrap();
+        assert!(
+            overlay_source.contains(&format!(
+                "value: !include source/descriptions/{language}.html"
+            )),
+            "{language} deck description should live outside translation overlay YAML"
+        );
+    }
+    let sv_extended_source =
+        fs::read_to_string(root.join("overlays/variants/extended/sv.yaml")).unwrap();
+    assert!(
+        sv_extended_source.contains("value: !include source/descriptions/en.html"),
+        "Swedish Extended metadata override should reuse the shared English description include"
+    );
+}
 
 #[test]
 fn ultimate_geography_fixture_manifest_composes_all_targets() {
     let root = fixture_root();
     let manifest = read_manifest(&root);
     let base_path = root.join(&manifest.base);
-    let base_source = fs::read_to_string(&base_path).unwrap();
-    assert_eq!(
-        canonical_yaml::format_str(&base_source).unwrap(),
-        base_source,
-        "{} is not canonicalized",
+    let base = read_canonical_deck_file(&root, &base_path)
+        .unwrap_or_else(|error| panic!("{} resolves and parses: {error}", base_path.display()));
+    let formatted = canonical_yaml::to_string(&base).expect("resolved base emits canonical YAML");
+    assert!(
+        canonical_yaml::from_str(&formatted)
+            .expect("formatted resolved base parses")
+            .semantic_diff(&base)
+            .is_empty(),
+        "{} resolves to deterministic canonical content",
         base_path.display()
     );
 
@@ -97,17 +167,26 @@ fn ultimate_geography_translation_overlays_use_dictionaries_not_template_copies(
         .values()
         .filter(|overlay| overlay.kind.as_deref() == Some("translation"))
     {
-        let overlay = canonical_yaml::overlay_from_str(
-            &fs::read_to_string(root.join(&overlay_ref.file)).unwrap(),
-        )
-        .unwrap_or_else(|error| panic!("{} parses: {error}", overlay_ref.file));
+        let overlay_path = root.join(&overlay_ref.file);
+        let overlay_source = fs::read_to_string(&overlay_path)
+            .unwrap_or_else(|error| panic!("{} reads: {error}", overlay_ref.file));
+        assert!(
+            !overlay_source.contains("\n  changes:\n")
+                && !overlay_source.contains("\n  additions:\n")
+                && !overlay_source.contains("\n  path_overrides:\n"),
+            "{} uses direct/contextual/target_additions rather than old names",
+            overlay_ref.file
+        );
+        let overlay = read_overlay_file(&root, &overlay_path)
+            .unwrap_or_else(|error| panic!("{} parses: {error}", overlay_ref.file));
         let translations = overlay
             .translations
             .as_ref()
             .unwrap_or_else(|| panic!("{} uses translation dictionary", overlay_ref.file));
         assert!(
-            !translations.changes.is_empty()
-                || !translations.additions.is_empty()
+            !translations.direct.is_empty()
+                || !translations.contextual.is_empty()
+                || !translations.target_additions.is_empty()
                 || !translations.variables.is_empty()
                 || !translations.adapter_ids.is_empty(),
             "{} has translation dictionary entries",
@@ -115,16 +194,13 @@ fn ultimate_geography_translation_overlays_use_dictionaries_not_template_copies(
         );
         assert!(
             overlay.note_changes.is_empty(),
-            "{} uses dictionary changes/additions instead of per-note field replacements",
+            "{} uses dictionary direct/contextual/target_additions instead of per-note field replacements",
             overlay_ref.file
         );
         assert!(
-            translations.changes.values().all(|change| match change {
-                TranslationChange::Global(_) => true,
-                TranslationChange::AtPaths(paths) => paths
-                    .keys()
-                    .all(|path| path != "note_types.note-type.ultimate-geography.name"),
-            }),
+            !translations
+                .contextual
+                .contains_key("note_types.note-type.ultimate-geography.name"),
             "{} translates note type names through variables instead of path-scoped metadata changes",
             overlay_ref.file
         );
@@ -153,8 +229,8 @@ fn ultimate_geography_translation_overlays_use_dictionaries_not_template_copies(
                 "English Hardcore field content is not a translation overlay"
             );
             assert!(
-                translations.additions.is_empty(),
-                "{} uses field_fills for extension-owned blank field content instead of translations.additions",
+                translations.target_additions.is_empty(),
+                "{} uses field_fills for extension-owned blank field content instead of translations.target_additions",
                 overlay_ref.file
             );
         }
@@ -171,10 +247,9 @@ fn ultimate_geography_translation_overlays_use_dictionaries_not_template_copies(
             "{} is extension content, not translation content",
             overlay_ref.file
         );
-        let overlay = canonical_yaml::overlay_from_str(
-            &fs::read_to_string(root.join(&overlay_ref.file)).unwrap(),
-        )
-        .unwrap_or_else(|error| panic!("{} parses: {error}", overlay_ref.file));
+        let overlay_path = root.join(&overlay_ref.file);
+        let overlay = read_overlay_file(&root, &overlay_path)
+            .unwrap_or_else(|error| panic!("{} parses: {error}", overlay_ref.file));
         assert_eq!(overlay.kind, OverlayKind::Extension);
         assert!(
             overlay.translations.is_none(),
@@ -193,10 +268,9 @@ fn ultimate_geography_translation_overlays_use_dictionaries_not_template_copies(
         .values()
         .filter(|overlay| overlay.file.starts_with("overlays/variants/extended/"))
     {
-        let overlay = canonical_yaml::overlay_from_str(
-            &fs::read_to_string(root.join(&overlay_ref.file)).unwrap(),
-        )
-        .unwrap_or_else(|error| panic!("{} parses: {error}", overlay_ref.file));
+        let overlay_path = root.join(&overlay_ref.file);
+        let overlay = read_overlay_file(&root, &overlay_path)
+            .unwrap_or_else(|error| panic!("{} parses: {error}", overlay_ref.file));
         assert!(
             overlay
                 .note_type_changes
@@ -1031,13 +1105,15 @@ fn compose_target_with_extra_overlay(
     let expanded = manifest
         .expand_target(target)
         .unwrap_or_else(|error| panic!("{target} expands: {error}"));
-    let base = canonical_yaml::from_str(&fs::read_to_string(root.join(&expanded.base)).unwrap())
+    let base_path = root.join(&expanded.base);
+    let base = read_canonical_deck_file(root, &base_path)
         .unwrap_or_else(|error| panic!("{target} base parses: {error}"));
     let mut overlays = expanded
         .overlays
         .iter()
         .map(|overlay| {
-            canonical_yaml::overlay_from_str(&fs::read_to_string(root.join(&overlay.file)).unwrap())
+            let overlay_path = root.join(&overlay.file);
+            read_overlay_file(root, &overlay_path)
                 .unwrap_or_else(|error| panic!("{target} overlay {} parses: {error}", overlay.id))
         })
         .collect::<Vec<_>>();
@@ -1312,6 +1388,20 @@ fn note_field_json_path(deck: &CanonicalDeck, note_id: &str, field_id: &str) -> 
 fn read_manifest(root: &Path) -> manifest::FederatedDeckManifest {
     manifest::from_str(&fs::read_to_string(root.join("brainbrew.yaml")).unwrap())
         .expect("manifest parses")
+}
+
+fn read_canonical_deck_file(root: &Path, path: &Path) -> Result<CanonicalDeck, String> {
+    let source = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let resolved = source_includes::resolve_file_includes(&source, path, root, &[])
+        .map_err(|error| error.to_string())?;
+    canonical_yaml::from_str(&resolved).map_err(|error| error.to_string())
+}
+
+fn read_overlay_file(root: &Path, path: &Path) -> Result<Overlay, String> {
+    let source = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let resolved = source_includes::resolve_file_includes(&source, path, root, &[])
+        .map_err(|error| error.to_string())?;
+    canonical_yaml::overlay_from_str(&resolved).map_err(|error| error.to_string())
 }
 
 fn release_oracle_deck_json_path(root: &Path, target: &str) -> PathBuf {

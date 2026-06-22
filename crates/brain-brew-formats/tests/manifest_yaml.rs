@@ -99,6 +99,34 @@ targets:
 }
 
 #[test]
+fn parses_and_formats_safe_include_roots() {
+    let formatted = manifest::format_str(
+        r#"
+include_roots: [../shared-content]
+base: deck.yaml
+targets:
+  base:
+    overlays: []
+"#,
+    )
+    .expect("manifest formats");
+
+    assert_eq!(
+        formatted,
+        r#"base: deck.yaml
+include_roots:
+  - ../shared-content
+overlays: {}
+targets:
+  base:
+    overlays: []
+"#
+    );
+    let manifest = manifest::from_str(&formatted).expect("manifest parses");
+    assert_eq!(manifest.include_roots, vec!["../shared-content"]);
+}
+
+#[test]
 fn formatter_canonicalizes_manifest_yaml() {
     let formatted = manifest::format_str(
         r#"

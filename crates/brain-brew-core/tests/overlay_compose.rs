@@ -4,8 +4,7 @@ use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, ChangeIntent,
     ComposeErrorKind, DeckChange, ExpectedBase, FieldChange, FieldDefinition,
     FieldDefinitionChange, MediaChange, MediaReference, Note, NoteChange, NoteType, NoteTypeChange,
-    Overlay, OverlayKind, PropertyChange, StableId, TagChange, TranslationChange,
-    TranslationDictionary,
+    Overlay, OverlayKind, PropertyChange, StableId, TagChange, TranslationDictionary,
 };
 
 #[test]
@@ -212,17 +211,15 @@ fn later_override_can_intentionally_replace_an_earlier_overlay_change() {
 }
 
 #[test]
-fn translation_dictionary_reports_stale_entries() {
+fn translation_dictionary_reports_stale_direct_entries() {
     let deck = ug_style_deck();
     let overlay = Overlay {
         id: sid("overlay.translation.da"),
         kind: OverlayKind::Translation,
         translations: Some(TranslationDictionary {
-            changes: BTreeMap::from([(
-                "Missing source".to_owned(),
-                TranslationChange::Global("Mangler".to_owned()),
-            )]),
-            additions: BTreeMap::new(),
+            direct: BTreeMap::from([("Missing source".to_owned(), "Mangler".to_owned())]),
+            contextual: BTreeMap::new(),
+            target_additions: BTreeMap::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: false,
@@ -240,12 +237,12 @@ fn translation_dictionary_reports_stale_entries() {
     assert!(
         report.errors[0]
             .message
-            .contains("translation source \"Missing source\" did not match")
+            .contains("stale direct translation source \"Missing source\"")
     );
 }
 
 #[test]
-fn translation_dictionary_can_scope_ambiguous_changes_by_path_and_add_blank_values() {
+fn translation_dictionary_distinguishes_direct_contextual_and_target_additions() {
     let mut base = ug_style_deck();
     base.notes
         .get_mut(&sid("note.finland"))
@@ -262,20 +259,21 @@ fn translation_dictionary_can_scope_ambiguous_changes_by_path_and_add_blank_valu
         id: sid("overlay.translation.da"),
         kind: OverlayKind::Translation,
         translations: Some(TranslationDictionary {
-            changes: BTreeMap::from([(
-                "Shared source".to_owned(),
-                TranslationChange::AtPaths(BTreeMap::from([
-                    (
-                        "notes.note.finland.fields.field.country".to_owned(),
-                        "Finsk kontekst".to_owned(),
-                    ),
-                    (
-                        "notes.note.sweden.fields.field.country".to_owned(),
-                        "Svensk kontekst".to_owned(),
-                    ),
-                ])),
-            )]),
-            additions: BTreeMap::from([(
+            direct: BTreeMap::from([
+                ("Helsinki".to_owned(), "Helsingfors".to_owned()),
+                ("Shared source".to_owned(), "Direkte standard".to_owned()),
+            ]),
+            contextual: BTreeMap::from([
+                (
+                    "notes.note.finland".to_owned(),
+                    BTreeMap::from([("Shared source".to_owned(), "Finsk kontekst".to_owned())]),
+                ),
+                (
+                    "notes.note.sweden.fields.field.country".to_owned(),
+                    BTreeMap::from([("Shared source".to_owned(), "Svensk kontekst".to_owned())]),
+                ),
+            ]),
+            target_additions: BTreeMap::from([(
                 "notes.note.sweden.fields.field.capital".to_owned(),
                 "Stockholm".to_owned(),
             )]),
@@ -292,6 +290,10 @@ fn translation_dictionary_can_scope_ambiguous_changes_by_path_and_add_blank_valu
 
     let resolved = base.compose(&[overlay]).expect("translations compose");
 
+    assert_eq!(
+        resolved.notes[&sid("note.finland")].fields[&sid("field.capital")],
+        "Helsingfors"
+    );
     assert_eq!(
         resolved.notes[&sid("note.finland")].fields[&sid("field.country")],
         "Finsk kontekst"
@@ -313,20 +315,12 @@ fn translation_dictionary_can_translate_tags() {
         id: sid("overlay.translation.da"),
         kind: OverlayKind::Translation,
         translations: Some(TranslationDictionary {
-            changes: BTreeMap::from([
-                (
-                    "Nordic".to_owned(),
-                    TranslationChange::Global("UG::Nordic".to_owned()),
-                ),
-                (
-                    "Europe".to_owned(),
-                    TranslationChange::AtPaths(BTreeMap::from([(
-                        "notes.note.finland.tags.Europe".to_owned(),
-                        "UG::Europe".to_owned(),
-                    )])),
-                ),
-            ]),
-            additions: BTreeMap::new(),
+            direct: BTreeMap::from([("Nordic".to_owned(), "UG::Nordic".to_owned())]),
+            contextual: BTreeMap::from([(
+                "notes.note.finland".to_owned(),
+                BTreeMap::from([("Europe".to_owned(), "UG::Europe".to_owned())]),
+            )]),
+            target_additions: BTreeMap::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: false,
@@ -348,14 +342,84 @@ fn translation_dictionary_can_translate_tags() {
 }
 
 #[test]
-fn translation_dictionary_addition_fails_when_base_is_not_blank() {
+fn translation_dictionary_reports_missing_direct_translation_when_complete() {
     let base = ug_style_deck();
     let overlay = Overlay {
         id: sid("overlay.translation.da"),
         kind: OverlayKind::Translation,
         translations: Some(TranslationDictionary {
-            changes: BTreeMap::new(),
-            additions: BTreeMap::from([(
+            direct: BTreeMap::new(),
+            contextual: BTreeMap::new(),
+            target_additions: BTreeMap::new(),
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            require_complete: true,
+            ignore_paths: BTreeSet::from(["deck.*".to_owned(), "note_types.*".to_owned()]),
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let report = base
+        .compose(&[overlay])
+        .expect_err("complete translations require entries");
+
+    assert!(report.has_kind(ComposeErrorKind::MissingTranslation));
+    assert!(report.errors.iter().any(|error| {
+        error.path == "notes.note.finland.fields.field.capital"
+            && error
+                .message
+                .contains("missing direct or contextual translation for \"Helsinki\"")
+    }));
+}
+
+#[test]
+fn translation_dictionary_contextual_reports_stale_source_or_context() {
+    let base = ug_style_deck();
+    let overlay = Overlay {
+        id: sid("overlay.translation.da"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::new(),
+            contextual: BTreeMap::from([(
+                "notes.note.finland.fields.field.country".to_owned(),
+                BTreeMap::from([("Helsinki".to_owned(), "Helsingfors".to_owned())]),
+            )]),
+            target_additions: BTreeMap::new(),
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            require_complete: false,
+            ignore_paths: BTreeSet::new(),
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let report = base
+        .compose(&[overlay])
+        .expect_err("contextual translation must match source under context");
+
+    assert!(report.has_kind(ComposeErrorKind::StaleTranslationEntry));
+    assert!(report.errors.iter().any(|error| {
+        error.path == "translations.contextual.notes.note.finland.fields.field.country.Helsinki"
+            && error.message.contains("invalid contextual translation")
+    }));
+}
+
+#[test]
+fn translation_dictionary_target_addition_fails_when_base_is_not_blank() {
+    let base = ug_style_deck();
+    let overlay = Overlay {
+        id: sid("overlay.translation.da"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::new(),
+            contextual: BTreeMap::new(),
+            target_additions: BTreeMap::from([(
                 "notes.note.finland.fields.field.capital".to_owned(),
                 "Helsinki translated".to_owned(),
             )]),
@@ -372,12 +436,14 @@ fn translation_dictionary_addition_fails_when_base_is_not_blank() {
 
     let report = base
         .compose(&[overlay])
-        .expect_err("addition expects blank base");
+        .expect_err("target addition expects blank base");
 
     assert!(report.has_kind(ComposeErrorKind::ExpectedBaseMismatch));
     assert!(report.errors.iter().any(|error| {
         error.path == "notes.note.finland.fields.field.capital"
-            && error.message.contains("expected blank value")
+            && error
+                .message
+                .contains("target-language addition expected blank source value")
     }));
 }
 

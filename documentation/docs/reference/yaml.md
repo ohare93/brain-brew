@@ -23,7 +23,8 @@ Important rules:
 - unknown keys fail;
 - entity maps are keyed by stable ID;
 - note type field/template order is explicit;
-- `adapter_ids` preserve external identities.
+- `adapter_ids` preserve external identities;
+- scalar content fields may use `!include package/relative/path` as an authoring convenience.
 
 ## Overlay file
 
@@ -41,7 +42,7 @@ notes: {}
 media: {}
 ```
 
-Only `id` and `kind` are required. Other sections are sparse.
+Only `id` and `kind` are required. Other sections are sparse. Overlay scalar content values may also use `!include package/relative/path`.
 
 ## Overlay kinds
 
@@ -59,9 +60,15 @@ translations:
   require_complete: true
   ignore_paths:
     - notes.note.example.fields.field.private-note
-  changes:
+  direct:
     Germany: Deutschland
-  additions:
+  contextual:
+    notes.note:
+      country-georgia:
+        Georgia: Georgien
+      us-georgia.fields.field.region:
+        Georgia: Georgia
+  target_additions:
     notes.note.example.fields.field.country-info: Localized blank text.
   variables:
     label.capital:
@@ -71,7 +78,7 @@ translations:
       old-guid: new-guid
 ```
 
-Formatter order is deterministic: `require_complete`, `ignore_paths`, `changes`, `additions`, `variables`, `adapter_ids`.
+Formatter order is deterministic: `require_complete`, `ignore_paths`, `direct`, `contextual`, `target_additions`, `variables`, `adapter_ids`.
 
 ## Field additions
 
@@ -97,6 +104,35 @@ field_fills:
     field.capital: The Valley
 ```
 
+## File includes
+
+Use `!include` when a scalar content field is easier to maintain as a normal file:
+
+```yaml
+deck:
+  description: !include content/description.md
+note_types:
+  note-type.country:
+    card_templates:
+      template.country-capital:
+        question_format: !include templates/country-capital-front.html
+        answer_format: !include templates/country-capital-back.html
+    styling: !include styles/cards.css
+```
+
+In overlays, include the value at the scalar property you are changing:
+
+```yaml
+deck:
+  description:
+    intent: replace
+    value: !include content/translated-description.md
+    expected_base:
+      value: !include content/base-description.md
+```
+
+Include paths are deterministic and package-root-relative: under a manifest workflow they are resolved relative to the directory containing `brainbrew.yaml`. A path may not escape that package root unless the manifest declares an explicit safe include root. Formatting a file that uses `!include` materializes the included scalar content into canonical YAML.
+
 ## Manifest file
 
 ```yaml
@@ -106,6 +142,8 @@ package:
   depends_on:
     - upstream.package@0.1.0
 base: deck.yaml
+include_roots:
+  - ../shared-source-text
 overlays:
   overlay.translation.de:
     file: overlays/languages/de.yaml

@@ -49,14 +49,14 @@ Use `field_fills` for:
 Do not use it for:
 
 - adding new field definitions — use [`field_additions`](extensions.md#add-fields-and-values);
-- translating non-blank source text — use [`translations.changes`](translations.md#basic-dictionary);
+- translating non-blank source text — use [`translations.direct`](translations.md#direct-translations) or [`translations.contextual`](translations.md#contextual-translations);
 - adding new notes — use `notes` with `intent: add`.
 
-## Why not `translations.additions`?
+## Why not `translations.target_additions`?
 
 A path-indexed value is not automatically a translation.
 
-`translations.additions` says “this blank localized text belongs to a translation overlay.”
+`translations.target_additions` says “this blank localized text belongs to a translation overlay.”
 
 `field_fills` says “this extension or patch fills a blank field with new content.”
 

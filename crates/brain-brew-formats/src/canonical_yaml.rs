@@ -5,8 +5,7 @@ use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, ChangeIntent,
     DeckChange, ExpectedBase, FieldChange, FieldDefinition, FieldDefinitionChange, InvalidStableId,
     MediaChange, MediaReference, Note, NoteChange, NoteType, NoteTypeChange, Overlay, OverlayKind,
-    PropertyChange, StableId, TagChange, TranslationChange, TranslationDictionary,
-    ValidationReport,
+    PropertyChange, StableId, TagChange, TranslationDictionary, ValidationReport,
 };
 use serde::Deserialize;
 
@@ -542,38 +541,26 @@ fn write_translation_dictionary(out: &mut String, translations: &TranslationDict
             writeln!(out, "    - {}", yaml_scalar(path)).expect("writing to a string cannot fail");
         }
     }
-    if !translations.changes.is_empty() {
-        writeln!(out, "  changes:").expect("writing to a string cannot fail");
-        for (source, change) in &translations.changes {
-            match change {
-                TranslationChange::Global(translated) => {
-                    writeln!(
-                        out,
-                        "    {}: {}",
-                        yaml_scalar(source),
-                        yaml_scalar(translated)
-                    )
-                    .expect("writing to a string cannot fail");
-                }
-                TranslationChange::AtPaths(paths) => {
-                    writeln!(out, "    {}:", yaml_scalar(source))
-                        .expect("writing to a string cannot fail");
-                    for (path, translated) in paths {
-                        writeln!(
-                            out,
-                            "      {}: {}",
-                            yaml_scalar(path),
-                            yaml_scalar(translated)
-                        )
-                        .expect("writing to a string cannot fail");
-                    }
-                }
-            }
+    if !translations.direct.is_empty() {
+        writeln!(out, "  direct:").expect("writing to a string cannot fail");
+        for (source, translated) in &translations.direct {
+            writeln!(
+                out,
+                "    {}: {}",
+                yaml_scalar(source),
+                yaml_scalar(translated)
+            )
+            .expect("writing to a string cannot fail");
         }
     }
-    if !translations.additions.is_empty() {
-        writeln!(out, "  additions:").expect("writing to a string cannot fail");
-        for (path, value) in &translations.additions {
+    if !translations.contextual.is_empty() {
+        writeln!(out, "  contextual:").expect("writing to a string cannot fail");
+        let nodes = contextual_format_tree(&translations.contextual);
+        write_contextual_nodes(out, "    ", &nodes);
+    }
+    if !translations.target_additions.is_empty() {
+        writeln!(out, "  target_additions:").expect("writing to a string cannot fail");
+        for (path, value) in &translations.target_additions {
             writeln!(out, "    {}: {}", yaml_scalar(path), yaml_scalar(value))
                 .expect("writing to a string cannot fail");
         }
@@ -607,6 +594,70 @@ fn write_translation_dictionary(out: &mut String, translations: &TranslationDict
                 .expect("writing to a string cannot fail");
             }
         }
+    }
+}
+
+#[derive(Default)]
+struct ContextualFormatNode {
+    translations: BTreeMap<String, String>,
+    children: BTreeMap<String, ContextualFormatNode>,
+}
+
+fn contextual_format_tree(
+    contextual: &BTreeMap<String, BTreeMap<String, String>>,
+) -> BTreeMap<String, ContextualFormatNode> {
+    let mut nodes = BTreeMap::new();
+    for (context_path, replacements) in contextual {
+        if let Some(suffix) = context_path.strip_prefix("notes.note.") {
+            insert_contextual_format_node(&mut nodes, "notes.note", suffix, replacements);
+        } else if let Some(suffix) = context_path.strip_prefix("note_types.note-type.") {
+            insert_contextual_format_node(&mut nodes, "note_types.note-type", suffix, replacements);
+        } else {
+            nodes
+                .entry(context_path.clone())
+                .or_default()
+                .translations
+                .extend(replacements.clone());
+        }
+    }
+    nodes
+}
+
+fn insert_contextual_format_node(
+    nodes: &mut BTreeMap<String, ContextualFormatNode>,
+    group: &str,
+    suffix: &str,
+    replacements: &BTreeMap<String, String>,
+) {
+    nodes
+        .entry(group.to_owned())
+        .or_default()
+        .children
+        .entry(suffix.to_owned())
+        .or_default()
+        .translations
+        .extend(replacements.clone());
+}
+
+fn write_contextual_nodes(
+    out: &mut String,
+    indent: &str,
+    nodes: &BTreeMap<String, ContextualFormatNode>,
+) {
+    for (key, node) in nodes {
+        writeln!(out, "{indent}{}:", yaml_scalar(key)).expect("writing to a string cannot fail");
+        let child_indent = format!("{indent}  ");
+        for (source, translated) in &node.translations {
+            writeln!(
+                out,
+                "{}{}: {}",
+                child_indent,
+                yaml_scalar(source),
+                yaml_scalar(translated)
+            )
+            .expect("writing to a string cannot fail");
+        }
+        write_contextual_nodes(out, &child_indent, &node.children);
     }
 }
 
@@ -859,6 +910,7 @@ pub enum CanonicalYamlError {
     InvalidOverlayKind(String),
     InvalidChangeIntent(String),
     InvalidExpectedBase(String),
+    InvalidTranslationDictionary(String),
     InvalidFieldAddition(String),
     InvalidFieldFill(String),
     MissingOrderedEntity { section: &'static str, id: String },
@@ -875,6 +927,9 @@ impl fmt::Display for CanonicalYamlError {
             Self::InvalidChangeIntent(intent) => write!(f, "invalid change intent {intent:?}"),
             Self::InvalidExpectedBase(expected_base) => {
                 write!(f, "invalid expected base {expected_base:?}")
+            }
+            Self::InvalidTranslationDictionary(message) => {
+                write!(f, "invalid translation dictionary: {message}")
             }
             Self::InvalidFieldAddition(message) => write!(f, "invalid field addition: {message}"),
             Self::InvalidFieldFill(message) => write!(f, "invalid field fill: {message}"),
@@ -952,7 +1007,8 @@ impl OverlayYaml {
             kind: parse_overlay_kind(&self.kind)?,
             translations: self
                 .translations
-                .map(TranslationDictionaryYaml::into_translation_dictionary),
+                .map(TranslationDictionaryYaml::into_translation_dictionary)
+                .transpose()?,
             deck_change: self
                 .deck
                 .map(DeckChangeYaml::into_deck_change)
@@ -1131,9 +1187,11 @@ fn empty_note_merge_change() -> NoteChange {
 #[serde(deny_unknown_fields)]
 struct TranslationDictionaryYaml {
     #[serde(default)]
-    changes: BTreeMap<String, TranslationChangeYaml>,
+    direct: BTreeMap<String, String>,
     #[serde(default)]
-    additions: BTreeMap<String, String>,
+    contextual: BTreeMap<String, ContextualTranslationYaml>,
+    #[serde(default)]
+    target_additions: BTreeMap<String, String>,
     #[serde(default)]
     variables: BTreeMap<String, BTreeMap<String, String>>,
     #[serde(default)]
@@ -1145,36 +1203,72 @@ struct TranslationDictionaryYaml {
 }
 
 impl TranslationDictionaryYaml {
-    fn into_translation_dictionary(self) -> TranslationDictionary {
-        TranslationDictionary {
-            changes: self
-                .changes
-                .into_iter()
-                .map(|(source, change)| (source, change.into_translation_change()))
-                .collect(),
-            additions: self.additions,
+    fn into_translation_dictionary(self) -> Result<TranslationDictionary, CanonicalYamlError> {
+        let mut contextual = BTreeMap::new();
+        flatten_contextual_translations(None, self.contextual, &mut contextual)?;
+
+        Ok(TranslationDictionary {
+            direct: self.direct,
+            contextual,
+            target_additions: self.target_additions,
             variables: self.variables,
             adapter_ids: self.adapter_ids,
             require_complete: self.require_complete,
             ignore_paths: self.ignore_paths,
-        }
+        })
     }
 }
 
 #[derive(Deserialize)]
 #[serde(untagged)]
-enum TranslationChangeYaml {
-    Global(String),
-    AtPaths(BTreeMap<String, String>),
+enum ContextualTranslationYaml {
+    Translation(String),
+    Nested(BTreeMap<String, ContextualTranslationYaml>),
 }
 
-impl TranslationChangeYaml {
-    fn into_translation_change(self) -> TranslationChange {
-        match self {
-            Self::Global(value) => TranslationChange::Global(value),
-            Self::AtPaths(paths) => TranslationChange::AtPaths(paths),
+fn flatten_contextual_translations(
+    context_path: Option<String>,
+    entries: BTreeMap<String, ContextualTranslationYaml>,
+    contextual: &mut BTreeMap<String, BTreeMap<String, String>>,
+) -> Result<(), CanonicalYamlError> {
+    for (key, entry) in entries {
+        match entry {
+            ContextualTranslationYaml::Translation(translated) => {
+                let Some(context_path) = &context_path else {
+                    return Err(CanonicalYamlError::InvalidTranslationDictionary(format!(
+                        "translations.contextual.{key} has no context path; use translations.direct for reusable translations"
+                    )));
+                };
+                insert_contextual_translation(contextual, context_path, key, translated)?;
+            }
+            ContextualTranslationYaml::Nested(nested) => {
+                let nested_context = context_path
+                    .as_ref()
+                    .map_or_else(|| key.clone(), |prefix| format!("{prefix}.{key}"));
+                flatten_contextual_translations(Some(nested_context), nested, contextual)?;
+            }
         }
     }
+    Ok(())
+}
+
+fn insert_contextual_translation(
+    contextual: &mut BTreeMap<String, BTreeMap<String, String>>,
+    context_path: &str,
+    source: String,
+    translated: String,
+) -> Result<(), CanonicalYamlError> {
+    let replacements = contextual.entry(context_path.to_owned()).or_default();
+    if let Some(existing) = replacements.get(&source) {
+        if existing != &translated {
+            return Err(CanonicalYamlError::InvalidTranslationDictionary(format!(
+                "translations.contextual.{context_path}.{source} has conflicting translations"
+            )));
+        }
+        return Ok(());
+    }
+    replacements.insert(source, translated);
+    Ok(())
 }
 
 #[derive(Deserialize)]

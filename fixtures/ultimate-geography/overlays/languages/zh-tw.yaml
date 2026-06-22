@@ -1,7 +1,7 @@
 id: overlay.translation.zh-tw
 kind: translation
 translations:
-  changes:
+  direct:
     'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.': ''
     Abkhazia: '阿布哈茲共和國 (Abkhazia)'
     Abu Dhabi: '阿布達比 (Abu Dhabi)'
@@ -181,9 +181,6 @@ translations:
     Dili: '帝利 (Dili)'
     'Disputed; claimed by Israel; Ramallah is the administrative centre.': '有爭議，以色列宣稱擁有主權，拉馬拉是行政中心。'
     'Disputed; claimed by Palestine.': '有爭議，巴勒斯坦宣稱擁有主權。'
-    Djibouti:
-      notes.note.djibouti.fields.field.capital: '吉布地 (Djibouti)'
-      notes.note.djibouti.fields.field.country: '吉布地共和國 (Djibouti)'
     Dodoma: '杜篤馬 (Dodoma)'
     Doha: '杜哈 (Doha)'
     Dominica: '多明尼加 (Dominica)'
@@ -265,9 +262,6 @@ translations:
     Iceland: '冰島 (Iceland)'
     'Iceland (blue background, red and white cross), Norway (red background, blue and white cross)': '冰島(藍底、紅白十字)、挪威(紅底、藍白十字)'
     'Iceland (blue background, red cross), Faroe Islands (white background, red and blue cross)': '冰島(藍底、紅十字)、法羅群島(白底、紅藍十字)'
-    Independent state claimed by Georgia.:
-      notes.note.abkhazia.fields.field.country-info: '喬治亞宣稱擁有該地區主權，但目前是獨立狀態。'
-      notes.note.south-ossetia.fields.field.country-info: '從喬治亞獨立。'
     Independent state claimed by Moldova.: '摩爾多瓦宣稱擁有該地區主權，但目前是獨立狀態。'
     Independent state claimed by Somalia.: '索馬利亞宣稱擁有該地區主權，但目前是獨立狀態。'
     India: '印度 (India)'
@@ -650,7 +644,17 @@ translations:
     Zanzibar: '尚吉巴 (Zanzibar)'
     Zimbabwe: '辛巴威 (Zimbabwe)'
     'Åland Islands': '奧蘭群島 (Åland Islands)'
-  additions:
+  contextual:
+    notes.note:
+      abkhazia.fields.field.country-info:
+        Independent state claimed by Georgia.: '喬治亞宣稱擁有該地區主權，但目前是獨立狀態。'
+      djibouti.fields.field.capital:
+        Djibouti: '吉布地 (Djibouti)'
+      djibouti.fields.field.country:
+        Djibouti: '吉布地共和國 (Djibouti)'
+      south-ossetia.fields.field.country-info:
+        Independent state claimed by Georgia.: '從喬治亞獨立。'
+  target_additions:
     notes.note.kiribati.fields.field.capital-info: '拉巴斯正在建造來取代馬拉波成為首都。'
   variables:
     label.capital:
@@ -997,36 +1001,6 @@ deck:
       value: Ultimate Geography
   description:
     intent: replace
-    value: |
-      <a href="https://github.com/anki-geo/ultimate-geography/"><b>完整說明</b></a> | <a href="https://github.com/anki-geo/ultimate-geography/releases"><b>發布版本</b></a> | <a href="https://github.com/anki-geo/ultimate-geography/blob/master/CONTRIBUTING.md"><b>貢獻指南</b></a>
-      
-      <b>Ultimate Geography v5.3</b> 包含:
-      
-      - 全世界 <a href="https://en.wikipedia.org/wiki/List_of_sovereign_states"><b>205 個主權國家</b></a> (820 張卡片)
-      - <b>59 個領土、世界區域和其他實體</b> (103 張卡片)
-      - <b>48 個海洋</b> (48 張卡片，僅有地圖)
-      - <b>7 個大陸</b> (7 張卡片，僅有地圖)
-      - 總共 <b>319 個不同的筆記</b>, <b>978 張卡片</b>, <b>221 個國旗</b> 以及 <b>319 個地圖</b>.
-      
-      本牌組 <a href="https://github.com/anki-geo/ultimate-geography#other-languages-and-versions">包含</a> <b>英文(English)</b>, <b>德文(German)</b>, <b>西班牙文(Spanish)</b>, <b>法文(French)</b>, <b>挪威語(Norwegian)</b>, <b>捷克語(Czech)</b>, <b>俄語(Russian)</b>, <b>荷蘭語(Dutch)</b>, <b>瑞典語(Swedish)</b>, <b>葡萄牙文(Portuguese)</b>, <b>簡體中文(Simplified Chinese/ZH)</b>, <b>繁體中文(Traditional Chinese/ZH-TW)</b>, <b>波蘭語(Polish)</b>, <b>意大利文(Italian)</b> 和 <b>丹麥語(Danish)</b>。 同時 每種語言皆有<a href="https://github.com/anki-geo/ultimate-geography#other-languages-and-versions"><b>延伸版本</b></a>。 為了幫助記憶和提供上下文，一些筆記帶有額外的資訊，例如類似的國旗、治理相關資訊、國家別名等。
-      
-      你還能使用Anki的<a href="https://github.com/anki-geo/ultimate-geography#custom-study">過濾牌組功能</a> , 將您的學習重點放在某個種類的牌上, 例如主權國家州、一種筆記模板（例如地圖對國家）或特定大陸（例如歐洲）。
-      
-      這個牌組在 <a href="https://github.com/anki-geo/ultimate-geography"><b>GitHub上維護</b></a>。如果您發現錯誤、有建議或想要幫助我們，請不要猶豫<a href="https://github.com/anki-geo/ultimate-geography/issues">打開一個問題(Issue)</a>。 想要<b>隨時了解新版本</b>？ 查看(Watch)我們的 GitHub Repository或者訂閱(Subscribe)<a href="https://github.com/anki-geo/ultimate-geography/releases.atom">發布通知(releases feed)</a>!
+    value: !include source/descriptions/zh-tw.html
     expected_base:
-      value: |
-        <a href="https://github.com/anki-geo/ultimate-geography/"><b>FULL DESCRIPTION</b></a> | <a href="https://github.com/anki-geo/ultimate-geography/releases"><b>RELEASE NOTES</b></a> | <a href="https://github.com/anki-geo/ultimate-geography/blob/master/CONTRIBUTING.md"><b>CONTRIBUTING</b></a>
-        
-        <b>Ultimate Geography v5.3</b> features:
-        
-        - the world's <a href="https://en.wikipedia.org/wiki/List_of_sovereign_states"><b>205 sovereign states</b></a> (820 cards)
-        - <b>59 territories, world regions, and other entities</b> (103 cards)
-        - <b>48 oceans and seas</b> (48 cards, maps only)
-        - <b>7 continents</b> (7 cards, maps only)
-        - for a total of <b>319 unique notes</b>, <b>978 cards</b>, <b>221 flags</b> and <b>319 maps</b>.
-        
-        The deck is <a href="https://github.com/anki-geo/ultimate-geography#other-languages-and-versions">available</a> in <b>English</b>, <b>German</b>, <b>Spanish</b>, <b>French</b>, <b>Norwegian</b>, <b>Czech</b>, <b>Russian</b>, <b>Dutch</b>, <b>Swedish</b>, <b>Portuguese</b>, <b>Chinese</b> (simplified and traditional), <b>Polish</b>, <b>Italian</b> and <b>Danish</b>. An <a href="https://github.com/anki-geo/ultimate-geography#other-languages-and-versions"><b>extended version</b></a> is also available in each language. To help with memorisation and provide context while learning, some notes include extra information such as similar flags, governance information, alternative country names, etc.
-        
-        You can use Anki's <a href="https://github.com/anki-geo/ultimate-geography#custom-study">filtered deck feature</a> to focus your study on a subset of the deck, such as sovereign states, a single note template (e.g. map to country), or a specific continent (e.g. Europe).
-        
-        This deck is <a href="https://github.com/anki-geo/ultimate-geography"><b>maintained on GitHub</b></a>. If you spot a mistake, have a suggestion or want to help, please don't hesitate to <a href="https://github.com/anki-geo/ultimate-geography/issues">open an issue</a>. Want to <b>stay informed of new releases</b>? Watch the GitHub repository or subscribe to the <a href="https://github.com/anki-geo/ultimate-geography/releases.atom">releases feed</a>!
+      value: !include source/descriptions/en.html

@@ -126,7 +126,7 @@ tombstones: []
         r#"id: overlay.translation.da
 kind: translation
 translations:
-  changes:
+  direct:
     Copenhagen: København
     Denmark: Danmark
     Ultimate Geography: 'Ultimate Geography [DA]'
@@ -164,6 +164,72 @@ translations:
         "<div class=\"type\">Hovedstad</div>{{Country}}"
     );
     assert_eq!(json["notes"][0]["guid"], "note-guid-da");
+}
+
+#[test]
+fn translation_dictionary_parses_nested_contextual_translations() {
+    let overlay = canonical_yaml::overlay_from_str(
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  contextual:
+    notes.note:
+      denmark:
+        Shared source: Dansk kontekst
+      denmark.fields.field.country:
+        Country: Land
+    deck.description:
+      Shared source: Dæk-kontekst
+  target_additions:
+    notes.note.denmark.fields.field.country-info: Ekstra tekst.
+"#,
+    )
+    .expect("contextual translation sections parse");
+
+    let translations = overlay.translations.expect("translation dictionary");
+    assert_eq!(
+        translations.contextual["notes.note.denmark"]["Shared source"],
+        "Dansk kontekst"
+    );
+    assert_eq!(
+        translations.contextual["notes.note.denmark.fields.field.country"]["Country"],
+        "Land"
+    );
+    assert_eq!(
+        translations.contextual["deck.description"]["Shared source"],
+        "Dæk-kontekst"
+    );
+    assert_eq!(
+        translations.target_additions["notes.note.denmark.fields.field.country-info"],
+        "Ekstra tekst."
+    );
+}
+
+#[test]
+fn translation_dictionary_rejects_legacy_changes_and_additions() {
+    let error = canonical_yaml::overlay_from_str(
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  changes:
+    Copenhagen: København
+"#,
+    )
+    .expect_err("legacy changes key is not accepted");
+
+    assert!(error.to_string().contains("changes"));
+
+    let error = canonical_yaml::overlay_from_str(
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  additions:
+    notes.note.denmark.fields.field.country-info: Ekstra tekst.
+"#,
+    )
+    .expect_err("legacy additions key is not accepted");
+
+    assert!(error.to_string().contains("additions"));
 }
 
 #[test]

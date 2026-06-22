@@ -1,7 +1,7 @@
 id: overlay.translation.nl
 kind: translation
 translations:
-  changes:
+  direct:
     'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.': Er bestaat een dispuut over de naam tussen de aangrenzende landen. In het Koreaans wordt de zee Oostzee genoemd.
     Abkhazia: 'Abchazië'
     Addis Ababa: Addis Abeba
@@ -375,7 +375,7 @@ translations:
     Yemen: Jemen
     Yerevan: Jerevan
     'Åland Islands': 'Åland'
-  additions:
+  target_additions:
     notes.note.baltic-sea.fields.field.country-info: Ook wel Baltische Zee.
     notes.note.belarus.fields.field.country-info: Ook bekend als Belarus.
     notes.note.china.fields.field.capital-info: Ook als Beijing bekend.

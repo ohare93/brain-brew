@@ -1,7 +1,7 @@
 id: overlay.translation.pl
 kind: translation
 translations:
-  changes:
+  direct:
     'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.': 'Pomiędzy państwami graniczącymi z tym morzem toczy się spór o jego nazwę, przy czym Korea Południowa opowiada się za nazwą Morze Wschodnie. KSNG opowiedziała się za nazwą Morze Japońskie.'
     Abkhazia: Abchazja
     Abu Dhabi: Abu Zabi
@@ -452,7 +452,7 @@ translations:
     Yerevan: 'Erywań'
     Zagreb: Zagrzeb
     'Åland Islands': Wyspy Alandzkie
-  additions:
+  target_additions:
     notes.note.arctic-ocean.fields.field.country-info: 'Znany także jako Ocean Północny lub Morze Arktyczne.'
     notes.note.netherlands.fields.field.country-info: 'Znana także jako Niderlandy.'
     notes.note.pacific-ocean.fields.field.country-info: 'Znany także jako Pacyfik.'

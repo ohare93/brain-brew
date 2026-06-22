@@ -1,7 +1,7 @@
 id: overlay.translation.de
 kind: translation
 translations:
-  changes:
+  direct:
     'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.': 'Zwischen den Anrainerstaaten des Meeres besteht ein Namensstreit, wobei Südkorea den Namen Ostmeer besonders unterstützt.'
     Abkhazia: Abchasien
     Addis Ababa: Addis Abeba
@@ -174,10 +174,6 @@ translations:
     'Iraq (text instead of emblem), Yemen (no emblem)': 'Irak (Text anstatt Emblem), Jemen (kein Emblem)'
     Ireland: Irland
     'Ireland (orange and green flipped, wider)': 'Irland (Orange und Grün vertauscht, breiter)'
-    Island of Indonesia.:
-      notes.note.bali.fields.field.country-info: Insel von Indonesien.
-      notes.note.java.fields.field.country-info: Insel von Indonesien.
-      notes.note.sumatra.fields.field.country-info: Indonesische Insel.
     Italy: Italien
     Ivory Coast: 'Elfenbeinküste'
     'Ivory Coast (green and orange flipped, narrower)': 'Elfenbeinküste (Grün und Orange vertauscht, schmaler)'
@@ -255,15 +251,6 @@ translations:
     Officially Luxembourg.: ''
     Overseas department of France.: 'Übersee-Département Frankreichs.'
     Overseas territory of France.: 'Französisches Überseegebiet.'
-    Overseas territory of the United Kingdom.:
-      notes.note.akrotiri-and-dhekelia.fields.field.country-info: 'Britisches Überseegebiet.'
-      notes.note.anguilla.fields.field.country-info: 'Britisches Überseegebiet.'
-      notes.note.bermuda.fields.field.country-info: 'Britisches Überseegebiet.'
-      notes.note.british-virgin-islands.fields.field.country-info: 'Britisches Überseegebiet.'
-      notes.note.cayman-islands.fields.field.country-info: 'Britisches Überseegebiet.'
-      notes.note.falkland-islands.fields.field.country-info: 'Britisches Überseegebiet.'
-      notes.note.gibraltar.fields.field.country-info: 'Britisches Überseegebiet.'
-      notes.note.turks-and-caicos-islands.fields.field.country-info: 'Auch Turks &amp; Caicos. Britisches Überseegebiet.'
     Pacific Ocean: Pazifischer Ozean
     Palestine: 'Palästina'
     'Palestine (black/white/green, red arrow)': 'Palästina (Schwarz/Weiß/Grün, roter Pfeil)'
@@ -391,7 +378,31 @@ translations:
     Zanzibar: Sansibar
     Zimbabwe: Simbabwe
     'Åland Islands': 'Åland'
-  additions:
+  contextual:
+    notes.note:
+      akrotiri-and-dhekelia.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Britisches Überseegebiet.'
+      anguilla.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Britisches Überseegebiet.'
+      bali.fields.field.country-info:
+        Island of Indonesia.: Insel von Indonesien.
+      bermuda.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Britisches Überseegebiet.'
+      british-virgin-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Britisches Überseegebiet.'
+      cayman-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Britisches Überseegebiet.'
+      falkland-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Britisches Überseegebiet.'
+      gibraltar.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Britisches Überseegebiet.'
+      java.fields.field.country-info:
+        Island of Indonesia.: Insel von Indonesien.
+      sumatra.fields.field.country-info:
+        Island of Indonesia.: Indonesische Insel.
+      turks-and-caicos-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Auch Turks &amp; Caicos. Britisches Überseegebiet.'
+  target_additions:
     notes.note.aegean-sea.fields.field.country-info: 'Auch Ägäis.'
     notes.note.arctic-ocean.fields.field.country-info: 'Auch Nordpolarmeer, nördliches Eismeer, Arktische See oder Arktik.'
     notes.note.atlantic-ocean.fields.field.country-info: Auch Atlantik.

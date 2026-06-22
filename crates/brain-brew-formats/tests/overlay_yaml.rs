@@ -428,24 +428,37 @@ fn formatter_orders_translation_dictionary_sections_deterministically() {
         r#"id: overlay.translation.de
 kind: translation
 translations:
-  additions:
+  target_additions:
     notes.note.anguilla.fields.field.capital: The Valley
   adapter_ids:
     crowdanki:guid:
       old-guid: new-guid
-  changes:
+  contextual:
+    notes.note:
+      georgia.fields.field.country:
+        Georgia: Georgien
+  direct:
     Germany: Deutschland
 "#,
     )
     .expect("overlay formats");
 
+    assert!(formatted.contains(
+        "    notes.note:\n      georgia.fields.field.country:\n        Georgia: Georgien\n"
+    ));
     assert!(
-        formatted.find("  changes:\n").unwrap() < formatted.find("  additions:\n").unwrap(),
-        "changes are emitted before additions"
+        formatted.find("  direct:\n").unwrap() < formatted.find("  contextual:\n").unwrap(),
+        "direct translations are emitted before contextual translations"
     );
     assert!(
-        formatted.find("  additions:\n").unwrap() < formatted.find("  adapter_ids:\n").unwrap(),
-        "additions are emitted before adapter_ids"
+        formatted.find("  contextual:\n").unwrap()
+            < formatted.find("  target_additions:\n").unwrap(),
+        "contextual translations are emitted before target additions"
+    );
+    assert!(
+        formatted.find("  target_additions:\n").unwrap()
+            < formatted.find("  adapter_ids:\n").unwrap(),
+        "target additions are emitted before adapter_ids"
     );
 }
 

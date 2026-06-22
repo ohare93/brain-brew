@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use brain_brew_core::{CanonicalDeck, Overlay};
-use brain_brew_formats::{canonical_yaml, lockfile, manifest};
+use brain_brew_formats::{canonical_yaml, lockfile, manifest, source_includes};
 use serde_json::json;
 
 use crate::commands::lock::locked_package_manifest_paths;
@@ -34,13 +34,54 @@ pub(crate) fn format_source(input: &str) -> Result<String, String> {
     ))
 }
 
+pub(crate) fn format_source_at(path: &Path, input: &str) -> Result<String, String> {
+    let context = source_context_for_path(path)?;
+    let resolved = resolve_source_includes(input, path, &context)?;
+    format_source(&resolved)
+}
+
 pub(crate) fn read_deck(path: &Path) -> Result<CanonicalDeck, String> {
+    let context = source_context_for_path(path)?;
+    read_deck_with_context(path, &context)
+}
+
+fn read_deck_from_package(
+    path: &Path,
+    package_root: &Path,
+    include_roots: &[PathBuf],
+) -> Result<CanonicalDeck, String> {
+    read_deck_with_context(
+        path,
+        &SourceContext {
+            root: package_root.to_path_buf(),
+            include_roots: include_roots.to_vec(),
+        },
+    )
+}
+
+fn read_deck_with_context(path: &Path, context: &SourceContext) -> Result<CanonicalDeck, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let input = resolve_source_includes(&input, path, context)?;
     canonical_yaml::from_str(&input).map_err(|error| error.to_string())
 }
 
-pub(crate) fn read_overlay(path: &Path) -> Result<Overlay, String> {
+fn read_overlay_from_package(
+    path: &Path,
+    package_root: &Path,
+    include_roots: &[PathBuf],
+) -> Result<Overlay, String> {
+    read_overlay_with_context(
+        path,
+        &SourceContext {
+            root: package_root.to_path_buf(),
+            include_roots: include_roots.to_vec(),
+        },
+    )
+}
+
+fn read_overlay_with_context(path: &Path, context: &SourceContext) -> Result<Overlay, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let input = resolve_source_includes(&input, path, context)?;
     canonical_yaml::overlay_from_str(&input).map_err(|error| error.to_string())
 }
 
@@ -53,10 +94,11 @@ pub(crate) fn read_and_compose_deck(
     deck_path: &Path,
     overlay_paths: &[String],
 ) -> Result<CanonicalDeck, String> {
-    let deck = read_deck(deck_path)?;
+    let context = source_context_for_path(deck_path)?;
+    let deck = read_deck_with_context(deck_path, &context)?;
     let overlays = overlay_paths
         .iter()
-        .map(|path| read_overlay(Path::new(path)))
+        .map(|path| read_overlay_with_context(Path::new(path), &context))
         .collect::<Result<Vec<_>, _>>()?;
     deck.compose(&overlays).map_err(|error| error.to_string())
 }
@@ -77,6 +119,8 @@ pub(crate) struct PlannedOverlay {
     pub(crate) id: String,
     pub(crate) file: PathBuf,
     pub(crate) display_file: String,
+    pub(crate) package_root: PathBuf,
+    pub(crate) include_roots: Vec<PathBuf>,
 }
 
 pub(crate) struct ManifestTargetPlan {
@@ -114,6 +158,7 @@ pub(crate) fn plan_manifest_target_with_packages(
 struct LoadedManifest {
     path: PathBuf,
     root: PathBuf,
+    include_roots: Vec<PathBuf>,
     manifest: manifest::FederatedDeckManifest,
 }
 
@@ -151,9 +196,12 @@ impl ManifestRegistry {
             .iter()
             .map(|path| {
                 let manifest = read_manifest(path)?;
+                let root = manifest_root(path);
+                let include_roots = include_roots_from_manifest(&root, &manifest);
                 Ok(LoadedManifest {
                     path: path.clone(),
-                    root: manifest_root(path),
+                    root,
+                    include_roots,
                     manifest,
                 })
             })
@@ -230,7 +278,11 @@ impl ManifestRegistry {
         } else {
             (
                 loaded.manifest.base.clone(),
-                read_deck(&loaded.root.join(&loaded.manifest.base))?,
+                read_deck_from_package(
+                    &loaded.root.join(&loaded.manifest.base),
+                    &loaded.root,
+                    &loaded.include_roots,
+                )?,
             )
         };
 
@@ -238,7 +290,11 @@ impl ManifestRegistry {
         let overlays = planned_overlays
             .into_iter()
             .map(|planned| {
-                let overlay = read_overlay(&planned.file)?;
+                let overlay = read_overlay_from_package(
+                    &planned.file,
+                    &planned.package_root,
+                    &planned.include_roots,
+                )?;
                 Ok((planned, overlay))
             })
             .collect::<Result<Vec<_>, String>>()?;
@@ -335,6 +391,8 @@ impl ManifestRegistry {
             id,
             file: loaded.root.join(&entry.file),
             display_file,
+            package_root: loaded.root.clone(),
+            include_roots: loaded.include_roots.clone(),
         });
         Ok(())
     }
@@ -445,7 +503,14 @@ where
     E: ToString,
 {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    let formatted = format(&input).map_err(|error| error.to_string())?;
+    let context = source_context_for_path(path)?;
+    let resolved = resolve_source_includes(&input, path, &context)?;
+    let formatted = format(&resolved).map_err(|error| error.to_string())?;
+    if input.contains("!include") {
+        // Source includes are authoring syntax; the formatter materializes them, so the
+        // resolved canonical bytes are intentionally different from the source file.
+        return Ok(());
+    }
     if formatted != input {
         return Err(format!("{} is not in canonical format", path.display()));
     }
@@ -479,4 +544,54 @@ pub(crate) fn manifest_root(path: &Path) -> PathBuf {
     path.parent()
         .unwrap_or_else(|| Path::new("."))
         .to_path_buf()
+}
+
+struct SourceContext {
+    root: PathBuf,
+    include_roots: Vec<PathBuf>,
+}
+
+fn source_context_for_path(path: &Path) -> Result<SourceContext, String> {
+    let root = nearest_manifest_root(path).unwrap_or_else(|| manifest_root(path));
+    let manifest_path = root.join("brainbrew.yaml");
+    let include_roots = if manifest_path.exists() {
+        let manifest = read_manifest(&manifest_path)?;
+        include_roots_from_manifest(&root, &manifest)
+    } else {
+        Vec::new()
+    };
+    Ok(SourceContext {
+        root,
+        include_roots,
+    })
+}
+
+fn nearest_manifest_root(path: &Path) -> Option<PathBuf> {
+    let mut current = path.parent()?;
+    loop {
+        if current.join("brainbrew.yaml").exists() {
+            return Some(current.to_path_buf());
+        }
+        current = current.parent()?;
+    }
+}
+
+fn include_roots_from_manifest(
+    root: &Path,
+    manifest: &manifest::FederatedDeckManifest,
+) -> Vec<PathBuf> {
+    manifest
+        .include_roots
+        .iter()
+        .map(|include_root| root_relative_path(root, Path::new(include_root)))
+        .collect()
+}
+
+fn resolve_source_includes(
+    input: &str,
+    path: &Path,
+    context: &SourceContext,
+) -> Result<String, String> {
+    source_includes::resolve_file_includes(input, path, &context.root, &context.include_roots)
+        .map_err(|error| error.to_string())
 }

@@ -8,6 +8,7 @@ use serde::Deserialize;
 pub struct FederatedDeckManifest {
     pub package: Option<PackageMetadata>,
     pub base: String,
+    pub include_roots: Vec<String>,
     pub overlays: BTreeMap<String, OverlayManifestEntry>,
     pub targets: BTreeMap<String, BuildTarget>,
 }
@@ -164,6 +165,12 @@ pub fn to_string(manifest: &FederatedDeckManifest) -> String {
         }
     }
     out.push_str(&format!("base: {}\n", yaml_scalar(&manifest.base)));
+    if !manifest.include_roots.is_empty() {
+        out.push_str("include_roots:\n");
+        for root in &manifest.include_roots {
+            out.push_str(&format!("  - {}\n", yaml_scalar(root)));
+        }
+    }
 
     if manifest.overlays.is_empty() {
         out.push_str("overlays: {}\n");
@@ -281,6 +288,8 @@ struct ManifestYaml {
     package: Option<PackageMetadataYaml>,
     base: String,
     #[serde(default)]
+    include_roots: Vec<String>,
+    #[serde(default)]
     overlays: BTreeMap<String, OverlayManifestEntryYaml>,
     #[serde(default)]
     targets: BTreeMap<String, BuildTargetYaml>,
@@ -291,6 +300,7 @@ impl ManifestYaml {
         FederatedDeckManifest {
             package: self.package.map(PackageMetadataYaml::into_metadata),
             base: self.base,
+            include_roots: self.include_roots,
             overlays: self
                 .overlays
                 .into_iter()

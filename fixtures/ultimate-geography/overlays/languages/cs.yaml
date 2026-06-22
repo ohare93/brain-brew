@@ -1,7 +1,7 @@
 id: overlay.translation.cs
 kind: translation
 translations:
-  changes:
+  direct:
     'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.': 'Existuje spor o názvu mezi hraničními zeměmi, zejména Jižní Korea podporuje název Východní moře.'
     Abkhazia: 'Abcházie'
     Abu Dhabi: 'Abú Zabí'
@@ -46,9 +46,6 @@ translations:
     Autonomous region of Finland.: 'Autonomní region Finska.'
     Autonomous region of Italy.: 'Autonomní region Itálie.'
     Autonomous region of Papua New Guinea.: 'Autonomní území státu Papua Nová Guinea.'
-    Autonomous region of Portugal.:
-      notes.note.azores.fields.field.country-info: 'Autonomní území Portugalska.'
-      notes.note.madeira.fields.field.country-info: 'Autonomní region Portugalska.'
     Azerbaijan: 'Ázerbájdžán'
     Azores: Azory
     Baghdad: 'Bagdád'
@@ -106,9 +103,6 @@ translations:
     'Colombia (no coat of arms)': 'Kolumbie (bez erbu)'
     Colombo is often referred to as the capital but Sri Jayawardenepura Kotte, a suburb of Colombo, is the official, legislative capital.: 'Kolombo bývá označováno jako hlavní město, ale Šrí Džajavardanapura Kotte, předměstí Kolomba, je oficiální a legislativní hlavní město.'
     Comoros: Komory
-    Constituent country in the Kingdom of Denmark.:
-      notes.note.faroe-islands.fields.field.country-info: 'Konstituční země Dánského království.'
-      notes.note.greenland.fields.field.country-info: 'Autonomní součást Dánského království.'
     Constituent country of the Kingdom of the Netherlands.: 'Konstituční země Nizozemského království.'
     Constituent country of the United Kingdom.: 'Konstituční země Velké Británie.'
     Cook Islands: Cookovy ostrovy
@@ -131,9 +125,6 @@ translations:
     Dhaka: 'Dháka'
     'Disputed; claimed by Israel; Ramallah is the administrative centre.': 'Sporný; nárokováno Izraelem; Ramalláh je správním centrem.'
     'Disputed; claimed by Palestine.': 'Sporný; tvrdí Palestina.'
-    Djibouti:
-      notes.note.djibouti.fields.field.capital: 'Džibuti'
-      notes.note.djibouti.fields.field.country: 'Džibutsko'
     Doha: 'Dauhá'
     Dominica: Dominika
     Dominican Republic: 'Dominikánská republika'
@@ -188,9 +179,6 @@ translations:
     Iceland: Island
     'Iceland (blue background, red and white cross), Norway (red background, blue and white cross)': 'Island (modré pozadí, červený a bílý kříž), Norsko (červené pozadí, modrý a bílý kříž)'
     'Iceland (blue background, red cross), Faroe Islands (white background, red and blue cross)': 'Island (modré pozadí, červený kříž), Faerské ostrovy (bílé pozadí, červený a modrý kříž)'
-    Independent state claimed by Georgia.:
-      notes.note.abkhazia.fields.field.country-info: 'Nezávislý stát nárokováný Gruzií.'
-      notes.note.south-ossetia.fields.field.country-info: 'Nezávislý stát nárokovaný Gruzií.'
     Independent state claimed by Moldova.: 'Nezávislý stát nárokovaný Moldavskem.'
     Independent state claimed by Somalia.: 'Vzácně označovaný jako Somálijsko, nezávislý stát nárokovaný Somálskem.'
     India: Indie
@@ -204,10 +192,6 @@ translations:
     Ireland: Irsko
     'Ireland (orange and green flipped, wider)': 'Irsko (prohozená oranžová a zelená, širší)'
     Islamabad: 'Islámábád'
-    Island of Indonesia.:
-      notes.note.bali.fields.field.country-info: 'Indonéský ostrov.'
-      notes.note.java.fields.field.country-info: 'Indonéský ostrov.'
-      notes.note.sumatra.fields.field.country-info: 'Ostrov Indonésie.'
     Isle of Man: Man
     Israel: Izrael
     Italy: 'Itálie'
@@ -265,9 +249,6 @@ translations:
     Mogadishu: 'Mogadišo'
     Moldova: Moldavsko
     'Moldova (wider, coat of arms with eagle)': 'Moldavsko (širší, erb s orlem)'
-    Monaco:
-      notes.note.monaco.fields.field.capital: Monaco-Ville
-      notes.note.monaco.fields.field.country: Monako
     'Monaco (narrower, darker red), Poland (red and white flipped, darker red)': 'Monaco (užší, tmavší červená), Polsko (prohozená červená a bílá, tmavší červená)'
     Mongolia: Mongolsko
     Montenegro: 'Černá Hora'
@@ -310,20 +291,6 @@ translations:
     Officially Luxembourg.: ''
     Oman: 'Omán'
     Overseas department of France.: 'Zámořský department Francie.'
-    Overseas territory of France.:
-      notes.note.french-polynesia.fields.field.country-info: 'Zámořské území Francie.'
-      notes.note.new-caledonia.fields.field.country-info: 'Zámořské území Francie.'
-      notes.note.saint-martin.fields.field.country-info: 'Konstituční země Francie.'
-      notes.note.wallis-and-futuna.fields.field.country-info: 'Zámořské území Francie.'
-    Overseas territory of the United Kingdom.:
-      notes.note.akrotiri-and-dhekelia.fields.field.country-info: 'Zámořské území Velké Británie.'
-      notes.note.anguilla.fields.field.country-info: 'Zámořské území Velké Británie s autonomní správou.'
-      notes.note.bermuda.fields.field.country-info: 'Zámořské území Velké Británie.'
-      notes.note.british-virgin-islands.fields.field.country-info: 'Zámořské území Velké Británie.'
-      notes.note.cayman-islands.fields.field.country-info: 'Zámořské území Velké Británie.'
-      notes.note.falkland-islands.fields.field.country-info: 'Zámořské území Velké Británie.'
-      notes.note.gibraltar.fields.field.country-info: 'Zámořské území Velké Británie.'
-      notes.note.turks-and-caicos-islands.fields.field.country-info: 'Zámořské území Velké Británie.'
     Pacific Ocean: 'Tichý oceán'
     Pakistan: 'Pákistán'
     Palestine: 'Stát Palestina'
@@ -470,7 +437,59 @@ translations:
     Zagreb: 'Záhřeb'
     Zambia: Zambie
     'Åland Islands': Alandy
-  additions:
+  contextual:
+    notes.note:
+      abkhazia.fields.field.country-info:
+        Independent state claimed by Georgia.: 'Nezávislý stát nárokováný Gruzií.'
+      akrotiri-and-dhekelia.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie.'
+      anguilla.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie s autonomní správou.'
+      azores.fields.field.country-info:
+        Autonomous region of Portugal.: 'Autonomní území Portugalska.'
+      bali.fields.field.country-info:
+        Island of Indonesia.: 'Indonéský ostrov.'
+      bermuda.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie.'
+      british-virgin-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie.'
+      cayman-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie.'
+      djibouti.fields.field.capital:
+        Djibouti: 'Džibuti'
+      djibouti.fields.field.country:
+        Djibouti: 'Džibutsko'
+      falkland-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie.'
+      faroe-islands.fields.field.country-info:
+        Constituent country in the Kingdom of Denmark.: 'Konstituční země Dánského království.'
+      french-polynesia.fields.field.country-info:
+        Overseas territory of France.: 'Zámořské území Francie.'
+      gibraltar.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie.'
+      greenland.fields.field.country-info:
+        Constituent country in the Kingdom of Denmark.: 'Autonomní součást Dánského království.'
+      java.fields.field.country-info:
+        Island of Indonesia.: 'Indonéský ostrov.'
+      madeira.fields.field.country-info:
+        Autonomous region of Portugal.: 'Autonomní region Portugalska.'
+      monaco.fields.field.capital:
+        Monaco: Monaco-Ville
+      monaco.fields.field.country:
+        Monaco: Monako
+      new-caledonia.fields.field.country-info:
+        Overseas territory of France.: 'Zámořské území Francie.'
+      saint-martin.fields.field.country-info:
+        Overseas territory of France.: 'Konstituční země Francie.'
+      south-ossetia.fields.field.country-info:
+        Independent state claimed by Georgia.: 'Nezávislý stát nárokovaný Gruzií.'
+      sumatra.fields.field.country-info:
+        Island of Indonesia.: 'Ostrov Indonésie.'
+      turks-and-caicos-islands.fields.field.country-info:
+        Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie.'
+      wallis-and-futuna.fields.field.country-info:
+        Overseas territory of France.: 'Zámořské území Francie.'
+  target_additions:
     notes.note.pacific-ocean.fields.field.country-info: 'Známý též jako Pacifik.'
     notes.note.united-kingdom.fields.field.country-info: 'Známé též jako Velká Británie.'
   variables:

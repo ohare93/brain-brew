@@ -10,6 +10,13 @@ A Federated Deck workspace contains a manifest, a base deck, and overlays.
 my-deck/
   brainbrew.yaml
   deck.yaml
+  content/
+    description.md
+  templates/
+    country-front.html
+    country-back.html
+  styles/
+    cards.css
   overlays/
     languages/de.yaml
     variants/extended.yaml
@@ -22,7 +29,21 @@ my-deck/
 
 ## `deck.yaml`
 
-The base Canonical Deck. It owns shared structure and content.
+The base Canonical Deck. It owns shared structure and content. Large scalar content can live in normal package files and be referenced from the deck source:
+
+```yaml
+deck:
+  description: !include content/description.md
+note_types:
+  note-type.country:
+    card_templates:
+      template.country-capital:
+        question_format: !include templates/country-front.html
+        answer_format: !include templates/country-back.html
+    styling: !include styles/cards.css
+```
+
+`!include` paths are resolved relative to the package root (the directory containing `brainbrew.yaml`) and the composed/resolved deck contains the final inlined text.
 
 ## `overlays/`
 
@@ -35,13 +56,15 @@ Sparse changes to the base deck. Keep overlays small and purpose-shaped:
 
 ## `brainbrew.yaml`
 
-The manifest declares package metadata, named overlays, dependencies, and build targets.
+The manifest declares package metadata, named overlays, dependencies, and build targets. It also defines the package root used for file includes.
 
 ```yaml
 package:
   id: example.capitals
   version: 0.1.0
 base: deck.yaml
+include_roots:
+  - ../shared-source-text
 overlays:
   overlay.translation.de:
     file: overlays/languages/de.yaml
@@ -51,6 +74,8 @@ targets:
     overlays:
       - overlay.translation.de
 ```
+
+Most packages do not need `include_roots`; use it only when a deliberately shared source-text directory sits outside the package. Without an explicit safe root, `!include ../outside-file` is rejected.
 
 ## Formatting
 

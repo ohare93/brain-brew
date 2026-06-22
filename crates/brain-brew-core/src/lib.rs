@@ -375,9 +375,9 @@ fn apply_translation_dictionary(
     changed_paths: &mut BTreeMap<String, StableId>,
     errors: &mut Vec<ComposeError>,
 ) {
-    let mut seen_global_changes = BTreeSet::new();
-    let mut seen_path_changes = BTreeSet::new();
-    let mut seen_additions = BTreeSet::new();
+    let mut seen_direct = BTreeSet::new();
+    let mut seen_contextual = BTreeSet::new();
+    let mut seen_target_additions = BTreeSet::new();
     let mut seen_variables = BTreeSet::new();
     let mut seen_adapter_ids = BTreeSet::new();
 
@@ -385,9 +385,9 @@ fn apply_translation_dictionary(
         let mut context = TranslationApplyContext {
             overlay,
             translations,
-            seen_global_changes: &mut seen_global_changes,
-            seen_path_changes: &mut seen_path_changes,
-            seen_additions: &mut seen_additions,
+            seen_direct: &mut seen_direct,
+            seen_contextual: &mut seen_contextual,
+            seen_target_additions: &mut seen_target_additions,
             seen_variables: &mut seen_variables,
             seen_adapter_ids: &mut seen_adapter_ids,
             changed_paths,
@@ -462,38 +462,38 @@ fn apply_translation_dictionary(
         }
     }
 
-    for (source, change) in &translations.changes {
-        match change {
-            TranslationChange::Global(_) => {
-                if !seen_global_changes.contains(source) {
-                    errors.push(ComposeError::new(
-                        ComposeErrorKind::StaleTranslationEntry,
-                        format!("translations.changes.{source}"),
-                        format!("translation source {source:?} did not match any extracted text"),
-                    ));
-                }
-            }
-            TranslationChange::AtPaths(paths) => {
-                for path in paths.keys() {
-                    if !seen_path_changes.contains(&(source.clone(), path.clone())) {
-                        errors.push(ComposeError::new(
-                            ComposeErrorKind::StaleTranslationEntry,
-                            format!("translations.changes.{source}.{path}"),
-                            format!(
-                                "translation source {source:?} did not match extracted text at {path}"
-                            ),
-                        ));
-                    }
-                }
+    for source in translations.direct.keys() {
+        if !seen_direct.contains(source) {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::StaleTranslationEntry,
+                format!("translations.direct.{source}"),
+                format!(
+                    "stale direct translation source {source:?} did not match any extracted non-empty source text; use translations.target_additions for intentionally blank source fields"
+                ),
+            ));
+        }
+    }
+    for (context_path, replacements) in &translations.contextual {
+        for source in replacements.keys() {
+            if !seen_contextual.contains(&(context_path.clone(), source.clone())) {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::StaleTranslationEntry,
+                    format!("translations.contextual.{context_path}.{source}"),
+                    format!(
+                        "invalid contextual translation: source {source:?} did not match any extracted text under {context_path}; the source key may be stale, the context may be invalid, or a blank source field should use translations.target_additions"
+                    ),
+                ));
             }
         }
     }
-    for path in translations.additions.keys() {
-        if !seen_additions.contains(path) {
+    for path in translations.target_additions.keys() {
+        if !seen_target_additions.contains(path) {
             errors.push(ComposeError::new(
                 ComposeErrorKind::MissingOverlayTarget,
-                format!("translations.additions.{path}"),
-                format!("translation addition path {path} did not match any extracted text"),
+                format!("translations.target_additions.{path}"),
+                format!(
+                    "target-language addition path {path} did not match any extracted field; use translations.direct or translations.contextual for non-blank source text"
+                ),
             ));
         }
     }
@@ -528,9 +528,9 @@ fn apply_translation_dictionary(
 struct TranslationApplyContext<'a, 'b> {
     overlay: &'a Overlay,
     translations: &'a TranslationDictionary,
-    seen_global_changes: &'b mut BTreeSet<String>,
-    seen_path_changes: &'b mut BTreeSet<(String, String)>,
-    seen_additions: &'b mut BTreeSet<String>,
+    seen_direct: &'b mut BTreeSet<String>,
+    seen_contextual: &'b mut BTreeSet<(String, String)>,
+    seen_target_additions: &'b mut BTreeSet<String>,
     seen_variables: &'b mut BTreeSet<(String, String)>,
     seen_adapter_ids: &'b mut BTreeSet<(String, String)>,
     changed_paths: &'b mut BTreeMap<String, StableId>,
@@ -545,13 +545,15 @@ impl TranslationApplyContext<'_, '_> {
     }
 
     fn translate_string(&mut self, value: &mut String, path: String, variable_key: Option<&str>) {
-        if let Some(addition) = self.translations.additions.get(&path) {
-            self.seen_additions.insert(path.clone());
+        if let Some(addition) = self.translations.target_additions.get(&path) {
+            self.seen_target_additions.insert(path.clone());
             if !value.is_empty() {
                 self.errors.push(ComposeError::new(
                     ComposeErrorKind::ExpectedBaseMismatch,
                     path,
-                    format!("translation addition expected blank value, found {value:?}"),
+                    format!(
+                        "target-language addition expected blank source value, found {value:?}; use translations.direct or translations.contextual for non-blank source text"
+                    ),
                 ));
                 return;
             }
@@ -594,52 +596,54 @@ impl TranslationApplyContext<'_, '_> {
             return;
         }
 
-        if let Some(change) = self.translations.changes.get(value.as_str()) {
-            match change {
-                TranslationChange::Global(translated) => {
-                    let source = value.clone();
-                    self.seen_global_changes.insert(source);
-                    if value != translated {
-                        if !record_change_path(
-                            &path,
-                            self.overlay,
-                            ChangeIntent::Replace,
-                            self.changed_paths,
-                            self.errors,
-                        ) {
-                            return;
-                        }
-                        *value = translated.clone();
-                    }
-                    return;
-                }
-                TranslationChange::AtPaths(paths) => {
-                    if let Some(translated) = paths.get(&path) {
-                        let source = value.clone();
-                        self.seen_path_changes.insert((source, path.clone()));
-                        if value != translated {
-                            if !record_change_path(
-                                &path,
-                                self.overlay,
-                                ChangeIntent::Replace,
-                                self.changed_paths,
-                                self.errors,
-                            ) {
-                                return;
-                            }
-                            *value = translated.clone();
-                        }
-                        return;
-                    }
+        let source = value.clone();
+        let direct_translation = self.translations.direct.get(source.as_str());
+        if direct_translation.is_some() {
+            self.seen_direct.insert(source.clone());
+        }
+
+        let mut contextual_translation: Option<(&String, &String)> = None;
+        for (context_path, replacements) in &self.translations.contextual {
+            if context_matches_path(context_path, &path)
+                && let Some(translated) = replacements.get(source.as_str())
+            {
+                self.seen_contextual
+                    .insert((context_path.clone(), source.clone()));
+                if contextual_translation
+                    .as_ref()
+                    .is_none_or(|(current_context, _)| context_path.len() > current_context.len())
+                {
+                    contextual_translation = Some((context_path, translated));
                 }
             }
+        }
+
+        let translated = contextual_translation
+            .map(|(_, translated)| translated)
+            .or(direct_translation);
+        if let Some(translated) = translated {
+            if value != translated {
+                if !record_change_path(
+                    &path,
+                    self.overlay,
+                    ChangeIntent::Replace,
+                    self.changed_paths,
+                    self.errors,
+                ) {
+                    return;
+                }
+                *value = translated.clone();
+            }
+            return;
         }
 
         if self.translations.require_complete {
             self.errors.push(ComposeError::new(
                 ComposeErrorKind::MissingTranslation,
-                path,
-                format!("missing translation for {value:?}"),
+                path.clone(),
+                format!(
+                    "missing direct or contextual translation for {value:?} at {path}; add translations.direct, add a translations.contextual entry for path-specific text, or ignore the path"
+                ),
             ));
         }
     }
@@ -683,6 +687,13 @@ impl TranslationApplyContext<'_, '_> {
             }
         }
     }
+}
+
+fn context_matches_path(context_path: &str, path: &str) -> bool {
+    path == context_path
+        || path
+            .strip_prefix(context_path)
+            .is_some_and(|suffix| suffix.starts_with('.'))
 }
 
 fn is_ignored_translation_path(translations: &TranslationDictionary, path: &str) -> bool {
@@ -2311,10 +2322,12 @@ pub struct Overlay {
 /// Translation dictionary applied by a translation overlay.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TranslationDictionary {
-    /// Exact source text replacements, either globally or scoped to stable deck paths.
-    pub changes: BTreeMap<String, TranslationChange>,
-    /// Stable deck paths to fill only when the current source value is blank.
-    pub additions: BTreeMap<String, String>,
+    /// Direct reusable replacements keyed by exact non-empty source text.
+    pub direct: BTreeMap<String, String>,
+    /// Contextual replacements keyed by stable deck path prefix and exact source text.
+    pub contextual: BTreeMap<String, BTreeMap<String, String>>,
+    /// Stable deck paths to fill only when the current source value is intentionally blank.
+    pub target_additions: BTreeMap<String, String>,
     /// Variable-specific source text to translated text replacements by variable key.
     pub variables: BTreeMap<String, BTreeMap<String, String>>,
     /// Adapter-specific source ID to translated ID replacements by adapter namespace.
@@ -2323,15 +2336,6 @@ pub struct TranslationDictionary {
     pub require_complete: bool,
     /// Glob-style paths ignored by complete-coverage checks.
     pub ignore_paths: BTreeSet<String>,
-}
-
-/// Translation replacement for one exact source string.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum TranslationChange {
-    /// Replace the source string wherever it is extracted.
-    Global(String),
-    /// Replace the source string only at the listed stable deck paths.
-    AtPaths(BTreeMap<String, String>),
 }
 
 /// Maintainer-facing category for an overlay.

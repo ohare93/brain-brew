@@ -1,7 +1,7 @@
 id: overlay.translation.pt
 kind: translation
 translations:
-  changes:
+  direct:
     'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.': 'Existe uma disputa de nomenclatura entre os países limítrofes do mar, com a Coreia do Sul apoiando notavelmente o nome Mar do Leste.'
     Abkhazia: 'Abecásia'
     Abu Dhabi: Abu Dabi
@@ -52,9 +52,6 @@ translations:
     Autonomous region of Finland.: 'Região autônoma da Finlândia.'
     Autonomous region of Italy.: 'Região autônoma da Itália.'
     Autonomous region of Papua New Guinea.: 'Região autônoma de Papua-Nova Guiné.'
-    Autonomous region of Portugal.:
-      notes.note.azores.fields.field.country-info: 'Região autônoma de Portugal.'
-      notes.note.madeira.fields.field.country-info: 'Região Autônoma de Portugal.'
     Azerbaijan: 'Azerbaijão'
     Azores: 'Açores'
     Baghdad: 'Bagdá (BR), Bagdade (PT)'
@@ -134,10 +131,6 @@ translations:
     Coral Sea: Mar de Coral
     Corsica: 'Córsega'
     Croatia: 'Croácia'
-    Crown dependency of the United Kingdom.:
-      notes.note.guernsey.fields.field.country-info: 'Dependência da coroa do Reino Unido.'
-      notes.note.isle-of-man.fields.field.country-info: Ilha de Man
-      notes.note.jersey.fields.field.country-info: 'Dependência da coroa do Reino Unido.'
     'Cuba (red triangle, blue stripes)': 'Cuba (triângulo vermelho, listras azuis)'
     'Curaçao (two stars in top-left corner)': 'Curaçao (duas estrelas no canto superior esquerdo)'
     Cyprus: Chipre
@@ -351,11 +344,6 @@ translations:
     Ottawa: Otava
     Ouagadougou: Uagadugu
     Overseas department of France.: 'Departamento ultramarino da França.'
-    Overseas territory of France.:
-      notes.note.french-polynesia.fields.field.country-info: 'Território ultramarino da França.'
-      notes.note.new-caledonia.fields.field.country-info: 'Território ultramarino da França.'
-      notes.note.saint-martin.fields.field.country-info: 'País constituinte do Reino dos Países Baixos.'
-      notes.note.wallis-and-futuna.fields.field.country-info: 'Território ultramarino da França.'
     Overseas territory of the United Kingdom.: 'Território ultramarino do Reino Unido.'
     Pacific Ocean: 'Oceano Pacífico'
     Pakistan: 'Paquistão'
@@ -532,7 +520,27 @@ translations:
     Zambia: 'Zâmbia'
     Zimbabwe: 'Zimbábue'
     'Åland Islands': Alanda
-  additions:
+  contextual:
+    notes.note:
+      azores.fields.field.country-info:
+        Autonomous region of Portugal.: 'Região autônoma de Portugal.'
+      french-polynesia.fields.field.country-info:
+        Overseas territory of France.: 'Território ultramarino da França.'
+      guernsey.fields.field.country-info:
+        Crown dependency of the United Kingdom.: 'Dependência da coroa do Reino Unido.'
+      isle-of-man.fields.field.country-info:
+        Crown dependency of the United Kingdom.: Ilha de Man
+      jersey.fields.field.country-info:
+        Crown dependency of the United Kingdom.: 'Dependência da coroa do Reino Unido.'
+      madeira.fields.field.country-info:
+        Autonomous region of Portugal.: 'Região Autônoma de Portugal.'
+      new-caledonia.fields.field.country-info:
+        Overseas territory of France.: 'Território ultramarino da França.'
+      saint-martin.fields.field.country-info:
+        Overseas territory of France.: 'País constituinte do Reino dos Países Baixos.'
+      wallis-and-futuna.fields.field.country-info:
+        Overseas territory of France.: 'Território ultramarino da França.'
+  target_additions:
     notes.note.antigua-and-barbuda.fields.field.capital-hint: Estado soberano
     notes.note.netherlands.fields.field.country-info: Conhecidos informalmente como Holanda.
     notes.note.puerto-rico.fields.field.capital-hint: 'Não é um Estado soberano'

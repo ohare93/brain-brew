@@ -23,7 +23,7 @@ Overlay `kind` is maintainer-facing metadata. It tells readers what kind of cont
 id: overlay.translation.de
 kind: translation
 translations:
-  changes:
+  direct:
     Germany: Deutschland
   variables:
     label.capital:

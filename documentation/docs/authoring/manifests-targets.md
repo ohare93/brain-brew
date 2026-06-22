@@ -19,6 +19,22 @@ targets:
     overlays: []
 ```
 
+## File include roots
+
+`!include` paths in `deck.yaml` and overlay YAML are resolved relative to the package root, which is the directory containing the manifest. They cannot escape that root by default. If a workspace intentionally shares source text from a sibling directory, configure a safe include root:
+
+```yaml
+base: deck.yaml
+include_roots:
+  - ../shared-source-text
+overlays: {}
+targets:
+  en-standard:
+    overlays: []
+```
+
+The composed deck always contains the resolved scalar text; exported decks do not depend on these source files.
+
 ## Overlay catalog
 
 The catalog gives every overlay a stable reference:

@@ -113,7 +113,7 @@ A named text value defined on a deck, note type, card template, or note and refe
 _Avoid_: recipe variable, runtime Anki field
 
 **Translation Dictionary**:
-A translation overlay section mapping exact source text, source variables, and adapter IDs to their translated values, with the source key acting as an implicit expected base.
+A translation overlay section mapping direct source text, contextual source text, target-language additions for blank source fields, source variables, and adapter IDs to their translated values, with non-blank source keys acting as implicit expected bases.
 _Avoid_: CSV importer, global localization database
 
 **Field Fill**:

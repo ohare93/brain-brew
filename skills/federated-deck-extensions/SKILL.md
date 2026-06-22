@@ -79,11 +79,11 @@ translations:
       'Flag similar to {{Flag similarity}}.': 'Flaget ligner {{Flag similarity}}.'
 ```
 
-Use `translations.changes` for content text and path-scoped exceptions. Do **not** path-scope metadata like `note_types.note-type.ultimate-geography.name` if a variable can express it.
+Use `translations.direct` for reusable content text and `translations.contextual` for path-scoped/content-specific exceptions. Do **not** path-scope metadata like `note_types.note-type.ultimate-geography.name` if a variable can express it.
 
 ### 3. Use field fills for non-translation blank content
 
-If an extension fills fields that already exist but are blank on base notes, use `field_fills` in an extension or patch overlay. Do not put extension content under `translations.additions` just because it is path-indexed.
+If an extension fills fields that already exist but are blank on base notes, use `field_fills` in an extension or patch overlay. Do not put extension content under `translations.target_additions` just because it is path-indexed.
 
 Prefer:
 
@@ -96,7 +96,7 @@ field_fills:
     field.flag: '<img src="ug-flag-anguilla.svg" />'
 ```
 
-Reserve `translations.additions` for blank localized text that is genuinely part of a translation overlay.
+Reserve `translations.target_additions` for blank localized text that is genuinely part of a translation overlay.
 
 ### 4. Shared extension overlay first, language-specific residue later
 
@@ -166,7 +166,7 @@ Stop if you see any of these:
 - `overlays/variants/extended/<lang>.yaml` contains full `card_templates:` blocks for every language.
 - Template HTML differs only by labels such as `Flag`, `Location`, or `Flag similar...`.
 - Translation overlays include `notes:` blocks for ordinary field translations.
-- Translation overlays use `translations.additions` for extension-owned field content instead of `field_fills`.
+- Translation overlays use `translations.target_additions` for extension-owned field content instead of `field_fills`.
 - Translation overlays path-scope note-type names instead of translating a variable.
 - `expected_base` refers to the rendered value of a variable-backed source property.
 - The same extension template exists in more than one language file.
