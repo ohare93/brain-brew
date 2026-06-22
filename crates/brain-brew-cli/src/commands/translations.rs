@@ -393,18 +393,31 @@ struct TerminalUi<'a, R: Read, W: Write> {
     reader: &'a mut R,
     writer: &'a mut W,
     raw_mode: bool,
+    max_option_rows: Option<usize>,
+    terminal_cols: Option<usize>,
 }
 
 impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
     fn new(reader: &'a mut R, writer: &'a mut W, raw_mode: bool) -> Result<Self, String> {
-        if raw_mode {
+        let (terminal_cols, max_option_rows) = if raw_mode {
             enable_raw_mode().map_err(|error| error.to_string())?;
             write!(writer, "\x1b[?25l").map_err(|error| error.to_string())?;
-        }
+            match crossterm::terminal::size() {
+                Ok((cols, rows)) => (
+                    Some(cols as usize),
+                    Some(usize::from(rows.saturating_sub(6).max(3))),
+                ),
+                Err(_) => (None, Some(12)),
+            }
+        } else {
+            (None, None)
+        };
         Ok(Self {
             reader,
             writer,
             raw_mode,
+            max_option_rows,
+            terminal_cols,
         })
     }
 
@@ -438,6 +451,15 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
             match self.read_key()? {
                 TuiKey::Up => selected = selected.saturating_sub(1),
                 TuiKey::Down => selected = (selected + 1).min(options.len() - 1),
+                TuiKey::PageUp => {
+                    selected = selected.saturating_sub(self.visible_option_rows(options.len()))
+                }
+                TuiKey::PageDown => {
+                    selected =
+                        (selected + self.visible_option_rows(options.len())).min(options.len() - 1)
+                }
+                TuiKey::Home => selected = 0,
+                TuiKey::End => selected = options.len() - 1,
                 TuiKey::Enter => return Ok(selected),
                 TuiKey::Char('k') => selected = selected.saturating_sub(1),
                 TuiKey::Char('j') => selected = (selected + 1).min(options.len() - 1),
@@ -465,6 +487,15 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
             match self.read_key()? {
                 TuiKey::Up => cursor = cursor.saturating_sub(1),
                 TuiKey::Down => cursor = (cursor + 1).min(options.len() - 1),
+                TuiKey::PageUp => {
+                    cursor = cursor.saturating_sub(self.visible_option_rows(options.len()))
+                }
+                TuiKey::PageDown => {
+                    cursor =
+                        (cursor + self.visible_option_rows(options.len())).min(options.len() - 1)
+                }
+                TuiKey::Home => cursor = 0,
+                TuiKey::End => cursor = options.len() - 1,
                 TuiKey::Char('k') => cursor = cursor.saturating_sub(1),
                 TuiKey::Char('j') => cursor = (cursor + 1).min(options.len() - 1),
                 TuiKey::Space => selected[cursor] = !selected[cursor],
@@ -512,17 +543,29 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
         self.clear_if_raw()?;
         self.write_line(&color_stdout(label, "1;36"))?;
         self.blank_line()?;
-        for (index, option) in options.iter().enumerate() {
+        let (start, end, scrolled) = self.option_window(options.len(), selected);
+        if scrolled {
+            self.write_line(&format!(
+                "Showing {}–{} of {}",
+                start + 1,
+                end,
+                options.len()
+            ))?;
+            self.blank_line()?;
+        }
+        for (relative_index, option) in options[start..end].iter().enumerate() {
+            let index = start + relative_index;
             let marker = if index == selected { "›" } else { " " };
+            let option = self.truncate_option(option, 4);
             let option = if index == selected {
-                color_stdout(option, "1;32")
+                color_stdout(&option, "1;32")
             } else {
-                option.clone()
+                option
             };
             self.write_line(&format!("  {marker} {option}"))?;
         }
         self.blank_line()?;
-        self.write_line("↑/↓ move • Enter select • q cancel")?;
+        self.write_line("↑/↓ move • PgUp/PgDn jump • Enter select • q cancel")?;
         self.writer.flush().map_err(|error| error.to_string())
     }
 
@@ -536,9 +579,21 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
         self.clear_if_raw()?;
         self.write_line(&color_stdout(label, "1;36"))?;
         self.blank_line()?;
-        for (index, option) in options.iter().enumerate() {
+        let (start, end, scrolled) = self.option_window(options.len(), cursor);
+        if scrolled {
+            self.write_line(&format!(
+                "Showing {}–{} of {}",
+                start + 1,
+                end,
+                options.len()
+            ))?;
+            self.blank_line()?;
+        }
+        for (relative_index, option) in options[start..end].iter().enumerate() {
+            let index = start + relative_index;
             let cursor_marker = if index == cursor { "›" } else { " " };
             let selected_marker = if selected[index] { "[x]" } else { "[ ]" };
+            let option = self.truncate_option(option, 8);
             let line = format!("{selected_marker} {option}");
             let line = if index == cursor {
                 color_stdout(&line, "1;32")
@@ -548,7 +603,9 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
             self.write_line(&format!("  {cursor_marker} {line}"))?;
         }
         self.blank_line()?;
-        self.write_line("↑/↓ move • Space toggle • a toggle all • Enter confirm • q cancel")?;
+        self.write_line(
+            "↑/↓ move • PgUp/PgDn jump • Space toggle • a toggle all • Enter confirm • q cancel",
+        )?;
         self.writer.flush().map_err(|error| error.to_string())
     }
 
@@ -571,6 +628,40 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
         self.blank_line()?;
         self.write_line("Type text • Enter confirm • Esc cancel")?;
         self.writer.flush().map_err(|error| error.to_string())
+    }
+
+    fn option_window(&self, option_count: usize, cursor: usize) -> (usize, usize, bool) {
+        if option_count == 0 {
+            return (0, 0, false);
+        }
+        let visible = self
+            .visible_option_rows(option_count)
+            .min(option_count)
+            .max(1);
+        if visible >= option_count {
+            return (0, option_count, false);
+        }
+        let half = visible / 2;
+        let mut start = cursor.saturating_sub(half);
+        if start + visible > option_count {
+            start = option_count - visible;
+        }
+        (start, start + visible, true)
+    }
+
+    fn visible_option_rows(&self, option_count: usize) -> usize {
+        self.max_option_rows
+            .unwrap_or(option_count)
+            .min(option_count)
+            .max(1)
+    }
+
+    fn truncate_option(&self, option: &str, prefix_width: usize) -> String {
+        let Some(cols) = self.terminal_cols else {
+            return option.to_owned();
+        };
+        let width = cols.saturating_sub(prefix_width).max(1);
+        truncate_chars(option, width)
     }
 
     fn clear_if_raw(&mut self) -> Result<(), String> {
@@ -606,6 +697,17 @@ fn terminal_line_end(raw_mode: bool) -> &'static str {
     if raw_mode { "\r\n" } else { "\n" }
 }
 
+fn truncate_chars(value: &str, max_chars: usize) -> String {
+    let char_count = value.chars().count();
+    if char_count <= max_chars {
+        return value.to_owned();
+    }
+    if max_chars <= 1 {
+        return "…".to_owned();
+    }
+    value.chars().take(max_chars - 1).chain(['…']).collect()
+}
+
 impl<R: Read, W: Write> Drop for TerminalUi<'_, R, W> {
     fn drop(&mut self) {
         if self.raw_mode {
@@ -620,6 +722,10 @@ impl<R: Read, W: Write> Drop for TerminalUi<'_, R, W> {
 enum TuiKey {
     Up,
     Down,
+    PageUp,
+    PageDown,
+    Home,
+    End,
     Enter,
     Space,
     Backspace,
@@ -638,6 +744,10 @@ fn read_terminal_key() -> Result<TuiKey, String> {
         return Ok(match key.code {
             KeyCode::Up => TuiKey::Up,
             KeyCode::Down => TuiKey::Down,
+            KeyCode::PageUp => TuiKey::PageUp,
+            KeyCode::PageDown => TuiKey::PageDown,
+            KeyCode::Home => TuiKey::Home,
+            KeyCode::End => TuiKey::End,
             KeyCode::Enter => TuiKey::Enter,
             KeyCode::Char(' ') => TuiKey::Space,
             KeyCode::Char(ch) => TuiKey::Char(ch),
@@ -1737,6 +1847,8 @@ mod tests {
                 reader: &mut input,
                 writer: &mut output,
                 raw_mode: true,
+                max_option_rows: None,
+                terminal_cols: None,
             };
             ui.render_select_one("Title", &["one".to_owned(), "two".to_owned()], 0)
                 .unwrap();
@@ -1745,5 +1857,48 @@ mod tests {
         assert!(output.contains("Title\r\n\r\n"));
         assert!(output.contains("  › one\r\n"));
         assert!(output.contains("    two\r\n"));
+    }
+
+    #[test]
+    fn long_raw_mode_lists_scroll_to_keep_selection_visible() {
+        let mut input = io::empty();
+        let mut output = Vec::new();
+        {
+            let mut ui = TerminalUi {
+                reader: &mut input,
+                writer: &mut output,
+                raw_mode: true,
+                max_option_rows: Some(3),
+                terminal_cols: Some(40),
+            };
+            let options = (1..=10)
+                .map(|index| format!("option-{index}"))
+                .collect::<Vec<_>>();
+            ui.render_select_one("Title", &options, 8).unwrap();
+        }
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("Showing 8–10 of 10\r\n"));
+        assert!(!output.contains("option-1\r\n"));
+        assert!(output.contains("  › option-9\r\n"));
+    }
+
+    #[test]
+    fn long_options_are_truncated_to_prevent_wrapping() {
+        assert_eq!(truncate_chars("abcdef", 4), "abc…");
+        let mut input = io::empty();
+        let mut output = Vec::new();
+        {
+            let mut ui = TerminalUi {
+                reader: &mut input,
+                writer: &mut output,
+                raw_mode: true,
+                max_option_rows: None,
+                terminal_cols: Some(14),
+            };
+            ui.render_select_one("Title", &["very-long-option".to_owned()], 0)
+                .unwrap();
+        }
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("  › very-long…\r\n"));
     }
 }
