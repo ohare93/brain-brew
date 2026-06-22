@@ -39,6 +39,8 @@ See the dedicated documentation site in [`documentation/`](documentation/) for m
 
 ## Install the CLI
 
+For normal deck users and contributors, install a released `brainbrew` binary. You do not need Nix to edit or verify a Federated Deck workspace, and downstream projects such as Ultimate Geography can link to the release tag they recommend.
+
 The easiest install path is the GitHub Release installer:
 
 ```bash
@@ -54,13 +56,13 @@ Homebrew users can install from the tap once the preview release is published:
 brew install jeprecated/tap/brainbrew
 ```
 
-Rust users can install directly from the release tag:
+Rust users can install directly from the pinned release tag:
 
 ```bash
 cargo install --git https://github.com/jeprecated/brain-brew --tag v1.0.0-alpha.1 brainbrew --locked
 ```
 
-Nix remains available as an optional build/install path:
+Nix remains available as an optional reproducible build/install path for contributors and CI:
 
 ```bash
 nix run . -- --help

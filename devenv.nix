@@ -36,6 +36,13 @@ in
   scripts."dist:plan".exec = ''
     dist manifest --tag v1.0.0-alpha.1 --artifacts=all --no-local-paths --output-format=json
   '';
+  scripts."release:smoke".exec = ''
+    set -euo pipefail
+    install_root="$(mktemp -d)"
+    trap 'rm -rf "$install_root"' EXIT
+    cargo install --path crates/brain-brew-cli --locked --root "$install_root"
+    "$PWD/scripts/release_smoke.sh" "$install_root/bin/brainbrew"
+  '';
 
   scripts.ci.exec = ''
     set -euo pipefail

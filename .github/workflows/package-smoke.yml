@@ -1,0 +1,19 @@
+name: Package Smoke
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  cargo-install-smoke:
+    name: cargo install smoke
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install packaged CLI without Nix
+        run: |
+          cargo install --path crates/brain-brew-cli --locked --root "$RUNNER_TEMP/brainbrew-install"
+          echo "$RUNNER_TEMP/brainbrew-install/bin" >> "$GITHUB_PATH"
+      - name: Smoke test installed CLI
+        run: scripts/release_smoke.sh brainbrew

@@ -6,7 +6,17 @@ title: Install the CLI
 
 Brain Brew is a Rust CLI named `brainbrew`.
 
-The primary install path is a prebuilt GitHub Release binary. You do **not** need Rust or Nix to test a released Brain Brew build.
+The primary install path is a prebuilt GitHub Release binary. You do **not** need Rust or Nix to test a released Brain Brew build. Deck projects such as Ultimate Geography can link to this page and recommend a specific Brain Brew release tag instead of asking contributors to run Brain Brew through a Nix flake.
+
+## Recommended version for deck contributors
+
+Use the version recommended by the deck repository you are contributing to. For the current Brain Brew preview, pin examples and contributor docs to `v1.0.0-alpha.1` and verify the installed binary with:
+
+```bash
+brainbrew --version
+```
+
+If a deck needs a newer Brain Brew behavior, update its docs to name the new Brain Brew tag or release URL. Nix users can still pin a flake revision for reproducible CI, but normal deck editing should start from the release installer, Homebrew, or Cargo install commands below.
 
 ## GitHub Release installer
 
@@ -41,12 +51,14 @@ The Homebrew formula is generated from the same release artifacts as the shell i
 
 ## Cargo install
 
-If you already have Rust installed:
+If you already have Rust installed, install the same release tag directly from GitHub:
 
 ```bash
 cargo install --git https://github.com/jeprecated/brain-brew --tag v1.0.0-alpha.1 brainbrew --locked
 brainbrew --version
 ```
+
+This is a normal non-Nix install path, but the prebuilt release installer is preferred for users who do not already have Rust.
 
 For unreleased branch testing:
 
