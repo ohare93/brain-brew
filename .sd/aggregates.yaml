@@ -1,0 +1,66 @@
+version: 1
+
+tasks:
+  release/crates/all:
+    desc: Publish brain-brew-core, brain-brew-formats, then brainbrew to crates.io
+    danger: true
+    defaultMode: dry-run
+    modes:
+      dry-run:
+        danger: false
+        values:
+          releaseMode: dry-run
+          confirmArgs: ""
+      publish:
+        values:
+          releaseMode: publish
+          confirmArgs: " --yes"
+    run: scripts/publish_crates.sh {{releaseMode}} all{{confirmArgs}}
+
+  release/crates/core:
+    desc: Publish brain-brew-core to crates.io
+    danger: true
+    defaultMode: dry-run
+    modes:
+      dry-run:
+        danger: false
+        values:
+          releaseMode: dry-run
+          confirmArgs: ""
+      publish:
+        values:
+          releaseMode: publish
+          confirmArgs: " --yes"
+    run: scripts/publish_crates.sh {{releaseMode}} core{{confirmArgs}}
+
+  release/crates/formats:
+    desc: Publish brain-brew-formats to crates.io after brain-brew-core is indexed
+    danger: true
+    defaultMode: dry-run
+    modes:
+      dry-run:
+        danger: false
+        values:
+          releaseMode: dry-run
+          confirmArgs: ""
+      publish:
+        values:
+          releaseMode: publish
+          confirmArgs: " --yes"
+    run: scripts/publish_crates.sh {{releaseMode}} formats{{confirmArgs}}
+
+  release/crates/cli:
+    desc: Publish brainbrew to crates.io after brain-brew-formats is indexed
+    danger: true
+    defaultMode: dry-run
+    modes:
+      dry-run:
+        danger: false
+        values:
+          releaseMode: dry-run
+          confirmArgs: ""
+      publish:
+        values:
+          releaseMode: publish
+          confirmArgs: " --yes"
+    run: scripts/publish_crates.sh {{releaseMode}} cli{{confirmArgs}}

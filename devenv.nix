@@ -37,6 +37,13 @@ in
     dist manifest --tag v1.0.0-alpha.1 --artifacts=all --no-local-paths --output-format=json
   '';
   scripts."crates:metadata-check".exec = "scripts/check_cratesio_metadata.py";
+  scripts."crates:publish-dry-run".exec = ''
+    scripts/publish_crates.sh dry-run "''${1:-all}"
+  '';
+  scripts."crates:publish".exec = ''
+    scripts/publish_crates.sh publish "''${1:-all}" --yes
+  '';
+  scripts."release:crates".exec = "scripts/publish_crates.sh dry-run all";
   scripts."release:smoke".exec = ''
     set -euo pipefail
     install_root="$(mktemp -d)"

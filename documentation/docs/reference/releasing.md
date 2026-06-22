@@ -31,12 +31,14 @@ devenv shell ci
 devenv shell crates:metadata-check
 devenv shell dist:plan > /tmp/brainbrew-dist-manifest.json
 devenv shell release:smoke
-cargo publish -p brain-brew-core --dry-run
+devenv shell release:crates
+# or, if you use the sd task dispatcher:
+sd release crates all
 ```
 
-`crates:metadata-check` verifies that the workspace packages are publishable and that internal dependencies carry exact version requirements for crates.io. `dist:plan` verifies that `cargo-dist` can see the release package and expected artifacts for `v1.0.0-alpha.1`. `release:smoke` installs the CLI with `cargo install --path crates/brain-brew-cli --locked` into a temporary root and runs the installed binary through `validate`, `compose`, `export crowdanki`, and `verify` against the fast UG-style fixture.
+`crates:metadata-check` verifies that the workspace packages are publishable and that internal dependencies carry exact version requirements for crates.io. `dist:plan` verifies that `cargo-dist` can see the release package and expected artifacts for `v1.0.0-alpha.1`. `release:smoke` installs the CLI with `cargo install --path crates/brain-brew-cli --locked` into a temporary root and runs the installed binary through `validate`, `compose`, `export crowdanki`, and `verify` against the fast UG-style fixture. `release:crates` and `sd release crates all` default to dry-run mode.
 
-Only `brain-brew-core` can be fully dry-run before anything is published because the dependent crates resolve their exact internal dependencies from crates.io during `cargo publish --dry-run`. After `brain-brew-core` is published and visible in the crates.io index, dry-run and publish `brain-brew-formats`; after that is visible, dry-run and publish `brainbrew`.
+Only `brain-brew-core` can be fully dry-run before anything is published because the dependent crates resolve their exact internal dependencies from crates.io during `cargo publish --dry-run`. The all-crates dry-run reports dependent crates as skipped until earlier crates are visible in the crates.io index. After `brain-brew-core` is published and visible, dry-run and publish `brain-brew-formats`; after that is visible, dry-run and publish `brainbrew`.
 
 If you change `dist-workspace.toml`, regenerate the workflow:
 
@@ -60,18 +62,37 @@ Push the tag with your Git/Jujutsu setup. The GitHub release workflow runs when 
 
 Log in to crates.io once with `cargo login`, then publish in dependency order. Crates.io versions are immutable, so double-check the workspace version, README install snippets, and changelog first.
 
+With Devenv scripts:
+
 ```bash
-cargo publish -p brain-brew-core --dry-run
-cargo publish -p brain-brew-core
+devenv shell crates:publish-dry-run core
+devenv shell crates:publish core
 # wait for the crates.io index to show brain-brew-core v1.0.0-alpha.1
 
-cargo publish -p brain-brew-formats --dry-run
-cargo publish -p brain-brew-formats
+devenv shell crates:publish-dry-run formats
+devenv shell crates:publish formats
 # wait for the crates.io index to show brain-brew-formats v1.0.0-alpha.1
 
-cargo publish -p brainbrew --dry-run
-cargo publish -p brainbrew
+devenv shell crates:publish-dry-run cli
+devenv shell crates:publish cli
 ```
+
+With the `sd` task dispatcher, dry-run is the default and publish mode requires `--yes`:
+
+```bash
+sd release crates core
+sd release crates core --mode publish --yes
+# wait for the crates.io index to show brain-brew-core v1.0.0-alpha.1
+
+sd release crates formats
+sd release crates formats --mode publish --yes
+# wait for the crates.io index to show brain-brew-formats v1.0.0-alpha.1
+
+sd release crates cli
+sd release crates cli --mode publish --yes
+```
+
+The same commands are backed by `scripts/publish_crates.sh`; use it directly if neither Devenv nor `sd` is available.
 
 After `brainbrew` is published, Rust users can install without Nix and without a Git checkout:
 
