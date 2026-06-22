@@ -1015,6 +1015,45 @@ fn translations_summary_exports_compact_counts_by_language() {
 }
 
 #[test]
+fn translations_summary_human_output_uses_aligned_space_columns() {
+    let dir = temp_dir("translations-summary-human");
+    write_translation_workspace(&dir);
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+        "--summary",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(
+        !out.contains('\t'),
+        "summary should not rely on terminal tab stops:\n{out}"
+    );
+    assert!(
+        out.contains("language  targets"),
+        "header should use padded columns:\n{out}"
+    );
+    let mut lines = out.lines();
+    let _title = lines.next().unwrap();
+    let header = lines.next().unwrap();
+    let row = lines.next().unwrap();
+    assert_eq!(
+        row.find("overlay.translation.da"),
+        header.find("overlay"),
+        "overlay column should start under its header:\n{out}"
+    );
+    assert_eq!(
+        row.find("da.yaml"),
+        header.find("file"),
+        "file column should start under its header:\n{out}"
+    );
+}
+
+#[test]
 fn translations_default_report_focuses_on_translatable_note_text() {
     let manifest = workspace_root().join("fixtures/ultimate-geography/brainbrew.yaml");
     let output = run([

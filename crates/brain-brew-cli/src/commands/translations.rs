@@ -1607,29 +1607,78 @@ fn print_json_summary(reports: &[ScopedTranslationReport]) {
 fn print_human_summary(reports: &[ScopedTranslationReport]) {
     let rows = translation_summary_rows(reports);
     println!("{}", color_stdout("Translation coverage summary", "1;36"));
-    println!(
-        "language\ttargets\toverlay\tfile\tdirect\tcontextual\tno-change\tadditions\tvariables\tadapter-ids\tmissing-text\thidden-fallbacks\traw-untranslated\tignored\tstale/invalid"
-    );
+    let mut table = vec![vec![
+        "language".to_owned(),
+        "targets".to_owned(),
+        "overlay".to_owned(),
+        "file".to_owned(),
+        "direct".to_owned(),
+        "contextual".to_owned(),
+        "no-change".to_owned(),
+        "additions".to_owned(),
+        "variables".to_owned(),
+        "adapter-ids".to_owned(),
+        "missing-text".to_owned(),
+        "hidden-fallbacks".to_owned(),
+        "raw-untranslated".to_owned(),
+        "ignored".to_owned(),
+        "stale/invalid".to_owned(),
+    ]];
     for row in rows {
-        println!(
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+        table.push(vec![
             row.language,
-            row.targets.len(),
+            row.targets.len().to_string(),
             row.overlay_id,
             row.overlay_file,
-            row.counts.direct_translation,
-            row.counts.contextual_override,
-            row.counts.no_change,
-            row.counts.target_language_addition,
-            row.counts.variable_translation,
-            row.counts.adapter_id_translation,
-            row.counts.missing_text_translation,
-            row.counts.hidden_untranslated_fallback,
-            row.counts.untranslated_fallback,
-            row.counts.ignored_source,
-            row.counts.stale_invalid,
-        );
+            row.counts.direct_translation.to_string(),
+            row.counts.contextual_override.to_string(),
+            row.counts.no_change.to_string(),
+            row.counts.target_language_addition.to_string(),
+            row.counts.variable_translation.to_string(),
+            row.counts.adapter_id_translation.to_string(),
+            row.counts.missing_text_translation.to_string(),
+            row.counts.hidden_untranslated_fallback.to_string(),
+            row.counts.untranslated_fallback.to_string(),
+            row.counts.ignored_source.to_string(),
+            row.counts.stale_invalid.to_string(),
+        ]);
     }
+    let right_aligned = [
+        false, true, false, false, true, true, true, true, true, true, true, true, true, true, true,
+    ];
+    for line in aligned_table_lines(&table, &right_aligned) {
+        println!("{line}");
+    }
+}
+
+fn aligned_table_lines(rows: &[Vec<String>], right_aligned: &[bool]) -> Vec<String> {
+    let column_count = rows.iter().map(Vec::len).max().unwrap_or(0);
+    let mut widths = vec![0; column_count];
+    for row in rows {
+        for (index, cell) in row.iter().enumerate() {
+            widths[index] = widths[index].max(cell.chars().count());
+        }
+    }
+    rows.iter()
+        .map(|row| {
+            let mut line = String::new();
+            for (index, width) in widths.iter().enumerate() {
+                if index > 0 {
+                    line.push_str("  ");
+                }
+                let cell = row.get(index).map(String::as_str).unwrap_or_default();
+                let padding = width.saturating_sub(cell.chars().count());
+                if right_aligned.get(index).copied().unwrap_or(false) {
+                    line.push_str(&" ".repeat(padding));
+                    line.push_str(cell);
+                } else {
+                    line.push_str(cell);
+                    line.push_str(&" ".repeat(padding));
+                }
+            }
+            line.trim_end().to_owned()
+        })
+        .collect()
 }
 
 fn translation_summary_rows(reports: &[ScopedTranslationReport]) -> Vec<TranslationSummaryRow> {
