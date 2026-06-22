@@ -453,201 +453,200 @@ translations:
     Zimbabwe: Zimbabue
     'Åland Islands': 'Åland'
   no_change:
-    direct:
-      - Alaska
-      - Albania
-      - Alofi
-      - Andorra
-      - Angola
-      - Ankara
-      - Antananarivo
-      - Apia
-      - Argentina
-      - Armenia
-      - Aruba
-      - Asia
-      - Asmara
-      - 'Asunción'
-      - Australia
-      - Austria
-      - Avarua
-      - Azores
-      - Bali
-      - Bamako
-      - Bandar Seri Begawan
-      - Bangkok
-      - Bangui
-      - Banjul
-      - Barbados
-      - Basseterre
-      - Beirut
-      - Belfast
-      - 'Bogotá'
-      - Bolivia
-      - Bougainville
-      - Bratislava
-      - Brazzaville
-      - Bridgetown
-      - Budapest
-      - Buenos Aires
-      - Bulgaria
-      - Burkina Faso
-      - Burundi
-      - Canberra
-      - Caracas
-      - Cardiff
-      - Castries
-      - Chad
-      - Charlotte Amalie
-      - Chile
-      - China
-      - Ciudad de la Paz
-      - Colombia
-      - Costa Rica
-      - Cuba
-      - Dakar
-      - Dili
-      - Dodoma
-      - Doha
-      - Dominica
-      - Ecuador
-      - El Salvador
-      - Eritrea
-      - Estonia
-      - Freetown
-      - Funafuti
-      - Gaborone
-      - Georgetown
-      - Georgia
-      - Ghana
-      - Gibraltar
-      - Guam
-      - Guatemala
-      - Guernsey
-      - Guinea
-      - Guyana
-      - Harare
-      - Hargeisa
-      - Helsinki
-      - Honduras
-      - Hong Kong
-      - Honiara
-      - India
-      - Indonesia
-      - Islamabad
-      - Israel
-      - Jamaica
-      - Java
-      - Jeju
-      - Jersey
-      - Kabul
-      - Kampala
-      - Kigali
-      - Kingston
-      - Kingstown
-      - Kiribati
-      - Kosovo
-      - Kuala Lumpur
-      - Kuwait
-      - Laos
-      - Liberia
-      - Libreville
-      - Liechtenstein
-      - Lima
-      - 'Lomé'
-      - Luanda
-      - Lusaka
-      - Madagascar
-      - Madeira
-      - Madrid
-      - Majuro
-      - Malta
-      - 'Malé'
-      - Managua
-      - Manama
-      - Manila
-      - Maputo
-      - Mariehamn
-      - Maseru
-      - Mauritania
-      - Mayotte
-      - Mbabane
-      - Melanesia
-      - Micronesia
-      - Minsk
-      - Mongolia
-      - Monrovia
-      - Montenegro
-      - Montevideo
-      - Moroni
-      - Mozambique
-      - Nairobi
-      - Namibia
-      - Nauru
-      - Nepal
-      - Ngerulmud
-      - Niamey
-      - Nicaragua
-      - Nicosia
-      - Nigeria
-      - Niue
-      - Nuuk
-      - Oranjestad
-      - Oslo
-      - Ottawa
-      - Palikir
-      - Papeete
-      - Paraguay
-      - Paramaribo
-      - Podgorica
-      - Port Louis
-      - Port Vila
-      - Portugal
-      - Praia
-      - Pristina
-      - Puerto Rico
-      - Quito
-      - Rabat
-      - Riga
-      - Roseau
-      - Samoa
-      - 'San José'
-      - San Juan
-      - San Marino
-      - San Salvador
-      - Santo Domingo
-      - Sarajevo
-      - Senegal
-      - Serbia
-      - Seychelles
-      - Somalia
-      - Sri Lanka
-      - Sucre
-      - Sumatra
-      - Suva
-      - Svalbard
-      - Tanzania
-      - Tegucigalpa
-      - Tirana
-      - Togo
-      - Tonga
-      - Transnistria
-      - Tuvalu
-      - 'Tórshavn'
-      - Uganda
-      - Uruguay
-      - Vaduz
-      - Vanuatu
-      - Venezuela
-      - Victoria
-      - Vietnam
-      - Wellington
-      - Willemstad
-      - Windhoek
-      - Yaren
-      - Yemen
-      - Zagreb
-      - Zambia
+    - Alaska
+    - Albania
+    - Alofi
+    - Andorra
+    - Angola
+    - Ankara
+    - Antananarivo
+    - Apia
+    - Argentina
+    - Armenia
+    - Aruba
+    - Asia
+    - Asmara
+    - 'Asunción'
+    - Australia
+    - Austria
+    - Avarua
+    - Azores
+    - Bali
+    - Bamako
+    - Bandar Seri Begawan
+    - Bangkok
+    - Bangui
+    - Banjul
+    - Barbados
+    - Basseterre
+    - Beirut
+    - Belfast
+    - 'Bogotá'
+    - Bolivia
+    - Bougainville
+    - Bratislava
+    - Brazzaville
+    - Bridgetown
+    - Budapest
+    - Buenos Aires
+    - Bulgaria
+    - Burkina Faso
+    - Burundi
+    - Canberra
+    - Caracas
+    - Cardiff
+    - Castries
+    - Chad
+    - Charlotte Amalie
+    - Chile
+    - China
+    - Ciudad de la Paz
+    - Colombia
+    - Costa Rica
+    - Cuba
+    - Dakar
+    - Dili
+    - Dodoma
+    - Doha
+    - Dominica
+    - Ecuador
+    - El Salvador
+    - Eritrea
+    - Estonia
+    - Freetown
+    - Funafuti
+    - Gaborone
+    - Georgetown
+    - Georgia
+    - Ghana
+    - Gibraltar
+    - Guam
+    - Guatemala
+    - Guernsey
+    - Guinea
+    - Guyana
+    - Harare
+    - Hargeisa
+    - Helsinki
+    - Honduras
+    - Hong Kong
+    - Honiara
+    - India
+    - Indonesia
+    - Islamabad
+    - Israel
+    - Jamaica
+    - Java
+    - Jeju
+    - Jersey
+    - Kabul
+    - Kampala
+    - Kigali
+    - Kingston
+    - Kingstown
+    - Kiribati
+    - Kosovo
+    - Kuala Lumpur
+    - Kuwait
+    - Laos
+    - Liberia
+    - Libreville
+    - Liechtenstein
+    - Lima
+    - 'Lomé'
+    - Luanda
+    - Lusaka
+    - Madagascar
+    - Madeira
+    - Madrid
+    - Majuro
+    - Malta
+    - 'Malé'
+    - Managua
+    - Manama
+    - Manila
+    - Maputo
+    - Mariehamn
+    - Maseru
+    - Mauritania
+    - Mayotte
+    - Mbabane
+    - Melanesia
+    - Micronesia
+    - Minsk
+    - Mongolia
+    - Monrovia
+    - Montenegro
+    - Montevideo
+    - Moroni
+    - Mozambique
+    - Nairobi
+    - Namibia
+    - Nauru
+    - Nepal
+    - Ngerulmud
+    - Niamey
+    - Nicaragua
+    - Nicosia
+    - Nigeria
+    - Niue
+    - Nuuk
+    - Oranjestad
+    - Oslo
+    - Ottawa
+    - Palikir
+    - Papeete
+    - Paraguay
+    - Paramaribo
+    - Podgorica
+    - Port Louis
+    - Port Vila
+    - Portugal
+    - Praia
+    - Pristina
+    - Puerto Rico
+    - Quito
+    - Rabat
+    - Riga
+    - Roseau
+    - Samoa
+    - 'San José'
+    - San Juan
+    - San Marino
+    - San Salvador
+    - Santo Domingo
+    - Sarajevo
+    - Senegal
+    - Serbia
+    - Seychelles
+    - Somalia
+    - Sri Lanka
+    - Sucre
+    - Sumatra
+    - Suva
+    - Svalbard
+    - Tanzania
+    - Tegucigalpa
+    - Tirana
+    - Togo
+    - Tonga
+    - Transnistria
+    - Tuvalu
+    - 'Tórshavn'
+    - Uganda
+    - Uruguay
+    - Vaduz
+    - Vanuatu
+    - Venezuela
+    - Victoria
+    - Vietnam
+    - Wellington
+    - Willemstad
+    - Windhoek
+    - Yaren
+    - Yemen
+    - Zagreb
+    - Zambia
   target_additions:
     notes.note.celebes-sea.fields.field.country-info: 'También conocido como mar de Sulawesi.'
   variables:

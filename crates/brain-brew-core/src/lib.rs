@@ -384,10 +384,10 @@ fn translation_coverage_report(
     let mut builder = TranslationCoverageBuilder {
         translations,
         entries: Vec::new(),
+        seen_sources: BTreeSet::new(),
         seen_direct: BTreeSet::new(),
         seen_contextual: BTreeSet::new(),
-        seen_no_change_direct: BTreeSet::new(),
-        seen_no_change_contextual: BTreeSet::new(),
+        seen_no_change: BTreeSet::new(),
         seen_target_additions: BTreeSet::new(),
         seen_variables: BTreeSet::new(),
         seen_adapter_ids: BTreeSet::new(),
@@ -460,10 +460,10 @@ fn translation_coverage_report(
 struct TranslationCoverageBuilder<'a> {
     translations: &'a TranslationDictionary,
     entries: Vec<TranslationCoverageEntry>,
+    seen_sources: BTreeSet<String>,
     seen_direct: BTreeSet<String>,
     seen_contextual: BTreeSet<(String, String)>,
-    seen_no_change_direct: BTreeSet<String>,
-    seen_no_change_contextual: BTreeSet<(String, String)>,
+    seen_no_change: BTreeSet<String>,
     seen_target_additions: BTreeSet<String>,
     seen_variables: BTreeSet<(String, String)>,
     seen_adapter_ids: BTreeSet<(String, String)>,
@@ -526,14 +526,12 @@ impl TranslationCoverageBuilder<'_> {
         }
 
         let source = value.to_owned();
+        self.seen_sources.insert(source.clone());
         let direct_translation = self.translations.direct.get(value);
         if direct_translation.is_some() {
             self.seen_direct.insert(source.clone());
         }
-        let direct_no_change = self.translations.no_change.direct.contains(value);
-        if direct_no_change {
-            self.seen_no_change_direct.insert(source.clone());
-        }
+        let no_change = self.translations.no_change.contains(value);
 
         let mut contextual_translation: Option<(&String, &String)> = None;
         for (context_path, replacements) in &self.translations.contextual {
@@ -547,20 +545,6 @@ impl TranslationCoverageBuilder<'_> {
                     .is_none_or(|(current_context, _)| context_path.len() > current_context.len())
                 {
                     contextual_translation = Some((context_path, translated));
-                }
-            }
-        }
-
-        let mut contextual_no_change: Option<&String> = None;
-        for (context_path, sources) in &self.translations.no_change.contextual {
-            if context_matches_path(context_path, &path) && sources.contains(value) {
-                self.seen_no_change_contextual
-                    .insert((context_path.clone(), source.clone()));
-                if contextual_no_change
-                    .as_ref()
-                    .is_none_or(|current_context| context_path.len() > current_context.len())
-                {
-                    contextual_no_change = Some(context_path);
                 }
             }
         }
@@ -581,17 +565,10 @@ impl TranslationCoverageBuilder<'_> {
                 translated: Some(translated.clone()),
                 context: None,
             });
-        } else if let Some(context_path) = contextual_no_change {
+        } else if no_change {
+            self.seen_no_change.insert(source.clone());
             self.entries.push(TranslationCoverageEntry {
-                category: TranslationCoverageCategory::NoChangeContextual,
-                path,
-                source: source.clone(),
-                translated: Some(source),
-                context: Some(context_path.clone()),
-            });
-        } else if direct_no_change {
-            self.entries.push(TranslationCoverageEntry {
-                category: TranslationCoverageCategory::NoChangeDirect,
+                category: TranslationCoverageCategory::NoChange,
                 path,
                 source: source.clone(),
                 translated: Some(source),
@@ -662,31 +639,15 @@ impl TranslationCoverageBuilder<'_> {
                 }
             }
         }
-        for source in &self.translations.no_change.direct {
-            if !self.seen_no_change_direct.contains(source) {
+        for source in &self.translations.no_change {
+            if !self.seen_sources.contains(source) {
                 self.entries.push(TranslationCoverageEntry {
-                    category: TranslationCoverageCategory::StaleNoChangeDirectKey,
-                    path: format!("translations.no_change.direct.{source}"),
+                    category: TranslationCoverageCategory::StaleNoChangeKey,
+                    path: format!("translations.no_change.{source}"),
                     source: source.clone(),
                     translated: Some(source.clone()),
                     context: None,
                 });
-            }
-        }
-        for (context_path, sources) in &self.translations.no_change.contextual {
-            for source in sources {
-                if !self
-                    .seen_no_change_contextual
-                    .contains(&(context_path.clone(), source.clone()))
-                {
-                    self.entries.push(TranslationCoverageEntry {
-                        category: TranslationCoverageCategory::StaleNoChangeContextualKey,
-                        path: format!("translations.no_change.contextual.{context_path}.{source}"),
-                        source: source.clone(),
-                        translated: Some(source.clone()),
-                        context: Some(context_path.clone()),
-                    });
-                }
             }
         }
         for (path, translated) in &self.translations.target_additions {
@@ -756,8 +717,6 @@ fn apply_translation_dictionary(
 ) {
     let mut seen_direct = BTreeSet::new();
     let mut seen_contextual = BTreeSet::new();
-    let mut seen_no_change_direct = BTreeSet::new();
-    let mut seen_no_change_contextual = BTreeSet::new();
     let mut seen_target_additions = BTreeSet::new();
     let mut seen_variables = BTreeSet::new();
     let mut seen_adapter_ids = BTreeSet::new();
@@ -769,8 +728,6 @@ fn apply_translation_dictionary(
             translations,
             seen_direct: &mut seen_direct,
             seen_contextual: &mut seen_contextual,
-            seen_no_change_direct: &mut seen_no_change_direct,
-            seen_no_change_contextual: &mut seen_no_change_contextual,
             seen_target_additions: &mut seen_target_additions,
             seen_variables: &mut seen_variables,
             seen_adapter_ids: &mut seen_adapter_ids,
@@ -887,28 +844,15 @@ fn apply_translation_dictionary(
             }
         }
     }
-    for source in &translations.no_change.direct {
-        if !seen_no_change_direct.contains(source) {
+    for source in &translations.no_change {
+        if !source_paths.contains_key(source) {
             errors.push(ComposeError::new(
                 ComposeErrorKind::StaleTranslationEntry,
-                format!("translations.no_change.direct.{source}"),
+                format!("translations.no_change.{source}"),
                 format!(
                     "stale no-change source {source:?} did not match any extracted non-empty source text"
                 ),
             ));
-        }
-    }
-    for (context_path, sources) in &translations.no_change.contextual {
-        for source in sources {
-            if !seen_no_change_contextual.contains(&(context_path.clone(), source.clone())) {
-                errors.push(ComposeError::new(
-                    ComposeErrorKind::StaleTranslationEntry,
-                    format!("translations.no_change.contextual.{context_path}.{source}"),
-                    format!(
-                        "invalid contextual no-change: source {source:?} did not match any extracted text under {context_path}; the source key may be stale or the context may be invalid"
-                    ),
-                ));
-            }
         }
     }
     for path in translations.target_additions.keys() {
@@ -955,8 +899,6 @@ struct TranslationApplyContext<'a, 'b> {
     translations: &'a TranslationDictionary,
     seen_direct: &'b mut BTreeSet<String>,
     seen_contextual: &'b mut BTreeSet<(String, String)>,
-    seen_no_change_direct: &'b mut BTreeSet<String>,
-    seen_no_change_contextual: &'b mut BTreeSet<(String, String)>,
     seen_target_additions: &'b mut BTreeSet<String>,
     seen_variables: &'b mut BTreeSet<(String, String)>,
     seen_adapter_ids: &'b mut BTreeSet<(String, String)>,
@@ -1033,10 +975,7 @@ impl TranslationApplyContext<'_, '_> {
         if direct_translation.is_some() {
             self.seen_direct.insert(source.clone());
         }
-        let direct_no_change = self.translations.no_change.direct.contains(source.as_str());
-        if direct_no_change {
-            self.seen_no_change_direct.insert(source.clone());
-        }
+        let no_change = self.translations.no_change.contains(source.as_str());
 
         let mut contextual_translation: Option<(&String, &String)> = None;
         for (context_path, replacements) in &self.translations.contextual {
@@ -1051,15 +990,6 @@ impl TranslationApplyContext<'_, '_> {
                 {
                     contextual_translation = Some((context_path, translated));
                 }
-            }
-        }
-
-        let mut contextual_no_change = false;
-        for (context_path, sources) in &self.translations.no_change.contextual {
-            if context_matches_path(context_path, &path) && sources.contains(source.as_str()) {
-                self.seen_no_change_contextual
-                    .insert((context_path.clone(), source.clone()));
-                contextual_no_change = true;
             }
         }
 
@@ -1082,7 +1012,7 @@ impl TranslationApplyContext<'_, '_> {
             return;
         }
 
-        if contextual_no_change || direct_no_change {
+        if no_change {
             return;
         }
 
@@ -2896,15 +2826,6 @@ pub struct Overlay {
     pub media_changes: BTreeMap<StableId, MediaChange>,
 }
 
-/// Explicitly reviewed source text that intentionally remains unchanged in the target language.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TranslationNoChange {
-    /// Reusable exact non-empty source strings that intentionally remain unchanged.
-    pub direct: BTreeSet<String>,
-    /// Path-scoped exact source strings that intentionally remain unchanged.
-    pub contextual: BTreeMap<String, BTreeSet<String>>,
-}
-
 /// Translation dictionary applied by a translation overlay.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TranslationDictionary {
@@ -2912,8 +2833,8 @@ pub struct TranslationDictionary {
     pub direct: BTreeMap<String, String>,
     /// Contextual replacements keyed by stable deck path prefix and exact source text.
     pub contextual: BTreeMap<String, BTreeMap<String, String>>,
-    /// Explicitly reviewed source text that intentionally remains unchanged.
-    pub no_change: TranslationNoChange,
+    /// Exact non-empty source strings reviewed as intentionally unchanged.
+    pub no_change: BTreeSet<String>,
     /// Stable deck paths to fill only when the current source value is intentionally blank.
     pub target_additions: BTreeMap<String, String>,
     /// Variable-specific source text to translated text replacements by variable key.
@@ -2955,8 +2876,7 @@ impl TranslationCoverageReport {
                 entry.category,
                 TranslationCoverageCategory::StaleDirectKey
                     | TranslationCoverageCategory::StaleContextualKey
-                    | TranslationCoverageCategory::StaleNoChangeDirectKey
-                    | TranslationCoverageCategory::StaleNoChangeContextualKey
+                    | TranslationCoverageCategory::StaleNoChangeKey
                     | TranslationCoverageCategory::StaleTargetAddition
                     | TranslationCoverageCategory::StaleVariableKey
                     | TranslationCoverageCategory::StaleAdapterIdKey
@@ -2981,8 +2901,7 @@ pub struct TranslationCoverageEntry {
 pub enum TranslationCoverageCategory {
     DirectTranslation,
     ContextualOverride,
-    NoChangeDirect,
-    NoChangeContextual,
+    NoChange,
     TargetLanguageAddition,
     VariableTranslation,
     AdapterIdTranslation,
@@ -2990,8 +2909,7 @@ pub enum TranslationCoverageCategory {
     UntranslatedFallback,
     StaleDirectKey,
     StaleContextualKey,
-    StaleNoChangeDirectKey,
-    StaleNoChangeContextualKey,
+    StaleNoChangeKey,
     StaleTargetAddition,
     StaleVariableKey,
     StaleAdapterIdKey,
@@ -3003,8 +2921,7 @@ impl TranslationCoverageCategory {
         match self {
             Self::DirectTranslation => "direct_translation",
             Self::ContextualOverride => "contextual_override",
-            Self::NoChangeDirect => "no_change_direct",
-            Self::NoChangeContextual => "no_change_contextual",
+            Self::NoChange => "no_change",
             Self::TargetLanguageAddition => "target_language_addition",
             Self::VariableTranslation => "variable_translation",
             Self::AdapterIdTranslation => "adapter_id_translation",
@@ -3012,8 +2929,7 @@ impl TranslationCoverageCategory {
             Self::UntranslatedFallback => "untranslated_fallback",
             Self::StaleDirectKey => "stale_direct_key",
             Self::StaleContextualKey => "stale_contextual_key",
-            Self::StaleNoChangeDirectKey => "stale_no_change_direct_key",
-            Self::StaleNoChangeContextualKey => "stale_no_change_contextual_key",
+            Self::StaleNoChangeKey => "stale_no_change_key",
             Self::StaleTargetAddition => "stale_target_addition",
             Self::StaleVariableKey => "stale_variable_key",
             Self::StaleAdapterIdKey => "stale_adapter_id_key",
@@ -3027,8 +2943,7 @@ impl TranslationCoverageCategory {
             Self::UntranslatedFallback
                 | Self::StaleDirectKey
                 | Self::StaleContextualKey
-                | Self::StaleNoChangeDirectKey
-                | Self::StaleNoChangeContextualKey
+                | Self::StaleNoChangeKey
                 | Self::StaleTargetAddition
                 | Self::StaleVariableKey
                 | Self::StaleAdapterIdKey

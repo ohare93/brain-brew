@@ -12,7 +12,7 @@ Translation overlays become hard to review when a small phrase change requires r
 
 Canonical Deck entities may define source variables, and translation overlays may use translation dictionaries.
 
-Text can reference variables with `${variable.name}`. Variables are resolved from the most specific scope to the broadest scope: card template, note, note type, then deck. Translation dictionaries map direct reusable source strings, contextual source-string translations scoped by stable deck path, explicit no-change decisions for reviewed text that intentionally stays identical, variable values, target-language additions for blank fields, and adapter IDs to translated values. The `direct`, `contextual`, and `no_change` source keys act as expected bases; `target_additions` requires the source field to remain blank.
+Text can reference variables with `${variable.name}`. Variables are resolved from the most specific scope to the broadest scope: card template, note, note type, then deck. Translation dictionaries map direct reusable source strings, contextual source-string translations scoped by stable deck path, explicit no-change decisions for reviewed text that intentionally stays identical, variable values, target-language additions for blank fields, and adapter IDs to translated values. The `direct`/`contextual` source keys and `no_change` source entries act as expected bases; `target_additions` requires the source field to remain blank.
 
 CrowdAnki and other adapter exports render variables before writing output, so distributable decks contain ordinary adapter-compatible text and HTML.
 
@@ -31,7 +31,7 @@ CrowdAnki and other adapter exports render variables before writing output, so d
 
 - Variable scoping adds one more concept to Canonical Deck source.
 - Translation extraction and coverage checks must be deterministic.
-- Ambiguous source strings need `contextual` dictionary entries or contextual no-change entries.
+- Ambiguous source strings need `contextual` dictionary entries; no-change remains reusable exact-source coverage.
 
 ## Alternatives Considered
 

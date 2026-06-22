@@ -69,11 +69,8 @@ translations:
       us-georgia.fields.field.region:
         Georgia: Georgia
   no_change:
-    direct:
-      - Andorra
-    contextual:
-      notes.note.djibouti.fields.field.capital:
-        - Djibouti
+    - Andorra
+    - Djibouti
   target_additions:
     notes.note.example.fields.field.country-info: Localized blank text.
   variables:

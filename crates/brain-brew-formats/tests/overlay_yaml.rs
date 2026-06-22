@@ -438,12 +438,8 @@ translations:
       georgia.fields.field.country:
         Georgia: Georgien
   no_change:
-    contextual:
-      notes.note:
-        canada.fields.field.country:
-          - Canada
-    direct:
-      - Andorra
+    - Canada
+    - Andorra
   direct:
     Germany: Deutschland
 "#,
@@ -453,9 +449,7 @@ translations:
     assert!(formatted.contains(
         "    notes.note:\n      georgia.fields.field.country:\n        Georgia: Georgien\n"
     ));
-    assert!(formatted.contains(
-        "  no_change:\n    direct:\n      - Andorra\n    contextual:\n      notes.note:\n        canada.fields.field.country:\n          - Canada\n"
-    ));
+    assert!(formatted.contains("  no_change:\n    - Andorra\n    - Canada\n"));
     assert!(
         formatted.find("  direct:\n").unwrap() < formatted.find("  contextual:\n").unwrap(),
         "direct translations are emitted before contextual translations"

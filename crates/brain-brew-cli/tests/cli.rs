@@ -1177,11 +1177,11 @@ fn translations_interactive_apply_can_mark_all_selected_rows_no_change() {
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let out = stdout(&output);
     assert!(out.contains("Action for selected missing translations"));
-    assert!(out.contains("mark direct no-change for all 2 selected missing translations"));
+    assert!(out.contains("mark no-change for all 2 selected missing translations"));
     let updated = fs::read_to_string(overlay_path).unwrap();
-    assert!(updated.contains("  no_change:\n    direct:\n"));
-    assert!(updated.contains("      - Stockholm\n"));
-    assert!(updated.contains("      - Sweden\n"));
+    assert!(updated.contains("  no_change:\n"));
+    assert!(updated.contains("    - Stockholm\n"));
+    assert!(updated.contains("    - Sweden\n"));
 }
 
 #[test]
@@ -1202,7 +1202,7 @@ fn translations_interactive_apply_can_use_one_translation_stub_action_for_all_se
             "--apply",
             "--interactive",
         ],
-        "\n\x1b[B\x1b[B\n\n",
+        "\n\x1b[B\n\n",
     );
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -1233,7 +1233,7 @@ fn translations_interactive_apply_can_insert_contextual_stub() {
             "--apply",
             "--interactive",
         ],
-        "\n\x1b[B\x1b[B\x1b[B\n\n",
+        "\n\x1b[B\x1b[B\n\n",
     );
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -1259,7 +1259,7 @@ fn translations_interactive_apply_can_insert_ignore_path() {
             "--apply",
             "--interactive",
         ],
-        "\n\x1b[B\x1b[B\x1b[B\x1b[B\n\n",
+        "\n\x1b[B\x1b[B\x1b[B\n\n",
     );
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -1283,11 +1283,8 @@ translations:
     - notes.*.tags.*
     - notes.*.fields.field.flag
   no_change:
-    direct:
-      - Sweden
-    contextual:
-      notes.note.sweden:
-        - Stockholm
+    - Stockholm
+    - Sweden
 "#,
     )
     .unwrap();
@@ -1427,9 +1424,8 @@ translations:
       finland:
         Helsinki: Helsingfors
   no_change:
-    direct:
-      - Stockholm
-      - Sweden
+    - Stockholm
+    - Sweden
   target_additions:
     notes.note.finland.fields.field.flag: '<img src="fi-da.png">'
 "#,
