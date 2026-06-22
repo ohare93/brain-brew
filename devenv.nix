@@ -19,6 +19,9 @@ in
     echo 'Brain Brew dev environment ready' > /dev/null
   '';
 
+  scripts.brainbrew.exec = ''
+    cargo run -q -p brainbrew -- "$@"
+  '';
   scripts.fmt.exec = "cargo fmt --all";
   scripts."fmt:check".exec = "cargo fmt --all -- --check";
   scripts.check.exec = "cargo check --workspace --all-targets";
