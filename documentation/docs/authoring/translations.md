@@ -124,7 +124,36 @@ translations:
 
 ## Complete coverage, translator context, and sync/apply
 
-When `require_complete: true`, every extracted non-empty translatable string must be translated by `direct`, translated by a matching `contextual` entry, or matched by `ignore_paths`.
+Use `brainbrew translations` to inspect coverage before editing a translated overlay:
+
+```bash
+brainbrew translations --manifest brainbrew.yaml --target de-standard
+brainbrew translations --manifest brainbrew.yaml --all-targets --language de
+brainbrew translations --manifest brainbrew.yaml --target de-standard --note note.berlin
+brainbrew translations --manifest brainbrew.yaml --target de-standard --path-prefix notes.note.berlin.fields.field.country
+```
+
+Report mode is the default and never modifies files. It groups extracted text into direct translations, contextual overrides, target-language additions, stale/invalid keys, and missing/untranslated fallbacks. Missing fallbacks are source strings that would currently pass through unchanged in a translated target.
+
+To seed translator work after adding English notes or fields, run apply explicitly:
+
+```bash
+brainbrew translations --manifest brainbrew.yaml --target de-standard --apply
+```
+
+`--apply` inserts deterministic `source: source` stubs into `translations.direct` for the missing fallbacks in scope. It keeps direct reusable translations distinct from `contextual` overrides and does not invent target-language additions for blank source fields. Existing comments and layout are preserved where practical; run `brainbrew fmt overlays/languages/de.yaml` when you want fully canonical formatting.
+
+When `require_complete: true`, composition fails if any extracted non-empty translatable string is not translated by `direct`, translated by a matching `contextual` entry, or matched by `ignore_paths`. For release workflows, prefer target-level verification policy in `brainbrew.yaml`:
+
+```yaml
+targets:
+  de-standard:
+    overlays:
+      - overlay.translation.de
+    translation_coverage: strict
+```
+
+`translation_coverage: lenient` is the default and allows untranslated fallbacks during development. `translation_coverage: strict` makes `brainbrew verify` fail when a translation overlay leaves missing fallbacks. The CLI flag `brainbrew verify --translation-coverage strict` can override target configuration for one run.
 
 Translator context views should present extracted strings in the same categories:
 

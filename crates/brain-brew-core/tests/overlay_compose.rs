@@ -4,7 +4,8 @@ use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, ChangeIntent,
     ComposeErrorKind, DeckChange, ExpectedBase, FieldChange, FieldDefinition,
     FieldDefinitionChange, MediaChange, MediaReference, Note, NoteChange, NoteType, NoteTypeChange,
-    Overlay, OverlayKind, PropertyChange, StableId, TagChange, TranslationDictionary,
+    Overlay, OverlayKind, PropertyChange, StableId, TagChange, TranslationCoverageCategory,
+    TranslationDictionary,
 };
 
 #[test]
@@ -451,6 +452,154 @@ fn translation_dictionary_target_addition_fails_when_base_is_not_blank() {
             && error
                 .message
                 .contains("target-language addition expected blank source value")
+    }));
+}
+
+#[test]
+fn translation_coverage_reports_new_note_and_new_field_fallbacks() {
+    let mut base = ug_style_deck();
+    let mut sweden = sweden_note();
+    sweden
+        .fields
+        .insert(sid("field.population"), "10 million".to_owned());
+    base.notes.insert(sid("note.sweden"), sweden);
+    base.note_types
+        .get_mut(&sid("note-type.country"))
+        .unwrap()
+        .fields
+        .push(FieldDefinition {
+            id: sid("field.population"),
+            name: "Population".to_owned(),
+        });
+    let overlay = Overlay {
+        id: sid("overlay.translation.da"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::from([
+                ("Finland".to_owned(), "Finland".to_owned()),
+                ("Helsinki".to_owned(), "Helsingfors".to_owned()),
+            ]),
+            contextual: BTreeMap::new(),
+            target_additions: BTreeMap::new(),
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            require_complete: false,
+            ignore_paths: BTreeSet::from([
+                "deck.*".to_owned(),
+                "note_types.*".to_owned(),
+                "notes.*.fields.field.flag".to_owned(),
+                "notes.*.tags.*".to_owned(),
+            ]),
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let report = base
+        .translation_coverage(&overlay)
+        .expect("translation overlay has coverage");
+
+    assert!(report.has_untranslated_fallbacks());
+    assert!(report.entries.iter().any(|entry| {
+        entry.category == TranslationCoverageCategory::UntranslatedFallback
+            && entry.path == "notes.note.sweden.fields.field.country"
+            && entry.source == "Sweden"
+    }));
+    assert!(report.entries.iter().any(|entry| {
+        entry.category == TranslationCoverageCategory::UntranslatedFallback
+            && entry.path == "notes.note.sweden.fields.field.population"
+            && entry.source == "10 million"
+    }));
+}
+
+#[test]
+fn translation_coverage_reports_stale_changed_or_removed_source_keys() {
+    let mut base = ug_style_deck();
+    base.notes
+        .get_mut(&sid("note.finland"))
+        .unwrap()
+        .fields
+        .insert(sid("field.capital"), "Helsinki City".to_owned());
+    let overlay = Overlay {
+        id: sid("overlay.translation.da"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::from([("Helsinki".to_owned(), "Helsingfors".to_owned())]),
+            contextual: BTreeMap::new(),
+            target_additions: BTreeMap::new(),
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            require_complete: false,
+            ignore_paths: BTreeSet::new(),
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let report = base
+        .translation_coverage(&overlay)
+        .expect("translation overlay has coverage");
+
+    assert!(report.has_stale_or_invalid_entries());
+    assert!(report.entries.iter().any(|entry| {
+        entry.category == TranslationCoverageCategory::StaleDirectKey
+            && entry.path == "translations.direct.Helsinki"
+    }));
+    assert!(report.entries.iter().any(|entry| {
+        entry.category == TranslationCoverageCategory::UntranslatedFallback
+            && entry.path == "notes.note.finland.fields.field.capital"
+            && entry.source == "Helsinki City"
+    }));
+}
+
+#[test]
+fn translation_coverage_reports_path_specific_overrides_and_additions() {
+    let mut base = ug_style_deck();
+    base.notes
+        .get_mut(&sid("note.finland"))
+        .unwrap()
+        .fields
+        .insert(sid("field.flag"), String::new());
+    let overlay = Overlay {
+        id: sid("overlay.translation.da"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::from([("Finland".to_owned(), "Finland".to_owned())]),
+            contextual: BTreeMap::from([(
+                "notes.note.finland".to_owned(),
+                BTreeMap::from([("Helsinki".to_owned(), "Helsingfors".to_owned())]),
+            )]),
+            target_additions: BTreeMap::from([(
+                "notes.note.finland.fields.field.flag".to_owned(),
+                "<img src=\"fi-da.png\">".to_owned(),
+            )]),
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            require_complete: false,
+            ignore_paths: BTreeSet::new(),
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let report = base
+        .translation_coverage(&overlay)
+        .expect("translation overlay has coverage");
+
+    assert!(report.entries.iter().any(|entry| {
+        entry.category == TranslationCoverageCategory::ContextualOverride
+            && entry.context.as_deref() == Some("notes.note.finland")
+            && entry.path == "notes.note.finland.fields.field.capital"
+    }));
+    assert!(report.entries.iter().any(|entry| {
+        entry.category == TranslationCoverageCategory::TargetLanguageAddition
+            && entry.path == "notes.note.finland.fields.field.flag"
     }));
 }
 

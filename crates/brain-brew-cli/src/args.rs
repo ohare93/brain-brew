@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use brain_brew_core::{OverlayKind, StableId};
+use brain_brew_formats::manifest::TranslationCoveragePolicy;
 
 pub(crate) struct ManifestTargetArgs {
     pub(crate) manifest_path: PathBuf,
@@ -18,6 +19,7 @@ pub(crate) struct VerifyArgs {
     pub(crate) media_root: Option<PathBuf>,
     pub(crate) include_paths: Vec<PathBuf>,
     pub(crate) package_roots: Vec<PathBuf>,
+    pub(crate) translation_coverage: Option<TranslationCoveragePolicy>,
 }
 
 pub(crate) struct ExportArgs {
@@ -158,6 +160,7 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
     let mut media_root = None;
     let mut include_paths = Vec::new();
     let mut package_roots = Vec::new();
+    let mut translation_coverage = None;
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -200,6 +203,13 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
                 package_roots.push(PathBuf::from(path));
                 index += 2;
             }
+            "--translation-coverage" => {
+                let Some(policy) = args.get(index + 1) else {
+                    return Err("--translation-coverage requires lenient or strict".to_owned());
+                };
+                translation_coverage = Some(parse_translation_coverage_policy(policy)?);
+                index += 2;
+            }
             other => return Err(format!("unexpected verify argument {other:?}")),
         }
     }
@@ -213,7 +223,18 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
         media_root,
         include_paths,
         package_roots,
+        translation_coverage,
     })
+}
+
+fn parse_translation_coverage_policy(value: &str) -> Result<TranslationCoveragePolicy, String> {
+    match value {
+        "lenient" => Ok(TranslationCoveragePolicy::Lenient),
+        "strict" => Ok(TranslationCoveragePolicy::Strict),
+        other => Err(format!(
+            "invalid translation coverage policy {other:?}; expected lenient or strict"
+        )),
+    }
 }
 
 pub(crate) fn parse_overlay_and_optional_out(

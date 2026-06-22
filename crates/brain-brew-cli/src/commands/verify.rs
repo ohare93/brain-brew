@@ -1,14 +1,15 @@
 use std::fs;
 use std::path::Path;
 
-use brain_brew_core::CanonicalDeck;
+use brain_brew_core::{CanonicalDeck, TranslationCoverageCategory};
 use brain_brew_formats::{crowdanki, manifest};
 
 use crate::args::parse_verify_args;
 use crate::help;
 use crate::io::{
-    manifest_root, plan_manifest_target_with_packages, read_manifest, root_relative_path,
-    verify_canonical_deck_format, verify_manifest_format, verify_overlay_format,
+    ManifestTargetPlan, manifest_root, plan_manifest_target_with_packages, read_manifest,
+    root_relative_path, verify_canonical_deck_format, verify_manifest_format,
+    verify_overlay_format,
 };
 use crate::media_assets::validate_media_assets;
 use crate::output;
@@ -48,6 +49,14 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         for (overlay, _) in &plan.overlays {
             verify_overlay_format(&overlay.file)?;
         }
+        let policy = verify_args.translation_coverage.unwrap_or_else(|| {
+            manifest
+                .targets
+                .get(target)
+                .map(|target| target.translation_coverage)
+                .unwrap_or_default()
+        });
+        verify_translation_coverage_policy(&plan, policy)?;
         let deck = plan.compose()?;
         deck.validate().map_err(|error| error.to_string())?;
         if let Some(media_root) = &media_root {
@@ -65,6 +74,50 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         format!("verified {} target{suffix}", target_names.len()),
         &details,
     );
+    Ok(())
+}
+
+fn verify_translation_coverage_policy(
+    plan: &ManifestTargetPlan,
+    policy: manifest::TranslationCoveragePolicy,
+) -> Result<(), String> {
+    if policy == manifest::TranslationCoveragePolicy::Lenient {
+        return Ok(());
+    }
+
+    let mut current = plan.base.clone();
+    for (planned, overlay) in &plan.overlays {
+        if let Some(report) = current.translation_coverage(overlay) {
+            let missing = report
+                .entries
+                .iter()
+                .filter(|entry| entry.category == TranslationCoverageCategory::UntranslatedFallback)
+                .take(10)
+                .map(|entry| format!("{} source {:?}", entry.path, entry.source))
+                .collect::<Vec<_>>();
+            if !missing.is_empty() {
+                return Err(format!(
+                    "translation coverage strict policy failed for target {} overlay {} ({}): {} untranslated fallback(s): {}",
+                    plan.target,
+                    planned.id,
+                    planned.display_file,
+                    report
+                        .entries
+                        .iter()
+                        .filter(|entry| entry.category
+                            == TranslationCoverageCategory::UntranslatedFallback)
+                        .count(),
+                    missing.join(", ")
+                ));
+            }
+        }
+        current = current.compose(std::slice::from_ref(overlay)).map_err(|error| {
+            format!(
+                "failed to compose overlay {} for target {} while checking translation coverage: {error}",
+                planned.id, plan.target
+            )
+        })?;
+    }
     Ok(())
 }
 

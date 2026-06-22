@@ -43,6 +43,7 @@ fn run() -> Result<(), String> {
         "import" => commands::import::run(&args[1..]),
         "lock" => commands::lock::run(&args[1..]),
         "targets" => commands::targets::run(&args[1..]),
+        "translations" => commands::translations::run(&args[1..]),
         "verify" => commands::verify::run(&args[1..]),
         "explain" => commands::explain::run(&args[1..]),
         "diff" => commands::diff::run(&args[1..]),

@@ -6,5 +6,6 @@ pub(crate) mod fmt;
 pub(crate) mod import;
 pub(crate) mod lock;
 pub(crate) mod targets;
+pub(crate) mod translations;
 pub(crate) mod validate;
 pub(crate) mod verify;

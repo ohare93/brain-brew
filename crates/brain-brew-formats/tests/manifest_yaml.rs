@@ -167,6 +167,45 @@ targets:
 }
 
 #[test]
+fn parses_and_formats_translation_coverage_policy() {
+    let formatted = manifest::format_str(
+        r#"
+base: deck.yaml
+targets:
+  de-release:
+    translation_coverage: strict
+    overlays: []
+  de-dev:
+    translation_coverage: lenient
+    overlays: []
+"#,
+    )
+    .expect("manifest formats");
+
+    assert_eq!(
+        formatted,
+        r#"base: deck.yaml
+overlays: {}
+targets:
+  de-dev:
+    overlays: []
+  de-release:
+    overlays: []
+    translation_coverage: strict
+"#
+    );
+    let manifest = manifest::from_str(&formatted).expect("manifest parses");
+    assert_eq!(
+        manifest.targets["de-release"].translation_coverage,
+        manifest::TranslationCoveragePolicy::Strict
+    );
+    assert_eq!(
+        manifest.targets["de-dev"].translation_coverage,
+        manifest::TranslationCoveragePolicy::Lenient
+    );
+}
+
+#[test]
 fn parses_and_formats_target_extends_for_package_federation() {
     let formatted = manifest::format_str(
         r#"

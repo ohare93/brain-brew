@@ -87,6 +87,24 @@ targets:
 
 Users and CI select targets instead of memorizing overlay paths.
 
+## Translation coverage policy
+
+Translated targets can choose how strictly `brainbrew verify` treats untranslated fallbacks:
+
+```yaml
+targets:
+  de-dev:
+    overlays:
+      - overlay.translation.de
+    translation_coverage: lenient
+  de-release:
+    overlays:
+      - overlay.translation.de
+    translation_coverage: strict
+```
+
+`lenient` is the default and allows missing translations while translators are in progress. `strict` fails verification when a translation overlay leaves a non-empty source string untranslated. Use `brainbrew translations --target <target>` to inspect the missing/stale entries, and `--apply` to seed `source: source` stubs before handing the file to translators.
+
 ## Package-qualified targets
 
 A downstream package can extend an upstream target:

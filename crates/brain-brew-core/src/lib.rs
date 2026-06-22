@@ -188,6 +188,14 @@ impl CanonicalDeck {
         render_deck_variables(self)
     }
 
+    /// Report translation coverage for one translation overlay without modifying this deck.
+    pub fn translation_coverage(&self, overlay: &Overlay) -> Option<TranslationCoverageReport> {
+        overlay
+            .translations
+            .as_ref()
+            .map(|translations| translation_coverage_report(self, overlay, translations))
+    }
+
     /// Validate strict core invariants that do not require filesystem or format access.
     pub fn validate(&self) -> Result<(), ValidationReport> {
         let mut errors = Vec::new();
@@ -365,6 +373,312 @@ fn fill_added_field_blanks(
         .filter(|note| &note.note_type_id == note_type_id)
     {
         note.fields.entry(field_id.clone()).or_default();
+    }
+}
+
+fn translation_coverage_report(
+    deck: &CanonicalDeck,
+    overlay: &Overlay,
+    translations: &TranslationDictionary,
+) -> TranslationCoverageReport {
+    let mut builder = TranslationCoverageBuilder {
+        translations,
+        entries: Vec::new(),
+        seen_direct: BTreeSet::new(),
+        seen_contextual: BTreeSet::new(),
+        seen_target_additions: BTreeSet::new(),
+        seen_variables: BTreeSet::new(),
+        seen_adapter_ids: BTreeSet::new(),
+    };
+
+    builder.record_string(&deck.name, "deck.name".to_owned(), None);
+    builder.record_string(&deck.description, "deck.description".to_owned(), None);
+    builder.record_variables(&deck.variables, "deck.variables");
+    builder.record_adapter_ids(&deck.adapter_ids, "deck.adapter_ids");
+
+    for (note_type_id, note_type) in &deck.note_types {
+        builder.record_string(
+            &note_type.name,
+            format!("note_types.{note_type_id}.name"),
+            None,
+        );
+        builder.record_variables(
+            &note_type.variables,
+            &format!("note_types.{note_type_id}.variables"),
+        );
+        for field in &note_type.fields {
+            builder.record_string(
+                &field.name,
+                format!("note_types.{note_type_id}.fields.{}.name", field.id),
+                None,
+            );
+        }
+        for template in &note_type.card_templates {
+            builder.record_string(
+                &template.name,
+                format!(
+                    "note_types.{note_type_id}.card_templates.{}.name",
+                    template.id
+                ),
+                None,
+            );
+            builder.record_variables(
+                &template.variables,
+                &format!(
+                    "note_types.{note_type_id}.card_templates.{}.variables",
+                    template.id
+                ),
+            );
+            builder.record_adapter_ids(
+                &template.adapter_ids,
+                &format!(
+                    "note_types.{note_type_id}.card_templates.{}.adapter_ids",
+                    template.id
+                ),
+            );
+        }
+        builder.record_adapter_ids(
+            &note_type.adapter_ids,
+            &format!("note_types.{note_type_id}.adapter_ids"),
+        );
+    }
+
+    for (note_id, note) in &deck.notes {
+        builder.record_variables(&note.variables, &format!("notes.{note_id}.variables"));
+        for (field_id, value) in &note.fields {
+            builder.record_string(value, format!("notes.{note_id}.fields.{field_id}"), None);
+        }
+        builder.record_tags(&note.tags, &format!("notes.{note_id}.tags"));
+        builder.record_adapter_ids(&note.adapter_ids, &format!("notes.{note_id}.adapter_ids"));
+    }
+
+    builder.finish(overlay.id.clone())
+}
+
+struct TranslationCoverageBuilder<'a> {
+    translations: &'a TranslationDictionary,
+    entries: Vec<TranslationCoverageEntry>,
+    seen_direct: BTreeSet<String>,
+    seen_contextual: BTreeSet<(String, String)>,
+    seen_target_additions: BTreeSet<String>,
+    seen_variables: BTreeSet<(String, String)>,
+    seen_adapter_ids: BTreeSet<(String, String)>,
+}
+
+impl TranslationCoverageBuilder<'_> {
+    fn record_variables(&mut self, variables: &BTreeMap<String, String>, path_prefix: &str) {
+        for (key, value) in variables {
+            self.record_string(value, format!("{path_prefix}.{key}"), Some(key));
+        }
+    }
+
+    fn record_string(&mut self, value: &str, path: String, variable_key: Option<&str>) {
+        if let Some(addition) = self.translations.target_additions.get(&path) {
+            self.seen_target_additions.insert(path.clone());
+            let category = if value.is_empty() {
+                TranslationCoverageCategory::TargetLanguageAddition
+            } else {
+                TranslationCoverageCategory::InvalidTargetAddition
+            };
+            self.entries.push(TranslationCoverageEntry {
+                category,
+                path,
+                source: value.to_owned(),
+                translated: Some(addition.clone()),
+                context: None,
+            });
+            return;
+        }
+
+        if value.is_empty() {
+            return;
+        }
+
+        if is_ignored_translation_path(self.translations, &path) {
+            self.entries.push(TranslationCoverageEntry {
+                category: TranslationCoverageCategory::IgnoredSource,
+                path,
+                source: value.to_owned(),
+                translated: None,
+                context: None,
+            });
+            return;
+        }
+
+        if let Some(variable_key) = variable_key
+            && let Some(replacements) = self.translations.variables.get(variable_key)
+            && let Some(translated) = replacements.get(value)
+        {
+            self.seen_variables
+                .insert((variable_key.to_owned(), value.to_owned()));
+            self.entries.push(TranslationCoverageEntry {
+                category: TranslationCoverageCategory::VariableTranslation,
+                path,
+                source: value.to_owned(),
+                translated: Some(translated.clone()),
+                context: Some(variable_key.to_owned()),
+            });
+            return;
+        }
+
+        let source = value.to_owned();
+        let direct_translation = self.translations.direct.get(value);
+        if direct_translation.is_some() {
+            self.seen_direct.insert(source.clone());
+        }
+
+        let mut contextual_translation: Option<(&String, &String)> = None;
+        for (context_path, replacements) in &self.translations.contextual {
+            if context_matches_path(context_path, &path)
+                && let Some(translated) = replacements.get(value)
+            {
+                self.seen_contextual
+                    .insert((context_path.clone(), source.clone()));
+                if contextual_translation
+                    .as_ref()
+                    .is_none_or(|(current_context, _)| context_path.len() > current_context.len())
+                {
+                    contextual_translation = Some((context_path, translated));
+                }
+            }
+        }
+
+        if let Some((context_path, translated)) = contextual_translation {
+            self.entries.push(TranslationCoverageEntry {
+                category: TranslationCoverageCategory::ContextualOverride,
+                path,
+                source,
+                translated: Some(translated.clone()),
+                context: Some(context_path.clone()),
+            });
+        } else if let Some(translated) = direct_translation {
+            self.entries.push(TranslationCoverageEntry {
+                category: TranslationCoverageCategory::DirectTranslation,
+                path,
+                source,
+                translated: Some(translated.clone()),
+                context: None,
+            });
+        } else {
+            self.entries.push(TranslationCoverageEntry {
+                category: TranslationCoverageCategory::UntranslatedFallback,
+                path,
+                source: source.clone(),
+                translated: Some(source),
+                context: None,
+            });
+        }
+    }
+
+    fn record_tags(&mut self, tags: &BTreeSet<String>, path_prefix: &str) {
+        for tag in tags {
+            self.record_string(tag, format!("{path_prefix}.{tag}"), None);
+        }
+    }
+
+    fn record_adapter_ids(&mut self, adapter_ids: &AdapterIds, path_prefix: &str) {
+        for (key, value) in adapter_ids.iter() {
+            let Some(replacements) = self.translations.adapter_ids.get(key) else {
+                continue;
+            };
+            let Some(translated) = replacements.get(value) else {
+                continue;
+            };
+            self.seen_adapter_ids
+                .insert((key.to_owned(), value.to_owned()));
+            self.entries.push(TranslationCoverageEntry {
+                category: TranslationCoverageCategory::AdapterIdTranslation,
+                path: format!("{path_prefix}.{key}"),
+                source: value.to_owned(),
+                translated: Some(translated.clone()),
+                context: Some(key.to_owned()),
+            });
+        }
+    }
+
+    fn finish(mut self, overlay_id: StableId) -> TranslationCoverageReport {
+        for (source, translated) in &self.translations.direct {
+            if !self.seen_direct.contains(source) {
+                self.entries.push(TranslationCoverageEntry {
+                    category: TranslationCoverageCategory::StaleDirectKey,
+                    path: format!("translations.direct.{source}"),
+                    source: source.clone(),
+                    translated: Some(translated.clone()),
+                    context: None,
+                });
+            }
+        }
+        for (context_path, replacements) in &self.translations.contextual {
+            for (source, translated) in replacements {
+                if !self
+                    .seen_contextual
+                    .contains(&(context_path.clone(), source.clone()))
+                {
+                    self.entries.push(TranslationCoverageEntry {
+                        category: TranslationCoverageCategory::StaleContextualKey,
+                        path: format!("translations.contextual.{context_path}.{source}"),
+                        source: source.clone(),
+                        translated: Some(translated.clone()),
+                        context: Some(context_path.clone()),
+                    });
+                }
+            }
+        }
+        for (path, translated) in &self.translations.target_additions {
+            if !self.seen_target_additions.contains(path) {
+                self.entries.push(TranslationCoverageEntry {
+                    category: TranslationCoverageCategory::StaleTargetAddition,
+                    path: format!("translations.target_additions.{path}"),
+                    source: String::new(),
+                    translated: Some(translated.clone()),
+                    context: Some(path.clone()),
+                });
+            }
+        }
+        for (variable_key, replacements) in &self.translations.variables {
+            for (source, translated) in replacements {
+                if !self
+                    .seen_variables
+                    .contains(&(variable_key.clone(), source.clone()))
+                {
+                    self.entries.push(TranslationCoverageEntry {
+                        category: TranslationCoverageCategory::StaleVariableKey,
+                        path: format!("translations.variables.{variable_key}.{source}"),
+                        source: source.clone(),
+                        translated: Some(translated.clone()),
+                        context: Some(variable_key.clone()),
+                    });
+                }
+            }
+        }
+        for (adapter_key, replacements) in &self.translations.adapter_ids {
+            for (source, translated) in replacements {
+                if !self
+                    .seen_adapter_ids
+                    .contains(&(adapter_key.clone(), source.clone()))
+                {
+                    self.entries.push(TranslationCoverageEntry {
+                        category: TranslationCoverageCategory::StaleAdapterIdKey,
+                        path: format!("translations.adapter_ids.{adapter_key}.{source}"),
+                        source: source.clone(),
+                        translated: Some(translated.clone()),
+                        context: Some(adapter_key.clone()),
+                    });
+                }
+            }
+        }
+
+        self.entries.sort_by(|left, right| {
+            left.path
+                .cmp(&right.path)
+                .then_with(|| left.category.as_str().cmp(right.category.as_str()))
+                .then_with(|| left.source.cmp(&right.source))
+        });
+
+        TranslationCoverageReport {
+            overlay_id,
+            entries: self.entries,
+        }
     }
 }
 
@@ -2487,6 +2801,105 @@ pub struct TranslationDictionary {
     pub require_complete: bool,
     /// Glob-style paths ignored by complete-coverage checks.
     pub ignore_paths: BTreeSet<String>,
+}
+
+/// Non-mutating coverage report for one translation overlay applied to a source deck.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranslationCoverageReport {
+    pub overlay_id: StableId,
+    pub entries: Vec<TranslationCoverageEntry>,
+}
+
+impl TranslationCoverageReport {
+    /// Entries that indicate untranslated fallback output or stale/invalid dictionary keys.
+    pub fn problem_entries(&self) -> impl Iterator<Item = &TranslationCoverageEntry> {
+        self.entries
+            .iter()
+            .filter(|entry| entry.category.is_problem())
+    }
+
+    /// Returns true when at least one extracted source string would fall back untranslated.
+    pub fn has_untranslated_fallbacks(&self) -> bool {
+        self.entries
+            .iter()
+            .any(|entry| entry.category == TranslationCoverageCategory::UntranslatedFallback)
+    }
+
+    /// Returns true when the dictionary contains stale or invalid entries.
+    pub fn has_stale_or_invalid_entries(&self) -> bool {
+        self.entries.iter().any(|entry| {
+            matches!(
+                entry.category,
+                TranslationCoverageCategory::StaleDirectKey
+                    | TranslationCoverageCategory::StaleContextualKey
+                    | TranslationCoverageCategory::StaleTargetAddition
+                    | TranslationCoverageCategory::StaleVariableKey
+                    | TranslationCoverageCategory::StaleAdapterIdKey
+                    | TranslationCoverageCategory::InvalidTargetAddition
+            )
+        })
+    }
+}
+
+/// One source string, dictionary entry, or fallback in a translation coverage report.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranslationCoverageEntry {
+    pub category: TranslationCoverageCategory,
+    pub path: String,
+    pub source: String,
+    pub translated: Option<String>,
+    pub context: Option<String>,
+}
+
+/// Maintainer-facing classification for translation coverage entries.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TranslationCoverageCategory {
+    DirectTranslation,
+    ContextualOverride,
+    TargetLanguageAddition,
+    VariableTranslation,
+    AdapterIdTranslation,
+    IgnoredSource,
+    UntranslatedFallback,
+    StaleDirectKey,
+    StaleContextualKey,
+    StaleTargetAddition,
+    StaleVariableKey,
+    StaleAdapterIdKey,
+    InvalidTargetAddition,
+}
+
+impl TranslationCoverageCategory {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::DirectTranslation => "direct_translation",
+            Self::ContextualOverride => "contextual_override",
+            Self::TargetLanguageAddition => "target_language_addition",
+            Self::VariableTranslation => "variable_translation",
+            Self::AdapterIdTranslation => "adapter_id_translation",
+            Self::IgnoredSource => "ignored_source",
+            Self::UntranslatedFallback => "untranslated_fallback",
+            Self::StaleDirectKey => "stale_direct_key",
+            Self::StaleContextualKey => "stale_contextual_key",
+            Self::StaleTargetAddition => "stale_target_addition",
+            Self::StaleVariableKey => "stale_variable_key",
+            Self::StaleAdapterIdKey => "stale_adapter_id_key",
+            Self::InvalidTargetAddition => "invalid_target_addition",
+        }
+    }
+
+    pub fn is_problem(self) -> bool {
+        matches!(
+            self,
+            Self::UntranslatedFallback
+                | Self::StaleDirectKey
+                | Self::StaleContextualKey
+                | Self::StaleTargetAddition
+                | Self::StaleVariableKey
+                | Self::StaleAdapterIdKey
+                | Self::InvalidTargetAddition
+        )
+    }
 }
 
 /// Maintainer-facing category for an overlay.

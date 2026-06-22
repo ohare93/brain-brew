@@ -152,6 +152,7 @@ targets:
   de-standard:
     overlays:
       - overlay.translation.de
+    translation_coverage: strict # optional; lenient by default
 ```
 
 ## Lock file

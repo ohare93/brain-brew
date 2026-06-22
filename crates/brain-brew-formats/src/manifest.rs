@@ -88,11 +88,22 @@ pub struct OverlayManifestEntry {
     pub depends_on: Vec<String>,
 }
 
+/// Translation coverage policy enforced during verification for one target.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum TranslationCoveragePolicy {
+    /// Missing translations are reported by `brainbrew translations` but do not fail verify.
+    #[default]
+    Lenient,
+    /// Missing untranslated fallbacks fail verify for release-ready targets.
+    Strict,
+}
+
 /// One named composition goal in a Federated Deck manifest.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BuildTarget {
     pub extends: Option<String>,
     pub overlays: Vec<String>,
+    pub translation_coverage: TranslationCoveragePolicy,
     pub exports: TargetExports,
 }
 
@@ -135,7 +146,7 @@ pub struct ExpandedOverlay {
 /// Parse a Federated Deck manifest from strict YAML.
 pub fn from_str(input: &str) -> Result<FederatedDeckManifest, ManifestError> {
     let yaml: ManifestYaml = serde_yaml::from_str(input).map_err(ManifestError::Parse)?;
-    Ok(yaml.into_manifest())
+    yaml.into_manifest()
 }
 
 /// Parse and re-emit a Federated Deck manifest using deterministic formatting.
@@ -208,6 +219,12 @@ pub fn to_string(manifest: &FederatedDeckManifest) -> String {
                     out.push_str(&format!("      - {}\n", yaml_scalar(overlay)));
                 }
             }
+            if target.translation_coverage != TranslationCoveragePolicy::Lenient {
+                out.push_str(&format!(
+                    "    translation_coverage: {}\n",
+                    translation_coverage_policy_name(target.translation_coverage)
+                ));
+            }
             if !target.exports.is_empty() {
                 out.push_str("    exports:\n");
                 if let Some(export) = &target.exports.crowdanki {
@@ -229,6 +246,25 @@ pub fn to_string(manifest: &FederatedDeckManifest) -> String {
         }
     }
     out
+}
+
+fn translation_coverage_policy_name(policy: TranslationCoveragePolicy) -> &'static str {
+    match policy {
+        TranslationCoveragePolicy::Lenient => "lenient",
+        TranslationCoveragePolicy::Strict => "strict",
+    }
+}
+
+fn parse_translation_coverage_policy(
+    value: &str,
+) -> Result<TranslationCoveragePolicy, ManifestError> {
+    match value {
+        "lenient" => Ok(TranslationCoveragePolicy::Lenient),
+        "strict" => Ok(TranslationCoveragePolicy::Strict),
+        other => Err(ManifestError::InvalidTranslationCoveragePolicy(
+            other.to_owned(),
+        )),
+    }
 }
 
 fn yaml_scalar(value: &str) -> String {
@@ -258,6 +294,7 @@ pub enum ManifestError {
     MissingTarget(String),
     MissingOverlay(String),
     DependencyCycle(Vec<String>),
+    InvalidTranslationCoveragePolicy(String),
 }
 
 impl fmt::Display for ManifestError {
@@ -275,6 +312,10 @@ impl fmt::Display for ManifestError {
                     cycle.join(" -> ")
                 )
             }
+            Self::InvalidTranslationCoveragePolicy(policy) => write!(
+                f,
+                "invalid translation coverage policy {policy:?}; expected lenient or strict"
+            ),
         }
     }
 }
@@ -296,8 +337,8 @@ struct ManifestYaml {
 }
 
 impl ManifestYaml {
-    fn into_manifest(self) -> FederatedDeckManifest {
-        FederatedDeckManifest {
+    fn into_manifest(self) -> Result<FederatedDeckManifest, ManifestError> {
+        Ok(FederatedDeckManifest {
             package: self.package.map(PackageMetadataYaml::into_metadata),
             base: self.base,
             include_roots: self.include_roots,
@@ -309,9 +350,9 @@ impl ManifestYaml {
             targets: self
                 .targets
                 .into_iter()
-                .map(|(id, target)| (id, target.into_target()))
-                .collect(),
-        }
+                .map(|(id, target)| Ok((id, target.into_target()?)))
+                .collect::<Result<_, ManifestError>>()?,
+        })
     }
 }
 
@@ -365,16 +406,25 @@ struct BuildTargetYaml {
     #[serde(default)]
     overlays: Vec<String>,
     #[serde(default)]
+    translation_coverage: Option<String>,
+    #[serde(default)]
     exports: TargetExportsYaml,
 }
 
 impl BuildTargetYaml {
-    fn into_target(self) -> BuildTarget {
-        BuildTarget {
+    fn into_target(self) -> Result<BuildTarget, ManifestError> {
+        let translation_coverage = self
+            .translation_coverage
+            .as_deref()
+            .map(parse_translation_coverage_policy)
+            .transpose()?
+            .unwrap_or_default();
+        Ok(BuildTarget {
             extends: self.extends,
             overlays: self.overlays,
+            translation_coverage,
             exports: self.exports.into_exports(),
-        }
+        })
     }
 }
 

@@ -903,6 +903,108 @@ fn verify_checks_all_manifest_targets() {
 }
 
 #[test]
+fn translations_reports_missing_stale_contextual_and_additions_without_modifying() {
+    let dir = temp_dir("translations-report");
+    write_translation_workspace(&dir);
+    let overlay_path = dir.join("da.yaml");
+    let before = fs::read_to_string(&overlay_path).unwrap();
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("Translation coverage for target da-standard"));
+    assert!(out.contains("contextual overrides: 1"));
+    assert!(out.contains("target-language additions: 1"));
+    assert!(out.contains("stale_direct_key translations.direct.Removed source"));
+    assert!(out.contains("untranslated_fallback notes.note.sweden.fields.field.country"));
+    assert_eq!(fs::read_to_string(overlay_path).unwrap(), before);
+}
+
+#[test]
+fn translations_apply_inserts_sorted_direct_stubs_and_preserves_comments() {
+    let dir = temp_dir("translations-apply");
+    write_translation_workspace(&dir);
+    let overlay_path = dir.join("da.yaml");
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--path-prefix",
+        "notes.note.sweden.fields.field.country",
+        "--apply",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let updated = fs::read_to_string(overlay_path).unwrap();
+    assert!(updated.contains("# translator note kept"));
+    assert!(updated.contains("    Sweden: Sweden\n"));
+}
+
+#[test]
+fn verify_translation_coverage_policy_can_be_lenient_or_strict() {
+    let dir = temp_dir("translations-verify-policy");
+    write_translation_workspace(&dir);
+    let overlay_path = dir.join("da.yaml");
+    fs::write(
+        &overlay_path,
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  ignore_paths:
+    - 'deck.*'
+    - 'note_types.*'
+    - 'notes.*.fields.field.flag'
+    - 'notes.*.tags.*'
+  direct:
+    Finland: Finland
+  contextual:
+    notes.note:
+      finland:
+        Helsinki: Helsingfors
+  target_additions:
+    notes.note.finland.fields.field.flag: '<img src="fi-da.png">'
+"#,
+    )
+    .unwrap();
+
+    let lenient_output = run([
+        "verify",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--translation-coverage",
+        "lenient",
+    ]);
+    assert!(
+        lenient_output.status.success(),
+        "stderr: {}",
+        stderr(&lenient_output)
+    );
+
+    let strict_output = run([
+        "verify",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-release",
+    ]);
+    assert!(!strict_output.status.success());
+    assert!(stderr(&strict_output).contains("translation coverage strict policy failed"));
+    assert!(stderr(&strict_output).contains("notes.note.sweden.fields.field.country"));
+}
+
+#[test]
 fn export_crowdanki_copies_media_from_media_root_and_checks_hashes() {
     let dir = temp_dir("export-media");
     let deck_path = dir.join("deck.yaml");
@@ -1547,6 +1649,68 @@ fn write_manifest_workspace(dir: &Path) {
     fs::write(dir.join("capital.yaml"), CAPITAL_OVERLAY_YAML).unwrap();
     fs::write(dir.join("noop.yaml"), NOOP_OVERLAY_YAML).unwrap();
     fs::write(dir.join("brainbrew.yaml"), MANIFEST_YAML).unwrap();
+}
+
+fn write_translation_workspace(dir: &Path) {
+    let deck = SAMPLE_CANONICAL_YAML
+        .replace("field.flag: '<img src=\"fi.png\">'", "field.flag: ''")
+        .replace(
+            "media:\n",
+            r#"  note.sweden:
+    note_type_id: note-type.country
+    fields:
+      field.capital: Stockholm
+      field.country: Sweden
+      field.flag: '<img src="se.png">'
+    tags:
+      - Europe
+      - Nordic
+    adapter_ids:
+      crowdanki:guid: ug-sweden-guid
+media:
+"#,
+        );
+    fs::write(dir.join("deck.yaml"), deck).unwrap();
+    fs::write(
+        dir.join("da.yaml"),
+        r#"id: overlay.translation.da
+kind: translation
+# translator note kept
+translations:
+  ignore_paths:
+    - deck.*
+    - note_types.*
+    - notes.*.tags.*
+    - notes.*.fields.field.flag
+  direct:
+    Finland: Finland
+    Removed source: Fjernet
+  contextual:
+    notes.note.finland:
+      Helsinki: Helsingfors
+  target_additions:
+    notes.note.finland.fields.field.flag: '<img src="fi-da.png">'
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.translation.da:
+    file: da.yaml
+    kind: translation
+targets:
+  da-release:
+    overlays:
+      - overlay.translation.da
+    translation_coverage: strict
+  da-standard:
+    overlays:
+      - overlay.translation.da
+"#,
+    )
+    .unwrap();
 }
 
 fn write_include_workspace(dir: &Path) {
