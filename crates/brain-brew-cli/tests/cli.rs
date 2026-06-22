@@ -1000,6 +1000,51 @@ fn translations_default_report_focuses_on_translatable_note_text() {
 }
 
 #[test]
+fn ultimate_geography_language_overlays_have_no_actionable_missing_text() {
+    let manifest = workspace_root().join("fixtures/ultimate-geography/brainbrew.yaml");
+    let output = run([
+        "translations",
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--all-targets",
+        "--json",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    let mut missing = Vec::new();
+    for report in json["reports"].as_array().unwrap() {
+        let file = report["file"].as_str().unwrap();
+        if !file.starts_with("overlays/languages/") {
+            continue;
+        }
+        let target = report["target"].as_str().unwrap();
+        let overlay = report["overlay"].as_str().unwrap();
+        for entry in report["entries"].as_array().unwrap() {
+            if entry["category"] != "untranslated_fallback" {
+                continue;
+            }
+            let path = entry["path"].as_str().unwrap();
+            let source = entry["source"].as_str().unwrap();
+            let actionable_note_field = path.starts_with("notes.")
+                && path.contains(".fields.")
+                && !path.ends_with(".fields.field.flag")
+                && !path.ends_with(".fields.field.map")
+                && !source.trim_start().starts_with("<img");
+            if actionable_note_field {
+                missing.push(format!("{target} {overlay} {path} source={source:?}"));
+            }
+        }
+    }
+
+    assert!(
+        missing.is_empty(),
+        "language overlays should use translations or no_change for reviewed note text:\n{}",
+        missing.join("\n")
+    );
+}
+
+#[test]
 fn translations_full_report_includes_structural_fallbacks() {
     let manifest = workspace_root().join("fixtures/ultimate-geography/brainbrew.yaml");
     let output = run([

@@ -371,6 +371,329 @@ translations:
         Overseas territory of the United Kingdom.: 'Selvstyrt britisk oversjøisk territorium i Karibia.'
       wallis-and-futuna:
         Overseas territory of France.: 'Fransk oversjøisk land.'
+  no_change:
+    direct:
+      - Abu Dhabi
+      - Abuja
+      - Accra
+      - Afghanistan
+      - Alaska
+      - Albania
+      - Alofi
+      - Amman
+      - Amsterdam
+      - Andorra
+      - Andorra la Vella
+      - Angola
+      - Anguilla
+      - Ankara
+      - Antananarivo
+      - Apia
+      - Argentina
+      - Armenia
+      - Aruba
+      - Asia
+      - Asmara
+      - Astana
+      - 'Asunción'
+      - Australia
+      - Avarua
+      - Bahrain
+      - Baku
+      - Bali
+      - Bamako
+      - Bandar Seri Begawan
+      - Bangkok
+      - Bangladesh
+      - Bangui
+      - Banjul
+      - Barbados
+      - Basseterre
+      - Beijing
+      - Beirut
+      - Belarus
+      - Belfast
+      - Belize
+      - Belmopan
+      - Benin
+      - Berlin
+      - Bermuda
+      - Bern
+      - Bhutan
+      - Bissau
+      - 'Bogotá'
+      - Bolivia
+      - Botswana
+      - Bougainville
+      - Bratislava
+      - Brazzaville
+      - Bridgetown
+      - Brunei
+      - Budapest
+      - Buenos Aires
+      - Bulgaria
+      - Burkina Faso
+      - Burundi
+      - Canada
+      - Canberra
+      - Caracas
+      - Cardiff
+      - Castries
+      - Charlotte Amalie
+      - Chile
+      - 'Chișinău'
+      - Ciudad de la Paz
+      - Colombia
+      - Conakry
+      - Costa Rica
+      - Cuba
+      - 'Curaçao'
+      - Dakar
+      - Dhaka
+      - Dili
+      - Djibouti
+      - Dodoma
+      - Doha
+      - Dominica
+      - Dublin
+      - Ecuador
+      - Edinburgh
+      - Egypt
+      - El Salvador
+      - England
+      - Eritrea
+      - Eswatini
+      - Fiji
+      - Finland
+      - Freetown
+      - Funafuti
+      - Gabon
+      - Gaborone
+      - Georgetown
+      - Georgia
+      - Ghana
+      - Gibraltar
+      - Gitega
+      - Grenada
+      - Guadeloupe
+      - Guam
+      - Guatemala
+      - Guernsey
+      - Guinea
+      - Guinea-Bissau
+      - Guyana
+      - 'Hagåtña'
+      - Haiti
+      - Hanoi
+      - Harare
+      - Hargeisa
+      - Hawaii
+      - Honduras
+      - Honiara
+      - India
+      - Indonesia
+      - Iran
+      - Islamabad
+      - Israel
+      - Jakarta
+      - Jamaica
+      - Japan
+      - Java
+      - Jeju
+      - Jersey
+      - Jerusalem
+      - Jordan
+      - Juba
+      - Kabul
+      - Kampala
+      - Kenya
+      - Khartoum
+      - Kigali
+      - Kingston
+      - Kingstown
+      - Kinshasa
+      - Kiribati
+      - Kosovo
+      - Kuala Lumpur
+      - Kuwait
+      - Laos
+      - Latvia
+      - Lesotho
+      - Liberia
+      - Libreville
+      - Libya
+      - Liechtenstein
+      - Lilongwe
+      - Lima
+      - Ljubljana
+      - 'Lomé'
+      - London
+      - Luanda
+      - Lusaka
+      - Luxembourg
+      - Madeira
+      - Madrid
+      - Majuro
+      - Malawi
+      - Malaysia
+      - Mali
+      - Malta
+      - 'Malé'
+      - Managua
+      - Manama
+      - Manila
+      - Maputo
+      - Mariehamn
+      - Martinique
+      - Maseru
+      - Mauritania
+      - Mauritius
+      - Mayotte
+      - Mbabane
+      - Melanesia
+      - Mexico
+      - Minsk
+      - Mogadishu
+      - Moldova
+      - Monaco
+      - Mongolia
+      - Monrovia
+      - Montenegro
+      - Montevideo
+      - Moroni
+      - Muscat
+      - Myanmar
+      - Nairobi
+      - Namibia
+      - Nassau
+      - Nauru
+      - Naypyidaw
+      - Nepal
+      - New Delhi
+      - New Zealand
+      - Ngerulmud
+      - Niamey
+      - Nicaragua
+      - Niger
+      - Nigeria
+      - Niue
+      - Nouakchott
+      - 'Nouméa'
+      - Nuuk
+      - Oman
+      - Oranjestad
+      - Oslo
+      - Ottawa
+      - Ouagadougou
+      - Pakistan
+      - Palau
+      - Palikir
+      - Panama
+      - Papeete
+      - Paraguay
+      - Paramaribo
+      - Paris
+      - Peru
+      - Phnom Penh
+      - Podgorica
+      - Polynesia
+      - Port Louis
+      - Port Moresby
+      - Port of Spain
+      - Port-au-Prince
+      - Porto-Novo
+      - Portugal
+      - Praia
+      - Pretoria, Cape Town, Bloemfontein
+      - Pristina
+      - Puerto Rico
+      - Pyongyang
+      - Qatar
+      - Quito
+      - Rabat
+      - 'Reykjavík'
+      - Riga
+      - Riyadh
+      - Romania
+      - Roseau
+      - Rwanda
+      - 'Réunion'
+      - Saint Lucia
+      - Samoa
+      - 'San José'
+      - San Juan
+      - San Marino
+      - San Salvador
+      - Santo Domingo
+      - Sarajevo
+      - Sardinia
+      - Senegal
+      - Seoul
+      - Serbia
+      - Sierra Leone
+      - Singapore
+      - Sint Maarten
+      - Skopje
+      - Slovakia
+      - Slovenia
+      - Sofia
+      - Somalia
+      - Somaliland
+      - South Tarawa
+      - Sri Lanka
+      - 'St. George''s'
+      - Stockholm
+      - Sucre
+      - Sudan
+      - Sukhumi
+      - Sumatra
+      - Suva
+      - Svalbard
+      - Syria
+      - 'São Tomé'
+      - Taipei
+      - Taiwan
+      - Tallinn
+      - Tanzania
+      - Tbilisi
+      - Tegucigalpa
+      - Thailand
+      - Tirana
+      - Tiraspol
+      - Togo
+      - Tokyo
+      - Tonga
+      - Transnistria
+      - Tripoli
+      - Tskhinvali
+      - Tunis
+      - Tunisia
+      - Turkmenistan
+      - Tuvalu
+      - 'Tórshavn'
+      - Uganda
+      - Ulaanbaatar
+      - Uruguay
+      - Vaduz
+      - Valletta
+      - Vanuatu
+      - Venezuela
+      - Victoria
+      - Vientiane
+      - Vietnam
+      - Vilnius
+      - Wales
+      - Washington, D.C.
+      - Wellington
+      - Willemstad
+      - Windhoek
+      - Yamoussoukro
+      - 'Yaoundé'
+      - Yaren
+      - Zagreb
+      - Zambia
+      - Zanzibar
+      - Zimbabwe
   target_additions:
     notes.note.arabian-sea.fields.field.country-info: 'Også kalt Arabiahavet.'
     notes.note.balkan-peninsula.fields.field.country-info: 'Også kalt Balkanhalvøya.'

@@ -387,12 +387,309 @@ translations:
         Overseas territory of France.: 'Franskt utomeuropeiskt område.'
       turks-and-caicos-islands:
         Overseas territory of the United Kingdom.: Brittiskt utomeuropeiskt territorium.
-      vatican-city.fields.field.capital:
-        Vatican City: Vatikanstaden
       vatican-city:
         Vatican City: Vatikanstaten
+      vatican-city.fields.field.capital:
+        Vatican City: Vatikanstaden
       wallis-and-futuna:
         Overseas territory of France.: 'Franskt utomeuropeiskt område.'
+  no_change:
+    direct:
+      - Abu Dhabi
+      - Abuja
+      - Accra
+      - Afghanistan
+      - Alaska
+      - Alofi
+      - Amman
+      - Amsterdam
+      - Andorra
+      - Andorra la Vella
+      - Angola
+      - Anguilla
+      - Ankara
+      - Antananarivo
+      - Apia
+      - Argentina
+      - Aruba
+      - Asmara
+      - Astana
+      - 'Asunción'
+      - Avarua
+      - Bahrain
+      - Baku
+      - Bali
+      - Bamako
+      - Bandar Seri Begawan
+      - Bangkok
+      - Bangladesh
+      - Bangui
+      - Banjul
+      - Barbados
+      - Basseterre
+      - Beirut
+      - Belarus
+      - Belfast
+      - Belize
+      - Belmopan
+      - Benin
+      - Berlin
+      - Bermuda
+      - Bern
+      - Bhutan
+      - Bissau
+      - 'Bogotá'
+      - Bolivia
+      - Botswana
+      - Bougainville
+      - 'Brasília'
+      - Bratislava
+      - Brazzaville
+      - Bridgetown
+      - Brunei
+      - Budapest
+      - Buenos Aires
+      - Burkina Faso
+      - Burundi
+      - Canberra
+      - Caracas
+      - Cardiff
+      - Castries
+      - Charlotte Amalie
+      - Chile
+      - 'Chișinău'
+      - Ciudad de la Paz
+      - Colombia
+      - Conakry
+      - Costa Rica
+      - 'Curaçao'
+      - Dakar
+      - Dhaka
+      - Dili
+      - Djibouti
+      - Dodoma
+      - Doha
+      - Dominica
+      - Dublin
+      - Ecuador
+      - Edinburgh
+      - El Salvador
+      - England
+      - Eritrea
+      - Fiji
+      - Finland
+      - Freetown
+      - Funafuti
+      - Gabon
+      - Gaborone
+      - Georgetown
+      - Ghana
+      - Gibraltar
+      - Gitega
+      - Grenada
+      - Guadeloupe
+      - Guam
+      - Guatemala
+      - Guatemala City
+      - Guernsey
+      - Guinea
+      - Guinea-Bissau
+      - Guyana
+      - 'Hagåtña'
+      - Haiti
+      - Hanoi
+      - Harare
+      - Hargeisa
+      - Hawaii
+      - Honduras
+      - Honiara
+      - Hudson Bay
+      - Iran
+      - Islamabad
+      - Isle of Man
+      - Israel
+      - Jakarta
+      - Jamaica
+      - Japan
+      - Java
+      - Jeju
+      - Jersey
+      - Jerusalem
+      - Juba
+      - Kabul
+      - Kampala
+      - Kenya
+      - Khartoum
+      - Kigali
+      - Kingston
+      - Kingstown
+      - Kinshasa
+      - Kiribati
+      - Kosovo
+      - Kuala Lumpur
+      - Kuwait
+      - Laos
+      - Lesotho
+      - Liberia
+      - Libreville
+      - Liechtenstein
+      - Lilongwe
+      - Lima
+      - Ljubljana
+      - 'Lomé'
+      - London
+      - Luanda
+      - Lusaka
+      - Madeira
+      - Madrid
+      - Majuro
+      - Malawi
+      - Malaysia
+      - Mali
+      - Malta
+      - 'Malé'
+      - Managua
+      - Manama
+      - Manila
+      - Maputo
+      - Mariehamn
+      - Martinique
+      - Maseru
+      - Mauritius
+      - Mayotte
+      - Mbabane
+      - Mexico City
+      - Minsk
+      - Mogadishu
+      - Monaco
+      - Monrovia
+      - Montenegro
+      - Montevideo
+      - Moroni
+      - Myanmar
+      - 'N''Djamena'
+      - Nairobi
+      - Namibia
+      - Nassau
+      - Nauru
+      - Naypyidaw
+      - Nepal
+      - New Delhi
+      - Ngerulmud
+      - Niamey
+      - Nicaragua
+      - Nicosia
+      - Niger
+      - Nigeria
+      - Niue
+      - Nouakchott
+      - 'Nouméa'
+      - Nuuk
+      - Oman
+      - Oranjestad
+      - Oslo
+      - Ottawa
+      - Ouagadougou
+      - Pakistan
+      - Palau
+      - Palikir
+      - Panama
+      - Panama City
+      - Papeete
+      - Paraguay
+      - Paramaribo
+      - Paris
+      - Peru
+      - Phnom Penh
+      - Podgorica
+      - Port Louis
+      - Port Moresby
+      - Port Vila
+      - Port of Spain
+      - Port-au-Prince
+      - Porto-Novo
+      - Portugal
+      - Praia
+      - Pristina
+      - Puerto Rico
+      - Pyongyang
+      - Qatar
+      - Quito
+      - Rabat
+      - Riga
+      - Riyadh
+      - Roseau
+      - Rwanda
+      - 'Réunion'
+      - Saint Lucia
+      - Saint Martin
+      - Samoa
+      - 'San José'
+      - San Juan
+      - San Marino
+      - San Salvador
+      - Sanaa
+      - Santo Domingo
+      - Sarajevo
+      - Senegal
+      - Seoul
+      - Sierra Leone
+      - Singapore
+      - Sint Maarten
+      - Skopje
+      - Sofia
+      - Somalia
+      - Somaliland
+      - South Tarawa
+      - Sri Lanka
+      - Stockholm
+      - Sucre
+      - Sudan
+      - Sumatra
+      - Suva
+      - Svalbard
+      - 'São Tomé'
+      - Taipei
+      - Taiwan
+      - Tallinn
+      - Tanzania
+      - Tbilisi
+      - Tegucigalpa
+      - Thailand
+      - Thimphu
+      - Tirana
+      - Tiraspol
+      - Togo
+      - Tokyo
+      - Tonga
+      - Tripoli
+      - Tunis
+      - Turkmenistan
+      - Tuvalu
+      - 'Tórshavn'
+      - Uganda
+      - Uruguay
+      - Uzbekistan
+      - Vaduz
+      - Valletta
+      - Vanuatu
+      - Venezuela
+      - Victoria
+      - Vientiane
+      - Vietnam
+      - Vilnius
+      - Wales
+      - Washington, D.C.
+      - Wellington
+      - Willemstad
+      - Windhoek
+      - Yamoussoukro
+      - 'Yaoundé'
+      - Yaren
+      - Zagreb
+      - Zambia
+      - Zanzibar
+      - Zimbabwe
   target_additions:
     notes.note.arabian-sea.fields.field.country-info: 'Även känt som Arabiska sjön.'
     notes.note.bahrain.fields.field.country-info: Stavas alternativt Bahrein.

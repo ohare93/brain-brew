@@ -375,6 +375,287 @@ translations:
         Monaco: Principato di Monaco
       monaco.fields.field.capital:
         Monaco: Comune di Monaco
+  no_change:
+    direct:
+      - Abu Dhabi
+      - Abuja
+      - Accra
+      - Afghanistan
+      - Africa
+      - Alaska
+      - Albania
+      - Algeria
+      - Alofi
+      - Amman
+      - Amsterdam
+      - Andorra
+      - Andorra la Vella
+      - Angola
+      - Anguilla
+      - Ankara
+      - Antananarivo
+      - Apia
+      - Argentina
+      - Armenia
+      - Aruba
+      - Asia
+      - Asmara
+      - Astana
+      - 'Asunción'
+      - Australia
+      - Austria
+      - Avarua
+      - Baghdad
+      - Baku
+      - Bali
+      - Bamako
+      - Bandar Seri Begawan
+      - Bangkok
+      - Bangladesh
+      - Bangui
+      - Banjul
+      - Barbados
+      - Basseterre
+      - Beirut
+      - Belfast
+      - Belize
+      - Belmopan
+      - Benin
+      - Bermuda
+      - Bhutan
+      - Bissau
+      - Bolivia
+      - Botswana
+      - Bougainville
+      - Bratislava
+      - Brazzaville
+      - Bridgetown
+      - Brunei
+      - Budapest
+      - Buenos Aires
+      - Bulgaria
+      - Burkina Faso
+      - Burundi
+      - Canada
+      - Canberra
+      - Caracas
+      - Cardiff
+      - Castries
+      - Charlotte Amalie
+      - 'Chișinău'
+      - Ciudad de la Paz
+      - Colombia
+      - Conakry
+      - Corsica
+      - Costa Rica
+      - Cuba
+      - 'Curaçao'
+      - Dakar
+      - Dili
+      - Dodoma
+      - Doha
+      - Dominica
+      - Ecuador
+      - El Salvador
+      - Eritrea
+      - Estonia
+      - Freetown
+      - Funafuti
+      - Gabon
+      - Gaborone
+      - Georgetown
+      - Georgia
+      - Ghana
+      - Gitega
+      - Grenada
+      - Guam
+      - Guatemala
+      - Guernsey
+      - Guinea
+      - Guinea-Bissau
+      - Guyana
+      - 'Hagåtña'
+      - Haiti
+      - Hanoi
+      - Harare
+      - Hawaii
+      - Helsinki
+      - Honduras
+      - Hong Kong
+      - Honiara
+      - India
+      - Indonesia
+      - Iran
+      - Iraq
+      - Islamabad
+      - Jeju
+      - Jersey
+      - Kabul
+      - Kampala
+      - Kenya
+      - Kigali
+      - Kingston
+      - Kingstown
+      - Kinshasa
+      - Kiribati
+      - Kosovo
+      - Kuala Lumpur
+      - Kuwait
+      - Laos
+      - Lesotho
+      - Liberia
+      - Libreville
+      - Liechtenstein
+      - Lilongwe
+      - Lima
+      - 'Lomé'
+      - Luanda
+      - Lusaka
+      - Madagascar
+      - Madrid
+      - Majuro
+      - Malawi
+      - Malaysia
+      - Mali
+      - Malta
+      - 'Malé'
+      - Managua
+      - Manama
+      - Manila
+      - Maputo
+      - Mariehamn
+      - Maseru
+      - Mauritania
+      - Mauritius
+      - Mayotte
+      - Mbabane
+      - Melanesia
+      - Micronesia
+      - Minsk
+      - Mongolia
+      - Monrovia
+      - Montenegro
+      - Montevideo
+      - Moroni
+      - 'N''Djamena'
+      - Nairobi
+      - Namibia
+      - Nassau
+      - Nauru
+      - Naypyidaw
+      - Nepal
+      - Ngerulmud
+      - Niamey
+      - Nicaragua
+      - Nicosia
+      - Niger
+      - Nigeria
+      - Niue
+      - Nouakchott
+      - 'Nukuʻalofa'
+      - Nuuk
+      - Oceania
+      - Oman
+      - Oranjestad
+      - Oslo
+      - Ottawa
+      - Ouagadougou
+      - Pakistan
+      - Palau
+      - Palikir
+      - Panama
+      - Papeete
+      - Paraguay
+      - Paramaribo
+      - Phnom Penh
+      - Podgorica
+      - Port Louis
+      - Port Moresby
+      - Port Vila
+      - Port of Spain
+      - Port-au-Prince
+      - Porto-Novo
+      - Praia
+      - Pristina
+      - Pyongyang
+      - Qatar
+      - Quito
+      - Rabat
+      - 'Reykjavík'
+      - Riga
+      - Romania
+      - Roseau
+      - Russia
+      - Saint Lucia
+      - Samoa
+      - 'San José'
+      - San Juan
+      - San Marino
+      - San Salvador
+      - Santo Domingo
+      - Sarajevo
+      - Scandinavia
+      - Senegal
+      - Serbia
+      - Seychelles
+      - Sierra Leone
+      - Singapore
+      - Sint Maarten
+      - Skopje
+      - Slovenia
+      - Sofia
+      - Somalia
+      - Somaliland
+      - Sri Lanka
+      - Sucre
+      - Sudan
+      - Sukhumi
+      - Sumatra
+      - Suriname
+      - Suva
+      - Svalbard
+      - 'São Tomé'
+      - Taipei
+      - Taiwan
+      - Tallinn
+      - Tanzania
+      - Tashkent
+      - Tbilisi
+      - Tegucigalpa
+      - Thimphu
+      - Tirana
+      - Tiraspol
+      - Togo
+      - Tokyo
+      - Tonga
+      - Transnistria
+      - Tripoli
+      - Tskhinvali
+      - Tunisia
+      - Turkmenistan
+      - Tuvalu
+      - 'Tórshavn'
+      - Uganda
+      - Uruguay
+      - Uzbekistan
+      - Vaduz
+      - Vanuatu
+      - Venezuela
+      - Victoria
+      - Vienna
+      - Vientiane
+      - Vietnam
+      - Vilnius
+      - Wellington
+      - Willemstad
+      - Windhoek
+      - Yamoussoukro
+      - 'Yaoundé'
+      - Yaren
+      - Yemen
+      - Zambia
+      - Zanzibar
+      - Zimbabwe
   target_additions:
     notes.note.arctic-ocean.fields.field.country-info: Conosciuto a livello internazionale come Oceano Artico.
   variables:

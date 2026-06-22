@@ -435,6 +435,233 @@ translations:
         Island of Indonesia.: 'Île indonésienne.'
       wallis-and-futuna:
         Overseas territory of France.: 'Collectivité française d''outre-mer.'
+  no_change:
+    direct:
+      - Abuja
+      - Accra
+      - Afghanistan
+      - Alaska
+      - Alofi
+      - Amman
+      - Amsterdam
+      - Angola
+      - Anguilla
+      - Ankara
+      - Antananarivo
+      - Apia
+      - Aruba
+      - Asmara
+      - Astana
+      - Avarua
+      - Bali
+      - Bamako
+      - Bandar Seri Begawan
+      - Bangkok
+      - Bangladesh
+      - Bangui
+      - Banjul
+      - Basseterre
+      - Belfast
+      - Belgrade
+      - Belize
+      - Belmopan
+      - Berlin
+      - Bissau
+      - Botswana
+      - Bougainville
+      - Bratislava
+      - Brazzaville
+      - Bridgetown
+      - Brunei
+      - Budapest
+      - Buenos Aires
+      - Burkina Faso
+      - Burundi
+      - Canada
+      - Canberra
+      - Caracas
+      - Cardiff
+      - Castries
+      - 'Chișinău'
+      - Ciudad de la Paz
+      - Conakry
+      - Costa Rica
+      - Cuba
+      - 'Curaçao'
+      - Dakar
+      - Dili
+      - Djibouti
+      - Dodoma
+      - Doha
+      - Dublin
+      - Eswatini
+      - Europe
+      - France
+      - Freetown
+      - Funafuti
+      - Gabon
+      - Gaborone
+      - Georgetown
+      - Ghana
+      - Gibraltar
+      - Gitega
+      - Guadeloupe
+      - Guam
+      - Guatemala
+      - Guyana
+      - 'Hagåtña'
+      - Harare
+      - Hargeisa
+      - Helsinki
+      - Honduras
+      - Hong Kong
+      - Honiara
+      - Iran
+      - Islamabad
+      - Jakarta
+      - Java
+      - Jeju
+      - Jersey
+      - Kampala
+      - Kazakhstan
+      - Kenya
+      - Khartoum
+      - Kigali
+      - Kingston
+      - Kingstown
+      - Kinshasa
+      - Kiribati
+      - Kosovo
+      - Kuala Lumpur
+      - Laos
+      - Lesotho
+      - Liberia
+      - Libreville
+      - Liechtenstein
+      - Lilongwe
+      - Lima
+      - Ljubljana
+      - 'Lomé'
+      - Luanda
+      - Lusaka
+      - Luxembourg
+      - Madagascar
+      - Madrid
+      - Majuro
+      - Malawi
+      - Maldives
+      - Mali
+      - 'Malé'
+      - Managua
+      - Manama
+      - Maputo
+      - Mariehamn
+      - Martinique
+      - Maseru
+      - Mayotte
+      - Mbabane
+      - Minsk
+      - Monaco
+      - Monrovia
+      - Montevideo
+      - Moroni
+      - Mozambique
+      - Nairobi
+      - Nassau
+      - Nauru
+      - Naypyidaw
+      - New Delhi
+      - Ngerulmud
+      - Niamey
+      - Nicaragua
+      - Niger
+      - Nigeria
+      - Niue
+      - Nouakchott
+      - 'Nouméa'
+      - 'Nukuʻalofa'
+      - Nuuk
+      - Oman
+      - Oranjestad
+      - Oslo
+      - Ottawa
+      - Ouagadougou
+      - Pakistan
+      - Palestine
+      - Palikir
+      - Panama
+      - Papeete
+      - Paraguay
+      - Paramaribo
+      - Paris
+      - Philippines
+      - Phnom Penh
+      - Podgorica
+      - Port Moresby
+      - Port-au-Prince
+      - Porto-Novo
+      - Portugal
+      - Prague
+      - Praia
+      - Pristina
+      - Pyongyang
+      - Qatar
+      - Quito
+      - Rabat
+      - Riga
+      - Rome
+      - Roseau
+      - Rwanda
+      - Samoa
+      - 'San José'
+      - San Juan
+      - San Salvador
+      - Sanaa
+      - Santiago
+      - Sarajevo
+      - Seychelles
+      - Sierra Leone
+      - Skopje
+      - Sofia
+      - Somaliland
+      - Sri Lanka
+      - Stockholm
+      - Sucre
+      - Sumatra
+      - Suriname
+      - Suva
+      - Svalbard
+      - 'São Tomé'
+      - Taipei
+      - Tallinn
+      - Tegucigalpa
+      - Tirana
+      - Tiraspol
+      - Togo
+      - Tokyo
+      - Tonga
+      - Tripoli
+      - Tskhinvali
+      - Tunis
+      - Tuvalu
+      - 'Tórshavn'
+      - Ukraine
+      - Uruguay
+      - Vaduz
+      - Vanuatu
+      - Venezuela
+      - Victoria
+      - Vientiane
+      - Vilnius
+      - Wellington
+      - Willemstad
+      - Windhoek
+      - Yamoussoukro
+      - 'Yaoundé'
+      - Yaren
+      - Zagreb
+      - Zanzibar
+      - Zimbabwe
   target_additions:
     notes.note.celebes-sea.fields.field.country-info: Aussi connu comme la mer de Sulawesi.
   variables:

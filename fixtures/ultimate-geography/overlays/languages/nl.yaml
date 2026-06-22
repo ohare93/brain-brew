@@ -375,6 +375,279 @@ translations:
     Yemen: Jemen
     Yerevan: Jerevan
     'Åland Islands': 'Åland'
+  no_change:
+    direct:
+      - Abu Dhabi
+      - Abuja
+      - Accra
+      - Afghanistan
+      - Alaska
+      - Algiers
+      - Alofi
+      - Amman
+      - Amsterdam
+      - Andorra
+      - Andorra la Vella
+      - Angola
+      - Anguilla
+      - Ankara
+      - Antananarivo
+      - Antarctica
+      - Apia
+      - Aruba
+      - Asmara
+      - Astana
+      - 'Asunción'
+      - Avarua
+      - Bali
+      - Bamako
+      - Bandar Seri Begawan
+      - Bangkok
+      - Bangladesh
+      - Bangui
+      - Banjul
+      - Barbados
+      - Basseterre
+      - Belfast
+      - Belize
+      - Belmopan
+      - Benin
+      - Bermuda
+      - Bern
+      - Bhutan
+      - Bissau
+      - Bolivia
+      - Botswana
+      - Bougainville
+      - Bratislava
+      - Brazzaville
+      - Bridgetown
+      - Brunei
+      - Buenos Aires
+      - Burkina Faso
+      - Burundi
+      - Canada
+      - Canberra
+      - Caracas
+      - Cardiff
+      - Castries
+      - Charlotte Amalie
+      - China
+      - 'Chișinău'
+      - Ciudad de la Paz
+      - Colombia
+      - Conakry
+      - Corsica
+      - Costa Rica
+      - Cuba
+      - 'Curaçao'
+      - Cyprus
+      - Dakar
+      - Damascus
+      - Dhaka
+      - Dili
+      - Djibouti
+      - Dodoma
+      - Doha
+      - Dominica
+      - Dublin
+      - Ecuador
+      - Edinburgh
+      - El Salvador
+      - Eritrea
+      - Eswatini
+      - Fiji
+      - Finland
+      - Freetown
+      - Funafuti
+      - Gabon
+      - Gaborone
+      - Georgetown
+      - Ghana
+      - Gibraltar
+      - Gitega
+      - Grenada
+      - Guadeloupe
+      - Guam
+      - Guatemala
+      - Guernsey
+      - Guyana
+      - 'Hagåtña'
+      - Hanoi
+      - Harare
+      - Hargeisa
+      - Havana
+      - Helsinki
+      - Honduras
+      - Honiara
+      - India
+      - Iran
+      - Islamabad
+      - Jakarta
+      - Jamaica
+      - Japan
+      - Java
+      - Jeju
+      - Jersey
+      - Kabul
+      - Kampala
+      - Kathmandu
+      - Kigali
+      - Kingston
+      - Kingstown
+      - Kinshasa
+      - Kiribati
+      - Kosovo
+      - Kuala Lumpur
+      - Laos
+      - Lesotho
+      - Liberia
+      - Libreville
+      - Liechtenstein
+      - Lilongwe
+      - Lima
+      - Ljubljana
+      - 'Lomé'
+      - Luanda
+      - Lusaka
+      - Macau
+      - Madeira
+      - Madrid
+      - Majuro
+      - Malawi
+      - Mali
+      - Malta
+      - 'Malé'
+      - Managua
+      - Manama
+      - Maputo
+      - Mariehamn
+      - Martinique
+      - Maseru
+      - Mauritius
+      - Mayotte
+      - Mbabane
+      - Mexico
+      - Minsk
+      - Mogadishu
+      - Monaco
+      - Monrovia
+      - Montenegro
+      - Montevideo
+      - Moroni
+      - Mozambique
+      - Myanmar
+      - Nairobi
+      - Nassau
+      - Nauru
+      - Naypyidaw
+      - Nepal
+      - New Delhi
+      - Ngerulmud
+      - Niamey
+      - Nicaragua
+      - Nicosia
+      - Niger
+      - Nigeria
+      - Niue
+      - Nouakchott
+      - 'Nouméa'
+      - 'Nukuʻalofa'
+      - Nuuk
+      - Oman
+      - Oranjestad
+      - Oslo
+      - Ottawa
+      - Ouagadougou
+      - Pakistan
+      - Palau
+      - Palikir
+      - Panama
+      - Papeete
+      - Paraguay
+      - Paramaribo
+      - Peru
+      - Phnom Penh
+      - Podgorica
+      - Port Louis
+      - Port Moresby
+      - Port Vila
+      - Port of Spain
+      - Port-au-Prince
+      - Porto-Novo
+      - Portugal
+      - Praia
+      - Pristina
+      - Puerto Rico
+      - Pyongyang
+      - Qatar
+      - Quito
+      - Rabat
+      - Riga
+      - Rome
+      - Roseau
+      - Rwanda
+      - 'Réunion'
+      - Saint Lucia
+      - Samoa
+      - 'San José'
+      - San Juan
+      - San Marino
+      - San Salvador
+      - Sanaa
+      - Santiago
+      - Santo Domingo
+      - Sarajevo
+      - Senegal
+      - Sierra Leone
+      - Singapore
+      - Skopje
+      - Sofia
+      - Somaliland
+      - Sri Lanka
+      - Stockholm
+      - Sucre
+      - Sumatra
+      - Suriname
+      - Suva
+      - Taipei
+      - Taiwan
+      - Tallinn
+      - Tanzania
+      - Tbilisi
+      - Tegucigalpa
+      - Thailand
+      - Thimphu
+      - Tirana
+      - Tiraspol
+      - Togo
+      - Tonga
+      - Tripoli
+      - Tunis
+      - Turkmenistan
+      - Tuvalu
+      - 'Tórshavn'
+      - Ulaanbaatar
+      - Uruguay
+      - Vaduz
+      - Valletta
+      - Vanuatu
+      - Venezuela
+      - Victoria
+      - Vientiane
+      - Vietnam
+      - Vilnius
+      - Wales
+      - Wellington
+      - Willemstad
+      - Windhoek
+      - Yamoussoukro
+      - 'Yaoundé'
+      - Yaren
+      - Zagreb
+      - Zambia
+      - Zanzibar
+      - Zimbabwe
   target_additions:
     notes.note.baltic-sea.fields.field.country-info: Ook wel Baltische Zee.
     notes.note.belarus.fields.field.country-info: Ook bekend als Belarus.

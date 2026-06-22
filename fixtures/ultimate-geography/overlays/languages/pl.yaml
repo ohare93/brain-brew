@@ -452,6 +452,202 @@ translations:
     Yerevan: 'Erywań'
     Zagreb: Zagrzeb
     'Åland Islands': Wyspy Alandzkie
+  no_change:
+    direct:
+      - Alaska
+      - Albania
+      - Alofi
+      - Amman
+      - Amsterdam
+      - Angola
+      - Anguilla
+      - Ankara
+      - Apia
+      - Armenia
+      - Aruba
+      - Asmara
+      - Astana
+      - 'Asunción'
+      - Australia
+      - Austria
+      - Avarua
+      - Baku
+      - Bali
+      - Bamako
+      - Bandar Seri Begawan
+      - Bangkok
+      - Barbados
+      - Basseterre
+      - Belfast
+      - Belize
+      - Belmopan
+      - Benin
+      - Berlin
+      - Bhutan
+      - Bissau
+      - Botswana
+      - Bougainville
+      - Brazzaville
+      - Bridgetown
+      - Brunei
+      - Buenos Aires
+      - Burkina Faso
+      - Burundi
+      - Canberra
+      - Caracas
+      - Cardiff
+      - Castries
+      - Charlotte Amalie
+      - Chile
+      - Ciudad de la Paz
+      - 'Curaçao'
+      - Dakar
+      - Dhaka
+      - Dili
+      - Dodoma
+      - Doha
+      - Dublin
+      - Estonia
+      - Eswatini
+      - Freetown
+      - Funafuti
+      - Gabon
+      - Gaborone
+      - Georgetown
+      - Ghana
+      - Gibraltar
+      - Gitega
+      - Grenada
+      - Guam
+      - Guernsey
+      - 'Hagåtña'
+      - Haiti
+      - Hanoi
+      - Harare
+      - Helsinki
+      - Honduras
+      - Honiara
+      - Iran
+      - Islamabad
+      - Jersey
+      - Kabul
+      - Kampala
+      - Kigali
+      - Kingston
+      - Kingstown
+      - Kiribati
+      - Kuala Lumpur
+      - Laos
+      - Lesotho
+      - Liberia
+      - Libreville
+      - Liechtenstein
+      - Lilongwe
+      - Lima
+      - 'Lomé'
+      - Luanda
+      - Lusaka
+      - Majuro
+      - Malawi
+      - Mali
+      - Malta
+      - Managua
+      - Manama
+      - Manila
+      - Maputo
+      - Maseru
+      - Mauritius
+      - Mbabane
+      - Mongolia
+      - Monrovia
+      - Montevideo
+      - Moroni
+      - Nairobi
+      - Namibia
+      - Nassau
+      - Nauru
+      - Naypyidaw
+      - Nepal
+      - Ngerulmud
+      - Niamey
+      - Niger
+      - Nigeria
+      - Niue
+      - 'Nukuʻalofa'
+      - Nuuk
+      - Oceania
+      - Oman
+      - Oranjestad
+      - Oslo
+      - Ottawa
+      - Pakistan
+      - Palau
+      - Palikir
+      - Panama
+      - Papeete
+      - Paramaribo
+      - Peru
+      - Phnom Penh
+      - Podgorica
+      - Port Louis
+      - Port Moresby
+      - Port Vila
+      - Port-au-Prince
+      - Porto-Novo
+      - Praia
+      - Quito
+      - Rabat
+      - 'Reykjavík'
+      - Roseau
+      - Rwanda
+      - Saint Lucia
+      - Samoa
+      - 'San José'
+      - San Juan
+      - San Marino
+      - San Salvador
+      - Santiago
+      - Santo Domingo
+      - Senegal
+      - Serbia
+      - Sierra Leone
+      - Sint Maarten
+      - Skopje
+      - Sofia
+      - Somalia
+      - Somaliland
+      - South Tarawa
+      - Sri Lanka
+      - Sucre
+      - Sudan
+      - Sumatra
+      - Suva
+      - Svalbard
+      - Syria
+      - 'São Tomé'
+      - Tallinn
+      - Tanzania
+      - Tbilisi
+      - Tegucigalpa
+      - Thimphu
+      - Tirana
+      - Togo
+      - Tonga
+      - Tunis
+      - Turkmenistan
+      - Tuvalu
+      - Uganda
+      - Uzbekistan
+      - Vaduz
+      - Valletta
+      - Vanuatu
+      - Victoria
+      - Wellington
+      - Willemstad
+      - Yaren
+      - Zambia
+      - Zanzibar
+      - Zimbabwe
   target_additions:
     notes.note.arctic-ocean.fields.field.country-info: 'Znany także jako Ocean Północny lub Morze Arktyczne.'
     notes.note.netherlands.fields.field.country-info: 'Znana także jako Niderlandy.'
