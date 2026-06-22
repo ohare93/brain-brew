@@ -6,6 +6,7 @@ use brain_brew_formats::core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplateChange, ChangeIntent, DeckChange,
     ExpectedBase, FieldChange, FieldDefinition, FieldDefinitionChange, MediaChange, MediaReference,
     Note, NoteChange, NoteTypeChange, Overlay, OverlayKind, PropertyChange, StableId, TagChange,
+    TranslationDictionary,
 };
 use brain_brew_formats::{canonical_yaml, crowdanki, manifest, media, source_includes};
 
@@ -1030,6 +1031,61 @@ fn ug_regression_note_changes_flow_to_crowdanki_for_every_target() {
             }],
         )
     });
+}
+
+#[test]
+fn ug_regression_translation_overlay_changes_flow_to_resolved_and_crowdanki_output() {
+    let root = fixture_root();
+    let manifest = read_manifest(&root);
+    let target = "en-standard";
+    let baseline_deck = compose_target(&root, &manifest, target);
+    let baseline_json = exported_json(&baseline_deck);
+    let note_id = sid("note.finland");
+    let field_id = sid("field.capital");
+    let current_value = baseline_deck.notes[&note_id].fields[&field_id].clone();
+    let translated_value = "Regression translated capital".to_owned();
+    let expected_export_path =
+        note_field_json_path(&baseline_deck, "note.finland", "field.capital");
+
+    let mut overlay = empty_overlay("overlay.regression.translation.en-standard");
+    overlay.kind = OverlayKind::Translation;
+    overlay.translations = Some(TranslationDictionary {
+        direct: BTreeMap::new(),
+        contextual: BTreeMap::from([(
+            "notes.note.finland".to_owned(),
+            BTreeMap::from([(current_value, translated_value.clone())]),
+        )]),
+        no_change: BTreeSet::new(),
+        target_additions: BTreeMap::new(),
+        variables: BTreeMap::new(),
+        adapter_ids: BTreeMap::new(),
+        require_complete: false,
+        ignore_paths: BTreeSet::new(),
+    });
+
+    let changed_deck = compose_target_with_extra_overlay(&root, &manifest, target, Some(overlay));
+    let resolved_diff = baseline_deck.semantic_diff(&changed_deck);
+    assert_eq!(resolved_diff.changes.len(), 1);
+    assert_eq!(
+        resolved_diff.changes[0].path,
+        "notes.note.finland.fields.field.capital"
+    );
+    assert_eq!(resolved_diff.changes[0].before.as_deref(), Some("Helsinki"));
+    assert_eq!(
+        resolved_diff.changes[0].after.as_deref(),
+        Some(translated_value.as_str())
+    );
+
+    let changed_json = exported_json(&changed_deck);
+    assert_eq!(
+        json_diff_paths(&baseline_json, &changed_json),
+        BTreeSet::from([expected_export_path.clone()]),
+        "translation overlay should change exactly one CrowdAnki JSON path"
+    );
+    assert_eq!(
+        changed_json.pointer(&expected_export_path),
+        Some(&serde_json::json!(translated_value))
+    );
 }
 
 #[test]

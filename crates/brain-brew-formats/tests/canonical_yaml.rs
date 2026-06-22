@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, MediaReference, Note, NoteType,
-    StableId,
+    SemanticChangeKind, StableId,
 };
 use brain_brew_formats::{canonical_yaml, crowdanki};
 
@@ -25,7 +25,7 @@ fn parses_emitted_yaml_back_to_semantically_equal_deck() {
 }
 
 #[test]
-fn formatter_canonicalizes_valid_yaml_bytes() {
+fn semantic_diff_ignores_yaml_ordering_and_reports_content_changes() {
     let messy_yaml = r#"deck:
   description: A geography deck fixture.
   id: deck.ultimate-geography
@@ -71,6 +71,23 @@ tombstones: []
     let formatted = canonical_yaml::format_str(messy_yaml).expect("valid yaml formats");
 
     assert_eq!(formatted, EXPECTED_CANONICAL_YAML);
+
+    let canonical = canonical_yaml::from_str(EXPECTED_CANONICAL_YAML).expect("canonical parses");
+    let reordered = canonical_yaml::from_str(messy_yaml).expect("reordered yaml parses");
+    assert!(
+        canonical.semantic_diff(&reordered).is_empty(),
+        "semantic comparison should ignore YAML key ordering and formatting noise"
+    );
+
+    let changed_yaml = messy_yaml.replace("field.capital: Helsinki", "field.capital: Helsingfors");
+    let changed = canonical_yaml::from_str(&changed_yaml).expect("changed yaml parses");
+    let diff = canonical.semantic_diff(&changed);
+    assert_eq!(diff.changes.len(), 1);
+    let change = &diff.changes[0];
+    assert_eq!(change.kind, SemanticChangeKind::Modified);
+    assert_eq!(change.path, "notes.note.finland.fields.field.capital");
+    assert_eq!(change.before.as_deref(), Some("Helsinki"));
+    assert_eq!(change.after.as_deref(), Some("Helsingfors"));
 }
 
 #[test]
