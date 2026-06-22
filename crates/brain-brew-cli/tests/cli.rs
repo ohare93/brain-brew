@@ -1108,6 +1108,36 @@ fn translations_interactive_derives_selector_options_and_prints_equivalent_comma
 }
 
 #[test]
+fn translations_interactive_apply_can_use_one_action_for_all_selected_rows() {
+    let dir = temp_dir("translations-interactive-direct-all");
+    write_translation_workspace(&dir);
+    let overlay_path = dir.join("da.yaml");
+
+    let output = run_with_stdin(
+        [
+            "translations",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--target",
+            "da-standard",
+            "--path-prefix",
+            "notes.note.sweden.fields.field",
+            "--apply",
+            "--interactive",
+        ],
+        "\n\n\n",
+    );
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("Action for selected missing translations"));
+    assert!(out.contains("add direct source→source stubs for all 2 selected missing translations"));
+    let updated = fs::read_to_string(overlay_path).unwrap();
+    assert!(updated.contains("    Stockholm: Stockholm\n"));
+    assert!(updated.contains("    Sweden: Sweden\n"));
+}
+
+#[test]
 fn translations_interactive_apply_can_insert_contextual_stub() {
     let dir = temp_dir("translations-interactive-contextual");
     write_translation_workspace(&dir);

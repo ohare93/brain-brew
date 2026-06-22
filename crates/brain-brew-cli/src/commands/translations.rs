@@ -958,6 +958,45 @@ fn prompt_selective_apply<R: Read, W: Write>(
         .collect::<Vec<_>>();
     let selected = ui.select_many("Rows to edit", &row_labels, true)?;
 
+    let selected_missing = selected
+        .iter()
+        .copied()
+        .filter(|row_index| {
+            let (_, entry_index) = rows[*row_index];
+            reports[rows[*row_index].0].report.entries[entry_index].category
+                == TranslationCoverageCategory::UntranslatedFallback
+        })
+        .collect::<Vec<_>>();
+
+    let bulk_action = if selected_missing.is_empty() {
+        MissingApplyAction::Skip
+    } else {
+        let labels = vec![
+            format!(
+                "add direct source→source stubs for all {} selected missing translations",
+                selected_missing.len()
+            ),
+            format!(
+                "add contextual source→source stubs for all {} selected missing translations",
+                selected_missing.len()
+            ),
+            format!(
+                "add ignore_paths entries for all {} selected missing translations",
+                selected_missing.len()
+            ),
+            "decide per row".to_owned(),
+            "skip selected missing translations".to_owned(),
+        ];
+        match ui.select_one("Action for selected missing translations", &labels, 0)? {
+            0 => MissingApplyAction::Direct,
+            1 => MissingApplyAction::Contextual,
+            2 => MissingApplyAction::IgnorePath,
+            3 => MissingApplyAction::DecidePerRow,
+            4 => MissingApplyAction::Skip,
+            _ => unreachable!(),
+        }
+    };
+
     let mut edits = BTreeMap::<PathBuf, OverlayEdits>::new();
     for row_index in selected {
         let (report_index, entry_index) = rows[row_index];
@@ -965,41 +1004,13 @@ fn prompt_selective_apply<R: Read, W: Write>(
         let entry = &report.report.entries[entry_index];
         match entry.category {
             TranslationCoverageCategory::UntranslatedFallback => {
-                let context = contextual_context_for_entry(entry);
-                let action_labels = vec![
-                    "add direct source→source stub".to_owned(),
-                    format!("add contextual source→source stub at {context}"),
-                    "add ignore path for this deck path".to_owned(),
-                    "skip".to_owned(),
-                ];
-                let action = ui.select_one(
-                    &format!(
-                        "{} at {} source={}",
-                        entry.category.as_str(),
-                        entry.path,
-                        yaml_scalar(&entry.source)
-                    ),
-                    &action_labels,
-                    0,
-                )?;
-                let file_edits = edits.entry(report.overlay_path.clone()).or_default();
-                match action {
-                    0 => {
-                        file_edits.direct.insert(entry.source.clone());
+                let action = match bulk_action {
+                    MissingApplyAction::DecidePerRow => {
+                        prompt_missing_apply_action(&mut ui, entry)?
                     }
-                    1 => {
-                        file_edits
-                            .contextual
-                            .entry(context)
-                            .or_default()
-                            .insert(entry.source.clone());
-                    }
-                    2 => {
-                        file_edits.ignore_paths.insert(entry.path.clone());
-                    }
-                    3 => {}
-                    _ => unreachable!(),
-                }
+                    other => other,
+                };
+                apply_missing_translation_action(&mut edits, &report.overlay_path, entry, action);
             }
             _ => {
                 ui.message(&format!(
@@ -1021,6 +1032,69 @@ fn prompt_selective_apply<R: Read, W: Write>(
         Ok(edits)
     } else {
         Ok(BTreeMap::new())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MissingApplyAction {
+    Direct,
+    Contextual,
+    IgnorePath,
+    DecidePerRow,
+    Skip,
+}
+
+fn prompt_missing_apply_action<R: Read, W: Write>(
+    ui: &mut TerminalUi<'_, R, W>,
+    entry: &TranslationCoverageEntry,
+) -> Result<MissingApplyAction, String> {
+    let context = contextual_context_for_entry(entry);
+    let action_labels = vec![
+        "add direct source→source stub".to_owned(),
+        format!("add contextual source→source stub at {context}"),
+        "add ignore path for this deck path".to_owned(),
+        "skip".to_owned(),
+    ];
+    match ui.select_one(
+        &format!(
+            "{} at {} source={}",
+            entry.category.as_str(),
+            entry.path,
+            yaml_scalar(&entry.source)
+        ),
+        &action_labels,
+        0,
+    )? {
+        0 => Ok(MissingApplyAction::Direct),
+        1 => Ok(MissingApplyAction::Contextual),
+        2 => Ok(MissingApplyAction::IgnorePath),
+        3 => Ok(MissingApplyAction::Skip),
+        _ => unreachable!(),
+    }
+}
+
+fn apply_missing_translation_action(
+    edits: &mut BTreeMap<PathBuf, OverlayEdits>,
+    overlay_path: &Path,
+    entry: &TranslationCoverageEntry,
+    action: MissingApplyAction,
+) {
+    let file_edits = edits.entry(overlay_path.to_path_buf()).or_default();
+    match action {
+        MissingApplyAction::Direct => {
+            file_edits.direct.insert(entry.source.clone());
+        }
+        MissingApplyAction::Contextual => {
+            file_edits
+                .contextual
+                .entry(contextual_context_for_entry(entry))
+                .or_default()
+                .insert(entry.source.clone());
+        }
+        MissingApplyAction::IgnorePath => {
+            file_edits.ignore_paths.insert(entry.path.clone());
+        }
+        MissingApplyAction::DecidePerRow | MissingApplyAction::Skip => {}
     }
 }
 
