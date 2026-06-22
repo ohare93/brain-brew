@@ -1074,6 +1074,7 @@ impl CrowdAnkiNoteJson {
                 note_type_id,
                 variables: BTreeMap::new(),
                 fields,
+                field_messages: BTreeMap::new(),
                 tags: self.tags.into_iter().collect(),
                 adapter_ids,
             },

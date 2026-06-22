@@ -86,6 +86,57 @@ Use `no_change` for names or phrases that should stay identical everywhere they 
 
 Keep `ignore_paths` for structural paths that translators should not review at all, such as tags, flag/map HTML, or adapter metadata. Use `no_change` for translator-facing text that was reviewed and intentionally left as-is.
 
+## Structured messages for composite fields
+
+Use a structured field message when a field value is genuinely assembled from reusable translated pieces, such as a list of country names plus small qualifier fragments. Do not use it for every ordinary sentence; plain scalar strings are easier to read and translate when the whole sentence is the natural translation unit.
+
+Base source:
+
+```yaml
+notes:
+  note.finland:
+    fields:
+      field.flag-similarity:
+        message:
+          - ref: notes.note.iceland.fields.field.country
+          - literal: ' ('
+          - text: blue background with a white cross
+          - literal: '), '
+          - ref: notes.note.norway.fields.field.country
+          - literal: ' ('
+          - text: red background with a blue cross
+          - literal: ')'
+```
+
+Components mean:
+
+- `ref` points at another note field and can reuse that field's existing translation, such as a country-name entry in `translations.direct`;
+- `text` is an editable translatable fragment and appears in translation coverage at a component path such as `notes.note.finland.fields.field.flag-similarity.message.2`;
+- `literal` is non-translatable glue for punctuation, spaces, or markup.
+
+Translation overlay:
+
+```yaml
+translations:
+  direct:
+    Iceland: Island
+    Norway: Norge
+    red background with a blue cross: rød bakgrunn med blått kors
+  contextual:
+    notes.note.finland:
+      blue background with a white cross: blå bakgrunn med hvitt kors
+```
+
+The resolved field exported to Anki is still a plain string:
+
+```text
+Island (blå bakgrunn med hvitt kors), Norge (rød bakgrunn med blått kors)
+```
+
+Strict coverage reports missing and stale entries for each `text` or `ref` component instead of requiring one long key for the whole composite field. The translator context view shows the resolved message plus its components so translators can edit the reusable country names and qualifier fragments separately. If a target language needs a special whole-field wording, add a contextual translation for the full resolved source string at the field or note context; that full override replaces the component-composed output for that target.
+
+Coordinate with deck maintainers before migrating existing large fields: structured messages are best for repeated, composite source text where component reuse clearly reduces duplication.
+
 ## Target-language additions for blank source fields
 
 Use `translations.target_additions` only when blank localized text genuinely belongs to the translation overlay. This is valid when the source deck intentionally has no English text for the field but a target language should supply text.

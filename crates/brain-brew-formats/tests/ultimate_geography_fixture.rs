@@ -1006,6 +1006,7 @@ fn ug_regression_note_changes_flow_to_crowdanki_for_every_target() {
             note_type_id: note_type.id.clone(),
             variables: BTreeMap::new(),
             fields,
+            field_messages: BTreeMap::new(),
             tags: BTreeSet::from(["ZZZ::Regression".to_owned()]),
             adapter_ids,
         };

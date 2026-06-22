@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use brain_brew_core::{
     CanonicalDeck, Overlay, OverlayKind, TranslationContextUnit, TranslationContextView,
     TranslationCoverageCategory, TranslationCoverageEntry, TranslationCoverageReport,
+    TranslationMessageContext,
 };
 use brain_brew_formats::manifest::FederatedDeckManifest;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -1755,6 +1756,19 @@ fn context_unit_json(unit: &TranslationContextUnit) -> serde_json::Value {
             "translated": field.translated,
             "status": field.category.map(|category| category.as_str()),
         })).collect::<Vec<_>>(),
+        "message": unit.message.as_ref().map(|message| json!({
+            "source": message.source,
+            "translated": message.translated,
+            "components": message.components.iter().map(|component| json!({
+                "index": component.index,
+                "kind": component.kind.as_str(),
+                "path": component.path,
+                "source": component.source,
+                "translated": component.translated,
+                "reference": component.reference,
+                "status": component.category.map(|category| category.as_str()),
+            })).collect::<Vec<_>>(),
+        })),
         "card_templates": unit.card_templates.iter().map(|card| json!({
             "template_id": card.template_id.as_str(),
             "template_name": card.template_name,
@@ -1830,6 +1844,9 @@ fn print_context_unit(unit: &TranslationContextUnit, language: &str) {
     if !unit.note_fields.is_empty() {
         print_note_field_context(unit, language);
     }
+    if let Some(message) = &unit.message {
+        print_message_context(message, language);
+    }
     if let Some(context) = &unit.context {
         println!("    dictionary context: {context}");
     }
@@ -1877,6 +1894,32 @@ fn print_note_field_context(unit: &TranslationContextUnit, language: &str) {
             format!("{} ({})", field.field_id, field.field_name),
             compact_context_value(&field.source),
             compact_context_value(&field.translated)
+        );
+    }
+}
+
+fn print_message_context(message: &TranslationMessageContext, language: &str) {
+    println!("    structured message (source/en | target/{language}):");
+    println!(
+        "      resolved {} | {}",
+        compact_context_value(&message.source),
+        compact_context_value(&message.translated)
+    );
+    for component in &message.components {
+        let label = match component.reference.as_deref() {
+            Some(reference) => format!(
+                "[{}] {} {}",
+                component.index,
+                component.kind.as_str(),
+                reference
+            ),
+            None => format!("[{}] {}", component.index, component.kind.as_str()),
+        };
+        println!(
+            "      {:<32} {} | {}",
+            label,
+            compact_context_value(&component.source),
+            compact_context_value(&component.translated)
         );
     }
 }

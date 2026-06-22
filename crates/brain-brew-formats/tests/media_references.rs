@@ -175,6 +175,7 @@ fn media_deck() -> CanonicalDeck {
             (sid("field.country"), "Finland".to_owned()),
             (sid("field.flag"), "<img src=\"flags/fi.png\">".to_owned()),
         ]),
+        field_messages: BTreeMap::new(),
         tags: BTreeSet::new(),
         adapter_ids: AdapterIds::new(),
     };

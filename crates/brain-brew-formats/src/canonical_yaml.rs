@@ -4,8 +4,9 @@ use std::fmt::{self, Write as _};
 use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, ChangeIntent,
     DeckChange, ExpectedBase, FieldChange, FieldDefinition, FieldDefinitionChange, InvalidStableId,
-    MediaChange, MediaReference, Note, NoteChange, NoteType, NoteTypeChange, Overlay, OverlayKind,
-    PropertyChange, StableId, TagChange, TranslationDictionary, ValidationReport,
+    MediaChange, MediaReference, MessageComponent, Note, NoteChange, NoteType, NoteTypeChange,
+    Overlay, OverlayKind, PropertyChange, StableId, StructuredMessage, TagChange,
+    TranslationDictionary, ValidationReport,
 };
 use serde::Deserialize;
 
@@ -109,8 +110,12 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
         write_variables(&mut out, "    ", &note.variables);
         writeln!(out, "    fields:").expect("writing to a string cannot fail");
         for (field_id, value) in &note.fields {
-            writeln!(out, "      {field_id}: {}", yaml_scalar(value))
-                .expect("writing to a string cannot fail");
+            if let Some(message) = note.field_messages.get(field_id) {
+                write_structured_message_field(&mut out, "      ", field_id, message);
+            } else {
+                writeln!(out, "      {field_id}: {}", yaml_scalar(value))
+                    .expect("writing to a string cannot fail");
+            }
         }
         writeln!(out, "    tags:").expect("writing to a string cannot fail");
         for tag in &note.tags {
@@ -825,14 +830,44 @@ fn write_note_payload(out: &mut String, indent: &str, note: &Note) {
     write_variables(out, indent, &note.variables);
     writeln!(out, "{indent}fields:").expect("writing to a string cannot fail");
     for (field_id, value) in &note.fields {
-        writeln!(out, "{indent}  {field_id}: {}", yaml_scalar(value))
-            .expect("writing to a string cannot fail");
+        if let Some(message) = note.field_messages.get(field_id) {
+            write_structured_message_field(out, &format!("{indent}  "), field_id, message);
+        } else {
+            writeln!(out, "{indent}  {field_id}: {}", yaml_scalar(value))
+                .expect("writing to a string cannot fail");
+        }
     }
     writeln!(out, "{indent}tags:").expect("writing to a string cannot fail");
     for tag in &note.tags {
         writeln!(out, "{indent}  - {}", yaml_scalar(tag)).expect("writing to a string cannot fail");
     }
     write_adapter_ids(out, indent, &note.adapter_ids);
+}
+
+fn write_structured_message_field(
+    out: &mut String,
+    indent: &str,
+    field_id: &StableId,
+    message: &StructuredMessage,
+) {
+    writeln!(out, "{indent}{field_id}:").expect("writing to a string cannot fail");
+    writeln!(out, "{indent}  message:").expect("writing to a string cannot fail");
+    for component in &message.components {
+        match component {
+            MessageComponent::Literal(value) => {
+                writeln!(out, "{indent}    - literal: {}", yaml_scalar(value))
+                    .expect("writing to a string cannot fail");
+            }
+            MessageComponent::Text(value) => {
+                writeln!(out, "{indent}    - text: {}", yaml_scalar(value))
+                    .expect("writing to a string cannot fail");
+            }
+            MessageComponent::FieldRef(reference) => {
+                writeln!(out, "{indent}    - ref: {}", yaml_scalar(reference))
+                    .expect("writing to a string cannot fail");
+            }
+        }
+    }
 }
 
 fn write_card_template_payload(out: &mut String, indent: &str, template: &CardTemplate) {
@@ -1732,7 +1767,7 @@ struct CanonicalDeckYaml {
 
 impl CanonicalDeckYaml {
     fn into_deck(self) -> Result<CanonicalDeck, CanonicalYamlError> {
-        Ok(CanonicalDeck {
+        let deck = CanonicalDeck {
             id: sid(&self.deck.id)?,
             name: self.deck.name,
             description: self.deck.description,
@@ -1767,7 +1802,9 @@ impl CanonicalDeckYaml {
                 .map(|id| sid(&id))
                 .collect::<Result<BTreeSet<_>, _>>()?,
             adapter_ids: adapter_ids_from_map(self.deck.adapter_ids),
-        })
+        };
+        deck.resolve_structured_messages()
+            .map_err(CanonicalYamlError::Validation)
     }
 }
 
@@ -1858,7 +1895,7 @@ struct NoteYaml {
     note_type_id: String,
     #[serde(default)]
     variables: BTreeMap<String, String>,
-    fields: BTreeMap<String, String>,
+    fields: BTreeMap<String, FieldValueYaml>,
     #[serde(default)]
     tags: BTreeSet<String>,
     #[serde(default)]
@@ -1867,18 +1904,91 @@ struct NoteYaml {
 
 impl NoteYaml {
     fn into_note(self, id: StableId) -> Result<Note, CanonicalYamlError> {
+        let mut fields = BTreeMap::new();
+        let mut field_messages = BTreeMap::new();
+        for (field_id, value) in self.fields {
+            let field_id = sid(&field_id)?;
+            match value {
+                FieldValueYaml::Scalar(value) => {
+                    fields.insert(field_id, value);
+                }
+                FieldValueYaml::Message(message) => {
+                    fields.insert(field_id.clone(), String::new());
+                    field_messages.insert(field_id, message.into_structured_message());
+                }
+            }
+        }
         Ok(Note {
             id,
             note_type_id: sid(&self.note_type_id)?,
             variables: self.variables,
-            fields: self
-                .fields
-                .into_iter()
-                .map(|(id, value)| Ok((sid(&id)?, value)))
-                .collect::<Result<_, CanonicalYamlError>>()?,
+            fields,
+            field_messages,
             tags: self.tags,
             adapter_ids: adapter_ids_from_map(self.adapter_ids),
         })
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum FieldValueYaml {
+    Scalar(String),
+    Message(FieldMessageYaml),
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FieldMessageYaml {
+    message: Vec<MessageComponentYaml>,
+}
+
+impl FieldMessageYaml {
+    fn into_structured_message(self) -> StructuredMessage {
+        StructuredMessage {
+            components: self
+                .message
+                .into_iter()
+                .map(MessageComponentYaml::into_component)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum MessageComponentYaml {
+    Literal(LiteralComponentYaml),
+    Text(TextComponentYaml),
+    Reference(ReferenceComponentYaml),
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LiteralComponentYaml {
+    literal: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TextComponentYaml {
+    text: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReferenceComponentYaml {
+    #[serde(rename = "ref")]
+    reference: String,
+}
+
+impl MessageComponentYaml {
+    fn into_component(self) -> MessageComponent {
+        match self {
+            Self::Literal(component) => MessageComponent::Literal(component.literal),
+            Self::Text(component) => MessageComponent::Text(component.text),
+            Self::Reference(component) => MessageComponent::FieldRef(component.reference),
+        }
     }
 }
 

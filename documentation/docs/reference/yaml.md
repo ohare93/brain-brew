@@ -53,6 +53,24 @@ kind: patch       # corrections or adjustments
 kind: personal    # learner/local source content
 ```
 
+## Structured field messages
+
+Note fields are usually scalar strings. For genuinely composite text that should reuse existing translations, a field may use a structured `message` instead:
+
+```yaml
+notes:
+  note.finland:
+    fields:
+      field.flag-similarity:
+        message:
+          - ref: notes.note.iceland.fields.field.country
+          - literal: ' ('
+          - text: blue background with a white cross
+          - literal: ')'
+```
+
+`ref` resolves another note field before export, `text` is extracted for translation coverage, and `literal` is non-translatable glue. Adapter exports receive a plain resolved string.
+
 ## Translation dictionary
 
 ```yaml

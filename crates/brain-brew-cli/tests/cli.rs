@@ -1092,6 +1092,55 @@ fn translations_context_view_json_exposes_reusable_context_model() {
 }
 
 #[test]
+fn translations_context_view_json_shows_structured_message_components() {
+    let dir = temp_dir("translations-context-structured-message");
+    write_structured_message_translation_workspace(&dir);
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "nb-standard",
+        "--context",
+        "--source",
+        "blue background",
+        "--json",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    let unit = &json["contexts"][0]["units"][0];
+    assert_eq!(
+        unit["path"],
+        "notes.note.finland.fields.field.flag-similarity.message.2"
+    );
+    assert_eq!(unit["status"], "contextual_override");
+    assert_eq!(
+        unit["message"]["source"],
+        "Iceland (blue background with a white cross), Norway (red background with a blue cross)"
+    );
+    assert_eq!(
+        unit["message"]["translated"],
+        "Island (blå bakgrunn med hvitt kors), Norge (rød bakgrunn med blått kors)"
+    );
+    let components = unit["message"]["components"].as_array().unwrap();
+    assert_eq!(components[0]["kind"], "field_ref");
+    assert_eq!(
+        components[0]["reference"],
+        "notes.note.iceland.fields.field.country"
+    );
+    assert_eq!(components[0]["source"], "Iceland");
+    assert_eq!(components[0]["translated"], "Island");
+    assert_eq!(components[2]["kind"], "text");
+    assert_eq!(
+        components[2]["source"],
+        "blue background with a white cross"
+    );
+    assert_eq!(components[2]["translated"], "blå bakgrunn med hvitt kors");
+}
+
+#[test]
 fn translations_context_apply_uses_existing_translation_apply_path() {
     let dir = temp_dir("translations-context-apply");
     write_translation_workspace(&dir);
@@ -2449,6 +2498,121 @@ targets:
   da-standard:
     overlays:
       - overlay.translation.da
+"#,
+    )
+    .unwrap();
+}
+
+fn write_structured_message_translation_workspace(dir: &Path) {
+    fs::write(
+        dir.join("deck.yaml"),
+        r#"deck:
+  id: deck.structured-message
+  name: Structured Message Fixture
+  description: Structured message translation fixture.
+  adapter_ids: {}
+note_types:
+  note-type.country:
+    name: Country
+    field_order:
+      - field.country
+      - field.capital
+      - field.flag
+      - field.flag-similarity
+    fields:
+      field.country:
+        name: Country
+      field.capital:
+        name: Capital
+      field.flag:
+        name: Flag
+      field.flag-similarity:
+        name: Flag similarity
+    card_template_order:
+      - template.flag-country
+    card_templates:
+      template.flag-country:
+        name: Flag - Country
+        question_format: '{{Flag}}'
+        answer_format: '{{Flag similarity}}'
+        adapter_ids: {}
+    styling: ''
+    adapter_ids: {}
+notes:
+  note.finland:
+    note_type_id: note-type.country
+    fields:
+      field.capital: Helsinki
+      field.country: Finland
+      field.flag: '<img src="fi.png">'
+      field.flag-similarity:
+        message:
+          - ref: notes.note.iceland.fields.field.country
+          - literal: ' ('
+          - text: blue background with a white cross
+          - literal: '), '
+          - ref: notes.note.norway.fields.field.country
+          - literal: ' ('
+          - text: red background with a blue cross
+          - literal: ')'
+    tags: []
+    adapter_ids: {}
+  note.iceland:
+    note_type_id: note-type.country
+    fields:
+      field.capital: Reykjavik
+      field.country: Iceland
+      field.flag: '<img src="is.png">'
+      field.flag-similarity: ''
+    tags: []
+    adapter_ids: {}
+  note.norway:
+    note_type_id: note-type.country
+    fields:
+      field.capital: Oslo
+      field.country: Norway
+      field.flag: '<img src="no.png">'
+      field.flag-similarity: ''
+    tags: []
+    adapter_ids: {}
+media: {}
+tombstones: []
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("nb.yaml"),
+        r#"id: overlay.translation.nb
+kind: translation
+translations:
+  ignore_paths:
+    - deck.*
+    - note_types.*
+    - notes.*.fields.field.country
+    - notes.*.fields.field.capital
+    - notes.*.fields.field.flag
+    - notes.*.tags.*
+  direct:
+    Iceland: Island
+    Norway: Norge
+    red background with a blue cross: rød bakgrunn med blått kors
+  contextual:
+    notes.note.finland:
+      blue background with a white cross: blå bakgrunn med hvitt kors
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.translation.nb:
+    file: nb.yaml
+    kind: translation
+targets:
+  nb-standard:
+    overlays:
+      - overlay.translation.nb
 "#,
     )
     .unwrap();

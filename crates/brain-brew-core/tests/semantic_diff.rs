@@ -103,6 +103,7 @@ fn ug_style_deck() -> CanonicalDeck {
             (sid("field.capital"), "Helsinki".to_owned()),
             (sid("field.flag"), "<img src=\"fi.png\">".to_owned()),
         ]),
+        field_messages: BTreeMap::new(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: AdapterIds::new(),
     };
@@ -137,6 +138,7 @@ fn sweden_note() -> Note {
             (sid("field.capital"), "Stockholm".to_owned()),
             (sid("field.flag"), "<img src=\"se.png\">".to_owned()),
         ]),
+        field_messages: BTreeMap::new(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: AdapterIds::new(),
     }

@@ -91,6 +91,77 @@ tombstones: []
 }
 
 #[test]
+fn parses_formats_and_resolves_structured_message_fields() {
+    let yaml = r#"deck:
+  id: deck.structured-message
+  name: Structured Message Fixture
+  description: Structured message translation fixture.
+  adapter_ids: {}
+note_types:
+  note-type.country:
+    name: Country
+    field_order:
+      - field.country
+      - field.flag-similarity
+    fields:
+      field.country:
+        name: Country
+      field.flag-similarity:
+        name: Flag similarity
+    card_template_order:
+      - template.flag-country
+    card_templates:
+      template.flag-country:
+        name: Flag - Country
+        question_format: '{{Country}}'
+        answer_format: '{{Flag similarity}}'
+        adapter_ids: {}
+    styling: ''
+    adapter_ids: {}
+notes:
+  note.finland:
+    note_type_id: note-type.country
+    fields:
+      field.country: Finland
+      field.flag-similarity:
+        message:
+          - ref: notes.note.iceland.fields.field.country
+          - literal: ' ('
+          - text: blue background with a white cross
+          - literal: ')'
+    tags: []
+    adapter_ids: {}
+  note.iceland:
+    note_type_id: note-type.country
+    fields:
+      field.country: Iceland
+      field.flag-similarity: ''
+    tags: []
+    adapter_ids: {}
+media: {}
+tombstones: []
+"#;
+
+    let deck = canonical_yaml::from_str(yaml).expect("structured message yaml parses");
+
+    assert_eq!(
+        deck.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
+        "Iceland (blue background with a white cross)"
+    );
+    assert_eq!(
+        deck.notes[&sid("note.finland")].field_messages[&sid("field.flag-similarity")]
+            .components
+            .len(),
+        4
+    );
+
+    let formatted = canonical_yaml::to_string(&deck).expect("structured message emits");
+    assert!(formatted.contains("field.flag-similarity:\n        message:"));
+    assert!(formatted.contains("          - ref: notes.note.iceland.fields.field.country"));
+    assert!(formatted.contains("          - text: blue background with a white cross"));
+}
+
+#[test]
 fn translation_dictionary_overlay_translates_variables_fields_and_adapter_ids() {
     let deck = canonical_yaml::from_str(
         r#"deck:
@@ -391,6 +462,7 @@ fn ug_style_deck() -> CanonicalDeck {
             (sid("field.capital"), "Helsinki".to_owned()),
             (sid("field.flag"), "<img src=\"fi.png\">".to_owned()),
         ]),
+        field_messages: BTreeMap::new(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: note_adapter_ids,
     };

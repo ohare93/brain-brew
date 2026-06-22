@@ -127,8 +127,11 @@ impl CanonicalDeck {
         let mut errors = Vec::new();
         let mut changed_paths = BTreeMap::<String, StableId>::new();
 
+        resolve_structured_messages_with_compose_errors(&mut resolved, &mut errors);
+
         for overlay in overlays {
             apply_overlay(&mut resolved, overlay, &mut changed_paths, &mut errors);
+            resolve_structured_messages_with_compose_errors(&mut resolved, &mut errors);
         }
 
         if !errors.is_empty() {
@@ -186,6 +189,18 @@ impl CanonicalDeck {
     /// Render `${variable}` references in deck text using deck, note type, card template, and note scopes.
     pub fn render_variables(&self) -> Result<Self, VariableRenderReport> {
         render_deck_variables(self)
+    }
+
+    /// Resolve structured message fields into their final scalar field strings.
+    pub fn resolve_structured_messages(&self) -> Result<Self, ValidationReport> {
+        let mut resolved = self.clone();
+        let mut errors = Vec::new();
+        resolve_structured_messages_with_validation_errors(&mut resolved, &mut errors);
+        if errors.is_empty() {
+            Ok(resolved)
+        } else {
+            Err(ValidationReport { errors })
+        }
     }
 
     /// Report translation coverage for one translation overlay without modifying this deck.
@@ -277,6 +292,20 @@ impl CanonicalDeck {
                         ),
                     ));
                 }
+            }
+
+            for (field_id, message) in &note.field_messages {
+                if !expected_field_ids.contains(field_id) {
+                    errors.push(ValidationError::new(
+                        ValidationErrorKind::UnknownNoteField,
+                        format!("notes.{id}.fields.{field_id}.message"),
+                        format!(
+                            "structured message field {field_id} is not defined by note type {}",
+                            note.note_type_id
+                        ),
+                    ));
+                }
+                validate_message_references(self, id, field_id, message, &mut errors);
             }
 
             for field_id in expected_field_ids {
@@ -384,12 +413,123 @@ fn fill_added_field_blanks(
     }
 }
 
+fn validate_message_references(
+    deck: &CanonicalDeck,
+    note_id: &StableId,
+    field_id: &StableId,
+    message: &StructuredMessage,
+    errors: &mut Vec<ValidationError>,
+) {
+    for (index, component) in message.components.iter().enumerate() {
+        let MessageComponent::FieldRef(reference) = component else {
+            continue;
+        };
+        if field_value_at_path(deck, reference).is_none() {
+            errors.push(ValidationError::new(
+                ValidationErrorKind::InvalidMessageReference,
+                message_component_path(note_id, field_id, index),
+                format!("structured message field reference {reference:?} does not resolve to a note field"),
+            ));
+        }
+    }
+}
+
+fn resolve_structured_messages_with_validation_errors(
+    deck: &mut CanonicalDeck,
+    errors: &mut Vec<ValidationError>,
+) {
+    let snapshot = deck.clone();
+    let mut resolved_fields = Vec::<(StableId, StableId, String)>::new();
+    for (note_id, note) in &snapshot.notes {
+        for (field_id, message) in &note.field_messages {
+            match render_structured_message(&snapshot, message) {
+                Ok(value) => resolved_fields.push((note_id.clone(), field_id.clone(), value)),
+                Err(reference) => errors.push(ValidationError::new(
+                    ValidationErrorKind::InvalidMessageReference,
+                    format!("notes.{note_id}.fields.{field_id}.message"),
+                    format!("structured message field reference {reference:?} does not resolve to a note field"),
+                )),
+            }
+        }
+    }
+    for (note_id, field_id, value) in resolved_fields {
+        if let Some(note) = deck.notes.get_mut(&note_id) {
+            note.fields.insert(field_id, value);
+        }
+    }
+}
+
+fn resolve_structured_messages_with_compose_errors(
+    deck: &mut CanonicalDeck,
+    errors: &mut Vec<ComposeError>,
+) {
+    let snapshot = deck.clone();
+    let mut resolved_fields = Vec::<(StableId, StableId, String)>::new();
+    for (note_id, note) in &snapshot.notes {
+        for (field_id, message) in &note.field_messages {
+            match render_structured_message(&snapshot, message) {
+                Ok(value) => resolved_fields.push((note_id.clone(), field_id.clone(), value)),
+                Err(reference) => errors.push(ComposeError::new(
+                    ComposeErrorKind::ValidationFailed,
+                    format!("notes.{note_id}.fields.{field_id}.message"),
+                    format!("structured message field reference {reference:?} does not resolve to a note field"),
+                )),
+            }
+        }
+    }
+    for (note_id, field_id, value) in resolved_fields {
+        if let Some(note) = deck.notes.get_mut(&note_id) {
+            note.fields.insert(field_id, value);
+        }
+    }
+}
+
+fn render_structured_message(
+    deck: &CanonicalDeck,
+    message: &StructuredMessage,
+) -> Result<String, String> {
+    let mut rendered = String::new();
+    for component in &message.components {
+        match component {
+            MessageComponent::Literal(value) | MessageComponent::Text(value) => {
+                rendered.push_str(value);
+            }
+            MessageComponent::FieldRef(reference) => {
+                let Some(value) = field_value_at_path(deck, reference) else {
+                    return Err(reference.clone());
+                };
+                rendered.push_str(value);
+            }
+        }
+    }
+    Ok(rendered)
+}
+
+fn field_value_at_path<'a>(deck: &'a CanonicalDeck, path: &str) -> Option<&'a str> {
+    let (note_id, field_id) = note_field_path_parts(path)?;
+    deck.notes
+        .get(&note_id)
+        .and_then(|note| note.fields.get(&field_id))
+        .map(String::as_str)
+}
+
+fn note_field_path_parts(path: &str) -> Option<(StableId, StableId)> {
+    let rest = path.strip_prefix("notes.")?;
+    let (note_id, field_id) = rest.split_once(".fields.")?;
+    Some((StableId::new(note_id).ok()?, StableId::new(field_id).ok()?))
+}
+
+fn message_component_path(note_id: &StableId, field_id: &StableId, index: usize) -> String {
+    format!("notes.{note_id}.fields.{field_id}.message.{index}")
+}
+
 fn translation_coverage_report(
     deck: &CanonicalDeck,
     overlay: &Overlay,
     translations: &TranslationDictionary,
 ) -> TranslationCoverageReport {
     let mut builder = TranslationCoverageBuilder {
+        deck,
         translations,
         entries: Vec::new(),
         seen_sources: BTreeSet::new(),
@@ -456,7 +596,12 @@ fn translation_coverage_report(
     for (note_id, note) in &deck.notes {
         builder.record_variables(&note.variables, &format!("notes.{note_id}.variables"));
         for (field_id, value) in &note.fields {
-            builder.record_string(value, format!("notes.{note_id}.fields.{field_id}"), None);
+            let path = format!("notes.{note_id}.fields.{field_id}");
+            if let Some(message) = note.field_messages.get(field_id) {
+                builder.record_message(value, path, note_id, field_id, message);
+            } else {
+                builder.record_string(value, path, None);
+            }
         }
         builder.record_tags(&note.tags, &format!("notes.{note_id}.tags"));
         builder.record_adapter_ids(&note.adapter_ids, &format!("notes.{note_id}.adapter_ids"));
@@ -466,6 +611,7 @@ fn translation_coverage_report(
 }
 
 struct TranslationCoverageBuilder<'a> {
+    deck: &'a CanonicalDeck,
     translations: &'a TranslationDictionary,
     entries: Vec<TranslationCoverageEntry>,
     seen_sources: BTreeSet<String>,
@@ -482,6 +628,81 @@ impl TranslationCoverageBuilder<'_> {
         for (key, value) in variables {
             self.record_string(value, format!("{path_prefix}.{key}"), Some(key));
         }
+    }
+
+    fn record_message(
+        &mut self,
+        resolved_value: &str,
+        path: String,
+        note_id: &StableId,
+        field_id: &StableId,
+        message: &StructuredMessage,
+    ) {
+        if self.translations.target_additions.contains_key(&path)
+            || self.has_explicit_string_entry(resolved_value, &path, None)
+        {
+            self.record_string(resolved_value, path, None);
+            return;
+        }
+
+        if resolved_value.is_empty() {
+            return;
+        }
+
+        if is_ignored_translation_path(self.translations, &path) {
+            self.entries.push(TranslationCoverageEntry {
+                category: TranslationCoverageCategory::IgnoredSource,
+                path,
+                source: resolved_value.to_owned(),
+                translated: None,
+                context: None,
+            });
+            return;
+        }
+
+        for (index, component) in message.components.iter().enumerate() {
+            let component_path = message_component_path(note_id, field_id, index);
+            match component {
+                MessageComponent::Literal(_) => {}
+                MessageComponent::Text(value) => {
+                    self.record_string(value, component_path, None);
+                }
+                MessageComponent::FieldRef(reference) => {
+                    if let Some(value) = field_value_at_path(self.deck, reference) {
+                        self.record_string(value, component_path, None);
+                    }
+                }
+            }
+        }
+    }
+
+    fn has_explicit_string_entry(
+        &self,
+        value: &str,
+        path: &str,
+        variable_key: Option<&str>,
+    ) -> bool {
+        if value.is_empty() {
+            return false;
+        }
+        if let Some(variable_key) = variable_key
+            && self
+                .translations
+                .variables
+                .get(variable_key)
+                .is_some_and(|replacements| replacements.contains_key(value))
+        {
+            return true;
+        }
+        self.translations.direct.contains_key(value)
+            || self.translations.no_change.contains(value)
+            || self
+                .translations
+                .contextual
+                .iter()
+                .any(|(context_path, replacements)| {
+                    context_matches_path(context_path, path) && replacements.contains_key(value)
+                })
     }
 
     fn record_string(&mut self, value: &str, path: String, variable_key: Option<&str>) {
@@ -775,6 +996,11 @@ fn translation_context_unit(
             note_field_contexts(note, note_type, note_id, entries_by_path)
         })
         .unwrap_or_default();
+    let message = note.zip(note_id.as_ref()).zip(field_id.as_ref()).and_then(
+        |((note, note_id), field_id)| {
+            message_context(deck, note, note_id, field_id, entries_by_path)
+        },
+    );
     let card_templates = note_type
         .zip(field_name.as_deref())
         .map(|(note_type, field_name)| card_contexts_for_field(note_type, field_name))
@@ -791,6 +1017,7 @@ fn translation_context_unit(
         field_id,
         field_name,
         note_fields,
+        message,
         card_templates,
         source_occurrences: source_counts.get(&entry.source).copied().unwrap_or(0),
     }
@@ -870,6 +1097,61 @@ fn note_field_contexts(
         .collect()
 }
 
+fn message_context(
+    deck: &CanonicalDeck,
+    note: &Note,
+    note_id: &StableId,
+    field_id: &StableId,
+    entries_by_path: &BTreeMap<&str, &TranslationCoverageEntry>,
+) -> Option<TranslationMessageContext> {
+    let message = note.field_messages.get(field_id)?;
+    let resolved_source = note.fields.get(field_id).cloned().unwrap_or_default();
+    let mut components = Vec::new();
+    for (index, component) in message.components.iter().enumerate() {
+        let path = message_component_path(note_id, field_id, index);
+        let entry = entries_by_path.get(path.as_str()).copied();
+        let (kind, source, reference) = match component {
+            MessageComponent::Literal(value) => {
+                (MessageComponentKind::Literal, value.clone(), None)
+            }
+            MessageComponent::Text(value) => (MessageComponentKind::Text, value.clone(), None),
+            MessageComponent::FieldRef(reference) => (
+                MessageComponentKind::FieldRef,
+                field_value_at_path(deck, reference)
+                    .unwrap_or_default()
+                    .to_owned(),
+                Some(reference.clone()),
+            ),
+        };
+        let translated = entry
+            .and_then(|entry| entry.translated.clone())
+            .unwrap_or_else(|| source.clone());
+        components.push(TranslationMessageComponentContext {
+            index,
+            kind,
+            path,
+            source,
+            translated,
+            reference,
+            category: entry.map(|entry| entry.category),
+        });
+    }
+    let translated = entries_by_path
+        .get(format!("notes.{note_id}.fields.{field_id}").as_str())
+        .and_then(|entry| entry.translated.clone())
+        .unwrap_or_else(|| {
+            components
+                .iter()
+                .map(|component| component.translated.as_str())
+                .collect::<String>()
+        });
+    Some(TranslationMessageContext {
+        source: resolved_source,
+        translated,
+        components,
+    })
+}
+
 fn card_contexts_for_field(note_type: &NoteType, field_name: &str) -> Vec<TranslationCardContext> {
     note_type
         .card_templates
@@ -914,6 +1196,7 @@ fn apply_translation_dictionary(
     changed_paths: &mut BTreeMap<String, StableId>,
     errors: &mut Vec<ComposeError>,
 ) {
+    let source_deck = resolved.clone();
     let mut seen_direct = BTreeSet::new();
     let mut seen_contextual = BTreeSet::new();
     let mut seen_target_additions = BTreeSet::new();
@@ -992,8 +1275,32 @@ fn apply_translation_dictionary(
 
         for (note_id, note) in &mut resolved.notes {
             context.translate_variables(&mut note.variables, &format!("notes.{note_id}.variables"));
-            for (field_id, value) in &mut note.fields {
-                context.translate_string(value, format!("notes.{note_id}.fields.{field_id}"), None);
+            let field_ids = note.fields.keys().cloned().collect::<Vec<_>>();
+            for field_id in field_ids {
+                let path = format!("notes.{note_id}.fields.{field_id}");
+                if note.field_messages.contains_key(&field_id) {
+                    let source = note.fields.get(&field_id).cloned().unwrap_or_default();
+                    let full_override = {
+                        let message = note
+                            .field_messages
+                            .get_mut(&field_id)
+                            .expect("field message existence checked");
+                        context.translate_message_field(
+                            &source_deck,
+                            &source,
+                            path.clone(),
+                            note_id,
+                            &field_id,
+                            message,
+                        )
+                    };
+                    if let Some(translated) = full_override {
+                        note.field_messages.remove(&field_id);
+                        note.fields.insert(field_id, translated);
+                    }
+                } else if let Some(value) = note.fields.get_mut(&field_id) {
+                    context.translate_string(value, path, None);
+                }
             }
             context.translate_tags(&mut note.tags, &format!("notes.{note_id}.tags"));
             context.translate_adapter_ids(
@@ -1111,6 +1418,76 @@ impl TranslationApplyContext<'_, '_> {
         for (key, value) in variables {
             self.translate_string(value, format!("{path_prefix}.{key}"), Some(key));
         }
+    }
+
+    fn translate_message_field(
+        &mut self,
+        source_deck: &CanonicalDeck,
+        resolved_source: &str,
+        path: String,
+        note_id: &StableId,
+        field_id: &StableId,
+        message: &mut StructuredMessage,
+    ) -> Option<String> {
+        if self.translations.target_additions.contains_key(&path)
+            || self.has_explicit_string_entry(resolved_source, &path, None)
+        {
+            let mut translated = resolved_source.to_owned();
+            self.translate_string(&mut translated, path, None);
+            return Some(translated);
+        }
+
+        if resolved_source.is_empty() || is_ignored_translation_path(self.translations, &path) {
+            return None;
+        }
+
+        for (index, component) in message.components.iter_mut().enumerate() {
+            let component_path = message_component_path(note_id, field_id, index);
+            match component {
+                MessageComponent::Literal(_) => {}
+                MessageComponent::Text(value) => {
+                    self.translate_string(value, component_path, None);
+                }
+                MessageComponent::FieldRef(reference) => {
+                    let Some(source) = field_value_at_path(source_deck, reference) else {
+                        continue;
+                    };
+                    let mut translated = source.to_owned();
+                    self.translate_string(&mut translated, component_path, None);
+                    *component = MessageComponent::Literal(translated);
+                }
+            }
+        }
+        None
+    }
+
+    fn has_explicit_string_entry(
+        &self,
+        value: &str,
+        path: &str,
+        variable_key: Option<&str>,
+    ) -> bool {
+        if value.is_empty() {
+            return false;
+        }
+        if let Some(variable_key) = variable_key
+            && self
+                .translations
+                .variables
+                .get(variable_key)
+                .is_some_and(|replacements| replacements.contains_key(value))
+        {
+            return true;
+        }
+        self.translations.direct.contains_key(value)
+            || self.translations.no_change.contains(value)
+            || self
+                .translations
+                .contextual
+                .iter()
+                .any(|(context_path, replacements)| {
+                    context_matches_path(context_path, path) && replacements.contains_key(value)
+                })
     }
 
     fn translate_string(&mut self, value: &mut String, path: String, variable_key: Option<&str>) {
@@ -2400,6 +2777,7 @@ fn apply_field_change(
         }
         ChangeIntent::Remove => {
             note.fields.remove(field_id);
+            note.field_messages.remove(field_id);
         }
         ChangeIntent::Add
         | ChangeIntent::Merge
@@ -2414,6 +2792,7 @@ fn apply_field_change(
                 return;
             };
             note.fields.insert(field_id.clone(), value.clone());
+            note.field_messages.remove(field_id);
         }
     }
 }
@@ -2693,12 +3072,43 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
                 );
             }
         }
+        for (field_id, message) in &mut note.field_messages {
+            let scopes = if let Some(note_type_variables) = note_type_variables {
+                vec![&note_variables, note_type_variables, &deck_variables]
+            } else {
+                vec![&note_variables, &deck_variables]
+            };
+            render_message_variables(
+                message,
+                &format!("notes.{note_id}.fields.{field_id}.message"),
+                &scopes,
+                &mut errors,
+            );
+        }
     }
 
     if errors.is_empty() {
+        let mut message_errors = Vec::new();
+        resolve_structured_messages_with_validation_errors(&mut rendered, &mut message_errors);
         Ok(rendered)
     } else {
         Err(VariableRenderReport { errors })
+    }
+}
+
+fn render_message_variables(
+    message: &mut StructuredMessage,
+    path: &str,
+    scopes: &[&BTreeMap<String, String>],
+    errors: &mut Vec<VariableRenderError>,
+) {
+    for (index, component) in message.components.iter_mut().enumerate() {
+        match component {
+            MessageComponent::Literal(value) | MessageComponent::Text(value) => {
+                render_string_with_variables(value, &format!("{path}.{index}"), scopes, errors);
+            }
+            MessageComponent::FieldRef(_) => {}
+        }
     }
 }
 
@@ -3115,8 +3525,29 @@ pub struct TranslationContextUnit {
     pub field_id: Option<StableId>,
     pub field_name: Option<String>,
     pub note_fields: Vec<TranslationNoteFieldContext>,
+    pub message: Option<TranslationMessageContext>,
     pub card_templates: Vec<TranslationCardContext>,
     pub source_occurrences: usize,
+}
+
+/// Structured-message context for a note field shown around a translatable unit.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranslationMessageContext {
+    pub source: String,
+    pub translated: String,
+    pub components: Vec<TranslationMessageComponentContext>,
+}
+
+/// One component of a structured message shown in translator context.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranslationMessageComponentContext {
+    pub index: usize,
+    pub kind: MessageComponentKind,
+    pub path: String,
+    pub source: String,
+    pub translated: String,
+    pub reference: Option<String>,
+    pub category: Option<TranslationCoverageCategory>,
 }
 
 /// Sibling note-field context shown around a translatable unit.
@@ -3368,8 +3799,44 @@ pub struct Note {
     pub note_type_id: StableId,
     pub variables: BTreeMap<String, String>,
     pub fields: BTreeMap<StableId, String>,
+    pub field_messages: BTreeMap<StableId, StructuredMessage>,
     pub tags: BTreeSet<String>,
     pub adapter_ids: AdapterIds,
+}
+
+/// A field value assembled from reusable references, translatable fragments, and literal glue.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StructuredMessage {
+    pub components: Vec<MessageComponent>,
+}
+
+/// One component of a structured message field value.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum MessageComponent {
+    /// Non-translatable glue such as punctuation, spaces, or markup.
+    Literal(String),
+    /// A translatable fragment extracted independently for translation coverage.
+    Text(String),
+    /// A reference to another note field path, such as `notes.note.iceland.fields.field.country`.
+    FieldRef(String),
+}
+
+/// Stable component kind for reports and translator context UIs.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MessageComponentKind {
+    Literal,
+    Text,
+    FieldRef,
+}
+
+impl MessageComponentKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Literal => "literal",
+            Self::Text => "text",
+            Self::FieldRef => "field_ref",
+        }
+    }
 }
 
 /// A reference to an external media asset.
@@ -3582,6 +4049,7 @@ pub enum ValidationErrorKind {
     MismatchedEntityId,
     DuplicateFieldDefinition,
     DuplicateCardTemplate,
+    InvalidMessageReference,
 }
 
 #[cfg(test)]

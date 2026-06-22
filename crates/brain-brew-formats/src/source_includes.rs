@@ -373,6 +373,9 @@ fn is_scalar_content_path(path: &[String]) -> bool {
     ) {
         return true;
     }
+    if matches!(last, "text" | "literal") && path.iter().any(|segment| segment == "message") {
+        return true;
+    }
     if path.iter().any(|segment| segment == "variables") && last != "variables" {
         return true;
     }

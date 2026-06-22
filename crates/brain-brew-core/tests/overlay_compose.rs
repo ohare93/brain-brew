@@ -3,9 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, CardTemplateSide,
     ChangeIntent, ComposeErrorKind, DeckChange, ExpectedBase, FieldChange, FieldDefinition,
-    FieldDefinitionChange, MediaChange, MediaReference, Note, NoteChange, NoteType, NoteTypeChange,
-    Overlay, OverlayKind, PropertyChange, StableId, TagChange, TranslationCoverageCategory,
-    TranslationDictionary,
+    FieldDefinitionChange, MediaChange, MediaReference, MessageComponent, Note, NoteChange,
+    NoteType, NoteTypeChange, Overlay, OverlayKind, PropertyChange, StableId, StructuredMessage,
+    TagChange, TranslationCoverageCategory, TranslationDictionary,
 };
 
 #[test]
@@ -105,6 +105,7 @@ fn extension_overlay_can_add_a_note_type_and_notes_using_it() {
                         (sid("field.region"), "Europe".to_owned()),
                         (sid("field.map"), "<img src=\"europe.png\" />".to_owned()),
                     ]),
+                    field_messages: BTreeMap::new(),
                     tags: BTreeSet::from(["UG::Europe".to_owned()]),
                     adapter_ids: AdapterIds::new(),
                 }),
@@ -772,6 +773,188 @@ fn translation_coverage_reports_path_specific_overrides_and_additions() {
 }
 
 #[test]
+fn translation_dictionary_resolves_structured_message_components() {
+    let base = ug_style_deck_with_flag_similarity_message();
+    let overlay = Overlay {
+        id: sid("overlay.translation.nb"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::from([
+                ("Iceland".to_owned(), "Island".to_owned()),
+                ("Norway".to_owned(), "Norge".to_owned()),
+                (
+                    "red background with a blue cross".to_owned(),
+                    "rød bakgrunn med blått kors".to_owned(),
+                ),
+            ]),
+            contextual: BTreeMap::from([(
+                "notes.note.finland".to_owned(),
+                BTreeMap::from([(
+                    "blue background with a white cross".to_owned(),
+                    "blå bakgrunn med hvitt kors".to_owned(),
+                )]),
+            )]),
+            no_change: BTreeSet::new(),
+            target_additions: BTreeMap::new(),
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            require_complete: true,
+            ignore_paths: BTreeSet::from([
+                "deck.*".to_owned(),
+                "note_types.*".to_owned(),
+                "notes.*.fields.field.country".to_owned(),
+                "notes.*.fields.field.capital".to_owned(),
+                "notes.*.fields.field.flag".to_owned(),
+                "notes.*.tags.*".to_owned(),
+            ]),
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let report = base
+        .translation_coverage(&overlay)
+        .expect("translation overlay has coverage");
+    assert!(report.entries.iter().any(|entry| {
+        entry.category == TranslationCoverageCategory::DirectTranslation
+            && entry.path == "notes.note.finland.fields.field.flag-similarity.message.0"
+            && entry.source == "Iceland"
+            && entry.translated.as_deref() == Some("Island")
+    }));
+    assert!(report.entries.iter().any(|entry| {
+        entry.category == TranslationCoverageCategory::ContextualOverride
+            && entry.path == "notes.note.finland.fields.field.flag-similarity.message.2"
+            && entry.source == "blue background with a white cross"
+            && entry.translated.as_deref() == Some("blå bakgrunn med hvitt kors")
+    }));
+
+    let resolved = base.compose(&[overlay]).expect("translations compose");
+
+    assert_eq!(
+        resolved.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
+        "Island (blå bakgrunn med hvitt kors), Norge (rød bakgrunn med blått kors)"
+    );
+}
+
+#[test]
+fn translation_dictionary_can_override_full_structured_message_when_needed() {
+    let base = ug_style_deck_with_flag_similarity_message();
+    let full_source =
+        "Iceland (blue background with a white cross), Norway (red background with a blue cross)";
+    let overlay = Overlay {
+        id: sid("overlay.translation.nb"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::new(),
+            contextual: BTreeMap::from([(
+                "notes.note.finland".to_owned(),
+                BTreeMap::from([(
+                    full_source.to_owned(),
+                    "Særskilt full oversettelse".to_owned(),
+                )]),
+            )]),
+            no_change: BTreeSet::new(),
+            target_additions: BTreeMap::new(),
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            require_complete: true,
+            ignore_paths: BTreeSet::from([
+                "deck.*".to_owned(),
+                "note_types.*".to_owned(),
+                "notes.*.fields.field.country".to_owned(),
+                "notes.*.fields.field.capital".to_owned(),
+                "notes.*.fields.field.flag".to_owned(),
+                "notes.*.tags.*".to_owned(),
+            ]),
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let resolved = base.compose(&[overlay]).expect("full override composes");
+
+    assert_eq!(
+        resolved.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
+        "Særskilt full oversettelse"
+    );
+    assert!(
+        !resolved.notes[&sid("note.finland")]
+            .field_messages
+            .contains_key(&sid("field.flag-similarity")),
+        "full resolved-text overrides replace the structured source message"
+    );
+}
+
+#[test]
+fn translation_dictionary_reports_structured_message_missing_and_stale_components() {
+    let base = ug_style_deck_with_flag_similarity_message();
+    let overlay = Overlay {
+        id: sid("overlay.translation.nb"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::from([
+                ("Iceland".to_owned(), "Island".to_owned()),
+                ("Norway".to_owned(), "Norge".to_owned()),
+                (
+                    "stale qualifier".to_owned(),
+                    "foreldet kvalifikator".to_owned(),
+                ),
+            ]),
+            contextual: BTreeMap::new(),
+            no_change: BTreeSet::new(),
+            target_additions: BTreeMap::new(),
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            require_complete: true,
+            ignore_paths: BTreeSet::from([
+                "deck.*".to_owned(),
+                "note_types.*".to_owned(),
+                "notes.*.fields.field.country".to_owned(),
+                "notes.*.fields.field.capital".to_owned(),
+                "notes.*.fields.field.flag".to_owned(),
+                "notes.*.tags.*".to_owned(),
+            ]),
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let report = base
+        .translation_coverage(&overlay)
+        .expect("translation overlay has coverage");
+    assert!(report.entries.iter().any(|entry| {
+        entry.category == TranslationCoverageCategory::UntranslatedFallback
+            && entry.path == "notes.note.finland.fields.field.flag-similarity.message.2"
+            && entry.source == "blue background with a white cross"
+    }));
+    assert!(report.entries.iter().any(|entry| {
+        entry.category == TranslationCoverageCategory::StaleDirectKey
+            && entry.path == "translations.direct.stale qualifier"
+    }));
+
+    let report = base
+        .compose(&[overlay])
+        .expect_err("strict structured message components fail");
+    assert!(report.errors.iter().any(|error| {
+        error.kind == ComposeErrorKind::MissingTranslation
+            && error.path == "notes.note.finland.fields.field.flag-similarity.message.2"
+            && error
+                .message
+                .contains("missing direct or contextual translation")
+    }));
+    assert!(report.errors.iter().any(|error| {
+        error.kind == ComposeErrorKind::StaleTranslationEntry
+            && error.path == "translations.direct.stale qualifier"
+    }));
+}
+
+#[test]
 fn extension_overlay_can_add_a_note_type_field_and_backfill_note_values() {
     let base = ug_style_deck();
     let overlay = Overlay {
@@ -1306,6 +1489,7 @@ fn ug_style_deck() -> CanonicalDeck {
             (sid("field.capital"), "Helsinki".to_owned()),
             (sid("field.flag"), "<img src=\"fi.png\">".to_owned()),
         ]),
+        field_messages: BTreeMap::new(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: note_adapter_ids,
     };
@@ -1333,6 +1517,73 @@ fn ug_style_deck() -> CanonicalDeck {
     }
 }
 
+fn ug_style_deck_with_flag_similarity_message() -> CanonicalDeck {
+    let mut deck = ug_style_deck();
+    deck.note_types
+        .get_mut(&sid("note-type.country"))
+        .unwrap()
+        .fields
+        .push(FieldDefinition {
+            id: sid("field.flag-similarity"),
+            name: "Flag similarity".to_owned(),
+        });
+    deck.notes.insert(
+        sid("note.iceland"),
+        Note {
+            id: sid("note.iceland"),
+            note_type_id: sid("note-type.country"),
+            variables: BTreeMap::new(),
+            fields: BTreeMap::from([
+                (sid("field.country"), "Iceland".to_owned()),
+                (sid("field.capital"), "Reykjavik".to_owned()),
+                (sid("field.flag"), "<img src=\"is.png\">".to_owned()),
+                (sid("field.flag-similarity"), String::new()),
+            ]),
+            field_messages: BTreeMap::new(),
+            tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
+            adapter_ids: AdapterIds::new(),
+        },
+    );
+    deck.notes.insert(
+        sid("note.norway"),
+        Note {
+            id: sid("note.norway"),
+            note_type_id: sid("note-type.country"),
+            variables: BTreeMap::new(),
+            fields: BTreeMap::from([
+                (sid("field.country"), "Norway".to_owned()),
+                (sid("field.capital"), "Oslo".to_owned()),
+                (sid("field.flag"), "<img src=\"no.png\">".to_owned()),
+                (sid("field.flag-similarity"), String::new()),
+            ]),
+            field_messages: BTreeMap::new(),
+            tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
+            adapter_ids: AdapterIds::new(),
+        },
+    );
+    let finland = deck.notes.get_mut(&sid("note.finland")).unwrap();
+    finland
+        .fields
+        .insert(sid("field.flag-similarity"), String::new());
+    finland.field_messages.insert(
+        sid("field.flag-similarity"),
+        StructuredMessage {
+            components: vec![
+                MessageComponent::FieldRef("notes.note.iceland.fields.field.country".to_owned()),
+                MessageComponent::Literal(" (".to_owned()),
+                MessageComponent::Text("blue background with a white cross".to_owned()),
+                MessageComponent::Literal("), ".to_owned()),
+                MessageComponent::FieldRef("notes.note.norway.fields.field.country".to_owned()),
+                MessageComponent::Literal(" (".to_owned()),
+                MessageComponent::Text("red background with a blue cross".to_owned()),
+                MessageComponent::Literal(")".to_owned()),
+            ],
+        },
+    );
+    deck.resolve_structured_messages()
+        .expect("structured message resolves")
+}
+
 fn sweden_note() -> Note {
     Note {
         id: sid("note.sweden"),
@@ -1343,6 +1594,7 @@ fn sweden_note() -> Note {
             (sid("field.capital"), "Stockholm".to_owned()),
             (sid("field.flag"), "<img src=\"se.png\">".to_owned()),
         ]),
+        field_messages: BTreeMap::new(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: AdapterIds::new(),
     }
