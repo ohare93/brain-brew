@@ -50,9 +50,10 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             let stdout = io::stdout();
             let mut reader = stdin.lock();
             let mut writer = stdout.lock();
-            edits_by_file = prompt_selective_apply(&reports, &mut reader, &mut writer, raw_mode)?;
+            edits_by_file =
+                prompt_selective_apply(&reports, &mut reader, &mut writer, raw_mode, args.full)?;
         } else {
-            edits_by_file = direct_stub_edits_from_reports(&reports);
+            edits_by_file = direct_stub_edits_from_reports(&reports, args.full);
         }
     }
 
@@ -70,7 +71,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         if reports.is_empty() {
             print_no_translation_reports(&args)?;
         } else {
-            print_human_reports(&reports);
+            print_human_reports(&reports, args.full);
         }
         if args.apply {
             let total = applied.values().sum::<usize>();
@@ -100,6 +101,7 @@ struct TranslationArgs {
     apply: bool,
     json_output: bool,
     interactive: Option<bool>,
+    full: bool,
 }
 
 fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
@@ -117,6 +119,7 @@ fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
         apply: false,
         json_output: false,
         interactive: None,
+        full: false,
     };
     let mut index = 0;
     while index < args.len() {
@@ -196,6 +199,10 @@ fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
                 parsed.json_output = true;
                 index += 1;
             }
+            "--full" => {
+                parsed.full = true;
+                index += 1;
+            }
             "--interactive" => {
                 parsed.interactive = Some(true);
                 index += 1;
@@ -265,7 +272,7 @@ fn configure_interactively<R: Read, W: Write>(
         }
     }
 
-    if args.language.is_none() {
+    if args.language.is_none() && args.all_targets {
         let languages = inferred_languages(&manifest);
         if !languages.is_empty() {
             let mut labels = vec!["all languages".to_owned()];
@@ -279,7 +286,7 @@ fn configure_interactively<R: Read, W: Write>(
 
     if args.overlay.is_none() {
         let overlays = translation_overlay_choices(args)?;
-        if !overlays.is_empty() {
+        if overlays.len() > 1 {
             let mut labels = vec!["all translation overlays".to_owned()];
             labels.extend(overlays.iter().map(|overlay| overlay.label.clone()));
             let choice = ui.select_one("Translation overlay", &labels, 0)?;
@@ -877,6 +884,7 @@ impl OverlayEdits {
 
 fn direct_stub_edits_from_reports(
     reports: &[ScopedTranslationReport],
+    full: bool,
 ) -> BTreeMap<PathBuf, OverlayEdits> {
     let mut edits = BTreeMap::<PathBuf, OverlayEdits>::new();
     for report in reports {
@@ -884,7 +892,10 @@ fn direct_stub_edits_from_reports(
             .report
             .entries
             .iter()
-            .filter(|entry| entry.category == TranslationCoverageCategory::UntranslatedFallback)
+            .filter(|entry| {
+                entry.category == TranslationCoverageCategory::UntranslatedFallback
+                    && (full || default_report_includes_entry(entry))
+            })
             .map(|entry| entry.source.clone())
             .collect::<BTreeSet<_>>();
         if !stubs.is_empty() {
@@ -903,6 +914,7 @@ fn prompt_selective_apply<R: Read, W: Write>(
     reader: &mut R,
     writer: &mut W,
     raw_mode: bool,
+    full: bool,
 ) -> Result<BTreeMap<PathBuf, OverlayEdits>, String> {
     let mut ui = TerminalUi::new(reader, writer, raw_mode)?;
     let rows = reports
@@ -914,7 +926,12 @@ fn prompt_selective_apply<R: Read, W: Write>(
                 .entries
                 .iter()
                 .enumerate()
-                .filter(|(_, entry)| entry.category.is_problem())
+                .filter(|(_, entry)| {
+                    entry.category.is_problem()
+                        && (entry.category != TranslationCoverageCategory::UntranslatedFallback
+                            || full
+                            || default_report_includes_entry(entry))
+                })
                 .map(move |(entry_index, _)| (report_index, entry_index))
         })
         .collect::<Vec<_>>();
@@ -1233,9 +1250,12 @@ fn non_dictionary_translation_overlays(
     Ok(choices.into_iter().collect())
 }
 
-fn print_human_reports(reports: &[ScopedTranslationReport]) {
+fn print_human_reports(reports: &[ScopedTranslationReport], full: bool) {
     for report in reports {
-        let counts = category_counts(&report.report.entries);
+        let display_entries = display_entries(&report.report.entries, full);
+        let display_counts = category_counts_refs(&display_entries);
+        let all_counts = category_counts(&report.report.entries);
+        let hidden_untranslated = hidden_untranslated_fallback_count(&report.report.entries, full);
         println!(
             "{}",
             color_stdout(
@@ -1249,22 +1269,40 @@ fn print_human_reports(reports: &[ScopedTranslationReport]) {
         println!(
             "  {}: {}",
             color_stdout("direct translations", "32"),
-            counts.get("direct_translation").copied().unwrap_or(0)
+            all_counts.get("direct_translation").copied().unwrap_or(0)
         );
         println!(
             "  {}: {}",
             color_stdout("contextual overrides", "36"),
-            counts.get("contextual_override").copied().unwrap_or(0)
+            all_counts.get("contextual_override").copied().unwrap_or(0)
         );
         println!(
             "  {}: {}",
             color_stdout("target-language additions", "35"),
-            counts.get("target_language_addition").copied().unwrap_or(0)
+            all_counts
+                .get("target_language_addition")
+                .copied()
+                .unwrap_or(0)
         );
         println!(
             "  {}: {}",
+            color_stdout("missing text translations", "31"),
+            display_counts
+                .get("untranslated_fallback")
+                .copied()
+                .unwrap_or(0)
+        );
+        if hidden_untranslated > 0 {
+            println!(
+                "  {}: {}",
+                color_stdout("hidden structural/media/tag fallbacks", "2"),
+                hidden_untranslated
+            );
+        }
+        println!(
+            "  {}: {}",
             color_stdout("ignored entries", "2"),
-            counts.get("ignored_source").copied().unwrap_or(0)
+            all_counts.get("ignored_source").copied().unwrap_or(0)
         );
         println!(
             "  {}: {}",
@@ -1276,15 +1314,20 @@ fn print_human_reports(reports: &[ScopedTranslationReport]) {
                 .filter(|entry| is_stale_or_invalid(entry.category))
                 .count()
         );
-        println!(
-            "  {}: {}",
-            color_stdout("missing/untranslated fallbacks", "31"),
-            counts.get("untranslated_fallback").copied().unwrap_or(0)
-        );
-        for entry in report.report.problem_entries() {
+        if hidden_untranslated > 0 && !full {
+            println!("  hint: use --full to include structural/media/tag fallbacks");
+        }
+
+        let problem_entries = display_entries
+            .iter()
+            .filter(|entry| entry.category.is_problem())
+            .copied()
+            .collect::<Vec<_>>();
+        let shown_problem_limit = 40;
+        for entry in problem_entries.iter().take(shown_problem_limit) {
             println!(
                 "  - {} {} source={} translated={}",
-                color_category(entry.category, entry.category.as_str()),
+                color_category(entry.category, display_category_name(entry.category)),
                 entry.path,
                 yaml_scalar(&entry.source),
                 entry
@@ -1294,6 +1337,66 @@ fn print_human_reports(reports: &[ScopedTranslationReport]) {
                     .unwrap_or_else(|| "''".to_owned())
             );
         }
+        if problem_entries.len() > shown_problem_limit {
+            println!(
+                "  … {} more problem entries not shown; narrow the scope or use --json",
+                problem_entries.len() - shown_problem_limit
+            );
+        }
+    }
+}
+
+fn display_entries(
+    entries: &[TranslationCoverageEntry],
+    full: bool,
+) -> Vec<&TranslationCoverageEntry> {
+    entries
+        .iter()
+        .filter(|entry| full || default_report_includes_entry(entry))
+        .collect()
+}
+
+fn hidden_untranslated_fallback_count(entries: &[TranslationCoverageEntry], full: bool) -> usize {
+    if full {
+        return 0;
+    }
+    entries
+        .iter()
+        .filter(|entry| {
+            entry.category == TranslationCoverageCategory::UntranslatedFallback
+                && !default_report_includes_entry(entry)
+        })
+        .count()
+}
+
+fn default_report_includes_entry(entry: &TranslationCoverageEntry) -> bool {
+    if entry.category != TranslationCoverageCategory::UntranslatedFallback {
+        return true;
+    }
+    default_report_includes_untranslated_fallback(entry)
+}
+
+fn default_report_includes_untranslated_fallback(entry: &TranslationCoverageEntry) -> bool {
+    let path = entry.path.as_str();
+    path.starts_with("notes.")
+        && path.contains(".fields.")
+        && !is_media_or_structural_field_path(path)
+        && !looks_like_media_markup(&entry.source)
+}
+
+fn is_media_or_structural_field_path(path: &str) -> bool {
+    path.ends_with(".fields.field.flag") || path.ends_with(".fields.field.map")
+}
+
+fn looks_like_media_markup(source: &str) -> bool {
+    let trimmed = source.trim_start();
+    trimmed.starts_with("<img ") || trimmed.starts_with("<img")
+}
+
+fn display_category_name(category: TranslationCoverageCategory) -> &'static str {
+    match category {
+        TranslationCoverageCategory::UntranslatedFallback => "missing_translation",
+        other => other.as_str(),
     }
 }
 
@@ -1343,6 +1446,14 @@ fn entry_json(entry: &TranslationCoverageEntry) -> serde_json::Value {
 }
 
 fn category_counts(entries: &[TranslationCoverageEntry]) -> BTreeMap<&'static str, usize> {
+    let mut counts = BTreeMap::new();
+    for entry in entries {
+        *counts.entry(entry.category.as_str()).or_insert(0) += 1;
+    }
+    counts
+}
+
+fn category_counts_refs(entries: &[&TranslationCoverageEntry]) -> BTreeMap<&'static str, usize> {
     let mut counts = BTreeMap::new();
     for entry in entries {
         *counts.entry(entry.category.as_str()).or_insert(0) += 1;
@@ -1752,6 +1863,9 @@ fn equivalent_command(args: &TranslationArgs) -> String {
     }
     if args.apply {
         parts.push("--apply".to_owned());
+    }
+    if args.full {
+        parts.push("--full".to_owned());
     }
     parts.join(" ")
 }

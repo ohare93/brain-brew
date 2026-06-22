@@ -976,6 +976,49 @@ fn translations_reports_when_selected_target_has_no_dictionary_overlays() {
 }
 
 #[test]
+fn translations_default_report_focuses_on_translatable_note_text() {
+    let manifest = workspace_root().join("fixtures/ultimate-geography/brainbrew.yaml");
+    let output = run([
+        "translations",
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--overlay",
+        "overlay.translation.da",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("missing text translations:"));
+    assert!(out.contains("hidden structural/media/tag fallbacks:"));
+    assert!(out.contains("hint: use --full"));
+    assert!(!out.contains("deck.description source="));
+    assert!(!out.contains("notes.note.abkhazia.fields.field.flag"));
+    assert!(out.contains("notes.note.abkhazia.fields.field.capital"));
+}
+
+#[test]
+fn translations_full_report_includes_structural_fallbacks() {
+    let manifest = workspace_root().join("fixtures/ultimate-geography/brainbrew.yaml");
+    let output = run([
+        "translations",
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--overlay",
+        "overlay.translation.da",
+        "--full",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("deck.description source="));
+    assert!(!out.contains("hidden structural/media/tag fallbacks:"));
+}
+
+#[test]
 fn translations_interactive_language_options_come_from_translation_overlays_only() {
     let manifest = workspace_root().join("fixtures/ug-style/brainbrew.yaml");
     let output = run_with_stdin(
@@ -985,7 +1028,7 @@ fn translations_interactive_language_options_come_from_translation_overlays_only
             manifest.to_str().unwrap(),
             "--interactive",
         ],
-        "\n\nq",
+        "\x1b[B\nq",
     );
 
     assert!(!output.status.success());
@@ -1052,12 +1095,14 @@ fn translations_interactive_derives_selector_options_and_prints_equivalent_comma
     assert!(out.contains("Target"));
     assert!(out.contains("da-release"));
     assert!(out.contains("da-standard"));
-    assert!(out.contains("Translation overlay"));
-    assert!(out.contains("overlay.translation.da"));
+    assert!(!out.contains("Language filter"));
+    assert!(!out.contains("Translation overlay"));
     assert!(out.contains("Scope"));
     assert!(out.contains("Equivalent command:"));
     assert!(out.contains("brainbrew translations"));
     assert!(out.contains("--target da-standard"));
+    assert!(!out.contains("--language"));
+    assert!(!out.contains("--overlay"));
     assert!(!out.contains("Select Target"));
     assert!(!out.contains("1. da-release"));
 }
@@ -1080,7 +1125,7 @@ fn translations_interactive_apply_can_insert_contextual_stub() {
             "--apply",
             "--interactive",
         ],
-        "\n\n\n\x1b[B\n\n",
+        "\n\x1b[B\n\n",
     );
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -1106,7 +1151,7 @@ fn translations_interactive_apply_can_insert_ignore_path() {
             "--apply",
             "--interactive",
         ],
-        "\n\n\n\x1b[B\x1b[B\n\n",
+        "\n\x1b[B\x1b[B\n\n",
     );
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -1136,7 +1181,7 @@ fn translations_reports_missing_stale_contextual_and_additions_without_modifying
     assert!(out.contains("contextual overrides: 1"));
     assert!(out.contains("target-language additions: 1"));
     assert!(out.contains("stale_direct_key translations.direct.Removed source"));
-    assert!(out.contains("untranslated_fallback notes.note.sweden.fields.field.country"));
+    assert!(out.contains("missing_translation notes.note.sweden.fields.field.country"));
     assert_eq!(fs::read_to_string(overlay_path).unwrap(), before);
 }
 
