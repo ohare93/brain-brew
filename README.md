@@ -80,13 +80,14 @@ crates/
 
 ## Development
 
-This project uses Devbox:
+This project uses Devenv. With direnv, `.envrc` loads the environment automatically; otherwise run commands through `devenv shell`:
 
 ```bash
-devbox run fmt
-devbox run test
-devbox run clippy
-devbox run ci
+devenv shell fmt
+devenv shell test
+devenv shell clippy
+devenv shell ci
+devenv test
 ```
 
 Useful docs:

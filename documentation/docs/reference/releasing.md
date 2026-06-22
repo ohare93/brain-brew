@@ -21,8 +21,8 @@ The generated workflow can publish the Homebrew formula to `jeprecated/homebrew-
 Before creating a tag:
 
 ```bash
-devbox run ci
-devbox run dist:plan > /tmp/brainbrew-dist-manifest.json
+devenv shell ci
+devenv shell dist:plan > /tmp/brainbrew-dist-manifest.json
 ```
 
 `dist:plan` verifies that `cargo-dist` can see the release package and expected artifacts for `v1.0.0-alpha.1`.
@@ -30,7 +30,7 @@ devbox run dist:plan > /tmp/brainbrew-dist-manifest.json
 If you change `dist-workspace.toml`, regenerate the workflow:
 
 ```bash
-devbox run dist:generate
+devenv shell dist:generate
 ```
 
 ## Cut the preview release

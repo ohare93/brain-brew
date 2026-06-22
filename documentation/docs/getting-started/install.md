@@ -88,18 +88,12 @@ brainbrew --help
 
 ## Developer shell
 
-The repository uses Devbox for day-to-day development:
+The repository uses Devenv for day-to-day development. With direnv, `.envrc` loads the environment automatically; otherwise run commands through `devenv shell`:
 
 ```bash
-devbox run test
-devbox run ci
-```
-
-The flake also exposes a Rust development shell:
-
-```bash
-nix develop
-cargo test --workspace --all-targets
+devenv shell test
+devenv shell ci
+devenv test
 ```
 
 ## Runtime dependencies

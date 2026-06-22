@@ -30,16 +30,16 @@ Scaffolding can exist without tests, but domain behavior, format behavior, adapt
 
 ## Commands
 
-Use Devbox:
+Use Devenv:
 
 ```bash
-devbox run fmt
-devbox run test
-devbox run clippy
-devbox run ci
+devenv shell fmt
+devenv shell test
+devenv shell clippy
+devenv shell ci
 ```
 
-Run `devbox run ci` before committing meaningful code changes.
+Run `devenv test` before committing meaningful code changes.
 
 ## Version Control
 

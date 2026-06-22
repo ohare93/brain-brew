@@ -48,7 +48,7 @@ Use Red-Green-Refactor for behavior changes:
 Run before meaningful commits:
 
 ```bash
-devbox run ci
+devenv test
 ```
 
 ## Decision log

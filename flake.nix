@@ -73,16 +73,5 @@
         brainbrew = self.packages.${system}.brainbrew;
         default = self.checks.${system}.brainbrew;
       });
-
-      devShells = forAllSystems (system: pkgs: {
-        default = pkgs.mkShell {
-          packages = [
-            pkgs.cargo
-            pkgs.clippy
-            pkgs.rustc
-            pkgs.rustfmt
-          ];
-        };
-      });
     };
 }

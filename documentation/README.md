@@ -8,11 +8,11 @@ npm run start
 npm run build
 ```
 
-From the repository root you can also use Devbox:
+From the repository root you can also use Devenv:
 
 ```bash
-devbox run docs:install
-devbox run docs:build
+devenv shell docs:install
+devenv shell docs:build
 ```
 
 The source pages live under `documentation/docs/`. The generated site is not committed.

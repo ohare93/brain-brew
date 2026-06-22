@@ -1,8 +1,10 @@
 # Rust
 /target/
 
-# Devbox local state
-/.devbox/
+# Devenv local overrides/state
+/.devenv/
+devenv.local.nix
+devenv.local.yaml
 
 # Editor/OS noise
 .DS_Store
