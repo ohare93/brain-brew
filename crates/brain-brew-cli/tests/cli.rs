@@ -990,12 +990,13 @@ fn translations_default_report_focuses_on_translatable_note_text() {
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let out = stdout(&output);
-    assert!(out.contains("missing text translations:"));
+    assert!(out.contains("missing text translations: 0"));
+    assert!(out.contains("intentionally unchanged text: 306"));
     assert!(out.contains("hidden structural/media/tag fallbacks:"));
     assert!(out.contains("hint: use --full"));
     assert!(!out.contains("deck.description source="));
     assert!(!out.contains("notes.note.abkhazia.fields.field.flag"));
-    assert!(out.contains("notes.note.abkhazia.fields.field.capital"));
+    assert!(!out.contains("notes.note.abkhazia.fields.field.capital"));
 }
 
 #[test]
@@ -1108,8 +1109,8 @@ fn translations_interactive_derives_selector_options_and_prints_equivalent_comma
 }
 
 #[test]
-fn translations_interactive_apply_can_use_one_action_for_all_selected_rows() {
-    let dir = temp_dir("translations-interactive-direct-all");
+fn translations_interactive_apply_can_mark_all_selected_rows_no_change() {
+    let dir = temp_dir("translations-interactive-no-change-all");
     write_translation_workspace(&dir);
     let overlay_path = dir.join("da.yaml");
 
@@ -1131,7 +1132,39 @@ fn translations_interactive_apply_can_use_one_action_for_all_selected_rows() {
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let out = stdout(&output);
     assert!(out.contains("Action for selected missing translations"));
-    assert!(out.contains("add direct source→source stubs for all 2 selected missing translations"));
+    assert!(out.contains("mark direct no-change for all 2 selected missing translations"));
+    let updated = fs::read_to_string(overlay_path).unwrap();
+    assert!(updated.contains("  no_change:\n    direct:\n"));
+    assert!(updated.contains("      - Stockholm\n"));
+    assert!(updated.contains("      - Sweden\n"));
+}
+
+#[test]
+fn translations_interactive_apply_can_use_one_translation_stub_action_for_all_selected_rows() {
+    let dir = temp_dir("translations-interactive-direct-all");
+    write_translation_workspace(&dir);
+    let overlay_path = dir.join("da.yaml");
+
+    let output = run_with_stdin(
+        [
+            "translations",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--target",
+            "da-standard",
+            "--path-prefix",
+            "notes.note.sweden.fields.field",
+            "--apply",
+            "--interactive",
+        ],
+        "\n\x1b[B\x1b[B\n\n",
+    );
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains(
+        "add direct source→source translation stubs for all 2 selected missing translations"
+    ));
     let updated = fs::read_to_string(overlay_path).unwrap();
     assert!(updated.contains("    Stockholm: Stockholm\n"));
     assert!(updated.contains("    Sweden: Sweden\n"));
@@ -1155,7 +1188,7 @@ fn translations_interactive_apply_can_insert_contextual_stub() {
             "--apply",
             "--interactive",
         ],
-        "\n\x1b[B\n\n",
+        "\n\x1b[B\x1b[B\x1b[B\n\n",
     );
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -1181,13 +1214,54 @@ fn translations_interactive_apply_can_insert_ignore_path() {
             "--apply",
             "--interactive",
         ],
-        "\n\x1b[B\x1b[B\n\n",
+        "\n\x1b[B\x1b[B\x1b[B\x1b[B\n\n",
     );
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let updated = fs::read_to_string(overlay_path).unwrap();
     assert!(updated.contains("  ignore_paths:\n"));
     assert!(updated.contains("    - notes.note.sweden.fields.field.country\n"));
+}
+
+#[test]
+fn translations_report_counts_no_change_as_intentionally_unchanged_text() {
+    let dir = temp_dir("translations-no-change-report");
+    write_translation_workspace(&dir);
+    fs::write(
+        dir.join("da.yaml"),
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  ignore_paths:
+    - deck.*
+    - note_types.*
+    - notes.*.tags.*
+    - notes.*.fields.field.flag
+  no_change:
+    direct:
+      - Sweden
+    contextual:
+      notes.note.sweden:
+        - Stockholm
+"#,
+    )
+    .unwrap();
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--path-prefix",
+        "notes.note.sweden.fields.field",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("intentionally unchanged text: 2"));
+    assert!(out.contains("missing text translations: 0"));
+    assert!(!out.contains("missing_translation notes.note.sweden.fields.field.country"));
 }
 
 #[test]
@@ -1290,6 +1364,45 @@ translations:
     assert!(!strict_output.status.success());
     assert!(stderr(&strict_output).contains("translation coverage strict policy failed"));
     assert!(stderr(&strict_output).contains("notes.note.sweden.fields.field.country"));
+
+    fs::write(
+        &overlay_path,
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  ignore_paths:
+    - 'deck.*'
+    - 'note_types.*'
+    - 'notes.*.fields.field.flag'
+    - 'notes.*.tags.*'
+  direct:
+    Finland: Finland
+  contextual:
+    notes.note:
+      finland:
+        Helsinki: Helsingfors
+  no_change:
+    direct:
+      - Stockholm
+      - Sweden
+  target_additions:
+    notes.note.finland.fields.field.flag: '<img src="fi-da.png">'
+"#,
+    )
+    .unwrap();
+
+    let strict_output = run([
+        "verify",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-release",
+    ]);
+    assert!(
+        strict_output.status.success(),
+        "stderr: {}",
+        stderr(&strict_output)
+    );
 }
 
 #[test]

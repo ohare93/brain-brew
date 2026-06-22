@@ -12,11 +12,12 @@ Translation dictionaries separate source-keyed translations from target-only tex
 | --- | --- | --- |
 | `direct` | reusable translations of exact non-empty source strings | `source text: target text` |
 | `contextual` | path-scoped translations for a source string inside a deck context | `context path -> source text: target text` |
+| `no_change` | translator-reviewed text that intentionally stays identical to the source | `direct: [source text]`, `contextual: context path -> [source text]` |
 | `target_additions` | target-language text for fields intentionally blank in the source deck | `stable deck path: target text` |
 
-Contextual translations win over direct translations. When multiple contextual scopes match, the longest matching context path wins.
+Contextual translations win over direct translations. When multiple contextual scopes match, the longest matching context path wins. No-change entries cover missing translation checks but never modify composed output.
 
-The source key in `direct` and `contextual` is the expected base. If the English/source text changes, composition fails with a stale source-key error instead of silently applying the wrong translation.
+The source key in `direct`, `contextual`, and `no_change` is the expected base. If the English/source text changes, composition fails with a stale source-key error instead of silently applying the wrong translation or no-change decision.
 
 ## Direct translations
 
@@ -66,6 +67,28 @@ The nested shape is an ergonomic way to avoid repeating full stable paths. It fl
 A context applies to any extracted string at that path or below it. A note-level context such as `notes.note.georgia` applies to every translated field/tag under that note unless a more specific context also matches.
 
 Contextual entries may exist with or without a `direct` fallback. If both exist, contextual wins for matching paths and `direct` remains the fallback elsewhere.
+
+## Explicit no-change entries
+
+Use `translations.no_change` when a translator has reviewed source text and intentionally left it identical in the target language. This is different from a missing translation: future source additions will still be reported until they are either translated or explicitly marked no-change.
+
+```yaml
+translations:
+  direct:
+    Germany: Deutschland
+  no_change:
+    direct:
+      - Andorra
+      - Canada
+    contextual:
+      notes.note:
+        djibouti.fields.field.capital:
+          - Djibouti
+```
+
+Use `no_change.direct` for reusable names that should stay identical everywhere. Use `no_change.contextual` when an identical string is only intentional under a specific note, field, or other stable deck context.
+
+Keep `ignore_paths` for structural paths that translators should not review at all, such as tags, flag/map HTML, or adapter metadata. Use `no_change` for translator-facing text that was reviewed and intentionally left as-is.
 
 ## Target-language additions for blank source fields
 
@@ -152,9 +175,9 @@ To seed translator work after adding English notes or fields, run apply explicit
 brainbrew translations --manifest brainbrew.yaml --target de-standard --apply
 ```
 
-Non-interactive `--apply` inserts deterministic `source: source` stubs into `translations.direct` for the missing text fallbacks in scope. Interactive apply is selective: toggle rows with Space, confirm with Enter, then choose one action for all selected rows — direct `source: source`, contextual `source: source` at the suggested safe context, `ignore_paths`, skip — or choose to decide per row. It keeps direct reusable translations distinct from `contextual` overrides and does not invent target-language additions for blank source fields. Existing comments and layout are preserved where practical; run `brainbrew fmt overlays/languages/de.yaml` when you want fully canonical formatting.
+Non-interactive `--apply` preserves the existing scriptable behavior: it inserts deterministic `source: source` translation stubs into `translations.direct` for the missing text fallbacks in scope. Interactive apply is selective: toggle rows with Space, confirm with Enter, then choose one action for all selected rows — mark direct no-change, mark contextual no-change at the suggested safe context, add direct `source: source`, add contextual `source: source`, add `ignore_paths`, skip — or choose to decide per row. It keeps reviewed no-change decisions distinct from real translations and does not invent target-language additions for blank source fields. Existing comments and layout are preserved where practical; run `brainbrew fmt overlays/languages/de.yaml` when you want fully canonical formatting.
 
-When `require_complete: true`, composition fails if any extracted non-empty translatable string is not translated by `direct`, translated by a matching `contextual` entry, or matched by `ignore_paths`. For release workflows, prefer target-level verification policy in `brainbrew.yaml`:
+When `require_complete: true`, composition fails if any extracted non-empty translatable string is not translated by `direct`, translated by a matching `contextual` entry, marked by `no_change`, or matched by `ignore_paths`. For release workflows, prefer target-level verification policy in `brainbrew.yaml`:
 
 ```yaml
 targets:
@@ -168,8 +191,8 @@ targets:
 
 Translator context views should present extracted strings in the same categories:
 
-- source strings that occur once or can be safely reused are candidates for `direct`;
-- repeated source strings should show their stable deck contexts so translators can choose a reusable `direct` translation, `contextual` entries, or both;
+- source strings that occur once or can be safely reused are candidates for `direct` or `no_change.direct`;
+- repeated source strings should show their stable deck contexts so translators can choose a reusable `direct` translation, `no_change.direct`, `contextual` entries, contextual no-change entries, or both;
 - blank source fields should be shown as target-language addition opportunities and written to `target_additions` only when the blank text belongs to the translation overlay.
 
 During sync/apply, stale source-key errors mean the translator should refresh against the current source deck before editing the target text. Missing direct/contextual translation errors indicate an untranslated extracted string. Invalid contextual errors indicate either a stale source key or an invalid context path. Invalid target-addition errors indicate the source is no longer blank.
@@ -182,8 +205,9 @@ The formatter emits translation dictionary sections in this order:
 2. `ignore_paths`
 3. `direct`
 4. `contextual`
-5. `target_additions`
-6. `variables`
-7. `adapter_ids`
+5. `no_change`
+6. `target_additions`
+7. `variables`
+8. `adapter_ids`
 
 A file with no `direct` section starts at the next non-empty section. That is still deterministic.

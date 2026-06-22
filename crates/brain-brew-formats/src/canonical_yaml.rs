@@ -5,7 +5,8 @@ use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, ChangeIntent,
     DeckChange, ExpectedBase, FieldChange, FieldDefinition, FieldDefinitionChange, InvalidStableId,
     MediaChange, MediaReference, Note, NoteChange, NoteType, NoteTypeChange, Overlay, OverlayKind,
-    PropertyChange, StableId, TagChange, TranslationDictionary, ValidationReport,
+    PropertyChange, StableId, TagChange, TranslationDictionary, TranslationNoChange,
+    ValidationReport,
 };
 use serde::Deserialize;
 
@@ -558,6 +559,9 @@ fn write_translation_dictionary(out: &mut String, translations: &TranslationDict
         let nodes = contextual_format_tree(&translations.contextual);
         write_contextual_nodes(out, "    ", &nodes);
     }
+    if !translations.no_change.direct.is_empty() || !translations.no_change.contextual.is_empty() {
+        write_no_change(out, &translations.no_change);
+    }
     if !translations.target_additions.is_empty() {
         writeln!(out, "  target_additions:").expect("writing to a string cannot fail");
         for (path, value) in &translations.target_additions {
@@ -658,6 +662,89 @@ fn write_contextual_nodes(
             .expect("writing to a string cannot fail");
         }
         write_contextual_nodes(out, &child_indent, &node.children);
+    }
+}
+
+fn write_no_change(out: &mut String, no_change: &TranslationNoChange) {
+    writeln!(out, "  no_change:").expect("writing to a string cannot fail");
+    if !no_change.direct.is_empty() {
+        writeln!(out, "    direct:").expect("writing to a string cannot fail");
+        for source in &no_change.direct {
+            writeln!(out, "      - {}", yaml_scalar(source))
+                .expect("writing to a string cannot fail");
+        }
+    }
+    if !no_change.contextual.is_empty() {
+        writeln!(out, "    contextual:").expect("writing to a string cannot fail");
+        let nodes = no_change_contextual_format_tree(&no_change.contextual);
+        write_no_change_contextual_nodes(out, "      ", &nodes);
+    }
+}
+
+#[derive(Default)]
+struct NoChangeContextualFormatNode {
+    sources: BTreeSet<String>,
+    children: BTreeMap<String, NoChangeContextualFormatNode>,
+}
+
+fn no_change_contextual_format_tree(
+    contextual: &BTreeMap<String, BTreeSet<String>>,
+) -> BTreeMap<String, NoChangeContextualFormatNode> {
+    let mut nodes = BTreeMap::new();
+    let has_notes_root = contextual.contains_key("notes.note");
+    let has_note_types_root = contextual.contains_key("note_types.note-type");
+    for (context_path, sources) in contextual {
+        if !has_notes_root && let Some(suffix) = context_path.strip_prefix("notes.note.") {
+            insert_no_change_contextual_format_node(&mut nodes, "notes.note", suffix, sources);
+        } else if !has_note_types_root
+            && let Some(suffix) = context_path.strip_prefix("note_types.note-type.")
+        {
+            insert_no_change_contextual_format_node(
+                &mut nodes,
+                "note_types.note-type",
+                suffix,
+                sources,
+            );
+        } else {
+            nodes
+                .entry(context_path.clone())
+                .or_default()
+                .sources
+                .extend(sources.clone());
+        }
+    }
+    nodes
+}
+
+fn insert_no_change_contextual_format_node(
+    nodes: &mut BTreeMap<String, NoChangeContextualFormatNode>,
+    group: &str,
+    suffix: &str,
+    sources: &BTreeSet<String>,
+) {
+    nodes
+        .entry(group.to_owned())
+        .or_default()
+        .children
+        .entry(suffix.to_owned())
+        .or_default()
+        .sources
+        .extend(sources.clone());
+}
+
+fn write_no_change_contextual_nodes(
+    out: &mut String,
+    indent: &str,
+    nodes: &BTreeMap<String, NoChangeContextualFormatNode>,
+) {
+    for (key, node) in nodes {
+        writeln!(out, "{indent}{}:", yaml_scalar(key)).expect("writing to a string cannot fail");
+        let child_indent = format!("{indent}  ");
+        for source in &node.sources {
+            writeln!(out, "{}- {}", child_indent, yaml_scalar(source))
+                .expect("writing to a string cannot fail");
+        }
+        write_no_change_contextual_nodes(out, &child_indent, &node.children);
     }
 }
 
@@ -1191,6 +1278,8 @@ struct TranslationDictionaryYaml {
     #[serde(default)]
     contextual: BTreeMap<String, ContextualTranslationYaml>,
     #[serde(default)]
+    no_change: NoChangeYaml,
+    #[serde(default)]
     target_additions: BTreeMap<String, String>,
     #[serde(default)]
     variables: BTreeMap<String, BTreeMap<String, String>>,
@@ -1206,10 +1295,12 @@ impl TranslationDictionaryYaml {
     fn into_translation_dictionary(self) -> Result<TranslationDictionary, CanonicalYamlError> {
         let mut contextual = BTreeMap::new();
         flatten_contextual_translations(None, self.contextual, &mut contextual)?;
+        let no_change = self.no_change.into_no_change()?;
 
         Ok(TranslationDictionary {
             direct: self.direct,
             contextual,
+            no_change,
             target_additions: self.target_additions,
             variables: self.variables,
             adapter_ids: self.adapter_ids,
@@ -1217,6 +1308,57 @@ impl TranslationDictionaryYaml {
             ignore_paths: self.ignore_paths,
         })
     }
+}
+
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NoChangeYaml {
+    #[serde(default)]
+    direct: BTreeSet<String>,
+    #[serde(default)]
+    contextual: BTreeMap<String, NoChangeContextualYaml>,
+}
+
+impl NoChangeYaml {
+    fn into_no_change(self) -> Result<TranslationNoChange, CanonicalYamlError> {
+        let mut contextual = BTreeMap::new();
+        flatten_no_change_contextual(None, self.contextual, &mut contextual)?;
+        Ok(TranslationNoChange {
+            direct: self.direct,
+            contextual,
+        })
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum NoChangeContextualYaml {
+    Sources(BTreeSet<String>),
+    Nested(BTreeMap<String, NoChangeContextualYaml>),
+}
+
+fn flatten_no_change_contextual(
+    context_path: Option<String>,
+    entries: BTreeMap<String, NoChangeContextualYaml>,
+    contextual: &mut BTreeMap<String, BTreeSet<String>>,
+) -> Result<(), CanonicalYamlError> {
+    for (key, entry) in entries {
+        match entry {
+            NoChangeContextualYaml::Sources(sources) => {
+                let context_path = context_path
+                    .as_ref()
+                    .map_or_else(|| key.clone(), |prefix| format!("{prefix}.{key}"));
+                contextual.entry(context_path).or_default().extend(sources);
+            }
+            NoChangeContextualYaml::Nested(nested) => {
+                let nested_context = context_path
+                    .as_ref()
+                    .map_or_else(|| key.clone(), |prefix| format!("{prefix}.{key}"));
+                flatten_no_change_contextual(Some(nested_context), nested, contextual)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 #[derive(Deserialize)]

@@ -167,6 +167,36 @@ translations:
 }
 
 #[test]
+fn translation_dictionary_parses_nested_no_change_entries() {
+    let overlay = canonical_yaml::overlay_from_str(
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  no_change:
+    direct:
+      - Andorra
+      - Sukhumi
+    contextual:
+      notes.note:
+        djibouti.fields.field.capital:
+          - Djibouti
+      deck.description:
+        - Ultimate Geography
+"#,
+    )
+    .expect("no-change sections parse");
+
+    let translations = overlay.translations.expect("translation dictionary");
+    assert!(translations.no_change.direct.contains("Andorra"));
+    assert!(translations.no_change.direct.contains("Sukhumi"));
+    assert!(
+        translations.no_change.contextual["notes.note.djibouti.fields.field.capital"]
+            .contains("Djibouti")
+    );
+    assert!(translations.no_change.contextual["deck.description"].contains("Ultimate Geography"));
+}
+
+#[test]
 fn translation_dictionary_parses_nested_contextual_translations() {
     let overlay = canonical_yaml::overlay_from_str(
         r#"id: overlay.translation.da

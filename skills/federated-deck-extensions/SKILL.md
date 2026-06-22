@@ -79,7 +79,7 @@ translations:
       'Flag similar to {{Flag similarity}}.': 'Flaget ligner {{Flag similarity}}.'
 ```
 
-Use `translations.direct` for reusable content text and `translations.contextual` for path-scoped/content-specific exceptions. Do **not** path-scope metadata like `note_types.note-type.ultimate-geography.name` if a variable can express it.
+Use `translations.direct` for reusable content text, `translations.contextual` for path-scoped/content-specific exceptions, and `translations.no_change` for translator-reviewed text that intentionally stays identical to the source. Do **not** path-scope metadata like `note_types.note-type.ultimate-geography.name` if a variable can express it.
 
 ### 3. Use field fills for non-translation blank content
 

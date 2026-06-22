@@ -867,17 +867,29 @@ fn selected_target_names(manifest: &FederatedDeckManifest, args: &TranslationArg
 struct OverlayEdits {
     direct: BTreeSet<String>,
     contextual: BTreeMap<String, BTreeSet<String>>,
+    no_change_direct: BTreeSet<String>,
+    no_change_contextual: BTreeMap<String, BTreeSet<String>>,
     ignore_paths: BTreeSet<String>,
 }
 
 impl OverlayEdits {
     fn is_empty(&self) -> bool {
-        self.direct.is_empty() && self.contextual.is_empty() && self.ignore_paths.is_empty()
+        self.direct.is_empty()
+            && self.contextual.is_empty()
+            && self.no_change_direct.is_empty()
+            && self.no_change_contextual.is_empty()
+            && self.ignore_paths.is_empty()
     }
 
     fn count(&self) -> usize {
         self.direct.len()
             + self.contextual.values().map(BTreeSet::len).sum::<usize>()
+            + self.no_change_direct.len()
+            + self
+                .no_change_contextual
+                .values()
+                .map(BTreeSet::len)
+                .sum::<usize>()
             + self.ignore_paths.len()
     }
 }
@@ -973,11 +985,19 @@ fn prompt_selective_apply<R: Read, W: Write>(
     } else {
         let labels = vec![
             format!(
-                "add direct source→source stubs for all {} selected missing translations",
+                "mark direct no-change for all {} selected missing translations",
                 selected_missing.len()
             ),
             format!(
-                "add contextual source→source stubs for all {} selected missing translations",
+                "mark contextual no-change for all {} selected missing translations",
+                selected_missing.len()
+            ),
+            format!(
+                "add direct source→source translation stubs for all {} selected missing translations",
+                selected_missing.len()
+            ),
+            format!(
+                "add contextual source→source translation stubs for all {} selected missing translations",
                 selected_missing.len()
             ),
             format!(
@@ -988,11 +1008,13 @@ fn prompt_selective_apply<R: Read, W: Write>(
             "skip selected missing translations".to_owned(),
         ];
         match ui.select_one("Action for selected missing translations", &labels, 0)? {
-            0 => MissingApplyAction::Direct,
-            1 => MissingApplyAction::Contextual,
-            2 => MissingApplyAction::IgnorePath,
-            3 => MissingApplyAction::DecidePerRow,
-            4 => MissingApplyAction::Skip,
+            0 => MissingApplyAction::NoChangeDirect,
+            1 => MissingApplyAction::NoChangeContextual,
+            2 => MissingApplyAction::Direct,
+            3 => MissingApplyAction::Contextual,
+            4 => MissingApplyAction::IgnorePath,
+            5 => MissingApplyAction::DecidePerRow,
+            6 => MissingApplyAction::Skip,
             _ => unreachable!(),
         }
     };
@@ -1037,6 +1059,8 @@ fn prompt_selective_apply<R: Read, W: Write>(
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum MissingApplyAction {
+    NoChangeDirect,
+    NoChangeContextual,
     Direct,
     Contextual,
     IgnorePath,
@@ -1050,8 +1074,10 @@ fn prompt_missing_apply_action<R: Read, W: Write>(
 ) -> Result<MissingApplyAction, String> {
     let context = contextual_context_for_entry(entry);
     let action_labels = vec![
-        "add direct source→source stub".to_owned(),
-        format!("add contextual source→source stub at {context}"),
+        "mark direct no-change".to_owned(),
+        format!("mark contextual no-change at {context}"),
+        "add direct source→source translation stub".to_owned(),
+        format!("add contextual source→source translation stub at {context}"),
         "add ignore path for this deck path".to_owned(),
         "skip".to_owned(),
     ];
@@ -1065,10 +1091,12 @@ fn prompt_missing_apply_action<R: Read, W: Write>(
         &action_labels,
         0,
     )? {
-        0 => Ok(MissingApplyAction::Direct),
-        1 => Ok(MissingApplyAction::Contextual),
-        2 => Ok(MissingApplyAction::IgnorePath),
-        3 => Ok(MissingApplyAction::Skip),
+        0 => Ok(MissingApplyAction::NoChangeDirect),
+        1 => Ok(MissingApplyAction::NoChangeContextual),
+        2 => Ok(MissingApplyAction::Direct),
+        3 => Ok(MissingApplyAction::Contextual),
+        4 => Ok(MissingApplyAction::IgnorePath),
+        5 => Ok(MissingApplyAction::Skip),
         _ => unreachable!(),
     }
 }
@@ -1081,6 +1109,16 @@ fn apply_missing_translation_action(
 ) {
     let file_edits = edits.entry(overlay_path.to_path_buf()).or_default();
     match action {
+        MissingApplyAction::NoChangeDirect => {
+            file_edits.no_change_direct.insert(entry.source.clone());
+        }
+        MissingApplyAction::NoChangeContextual => {
+            file_edits
+                .no_change_contextual
+                .entry(contextual_context_for_entry(entry))
+                .or_default()
+                .insert(entry.source.clone());
+        }
         MissingApplyAction::Direct => {
             file_edits.direct.insert(entry.source.clone());
         }
@@ -1213,6 +1251,20 @@ fn compose_lenient_translation_overlay(
                             replacements.remove(&entry.source);
                             if replacements.is_empty() {
                                 translations.contextual.remove(context);
+                            }
+                        }
+                    }
+                    TranslationCoverageCategory::StaleNoChangeDirectKey => {
+                        translations.no_change.direct.remove(&entry.source);
+                    }
+                    TranslationCoverageCategory::StaleNoChangeContextualKey => {
+                        if let Some(context) = &entry.context
+                            && let Some(sources) =
+                                translations.no_change.contextual.get_mut(context)
+                        {
+                            sources.remove(&entry.source);
+                            if sources.is_empty() {
+                                translations.no_change.contextual.remove(context);
                             }
                         }
                     }
@@ -1360,6 +1412,12 @@ fn print_human_reports(reports: &[ScopedTranslationReport], full: bool) {
         );
         println!(
             "  {}: {}",
+            color_stdout("intentionally unchanged text", "34"),
+            all_counts.get("no_change_direct").copied().unwrap_or(0)
+                + all_counts.get("no_change_contextual").copied().unwrap_or(0)
+        );
+        println!(
+            "  {}: {}",
             color_stdout("missing text translations", "31"),
             display_counts
                 .get("untranslated_fallback")
@@ -1479,6 +1537,8 @@ fn is_stale_or_invalid(category: TranslationCoverageCategory) -> bool {
         category,
         TranslationCoverageCategory::StaleDirectKey
             | TranslationCoverageCategory::StaleContextualKey
+            | TranslationCoverageCategory::StaleNoChangeDirectKey
+            | TranslationCoverageCategory::StaleNoChangeContextualKey
             | TranslationCoverageCategory::StaleTargetAddition
             | TranslationCoverageCategory::StaleVariableKey
             | TranslationCoverageCategory::StaleAdapterIdKey
@@ -1550,6 +1610,13 @@ fn apply_overlay_edits(path: &Path, edits: &OverlayEdits) -> Result<usize, Strin
     if !edits.contextual.is_empty() {
         output = insert_contextual_stub_lines(&output, &edits.contextual);
     }
+    if !edits.no_change_direct.is_empty() || !edits.no_change_contextual.is_empty() {
+        output = insert_no_change_lines(
+            &output,
+            &edits.no_change_direct,
+            &edits.no_change_contextual,
+        );
+    }
     if output != input {
         fs::write(path, output).map_err(|error| format!("{}: {error}", path.display()))?;
     }
@@ -1587,6 +1654,162 @@ fn insert_contextual_stub_lines(input: &str, stubs: &BTreeMap<String, BTreeSet<S
         &entries,
         &["direct", "ignore_paths", "require_complete"],
     )
+}
+
+fn insert_no_change_lines(
+    input: &str,
+    direct: &BTreeSet<String>,
+    contextual: &BTreeMap<String, BTreeSet<String>>,
+) -> String {
+    let spans = line_spans(input);
+    let Some(translations_index) = find_translations_line(input, &spans) else {
+        return insert_new_no_change_section(input, direct, contextual);
+    };
+    if find_translation_section(input, &spans, translations_index, "no_change").is_none() {
+        return insert_new_no_change_section(input, direct, contextual);
+    }
+
+    let mut output = input.to_owned();
+    if !direct.is_empty() {
+        let entries = direct
+            .iter()
+            .map(|source| format!("      - {}\n", yaml_scalar(source)))
+            .collect::<String>();
+        output = insert_no_change_subsection(&output, "direct", &entries, &[]);
+    }
+    if !contextual.is_empty() {
+        let mut entries = String::new();
+        for (context, sources) in contextual {
+            entries.push_str(&format!("      {}:\n", yaml_scalar(context)));
+            for source in sources {
+                entries.push_str(&format!("        - {}\n", yaml_scalar(source)));
+            }
+        }
+        output = insert_no_change_subsection(&output, "contextual", &entries, &["direct"]);
+    }
+    output
+}
+
+fn insert_new_no_change_section(
+    input: &str,
+    direct: &BTreeSet<String>,
+    contextual: &BTreeMap<String, BTreeSet<String>>,
+) -> String {
+    let mut entries = String::new();
+    if !direct.is_empty() {
+        entries.push_str("    direct:\n");
+        for source in direct {
+            entries.push_str(&format!("      - {}\n", yaml_scalar(source)));
+        }
+    }
+    if !contextual.is_empty() {
+        entries.push_str("    contextual:\n");
+        for (context, sources) in contextual {
+            entries.push_str(&format!("      {}:\n", yaml_scalar(context)));
+            for source in sources {
+                entries.push_str(&format!("        - {}\n", yaml_scalar(source)));
+            }
+        }
+    }
+    insert_translation_section(
+        input,
+        "no_change",
+        &entries,
+        &["contextual", "direct", "ignore_paths", "require_complete"],
+    )
+}
+
+fn insert_no_change_subsection(
+    input: &str,
+    subsection_name: &str,
+    entries: &str,
+    preferred_after_subsections: &[&str],
+) -> String {
+    let spans = line_spans(input);
+    let Some(translations_index) = find_translations_line(input, &spans) else {
+        return input.to_owned();
+    };
+    let Some(no_change_index) =
+        find_translation_section(input, &spans, translations_index, "no_change")
+    else {
+        return input.to_owned();
+    };
+    let no_change_end = translation_section_end(input, &spans, no_change_index);
+
+    if let Some(section_index) = find_no_change_subsection(
+        input,
+        &spans,
+        no_change_index,
+        no_change_end,
+        subsection_name,
+    ) {
+        let insert_at = indented_section_end(input, &spans, section_index, 4);
+        return insert_at_byte(input, insert_at, entries);
+    }
+
+    for anchor in preferred_after_subsections {
+        if let Some(section_index) =
+            find_no_change_subsection(input, &spans, no_change_index, no_change_end, anchor)
+        {
+            let insert_at = indented_section_end(input, &spans, section_index, 4);
+            return insert_at_byte(
+                input,
+                insert_at,
+                &format!("    {subsection_name}:\n{entries}"),
+            );
+        }
+    }
+
+    let insert_at = spans[no_change_index].1;
+    insert_at_byte(
+        input,
+        insert_at,
+        &format!("    {subsection_name}:\n{entries}"),
+    )
+}
+
+fn find_no_change_subsection(
+    input: &str,
+    spans: &[(usize, usize)],
+    no_change_index: usize,
+    no_change_end: usize,
+    subsection_name: &str,
+) -> Option<usize> {
+    let needle = format!("    {subsection_name}:");
+    spans
+        .iter()
+        .enumerate()
+        .skip(no_change_index + 1)
+        .take_while(|(_, (start, _))| *start < no_change_end)
+        .find(|(_, (start, end))| input[*start..*end].trim_end() == needle)
+        .map(|(index, _)| index)
+}
+
+fn indented_section_end(
+    input: &str,
+    spans: &[(usize, usize)],
+    section_index: usize,
+    section_indent: usize,
+) -> usize {
+    spans
+        .iter()
+        .enumerate()
+        .skip(section_index + 1)
+        .find(|(_, (start, end))| {
+            let line = &input[*start..*end];
+            !line.trim().is_empty()
+                && !line.trim_start().starts_with('#')
+                && leading_spaces(line) <= section_indent
+        })
+        .map(|(_, (start, _))| *start)
+        .unwrap_or(input.len())
+}
+
+fn leading_spaces(line: &str) -> usize {
+    line.as_bytes()
+        .iter()
+        .take_while(|byte| **byte == b' ')
+        .count()
 }
 
 fn insert_ignore_path_lines(input: &str, paths: &BTreeSet<String>) -> String {
@@ -1986,6 +2209,8 @@ fn color_category(category: TranslationCoverageCategory, text: &str) -> String {
     match category {
         TranslationCoverageCategory::DirectTranslation => color_stdout(text, "32"),
         TranslationCoverageCategory::ContextualOverride => color_stdout(text, "36"),
+        TranslationCoverageCategory::NoChangeDirect
+        | TranslationCoverageCategory::NoChangeContextual => color_stdout(text, "34"),
         TranslationCoverageCategory::TargetLanguageAddition => color_stdout(text, "35"),
         TranslationCoverageCategory::VariableTranslation
         | TranslationCoverageCategory::AdapterIdTranslation
@@ -1993,6 +2218,8 @@ fn color_category(category: TranslationCoverageCategory, text: &str) -> String {
         TranslationCoverageCategory::UntranslatedFallback => color_stdout(text, "31"),
         TranslationCoverageCategory::StaleDirectKey
         | TranslationCoverageCategory::StaleContextualKey
+        | TranslationCoverageCategory::StaleNoChangeDirectKey
+        | TranslationCoverageCategory::StaleNoChangeContextualKey
         | TranslationCoverageCategory::StaleTargetAddition
         | TranslationCoverageCategory::StaleVariableKey
         | TranslationCoverageCategory::StaleAdapterIdKey

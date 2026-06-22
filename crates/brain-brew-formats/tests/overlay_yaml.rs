@@ -437,6 +437,13 @@ translations:
     notes.note:
       georgia.fields.field.country:
         Georgia: Georgien
+  no_change:
+    contextual:
+      notes.note:
+        canada.fields.field.country:
+          - Canada
+    direct:
+      - Andorra
   direct:
     Germany: Deutschland
 "#,
@@ -446,14 +453,21 @@ translations:
     assert!(formatted.contains(
         "    notes.note:\n      georgia.fields.field.country:\n        Georgia: Georgien\n"
     ));
+    assert!(formatted.contains(
+        "  no_change:\n    direct:\n      - Andorra\n    contextual:\n      notes.note:\n        canada.fields.field.country:\n          - Canada\n"
+    ));
     assert!(
         formatted.find("  direct:\n").unwrap() < formatted.find("  contextual:\n").unwrap(),
         "direct translations are emitted before contextual translations"
     );
     assert!(
-        formatted.find("  contextual:\n").unwrap()
+        formatted.find("  contextual:\n").unwrap() < formatted.find("  no_change:\n").unwrap(),
+        "contextual translations are emitted before no-change entries"
+    );
+    assert!(
+        formatted.find("  no_change:\n").unwrap()
             < formatted.find("  target_additions:\n").unwrap(),
-        "contextual translations are emitted before target additions"
+        "no-change entries are emitted before target additions"
     );
     assert!(
         formatted.find("  target_additions:\n").unwrap()

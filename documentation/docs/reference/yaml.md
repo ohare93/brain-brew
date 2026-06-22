@@ -68,6 +68,12 @@ translations:
         Georgia: Georgien
       us-georgia.fields.field.region:
         Georgia: Georgia
+  no_change:
+    direct:
+      - Andorra
+    contextual:
+      notes.note.djibouti.fields.field.capital:
+        - Djibouti
   target_additions:
     notes.note.example.fields.field.country-info: Localized blank text.
   variables:
@@ -78,7 +84,7 @@ translations:
       old-guid: new-guid
 ```
 
-Formatter order is deterministic: `require_complete`, `ignore_paths`, `direct`, `contextual`, `target_additions`, `variables`, `adapter_ids`.
+Formatter order is deterministic: `require_complete`, `ignore_paths`, `direct`, `contextual`, `no_change`, `target_additions`, `variables`, `adapter_ids`.
 
 ## Field additions
 
