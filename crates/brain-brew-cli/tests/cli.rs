@@ -1034,23 +1034,31 @@ fn translations_summary_human_output_uses_aligned_space_columns() {
         "summary should not rely on terminal tab stops:\n{out}"
     );
     assert!(
-        out.contains("language  targets"),
-        "header should use padded columns:\n{out}"
+        out.contains("lang  tgt  direct"),
+        "header should use compact padded columns:\n{out}"
     );
-    let mut lines = out.lines();
-    let _title = lines.next().unwrap();
-    let header = lines.next().unwrap();
-    let row = lines.next().unwrap();
-    assert_eq!(
-        row.find("overlay.translation.da"),
-        header.find("overlay"),
-        "overlay column should start under its header:\n{out}"
+    assert!(
+        !out.contains("overlay.translation.da"),
+        "default summary should keep wide overlay/file columns out of the table:\n{out}"
     );
-    assert_eq!(
-        row.find("da.yaml"),
-        header.find("file"),
-        "file column should start under its header:\n{out}"
-    );
+    for line in out.lines().skip(1) {
+        assert!(
+            line.chars().count() <= 90,
+            "default summary line should stay compact, got {} chars:\n{line}\n\n{out}",
+            line.chars().count()
+        );
+    }
+    let full = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+        "--summary",
+        "--full",
+    ]);
+    assert!(full.status.success(), "stderr: {}", stderr(&full));
+    assert!(stdout(&full).contains("overlay.translation.da"));
+    assert!(stdout(&full).contains("da.yaml"));
 }
 
 #[test]

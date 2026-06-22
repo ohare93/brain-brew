@@ -71,7 +71,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         } else if reports.is_empty() {
             print_no_translation_reports(&args)?;
         } else {
-            print_human_summary(&reports);
+            print_human_summary(&reports, args.full);
         }
     } else if args.json_output {
         print_json_reports(&reports, &applied);
@@ -1604,9 +1604,60 @@ fn print_json_summary(reports: &[ScopedTranslationReport]) {
     );
 }
 
-fn print_human_summary(reports: &[ScopedTranslationReport]) {
+fn print_human_summary(reports: &[ScopedTranslationReport], full: bool) {
     let rows = translation_summary_rows(reports);
     println!("{}", color_stdout("Translation coverage summary", "1;36"));
+    if full {
+        print_full_human_summary_table(rows);
+    } else {
+        print_compact_human_summary_table(rows);
+        println!("Legend: ctxt=contextual, same=no-change, miss=actionable missing text.");
+        println!("        hidden/raw=untranslated fallbacks; --summary --full shows overlay/file.");
+    }
+}
+
+fn print_compact_human_summary_table(rows: Vec<TranslationSummaryRow>) {
+    let mut table = vec![vec![
+        "lang".to_owned(),
+        "tgt".to_owned(),
+        "direct".to_owned(),
+        "ctxt".to_owned(),
+        "same".to_owned(),
+        "add".to_owned(),
+        "vars".to_owned(),
+        "ids".to_owned(),
+        "miss".to_owned(),
+        "hidden".to_owned(),
+        "raw".to_owned(),
+        "ign".to_owned(),
+        "stale".to_owned(),
+    ]];
+    for row in rows {
+        table.push(vec![
+            row.language,
+            row.targets.len().to_string(),
+            row.counts.direct_translation.to_string(),
+            row.counts.contextual_override.to_string(),
+            row.counts.no_change.to_string(),
+            row.counts.target_language_addition.to_string(),
+            row.counts.variable_translation.to_string(),
+            row.counts.adapter_id_translation.to_string(),
+            row.counts.missing_text_translation.to_string(),
+            row.counts.hidden_untranslated_fallback.to_string(),
+            row.counts.untranslated_fallback.to_string(),
+            row.counts.ignored_source.to_string(),
+            row.counts.stale_invalid.to_string(),
+        ]);
+    }
+    let right_aligned = [
+        false, true, true, true, true, true, true, true, true, true, true, true, true,
+    ];
+    for line in aligned_table_lines(&table, &right_aligned) {
+        println!("{line}");
+    }
+}
+
+fn print_full_human_summary_table(rows: Vec<TranslationSummaryRow>) {
     let mut table = vec![vec![
         "language".to_owned(),
         "targets".to_owned(),
