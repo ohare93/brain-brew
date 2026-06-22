@@ -65,7 +65,15 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         }
     }
 
-    if args.json_output {
+    if args.summary {
+        if args.json_output {
+            print_json_summary(&reports);
+        } else if reports.is_empty() {
+            print_no_translation_reports(&args)?;
+        } else {
+            print_human_summary(&reports);
+        }
+    } else if args.json_output {
         print_json_reports(&reports, &applied);
     } else {
         if reports.is_empty() {
@@ -102,6 +110,7 @@ struct TranslationArgs {
     json_output: bool,
     interactive: Option<bool>,
     full: bool,
+    summary: bool,
 }
 
 fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
@@ -120,6 +129,7 @@ fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
         json_output: false,
         interactive: None,
         full: false,
+        summary: false,
     };
     let mut index = 0;
     while index < args.len() {
@@ -203,6 +213,10 @@ fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
                 parsed.full = true;
                 index += 1;
             }
+            "--summary" => {
+                parsed.summary = true;
+                index += 1;
+            }
             "--interactive" => {
                 parsed.interactive = Some(true);
                 index += 1;
@@ -219,6 +233,9 @@ fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
     }
     if parsed.interactive == Some(true) && parsed.json_output {
         return Err("choose --interactive or --json, not both".to_owned());
+    }
+    if parsed.summary && parsed.apply {
+        return Err("choose --summary or --apply, not both".to_owned());
     }
     Ok(parsed)
 }
@@ -1534,6 +1551,200 @@ fn print_json_reports(reports: &[ScopedTranslationReport], applied: &BTreeMap<St
     );
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
+struct TranslationSummaryCounts {
+    direct_translation: usize,
+    contextual_override: usize,
+    no_change: usize,
+    target_language_addition: usize,
+    variable_translation: usize,
+    adapter_id_translation: usize,
+    untranslated_fallback: usize,
+    missing_text_translation: usize,
+    hidden_untranslated_fallback: usize,
+    ignored_source: usize,
+    stale_invalid: usize,
+}
+
+struct TranslationSummaryRow {
+    language: String,
+    targets: BTreeSet<String>,
+    overlay_id: String,
+    overlay_file: String,
+    counts: TranslationSummaryCounts,
+}
+
+fn print_json_summary(reports: &[ScopedTranslationReport]) {
+    let summaries = translation_summary_rows(reports)
+        .into_iter()
+        .map(|row| {
+            json!({
+                "language": row.language,
+                "targets": row.targets.into_iter().collect::<Vec<_>>(),
+                "overlay": row.overlay_id,
+                "file": row.overlay_file,
+                "direct_translation": row.counts.direct_translation,
+                "contextual_override": row.counts.contextual_override,
+                "no_change": row.counts.no_change,
+                "target_language_addition": row.counts.target_language_addition,
+                "variable_translation": row.counts.variable_translation,
+                "adapter_id_translation": row.counts.adapter_id_translation,
+                "untranslated_fallback": row.counts.untranslated_fallback,
+                "missing_text_translation": row.counts.missing_text_translation,
+                "hidden_untranslated_fallback": row.counts.hidden_untranslated_fallback,
+                "ignored_source": row.counts.ignored_source,
+                "stale_invalid": row.counts.stale_invalid,
+            })
+        })
+        .collect::<Vec<_>>();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json!({ "summaries": summaries }))
+            .expect("translation summary JSON serializes")
+    );
+}
+
+fn print_human_summary(reports: &[ScopedTranslationReport]) {
+    let rows = translation_summary_rows(reports);
+    println!("{}", color_stdout("Translation coverage summary", "1;36"));
+    println!(
+        "language\ttargets\toverlay\tfile\tdirect\tcontextual\tno-change\tadditions\tvariables\tadapter-ids\tmissing-text\thidden-fallbacks\traw-untranslated\tignored\tstale/invalid"
+    );
+    for row in rows {
+        println!(
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            row.language,
+            row.targets.len(),
+            row.overlay_id,
+            row.overlay_file,
+            row.counts.direct_translation,
+            row.counts.contextual_override,
+            row.counts.no_change,
+            row.counts.target_language_addition,
+            row.counts.variable_translation,
+            row.counts.adapter_id_translation,
+            row.counts.missing_text_translation,
+            row.counts.hidden_untranslated_fallback,
+            row.counts.untranslated_fallback,
+            row.counts.ignored_source,
+            row.counts.stale_invalid,
+        );
+    }
+}
+
+fn translation_summary_rows(reports: &[ScopedTranslationReport]) -> Vec<TranslationSummaryRow> {
+    let mut grouped =
+        BTreeMap::<(String, String, String, TranslationSummaryCounts), BTreeSet<String>>::new();
+    for report in reports {
+        let language = inferred_report_language(report);
+        let counts = translation_summary_counts(&report.report.entries);
+        grouped
+            .entry((
+                language,
+                report.overlay_id.clone(),
+                report.overlay_file.clone(),
+                counts,
+            ))
+            .or_default()
+            .insert(report.target.clone());
+    }
+    grouped
+        .into_iter()
+        .map(
+            |((language, overlay_id, overlay_file, counts), targets)| TranslationSummaryRow {
+                language,
+                targets,
+                overlay_id,
+                overlay_file,
+                counts,
+            },
+        )
+        .collect()
+}
+
+fn translation_summary_counts(entries: &[TranslationCoverageEntry]) -> TranslationSummaryCounts {
+    let counts = category_counts(entries);
+    let untranslated_fallback = counts.get("untranslated_fallback").copied().unwrap_or(0);
+    let missing_text_translation = entries
+        .iter()
+        .filter(|entry| {
+            entry.category == TranslationCoverageCategory::UntranslatedFallback
+                && default_report_includes_untranslated_fallback(entry)
+        })
+        .count();
+    TranslationSummaryCounts {
+        direct_translation: counts.get("direct_translation").copied().unwrap_or(0),
+        contextual_override: counts.get("contextual_override").copied().unwrap_or(0),
+        no_change: counts.get("no_change").copied().unwrap_or(0),
+        target_language_addition: counts.get("target_language_addition").copied().unwrap_or(0),
+        variable_translation: counts.get("variable_translation").copied().unwrap_or(0),
+        adapter_id_translation: counts.get("adapter_id_translation").copied().unwrap_or(0),
+        untranslated_fallback,
+        missing_text_translation,
+        hidden_untranslated_fallback: untranslated_fallback
+            .saturating_sub(missing_text_translation),
+        ignored_source: counts.get("ignored_source").copied().unwrap_or(0),
+        stale_invalid: entries
+            .iter()
+            .filter(|entry| is_stale_or_invalid(entry.category))
+            .count(),
+    }
+}
+
+fn inferred_report_language(report: &ScopedTranslationReport) -> String {
+    let stem = Path::new(&report.overlay_file)
+        .file_stem()
+        .and_then(|stem| stem.to_str());
+    if let Some(language) = language_candidate(stem) {
+        return language;
+    }
+    if let Some(language) = stem
+        .and_then(|stem| stem.strip_prefix("translation-"))
+        .and_then(|candidate| language_candidate(Some(candidate)))
+    {
+        return language;
+    }
+    if let Some((_, suffix)) = report.overlay_id.rsplit_once(".translation.") {
+        if let Some(language) = language_candidate(Some(suffix)) {
+            return language;
+        }
+        if let Some(language) = suffix
+            .rsplit_once('.')
+            .and_then(|(_, last_segment)| language_candidate(Some(last_segment)))
+        {
+            return language;
+        }
+    }
+    if let Some(language) = language_candidate(Some(trim_target_language_suffixes(&report.target)))
+    {
+        return language;
+    }
+    if let Some(language) = stem
+        .and_then(|stem| stem.rsplit_once(['-', '.']))
+        .and_then(|(_, suffix)| language_candidate(Some(suffix)))
+    {
+        return language;
+    }
+    "unknown".to_owned()
+}
+
+fn trim_target_language_suffixes(target: &str) -> &str {
+    let mut candidate = target;
+    loop {
+        let Some((prefix, suffix)) = candidate.rsplit_once('-') else {
+            return candidate;
+        };
+        if matches!(
+            suffix,
+            "standard" | "extended" | "experimental" | "hardcore" | "release"
+        ) {
+            candidate = prefix;
+        } else {
+            return candidate;
+        }
+    }
+}
+
 fn entry_json(entry: &TranslationCoverageEntry) -> serde_json::Value {
     json!({
         "category": entry.category.as_str(),
@@ -1810,16 +2021,22 @@ fn inferred_languages(manifest: &FederatedDeckManifest) -> Vec<String> {
 }
 
 fn maybe_insert_language(candidate: Option<&str>, languages: &mut BTreeSet<String>) {
-    let Some(language) = candidate else {
-        return;
-    };
+    if let Some(language) = language_candidate(candidate) {
+        languages.insert(language);
+    }
+}
+
+fn language_candidate(candidate: Option<&str>) -> Option<String> {
+    let language = candidate?;
     if (2..=8).contains(&language.len())
         && language
             .chars()
             .all(|ch| ch.is_ascii_lowercase() || ch == '-')
         && language != "translation"
     {
-        languages.insert(language.to_owned());
+        Some(language.to_owned())
+    } else {
+        None
     }
 }
 

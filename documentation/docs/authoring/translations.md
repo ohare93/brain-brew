@@ -160,10 +160,11 @@ brainbrew translations --manifest brainbrew.yaml --all-targets --language de
 brainbrew translations --manifest brainbrew.yaml --target de-standard --note note.berlin
 brainbrew translations --manifest brainbrew.yaml --target de-standard --path-prefix notes.note.berlin.fields.field.country
 brainbrew translations --manifest brainbrew.yaml --target de-standard --json
+brainbrew translations --manifest brainbrew.yaml --all-targets --summary --json
 brainbrew translations --manifest brainbrew.yaml --target de-standard --full
 ```
 
-Report mode is the default and never modifies files. The human report is translator-focused by default: it shows missing note-field text translations and summarizes structural/media/tag values separately so flag HTML, map HTML, tags, deck metadata, and template names do not drown out translator work. Use `--full` when you intentionally want every scalar fallback. JSON output remains stable and includes all coverage entries. Missing fallbacks are source strings that would currently pass through unchanged in a translated target.
+Report mode is the default and never modifies files. The human report is translator-focused by default: it shows missing note-field text translations and summarizes structural/media/tag values separately so flag HTML, map HTML, tags, deck metadata, and template names do not drown out translator work. Use `--full` when you intentionally want every scalar fallback. JSON output remains stable and includes all coverage entries. Use `--summary` for compact per-language/per-overlay counts; summary mode de-duplicates identical reports across target variants and includes direct translations, contextual overrides, no-change entries, target-language additions, variables, adapter IDs, raw untranslated fallbacks, actionable missing text translations, ignored entries, and stale/invalid keys. Missing fallbacks are source strings that would currently pass through unchanged in a translated target.
 
 To seed translator work after adding English notes or fields, run apply explicitly:
 

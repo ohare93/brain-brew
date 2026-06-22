@@ -976,6 +976,45 @@ fn translations_reports_when_selected_target_has_no_dictionary_overlays() {
 }
 
 #[test]
+fn translations_summary_exports_compact_counts_by_language() {
+    let dir = temp_dir("translations-summary");
+    write_translation_workspace(&dir);
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+        "--summary",
+        "--json",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    assert!(json.get("reports").is_none());
+    let summaries = json["summaries"].as_array().unwrap();
+    assert_eq!(summaries.len(), 1);
+    let row = &summaries[0];
+    assert_eq!(row["language"], "da");
+    assert_eq!(
+        row["targets"],
+        serde_json::json!(["da-release", "da-standard"])
+    );
+    assert_eq!(row["overlay"], "overlay.translation.da");
+    assert_eq!(row["file"], "da.yaml");
+    assert_eq!(row["direct_translation"], 1);
+    assert_eq!(row["contextual_override"], 1);
+    assert_eq!(row["no_change"], 0);
+    assert_eq!(row["target_language_addition"], 1);
+    assert_eq!(row["variable_translation"], 0);
+    assert_eq!(row["adapter_id_translation"], 0);
+    assert_eq!(row["untranslated_fallback"], 2);
+    assert_eq!(row["missing_text_translation"], 2);
+    assert_eq!(row["hidden_untranslated_fallback"], 0);
+    assert_eq!(row["stale_invalid"], 1);
+}
+
+#[test]
 fn translations_default_report_focuses_on_translatable_note_text() {
     let manifest = workspace_root().join("fixtures/ultimate-geography/brainbrew.yaml");
     let output = run([
