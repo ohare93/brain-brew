@@ -3,69 +3,54 @@ kind: translation
 translations:
   contextual:
     notes.note:
-      bonaire.fields.field.country-info:
+      bonaire:
         Special municipality of the Netherlands.: 'Municipio especial de los Países Bajos.'
-      british-indian-ocean-territory.fields.field.country:
+      british-indian-ocean-territory:
         British Indian Ocean Territory: 'Territorio Británico del Océano Índico'
-      british-indian-ocean-territory.fields.field.country-info:
         Overseas territory of the United Kingdom.: Territorio de ultramar del Reino Unido.
-      ceuta.fields.field.country-info:
+      ceuta:
         Autonomous city of Spain.: 'Ciudad autónoma de España.'
-      christmas-island.fields.field.country:
+      christmas-island:
         Christmas Island: Isla de Navidad
-      christmas-island.fields.field.country-info:
         External territory of Australia.: Territorio externo de Australia.
-      cocos-keeling-islands.fields.field.country:
+      cocos-keeling-islands:
         'Cocos (Keeling) Islands': Islas Cocos
-      cocos-keeling-islands.fields.field.country-info:
         External territory of Australia.: Territorio externo de Australia.
-      easter-island.fields.field.country:
+      easter-island:
         Easter Island: Isla de Pascua
-      easter-island.fields.field.country-info:
         Polynesian island and special territory of Chile.: Isla de la Polinesia y territorio especial de Chile.
-      gal-pagos-islands.fields.field.country:
+      gal-pagos-islands:
         'Galápagos Islands': 'Islas Galápagos'
-      gal-pagos-islands.fields.field.country-info:
         Province of Ecuador.: Provincia de Ecuador.
-      gal-pagos-islands.fields.field.flag-similarity:
         'Sierra Leone (slightly lighter blue)': 'Sierra Leona (azul ligeramente más claro)'
-      melilla.fields.field.country-info:
+      melilla:
         Autonomous city of Spain: 'Ciudad autónoma de España.'
-      montserrat.fields.field.capital-info:
+      montserrat:
         Eruptions in 1997 destroyed the capital city of Plymouth, making Brades the de facto capital.: Las erupciones de 1997 destruyeron la capital de Plymouth, haciendo Brades la capital de facto.
-      montserrat.fields.field.country-info:
         Overseas territory of the United Kingdom.: Territorio de ultramar del Reino Unido.
-      mount-athos.fields.field.country:
-        Mount Athos: Monte Athos
-      mount-athos.fields.field.country-info:
+      mount-athos:
         Autonomous orthodox monastic state in northeastern Greece, also known as the Holy Mountain.: 'Estado monástico ortodoxo autónomo en la parte noreste de Grecia, también conocido como la Montaña Sagrada.'
-      norfolk-island.fields.field.capital-hint:
-        Not a sovereign country: 'No es un país soberano'
-      norfolk-island.fields.field.country:
-        Norfolk Island: Isla Norfolk
-      norfolk-island.fields.field.country-info:
+        Mount Athos: Monte Athos
+      norfolk-island:
         External territory of Australia.: Territorio externo de Australia.
-      pitcairn-islands.fields.field.country:
-        Pitcairn Islands: Islas Pitcairn
-      pitcairn-islands.fields.field.country-info:
+        Norfolk Island: Isla Norfolk
+        Not a sovereign country: 'No es un país soberano'
+      pitcairn-islands:
         Overseas territory of the United Kingdom.: Territorio de ultramar del Reino Unido.
-      saba.fields.field.country-info:
+        Pitcairn Islands: Islas Pitcairn
+      saba:
         Special municipality of the Netherlands.: 'Municipio especial de los Países Bajos.'
-      saint-barth-lemy.fields.field.country:
-        'Saint Barthélemy': 'San Bartolomé'
-      saint-barth-lemy.fields.field.country-info:
+      saint-barth-lemy:
         Overseas territory of France.: Territorio de ultramar de Francia.
-      saint-helena.fields.field.country:
-        Saint Helena: Santa Helena
-      saint-helena.fields.field.country-info:
+        'Saint Barthélemy': 'San Bartolomé'
+      saint-helena:
         Part of Saint Helena, Ascension and Tristan da Cunha, an overseas territory of the United Kingdom.: 'Parte de Santa Elena, Ascensión y Tristán de Acuña, un territorio de ultramar del Reino Unido.'
-      sint-eustatius.fields.field.capital-hint:
-        Special municipality: Es un municipio especial
-      sint-eustatius.fields.field.country:
+        Saint Helena: Santa Helena
+      sint-eustatius:
         Sint Eustatius: San Eustaquio
-      sint-eustatius.fields.field.country-info:
+        Special municipality: Es un municipio especial
         Special municipality of the Netherlands.: 'Municipio especial de los Países Bajos.'
-      tokelau.fields.field.country-info:
+      tokelau:
         'Dependent territory of New Zealand. Tokelau has no official capital; the meeting place of the Tokelau Council rotates annually.': 'Territorio dependiente de Nueva Zelanda. Tokelau no tiene capital oficial; el sitio de encuentro del Consejo de Tokelau rota anualmente.'
   adapter_ids:
     crowdanki:guid:

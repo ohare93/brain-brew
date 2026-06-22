@@ -380,6 +380,7 @@ fn apply_translation_dictionary(
     let mut seen_target_additions = BTreeSet::new();
     let mut seen_variables = BTreeSet::new();
     let mut seen_adapter_ids = BTreeSet::new();
+    let mut source_paths = BTreeMap::<String, BTreeSet<String>>::new();
 
     {
         let mut context = TranslationApplyContext {
@@ -390,6 +391,7 @@ fn apply_translation_dictionary(
             seen_target_additions: &mut seen_target_additions,
             seen_variables: &mut seen_variables,
             seen_adapter_ids: &mut seen_adapter_ids,
+            source_paths: &mut source_paths,
             changed_paths,
             errors,
         };
@@ -474,13 +476,29 @@ fn apply_translation_dictionary(
         }
     }
     for (context_path, replacements) in &translations.contextual {
-        for source in replacements.keys() {
+        for (source, translated) in replacements {
             if !seen_contextual.contains(&(context_path.clone(), source.clone())) {
                 errors.push(ComposeError::new(
                     ComposeErrorKind::StaleTranslationEntry,
                     format!("translations.contextual.{context_path}.{source}"),
                     format!(
                         "invalid contextual translation: source {source:?} did not match any extracted text under {context_path}; the source key may be stale, the context may be invalid, or a blank source field should use translations.target_additions"
+                    ),
+                ));
+                continue;
+            }
+            if let Some(shorter_context) = shortest_safe_context(
+                translations,
+                &source_paths,
+                context_path,
+                source,
+                translated,
+            ) {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::ValidationFailed,
+                    format!("translations.contextual.{context_path}.{source}"),
+                    format!(
+                        "contextual translation for source {source:?} is more specific than necessary; use context {shorter_context:?} instead of {context_path:?}"
                     ),
                 ));
             }
@@ -533,6 +551,7 @@ struct TranslationApplyContext<'a, 'b> {
     seen_target_additions: &'b mut BTreeSet<String>,
     seen_variables: &'b mut BTreeSet<(String, String)>,
     seen_adapter_ids: &'b mut BTreeSet<(String, String)>,
+    source_paths: &'b mut BTreeMap<String, BTreeSet<String>>,
     changed_paths: &'b mut BTreeMap<String, StableId>,
     errors: &'b mut Vec<ComposeError>,
 }
@@ -597,6 +616,10 @@ impl TranslationApplyContext<'_, '_> {
         }
 
         let source = value.clone();
+        self.source_paths
+            .entry(source.clone())
+            .or_default()
+            .insert(path.clone());
         let direct_translation = self.translations.direct.get(source.as_str());
         if direct_translation.is_some() {
             self.seen_direct.insert(source.clone());
@@ -687,6 +710,134 @@ impl TranslationApplyContext<'_, '_> {
             }
         }
     }
+}
+
+fn shortest_safe_context(
+    translations: &TranslationDictionary,
+    source_paths: &BTreeMap<String, BTreeSet<String>>,
+    context_path: &str,
+    source: &str,
+    translated: &str,
+) -> Option<String> {
+    context_parent_candidates(context_path)
+        .into_iter()
+        .filter(|candidate| {
+            contextual_replacement_is_safe(
+                translations,
+                source_paths,
+                candidate,
+                source,
+                translated,
+            )
+        })
+        .min_by_key(|candidate| candidate.len())
+}
+
+fn contextual_replacement_is_safe(
+    translations: &TranslationDictionary,
+    source_paths: &BTreeMap<String, BTreeSet<String>>,
+    candidate_context: &str,
+    source: &str,
+    translated: &str,
+) -> bool {
+    if translations
+        .contextual
+        .get(candidate_context)
+        .and_then(|replacements| replacements.get(source))
+        .is_some_and(|existing| existing != translated)
+    {
+        return false;
+    }
+
+    let Some(paths) = source_paths.get(source) else {
+        return false;
+    };
+    paths
+        .iter()
+        .filter(|path| context_matches_path(candidate_context, path))
+        .all(|path| {
+            let current = direct_or_contextual_translation_for_path(translations, source, path);
+            let candidate = direct_or_contextual_translation_for_path_with_candidate(
+                translations,
+                candidate_context,
+                source,
+                translated,
+                path,
+            );
+            current == candidate
+        })
+}
+
+fn direct_or_contextual_translation_for_path<'a>(
+    translations: &'a TranslationDictionary,
+    source: &str,
+    path: &str,
+) -> Option<&'a str> {
+    translations
+        .contextual
+        .iter()
+        .filter(|(context_path, replacements)| {
+            context_matches_path(context_path, path) && replacements.contains_key(source)
+        })
+        .max_by_key(|(context_path, _)| context_path.len())
+        .and_then(|(_, replacements)| replacements.get(source).map(String::as_str))
+        .or_else(|| translations.direct.get(source).map(String::as_str))
+}
+
+fn direct_or_contextual_translation_for_path_with_candidate<'a>(
+    translations: &'a TranslationDictionary,
+    candidate_context: &'a str,
+    source: &str,
+    translated: &'a str,
+    path: &str,
+) -> Option<&'a str> {
+    let best_contextual = translations
+        .contextual
+        .iter()
+        .filter(|(context_path, replacements)| {
+            context_matches_path(context_path, path) && replacements.contains_key(source)
+        })
+        .max_by_key(|(context_path, _)| context_path.len());
+
+    if context_matches_path(candidate_context, path)
+        && best_contextual
+            .is_none_or(|(context_path, _)| candidate_context.len() > context_path.len())
+    {
+        return Some(translated);
+    }
+
+    best_contextual
+        .and_then(|(_, replacements)| replacements.get(source).map(String::as_str))
+        .or_else(|| translations.direct.get(source).map(String::as_str))
+}
+
+fn context_parent_candidates(context_path: &str) -> Vec<String> {
+    if let Some((note_context, _)) = context_path.split_once(".fields.")
+        && note_context.starts_with("notes.")
+    {
+        return vec![note_context.to_owned()];
+    }
+    if let Some((note_context, _)) = context_path.split_once(".tags.")
+        && note_context.starts_with("notes.")
+    {
+        return vec![note_context.to_owned()];
+    }
+    if let Some((note_context, _)) = context_path.split_once(".variables.")
+        && note_context.starts_with("notes.")
+    {
+        return vec![note_context.to_owned()];
+    }
+    if let Some((note_type_context, _)) = context_path.split_once(".fields.")
+        && note_type_context.starts_with("note_types.")
+    {
+        return vec![note_type_context.to_owned()];
+    }
+    if let Some((note_type_context, _)) = context_path.split_once(".card_templates.")
+        && note_type_context.starts_with("note_types.")
+    {
+        return vec![note_type_context.to_owned()];
+    }
+    Vec::new()
 }
 
 fn context_matches_path(context_path: &str, path: &str) -> bool {

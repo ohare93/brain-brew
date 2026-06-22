@@ -321,55 +321,55 @@ translations:
     'Åland Islands': 'Åland'
   contextual:
     notes.note:
-      akrotiri-and-dhekelia.fields.field.country-info:
+      akrotiri-and-dhekelia:
         Overseas territory of the United Kingdom.: 'Britisk oversjøisk territorium.'
-      anguilla.fields.field.country-info:
+      anguilla:
         Overseas territory of the United Kingdom.: 'Selvstyrt britisk oversjøisk territorium i Karibia.'
-      aruba.fields.field.country-info:
+      aruba:
         Constituent country of the Kingdom of the Netherlands.: '«Land» som sammen med Nederland, Curaçao og Sint Maarten utgjør føderasjonen Kongeriket Nederlandene.'
-      bermuda.fields.field.country-info:
+      bermuda:
         Overseas territory of the United Kingdom.: 'Selvstyrt britisk oversjøisk territorium.'
-      british-virgin-islands.fields.field.country-info:
+      british-virgin-islands:
         Overseas territory of the United Kingdom.: 'Selvstyrt britisk oversjøisk territorium i Karibia.'
-      cayman-islands.fields.field.country-info:
+      cayman-islands:
         Overseas territory of the United Kingdom.: 'Selvstyrt britisk oversjøisk territorium i Karibia.'
-      cura-ao.fields.field.country-info:
+      cura-ao:
         Constituent country of the Kingdom of the Netherlands.: '«Land» som sammen med Nederland, Aruba og Sint Maarten utgjør føderasjonen Kongeriket Nederlandene.'
-      falkland-islands.fields.field.country-info:
+      falkland-islands:
         Overseas territory of the United Kingdom.: 'Britisk øygruppe.'
-      french-guiana.fields.field.country-info:
+      french-guiana:
         Overseas department of France.: 'Fransk oversjøisk departement og del av EU.'
-      french-polynesia.fields.field.country-info:
+      french-polynesia:
         Overseas territory of France.: 'Fransk oversjøisk land.'
-      gibraltar.fields.field.country-info:
+      gibraltar:
         Overseas territory of the United Kingdom.: Britisk kronkoloni.
-      guadeloupe.fields.field.country-info:
+      guadeloupe:
         Overseas department of France.: 'Fransk oversjøisk departement.'
-      guernsey.fields.field.country-info:
+      guernsey:
         Crown dependency of the United Kingdom.: 'Kanaløy underlagt britisk kronbesittelse.'
-      hong-kong.fields.field.country-info:
+      hong-kong:
         Special Administrative Region of China.: 'Også kjent som Hong Kong. Spesiell administrativ region i Kina.'
-      isle-of-man.fields.field.country-info:
+      isle-of-man:
         Crown dependency of the United Kingdom.: 'Også kalt Isle of Man. Kanaløy underlagt britisk kronbesittelse. Hverken del av Storbritannia eller EU.'
-      jersey.fields.field.country-info:
+      jersey:
         Crown dependency of the United Kingdom.: 'Kanaløy underlagt britisk kronbesittelse.'
-      macau.fields.field.country-info:
+      macau:
         Special Administrative Region of China.: 'Også kalt Macau. Spesiell administrativ region i Kina.'
-      martinique.fields.field.country-info:
+      martinique:
         Overseas department of France.: 'Fransk oversjøisk departement.'
-      mayotte.fields.field.country-info:
+      mayotte:
         Overseas department of France.: 'Fransk oversjøisk territorium.'
-      new-caledonia.fields.field.country-info:
+      new-caledonia:
         Overseas territory of France.: 'Fransk oversjøisk territorium i det sørvestlige Stillehavet.'
-      r-union.fields.field.country-info:
+      r-union:
         Overseas department of France.: 'Fransk oversjøisk departement.'
-      saint-martin.fields.field.country-info:
+      saint-martin:
         Overseas territory of France.: 'Fransk oversjøisk land.'
-      sint-maarten.fields.field.country-info:
+      sint-maarten:
         Constituent country of the Kingdom of the Netherlands.: '«Land» som sammen med Nederland, Curaçao og Aruba utgjør føderasjonen Kongeriket Nederlandene.'
-      turks-and-caicos-islands.fields.field.country-info:
+      turks-and-caicos-islands:
         Overseas territory of the United Kingdom.: 'Selvstyrt britisk oversjøisk territorium i Karibia.'
-      wallis-and-futuna.fields.field.country-info:
+      wallis-and-futuna:
         Overseas territory of France.: 'Fransk oversjøisk land.'
   target_additions:
     notes.note.arabian-sea.fields.field.country-info: 'Også kalt Arabiahavet.'

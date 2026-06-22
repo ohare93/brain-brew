@@ -646,13 +646,13 @@ translations:
     'Åland Islands': '奧蘭群島 (Åland Islands)'
   contextual:
     notes.note:
-      abkhazia.fields.field.country-info:
+      abkhazia:
         Independent state claimed by Georgia.: '喬治亞宣稱擁有該地區主權，但目前是獨立狀態。'
       djibouti.fields.field.capital:
         Djibouti: '吉布地 (Djibouti)'
-      djibouti.fields.field.country:
+      djibouti:
         Djibouti: '吉布地共和國 (Djibouti)'
-      south-ossetia.fields.field.country-info:
+      south-ossetia:
         Independent state claimed by Georgia.: '從喬治亞獨立。'
   target_additions:
     notes.note.kiribati.fields.field.capital-info: '拉巴斯正在建造來取代馬拉波成為首都。'

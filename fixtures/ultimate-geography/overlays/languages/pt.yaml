@@ -522,23 +522,23 @@ translations:
     'Åland Islands': Alanda
   contextual:
     notes.note:
-      azores.fields.field.country-info:
+      azores:
         Autonomous region of Portugal.: 'Região autônoma de Portugal.'
-      french-polynesia.fields.field.country-info:
+      french-polynesia:
         Overseas territory of France.: 'Território ultramarino da França.'
-      guernsey.fields.field.country-info:
+      guernsey:
         Crown dependency of the United Kingdom.: 'Dependência da coroa do Reino Unido.'
-      isle-of-man.fields.field.country-info:
+      isle-of-man:
         Crown dependency of the United Kingdom.: Ilha de Man
-      jersey.fields.field.country-info:
+      jersey:
         Crown dependency of the United Kingdom.: 'Dependência da coroa do Reino Unido.'
-      madeira.fields.field.country-info:
+      madeira:
         Autonomous region of Portugal.: 'Região Autônoma de Portugal.'
-      new-caledonia.fields.field.country-info:
+      new-caledonia:
         Overseas territory of France.: 'Território ultramarino da França.'
-      saint-martin.fields.field.country-info:
+      saint-martin:
         Overseas territory of France.: 'País constituinte do Reino dos Países Baixos.'
-      wallis-and-futuna.fields.field.country-info:
+      wallis-and-futuna:
         Overseas territory of France.: 'Território ultramarino da França.'
   target_additions:
     notes.note.antigua-and-barbuda.fields.field.capital-hint: Estado soberano

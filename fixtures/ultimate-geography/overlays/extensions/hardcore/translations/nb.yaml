@@ -3,67 +3,53 @@ kind: translation
 translations:
   contextual:
     notes.note:
-      bonaire.fields.field.country-info:
+      bonaire:
         Special municipality of the Netherlands.: Kommune med spesiell status i Nederland.
-      british-indian-ocean-territory.fields.field.country:
+      british-indian-ocean-territory:
         British Indian Ocean Territory: Det britiske territoriet i Indiahavet
-      british-indian-ocean-territory.fields.field.country-info:
         Overseas territory of the United Kingdom.: Britisk besittelse.
-      ceuta.fields.field.country-info:
+      ceuta:
         Autonomous city of Spain.: Selvstyrt by i Spania.
-      christmas-island.fields.field.country:
+      christmas-island:
         Christmas Island: 'Christmasøya'
-      christmas-island.fields.field.country-info:
         External territory of Australia.: 'Australsk territorium. '
-      cocos-keeling-islands.fields.field.country:
+      cocos-keeling-islands:
         'Cocos (Keeling) Islands': 'Kokosøyene'
-      cocos-keeling-islands.fields.field.country-info:
         External territory of Australia.: Australsk territorium.
-      easter-island.fields.field.country:
+      easter-island:
         Easter Island: 'Påskeøya'
-      easter-island.fields.field.country-info:
         Polynesian island and special territory of Chile.: Territorium i Chile.
-      gal-pagos-islands.fields.field.country:
+      gal-pagos-islands:
         'Galápagos Islands': 'Galápagosøyene'
-      gal-pagos-islands.fields.field.country-info:
         Province of Ecuador.: Region i Ecuador.
-      gal-pagos-islands.fields.field.flag-similarity:
         'Sierra Leone (slightly lighter blue)': 'Sierra Leone (noe lysere blå)'
-      melilla.fields.field.country-info:
+      melilla:
         Autonomous city of Spain: 'Spansk by og enklave på Marokkos middelhavskyst.'
-      montserrat.fields.field.capital-info:
+      montserrat:
         Eruptions in 1997 destroyed the capital city of Plymouth, making Brades the de facto capital.: 'Vulkanutbrudd i 1997 ødela hovedstaden Plymouth, og Brades ble de facto hovedstad.'
-      montserrat.fields.field.country-info:
         Overseas territory of the United Kingdom.: 'Britisk oversjøisk territorium i Karibia.'
-      mount-athos.fields.field.country:
-        Mount Athos: Athos
-      mount-athos.fields.field.country-info:
+      mount-athos:
         Autonomous orthodox monastic state in northeastern Greece, also known as the Holy Mountain.: 'Autonom munkerepublikk i Nord-Hellas. Også kalt Det hellige berget.'
-      norfolk-island.fields.field.capital-hint:
-        Not a sovereign country: Ikke selvstendig land
-      norfolk-island.fields.field.country:
-        Norfolk Island: 'Norfolkøya'
-      norfolk-island.fields.field.country-info:
+        Mount Athos: Athos
+      norfolk-island:
         External territory of Australia.: Selvstyrt australsk territorium.
-      pitcairn-islands.fields.field.country:
-        Pitcairn Islands: 'Pitcairnøyene'
-      pitcairn-islands.fields.field.country-info:
+        Norfolk Island: 'Norfolkøya'
+        Not a sovereign country: Ikke selvstendig land
+      pitcairn-islands:
         Overseas territory of the United Kingdom.: 'Oversjøisk britisk territorium.'
-      saba.fields.field.country-info:
+        Pitcairn Islands: 'Pitcairnøyene'
+      saba:
         Special municipality of the Netherlands.: 'Kommune med særstatus i Nederland. Øy i Karibia.'
-      saint-barth-lemy.fields.field.country:
-        'Saint Barthélemy': 'Saint-Barthélemy'
-      saint-barth-lemy.fields.field.country-info:
+      saint-barth-lemy:
         Overseas territory of France.: 'Fransk oversjøisk land.'
-      saint-helena.fields.field.country:
-        Saint Helena: Sankt Helena
-      saint-helena.fields.field.country-info:
+        'Saint Barthélemy': 'Saint-Barthélemy'
+      saint-helena:
         Part of Saint Helena, Ascension and Tristan da Cunha, an overseas territory of the United Kingdom.: 'Del av det britiske oversjøiske territoriet Sankt Helena, Ascencion og Tristan da Cunha.'
-      sint-eustatius.fields.field.capital-hint:
+        Saint Helena: Sankt Helena
+      sint-eustatius:
         Special municipality: 'Kommune med særstatus'
-      sint-eustatius.fields.field.country-info:
         Special municipality of the Netherlands.: 'Kommune med særstatus i Nederland.'
-      tokelau.fields.field.country-info:
+      tokelau:
         'Dependent territory of New Zealand. Tokelau has no official capital; the meeting place of the Tokelau Council rotates annually.': Newzealandsk territorium.
   adapter_ids:
     crowdanki:guid:

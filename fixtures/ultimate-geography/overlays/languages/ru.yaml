@@ -644,37 +644,37 @@ translations:
     'Åland Islands': 'Аландские острова'
   contextual:
     notes.note:
-      akrotiri-and-dhekelia.fields.field.country-info:
+      akrotiri-and-dhekelia:
         Overseas territory of the United Kingdom.: 'Заморская территория Великобритании.'
-      anguilla.fields.field.country-info:
+      anguilla:
         Overseas territory of the United Kingdom.: 'Заморская территория Соединенного Королевства.'
-      aruba.fields.field.country-info:
+      aruba:
         Constituent country of the Kingdom of the Netherlands.: 'Страна-учредитель Королевства Нидерландов.'
-      bermuda.fields.field.country-info:
+      bermuda:
         Overseas territory of the United Kingdom.: 'Заморская территория Соединенного Королевства.'
-      british-virgin-islands.fields.field.country-info:
+      british-virgin-islands:
         Overseas territory of the United Kingdom.: 'Заморская территория Великобритании.'
-      cayman-islands.fields.field.country-info:
+      cayman-islands:
         Overseas territory of the United Kingdom.: 'Заморская территория Соединенного Королевства.'
-      cura-ao.fields.field.country-info:
+      cura-ao:
         Constituent country of the Kingdom of the Netherlands.: 'Самоуправляемое государственное образование, составная часть Королевства Нидерландов.'
-      falkland-islands.fields.field.country-info:
+      falkland-islands:
         Overseas territory of the United Kingdom.: 'Зарубежная территория Великобритании.'
-      gibraltar.fields.field.country-info:
+      gibraltar:
         Overseas territory of the United Kingdom.: 'Заморская территория Великобритании.'
-      guernsey.fields.field.country-info:
+      guernsey:
         Crown dependency of the United Kingdom.: 'Зависимость короны от Соединенного Королевства.'
-      isle-of-man.fields.field.country-info:
+      isle-of-man:
         Crown dependency of the United Kingdom.: 'Зависимость Соединенного Королевства от короны.'
-      jersey.fields.field.country-info:
+      jersey:
         Crown dependency of the United Kingdom.: 'Зависимость Соединенного Королевства от короны.'
-      sardinia.fields.field.country-info:
+      sardinia:
         Autonomous region of Italy.: 'Автономная область Италии.'
-      sicily.fields.field.country-info:
+      sicily:
         Autonomous region of Italy.: 'Автономный регион Италии.'
-      sint-maarten.fields.field.country-info:
+      sint-maarten:
         Constituent country of the Kingdom of the Netherlands.: 'Страна, входящая в состав Королевства Нидерландов.'
-      turks-and-caicos-islands.fields.field.country-info:
+      turks-and-caicos-islands:
         Overseas territory of the United Kingdom.: 'Заморская территория Соединенного Королевства.'
   target_additions:
     notes.note.english-channel.fields.field.country-info: 'Также известен как Английский канал'

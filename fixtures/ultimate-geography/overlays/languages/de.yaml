@@ -380,27 +380,27 @@ translations:
     'Åland Islands': 'Åland'
   contextual:
     notes.note:
-      akrotiri-and-dhekelia.fields.field.country-info:
+      akrotiri-and-dhekelia:
         Overseas territory of the United Kingdom.: 'Britisches Überseegebiet.'
-      anguilla.fields.field.country-info:
+      anguilla:
         Overseas territory of the United Kingdom.: 'Britisches Überseegebiet.'
-      bali.fields.field.country-info:
+      bali:
         Island of Indonesia.: Insel von Indonesien.
-      bermuda.fields.field.country-info:
+      bermuda:
         Overseas territory of the United Kingdom.: 'Britisches Überseegebiet.'
-      british-virgin-islands.fields.field.country-info:
+      british-virgin-islands:
         Overseas territory of the United Kingdom.: 'Britisches Überseegebiet.'
-      cayman-islands.fields.field.country-info:
+      cayman-islands:
         Overseas territory of the United Kingdom.: 'Britisches Überseegebiet.'
-      falkland-islands.fields.field.country-info:
+      falkland-islands:
         Overseas territory of the United Kingdom.: 'Britisches Überseegebiet.'
-      gibraltar.fields.field.country-info:
+      gibraltar:
         Overseas territory of the United Kingdom.: 'Britisches Überseegebiet.'
-      java.fields.field.country-info:
+      java:
         Island of Indonesia.: Insel von Indonesien.
-      sumatra.fields.field.country-info:
+      sumatra:
         Island of Indonesia.: Indonesische Insel.
-      turks-and-caicos-islands.fields.field.country-info:
+      turks-and-caicos-islands:
         Overseas territory of the United Kingdom.: 'Auch Turks &amp; Caicos. Britisches Überseegebiet.'
   target_additions:
     notes.note.aegean-sea.fields.field.country-info: 'Auch Ägäis.'

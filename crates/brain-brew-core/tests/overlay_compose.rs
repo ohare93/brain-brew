@@ -254,6 +254,9 @@ fn translation_dictionary_distinguishes_direct_contextual_and_target_additions()
         .fields
         .insert(sid("field.country"), "Shared source".to_owned());
     sweden.fields.insert(sid("field.capital"), String::new());
+    sweden
+        .fields
+        .insert(sid("field.flag"), "Shared source".to_owned());
     base.notes.insert(sid("note.sweden"), sweden);
     let overlay = Overlay {
         id: sid("overlay.translation.da"),
@@ -305,6 +308,10 @@ fn translation_dictionary_distinguishes_direct_contextual_and_target_additions()
     assert_eq!(
         resolved.notes[&sid("note.sweden")].fields[&sid("field.capital")],
         "Stockholm"
+    );
+    assert_eq!(
+        resolved.notes[&sid("note.sweden")].fields[&sid("field.flag")],
+        "Direkte standard"
     );
 }
 
@@ -376,7 +383,7 @@ fn translation_dictionary_reports_missing_direct_translation_when_complete() {
 }
 
 #[test]
-fn translation_dictionary_contextual_reports_stale_source_or_context() {
+fn translation_dictionary_contextual_reports_unnecessary_specificity() {
     let base = ug_style_deck();
     let overlay = Overlay {
         id: sid("overlay.translation.da"),
@@ -384,7 +391,7 @@ fn translation_dictionary_contextual_reports_stale_source_or_context() {
         translations: Some(TranslationDictionary {
             direct: BTreeMap::new(),
             contextual: BTreeMap::from([(
-                "notes.note.finland.fields.field.country".to_owned(),
+                "notes.note.finland.fields.field.capital".to_owned(),
                 BTreeMap::from([("Helsinki".to_owned(), "Helsingfors".to_owned())]),
             )]),
             target_additions: BTreeMap::new(),
@@ -401,12 +408,12 @@ fn translation_dictionary_contextual_reports_stale_source_or_context() {
 
     let report = base
         .compose(&[overlay])
-        .expect_err("contextual translation must match source under context");
+        .expect_err("contextual translation should use the shortest safe context");
 
-    assert!(report.has_kind(ComposeErrorKind::StaleTranslationEntry));
+    assert!(report.has_kind(ComposeErrorKind::ValidationFailed));
     assert!(report.errors.iter().any(|error| {
-        error.path == "translations.contextual.notes.note.finland.fields.field.country.Helsinki"
-            && error.message.contains("invalid contextual translation")
+        error.path == "translations.contextual.notes.note.finland.fields.field.capital.Helsinki"
+            && error.message.contains("use context \"notes.note.finland\"")
     }));
 }
 

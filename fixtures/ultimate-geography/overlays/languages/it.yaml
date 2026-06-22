@@ -367,14 +367,14 @@ translations:
     'Åland Islands': 'Isole Åland'
   contextual:
     notes.note:
-      faroe-islands.fields.field.country-info:
+      faroe-islands:
         Constituent country in the Kingdom of Denmark.: 'Nazione costitutiva del Regno di Danimarca; conosciute anche come Isole Faroe.'
-      greenland.fields.field.country-info:
+      greenland:
         Constituent country in the Kingdom of Denmark.: Nazione costitutiva del Regno di Danimarca.
+      monaco:
+        Monaco: Principato di Monaco
       monaco.fields.field.capital:
         Monaco: Comune di Monaco
-      monaco.fields.field.country:
-        Monaco: Principato di Monaco
   target_additions:
     notes.note.arctic-ocean.fields.field.country-info: Conosciuto a livello internazionale come Oceano Artico.
   variables:

@@ -421,19 +421,19 @@ translations:
     'Åland Islands': 'Åland'
   contextual:
     notes.note:
-      bali.fields.field.country-info:
+      bali:
         Island of Indonesia.: 'Île d''Indonésie.'
-      french-polynesia.fields.field.country-info:
+      french-polynesia:
         Overseas territory of France.: 'Collectivité française d''outre-mer.'
-      java.fields.field.country-info:
+      java:
         Island of Indonesia.: 'Île d''Indonésie.'
-      new-caledonia.fields.field.country-info:
+      new-caledonia:
         Overseas territory of France.: 'Territoire français d''outre-mer.'
-      saint-martin.fields.field.country-info:
+      saint-martin:
         Overseas territory of France.: 'Collectivité française d''outre-mer.'
-      sumatra.fields.field.country-info:
+      sumatra:
         Island of Indonesia.: 'Île indonésienne.'
-      wallis-and-futuna.fields.field.country-info:
+      wallis-and-futuna:
         Overseas territory of France.: 'Collectivité française d''outre-mer.'
   target_additions:
     notes.note.celebes-sea.fields.field.country-info: Aussi connu comme la mer de Sulawesi.

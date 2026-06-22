@@ -649,7 +649,7 @@ translations:
     notes.note:
       vatican-city.fields.field.capital:
         Vatican City: '梵蒂冈城(Vatican City)'
-      vatican-city.fields.field.country:
+      vatican-city:
         Vatican City: '梵蒂冈(Vatican City)'
   target_additions:
     notes.note.myanmar.fields.field.capital-info: '缅甸于2005年11月6日首都从仰光(Yangon)迁往内比都(Naypyidaw)。'

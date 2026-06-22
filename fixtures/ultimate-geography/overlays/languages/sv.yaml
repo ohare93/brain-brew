@@ -347,51 +347,51 @@ translations:
     'Åland Islands': 'Åland'
   contextual:
     notes.note:
-      akrotiri-and-dhekelia.fields.field.country-info:
+      akrotiri-and-dhekelia:
         Overseas territory of the United Kingdom.: 'Brittiska “suveräna basområden”.'
-      anguilla.fields.field.country-info:
+      anguilla:
         Overseas territory of the United Kingdom.: Brittiskt utomeuropeiskt territorium.
-      azores.fields.field.country-info:
+      azores:
         Autonomous region of Portugal.: 'Portugisisk autonom ögrupp.'
-      bermuda.fields.field.country-info:
+      bermuda:
         Overseas territory of the United Kingdom.: Brittiskt utomeuropeiskt territorium.
-      british-virgin-islands.fields.field.country-info:
+      british-virgin-islands:
         Overseas territory of the United Kingdom.: Brittiskt utomeuropeiskt territorium.
-      cayman-islands.fields.field.country-info:
+      cayman-islands:
         Overseas territory of the United Kingdom.: Brittiskt utomeuropeiskt territorium.
-      falkland-islands.fields.field.country-info:
+      falkland-islands:
         Overseas territory of the United Kingdom.: Brittiskt utomeuropeiskt territorium.
-      french-guiana.fields.field.country-info:
+      french-guiana:
         Overseas department of France.: Franskt utomeuropeiskt departement.
-      french-polynesia.fields.field.country-info:
+      french-polynesia:
         Overseas territory of France.: 'Franskt utomeuropeiskt förvaltningsområde.'
-      gibraltar.fields.field.country-info:
+      gibraltar:
         Overseas territory of the United Kingdom.: Brittiskt  territorium.
-      guadeloupe.fields.field.country-info:
+      guadeloupe:
         Overseas department of France.: Utomeuropeiskt franskt departement.
-      hong-kong.fields.field.country-info:
+      hong-kong:
         Special Administrative Region of China.: 'Särskild administrativ region i Kina.'
-      macau.fields.field.country-info:
+      macau:
         Special Administrative Region of China.: 'Särskild administrativ region i Kina, stavas alternativt Macau.'
-      madeira.fields.field.country-info:
+      madeira:
         Autonomous region of Portugal.: Portugisisk autonom region.
-      martinique.fields.field.country-info:
+      martinique:
         Overseas department of France.: Franskt utomeuropeiskt departement.
-      mayotte.fields.field.country-info:
+      mayotte:
         Overseas department of France.: Franskt utomeuropeiskt departement.
-      new-caledonia.fields.field.country-info:
+      new-caledonia:
         Overseas territory of France.: Franskt utomeuropeiskt territorium.
-      r-union.fields.field.country-info:
+      r-union:
         Overseas department of France.: Franskt utomeuropeiskt departement.
-      saint-martin.fields.field.country-info:
+      saint-martin:
         Overseas territory of France.: 'Franskt utomeuropeiskt område.'
-      turks-and-caicos-islands.fields.field.country-info:
+      turks-and-caicos-islands:
         Overseas territory of the United Kingdom.: Brittiskt utomeuropeiskt territorium.
       vatican-city.fields.field.capital:
         Vatican City: Vatikanstaden
-      vatican-city.fields.field.country:
+      vatican-city:
         Vatican City: Vatikanstaten
-      wallis-and-futuna.fields.field.country-info:
+      wallis-and-futuna:
         Overseas territory of France.: 'Franskt utomeuropeiskt område.'
   target_additions:
     notes.note.arabian-sea.fields.field.country-info: 'Även känt som Arabiska sjön.'

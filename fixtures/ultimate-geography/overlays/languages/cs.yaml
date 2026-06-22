@@ -439,55 +439,55 @@ translations:
     'Åland Islands': Alandy
   contextual:
     notes.note:
-      abkhazia.fields.field.country-info:
+      abkhazia:
         Independent state claimed by Georgia.: 'Nezávislý stát nárokováný Gruzií.'
-      akrotiri-and-dhekelia.fields.field.country-info:
+      akrotiri-and-dhekelia:
         Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie.'
-      anguilla.fields.field.country-info:
+      anguilla:
         Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie s autonomní správou.'
-      azores.fields.field.country-info:
+      azores:
         Autonomous region of Portugal.: 'Autonomní území Portugalska.'
-      bali.fields.field.country-info:
+      bali:
         Island of Indonesia.: 'Indonéský ostrov.'
-      bermuda.fields.field.country-info:
+      bermuda:
         Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie.'
-      british-virgin-islands.fields.field.country-info:
+      british-virgin-islands:
         Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie.'
-      cayman-islands.fields.field.country-info:
+      cayman-islands:
         Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie.'
+      djibouti:
+        Djibouti: 'Džibutsko'
       djibouti.fields.field.capital:
         Djibouti: 'Džibuti'
-      djibouti.fields.field.country:
-        Djibouti: 'Džibutsko'
-      falkland-islands.fields.field.country-info:
+      falkland-islands:
         Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie.'
-      faroe-islands.fields.field.country-info:
+      faroe-islands:
         Constituent country in the Kingdom of Denmark.: 'Konstituční země Dánského království.'
-      french-polynesia.fields.field.country-info:
+      french-polynesia:
         Overseas territory of France.: 'Zámořské území Francie.'
-      gibraltar.fields.field.country-info:
+      gibraltar:
         Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie.'
-      greenland.fields.field.country-info:
+      greenland:
         Constituent country in the Kingdom of Denmark.: 'Autonomní součást Dánského království.'
-      java.fields.field.country-info:
+      java:
         Island of Indonesia.: 'Indonéský ostrov.'
-      madeira.fields.field.country-info:
+      madeira:
         Autonomous region of Portugal.: 'Autonomní region Portugalska.'
+      monaco:
+        Monaco: Monako
       monaco.fields.field.capital:
         Monaco: Monaco-Ville
-      monaco.fields.field.country:
-        Monaco: Monako
-      new-caledonia.fields.field.country-info:
+      new-caledonia:
         Overseas territory of France.: 'Zámořské území Francie.'
-      saint-martin.fields.field.country-info:
+      saint-martin:
         Overseas territory of France.: 'Konstituční země Francie.'
-      south-ossetia.fields.field.country-info:
+      south-ossetia:
         Independent state claimed by Georgia.: 'Nezávislý stát nárokovaný Gruzií.'
-      sumatra.fields.field.country-info:
+      sumatra:
         Island of Indonesia.: 'Ostrov Indonésie.'
-      turks-and-caicos-islands.fields.field.country-info:
+      turks-and-caicos-islands:
         Overseas territory of the United Kingdom.: 'Zámořské území Velké Británie.'
-      wallis-and-futuna.fields.field.country-info:
+      wallis-and-futuna:
         Overseas territory of France.: 'Zámořské území Francie.'
   target_additions:
     notes.note.pacific-ocean.fields.field.country-info: 'Známý též jako Pacifik.'
