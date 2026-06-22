@@ -131,7 +131,7 @@ brainbrew translate
 brainbrew translate --manifest fixtures/ultimate-geography/brainbrew.yaml
 ```
 
-The interactive workflow lets you choose from the known manifests, targets, languages, translation overlays, notes, fields, path prefixes, and report/apply mode. It prints the equivalent non-interactive command before running so the same review can be repeated in CI or shared with another maintainer.
+The interactive workflow is a real arrow-key terminal UI: use ↑/↓ to move, Enter to select, Space to toggle rows during selective apply, and `q` to cancel. It lets you choose from the known manifests, targets, languages, translation overlays, notes, fields, path prefixes, and report/apply mode. It prints the equivalent non-interactive command before running so the same review can be repeated in CI or shared with another maintainer.
 
 For scripts and CI, pass the scope explicitly:
 
@@ -151,7 +151,7 @@ To seed translator work after adding English notes or fields, run apply explicit
 brainbrew translations --manifest brainbrew.yaml --target de-standard --apply
 ```
 
-Non-interactive `--apply` inserts deterministic `source: source` stubs into `translations.direct` for the missing fallbacks in scope. Interactive apply is selective: choose rows, then choose direct `source: source`, contextual `source: source` at the suggested safe context, an `ignore_paths` entry, or skip. It keeps direct reusable translations distinct from `contextual` overrides and does not invent target-language additions for blank source fields. Existing comments and layout are preserved where practical; run `brainbrew fmt overlays/languages/de.yaml` when you want fully canonical formatting.
+Non-interactive `--apply` inserts deterministic `source: source` stubs into `translations.direct` for the missing fallbacks in scope. Interactive apply is selective: toggle rows with Space, confirm with Enter, then choose direct `source: source`, contextual `source: source` at the suggested safe context, an `ignore_paths` entry, or skip. It keeps direct reusable translations distinct from `contextual` overrides and does not invent target-language additions for blank source fields. Existing comments and layout are preserved where practical; run `brainbrew fmt overlays/languages/de.yaml` when you want fully canonical formatting.
 
 When `require_complete: true`, composition fails if any extracted non-empty translatable string is not translated by `direct`, translated by a matching `contextual` entry, or matched by `ignore_paths`. For release workflows, prefer target-level verification policy in `brainbrew.yaml`:
 

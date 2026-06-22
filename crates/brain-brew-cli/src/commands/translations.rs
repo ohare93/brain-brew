@@ -1,14 +1,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs;
-use std::io::{self, BufRead, IsTerminal, Write};
+use std::io::{self, IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 
 use brain_brew_core::{
-    CanonicalDeck, Overlay, TranslationCoverageCategory, TranslationCoverageEntry,
+    CanonicalDeck, Overlay, OverlayKind, TranslationCoverageCategory, TranslationCoverageEntry,
     TranslationCoverageReport,
 };
 use brain_brew_formats::manifest::FederatedDeckManifest;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use serde_json::json;
 
 use crate::help;
@@ -31,11 +32,12 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     }
 
     if interactive {
+        let raw_mode = io::stdin().is_terminal() && io::stdout().is_terminal();
         let stdin = io::stdin();
         let stdout = io::stdout();
         let mut reader = stdin.lock();
         let mut writer = stdout.lock();
-        configure_interactively(&mut args, &mut reader, &mut writer)?;
+        configure_interactively(&mut args, &mut reader, &mut writer, raw_mode)?;
     }
 
     let reports = collect_translation_reports(&args)?;
@@ -43,11 +45,12 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     let mut edits_by_file = BTreeMap::<PathBuf, OverlayEdits>::new();
     if args.apply {
         if interactive {
+            let raw_mode = io::stdin().is_terminal() && io::stdout().is_terminal();
             let stdin = io::stdin();
             let stdout = io::stdout();
             let mut reader = stdin.lock();
             let mut writer = stdout.lock();
-            edits_by_file = prompt_selective_apply(&reports, &mut reader, &mut writer)?;
+            edits_by_file = prompt_selective_apply(&reports, &mut reader, &mut writer, raw_mode)?;
         } else {
             edits_by_file = direct_stub_edits_from_reports(&reports);
         }
@@ -64,7 +67,11 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if args.json_output {
         print_json_reports(&reports, &applied);
     } else {
-        print_human_reports(&reports);
+        if reports.is_empty() {
+            print_no_translation_reports(&args)?;
+        } else {
+            print_human_reports(&reports);
+        }
         if args.apply {
             let total = applied.values().sum::<usize>();
             let details = applied
@@ -222,18 +229,14 @@ fn should_use_interactive(args: &TranslationArgs) -> bool {
     }
 }
 
-fn configure_interactively<R: BufRead, W: Write>(
+fn configure_interactively<R: Read, W: Write>(
     args: &mut TranslationArgs,
     reader: &mut R,
     writer: &mut W,
+    raw_mode: bool,
 ) -> Result<(), String> {
-    writeln!(
-        writer,
-        "{}",
-        color_stdout("Brain Brew translation coverage", "1;36")
-    )
-    .map_err(|error| error.to_string())?;
-    writeln!(writer).map_err(|error| error.to_string())?;
+    let mut ui = TerminalUi::new(reader, writer, raw_mode)?;
+    ui.message("Brain Brew translation coverage")?;
 
     if !args.manifest_path.exists() {
         let manifests = discover_nearby_manifests();
@@ -244,7 +247,7 @@ fn configure_interactively<R: BufRead, W: Write>(
             .iter()
             .map(|path| path.display().to_string())
             .collect::<Vec<_>>();
-        let choice = choose_index(reader, writer, "Manifest", &labels, 0)?;
+        let choice = ui.select_one("Manifest", &labels, 0)?;
         args.manifest_path = manifests[choice].clone();
     }
 
@@ -254,7 +257,7 @@ fn configure_interactively<R: BufRead, W: Write>(
         target_values.sort();
         let mut labels = target_values.clone();
         labels.push("all targets".to_owned());
-        let choice = choose_index(reader, writer, "Target", &labels, 0)?;
+        let choice = ui.select_one("Target", &labels, 0)?;
         if choice == target_values.len() {
             args.all_targets = true;
         } else {
@@ -267,7 +270,7 @@ fn configure_interactively<R: BufRead, W: Write>(
         if !languages.is_empty() {
             let mut labels = vec!["all languages".to_owned()];
             labels.extend(languages.iter().cloned());
-            let choice = choose_index(reader, writer, "Language filter", &labels, 0)?;
+            let choice = ui.select_one("Language filter", &labels, 0)?;
             if choice > 0 {
                 args.language = Some(languages[choice - 1].clone());
             }
@@ -279,7 +282,7 @@ fn configure_interactively<R: BufRead, W: Write>(
         if !overlays.is_empty() {
             let mut labels = vec!["all translation overlays".to_owned()];
             labels.extend(overlays.iter().map(|overlay| overlay.label.clone()));
-            let choice = choose_index(reader, writer, "Translation overlay", &labels, 0)?;
+            let choice = ui.select_one("Translation overlay", &labels, 0)?;
             if choice > 0 {
                 args.overlay = Some(overlays[choice - 1].id.clone());
             }
@@ -288,7 +291,7 @@ fn configure_interactively<R: BufRead, W: Write>(
 
     if args.note.is_none() && args.field.is_none() && args.path_prefixes.is_empty() {
         let reports = collect_translation_reports(args)?;
-        configure_scope_interactively(args, &reports, reader, writer)?;
+        configure_scope_interactively(args, &reports, &mut ui)?;
     }
 
     if !args.apply {
@@ -296,25 +299,19 @@ fn configure_interactively<R: BufRead, W: Write>(
             "report only".to_owned(),
             "apply selected source→source stubs".to_owned(),
         ];
-        let choice = choose_index(reader, writer, "Mode", &labels, 0)?;
+        let choice = ui.select_one("Mode", &labels, 0)?;
         if choice == 1 {
             args.apply = true;
         }
     }
 
-    writeln!(writer).map_err(|error| error.to_string())?;
-    writeln!(writer, "Equivalent command:").map_err(|error| error.to_string())?;
-    writeln!(writer, "  {}", equivalent_command(args)).map_err(|error| error.to_string())?;
-    writeln!(writer).map_err(|error| error.to_string())?;
-    writer.flush().map_err(|error| error.to_string())?;
-    Ok(())
+    ui.finish_with_equivalent_command(args)
 }
 
-fn configure_scope_interactively<R: BufRead, W: Write>(
+fn configure_scope_interactively<R: Read, W: Write>(
     args: &mut TranslationArgs,
     reports: &[ScopedTranslationReport],
-    reader: &mut R,
-    writer: &mut W,
+    ui: &mut TerminalUi<'_, R, W>,
 ) -> Result<(), String> {
     let mut notes = BTreeSet::new();
     let mut fields = BTreeSet::new();
@@ -340,46 +337,44 @@ fn configure_scope_interactively<R: BufRead, W: Write>(
         "select path prefix".to_owned(),
         "changed-path prefixes from diff".to_owned(),
     ];
-    let choice = choose_index(reader, writer, "Scope", &labels, 0)?;
+    let choice = ui.select_one("Scope", &labels, 0)?;
     match choice {
         0 => {}
         1 => {
             let note_labels = notes.into_iter().collect::<Vec<_>>();
             if note_labels.is_empty() {
-                writeln!(writer, "No note paths were found; using whole overlay.")
-                    .map_err(|error| error.to_string())?;
+                ui.message("No note paths were found; using whole overlay.")?;
             } else {
-                let choice = choose_index(reader, writer, "Note", &note_labels, 0)?;
+                let choice = ui.select_one("Note", &note_labels, 0)?;
                 args.note = Some(note_labels[choice].clone());
             }
         }
         2 => {
             let field_labels = fields.into_iter().collect::<Vec<_>>();
             if field_labels.is_empty() {
-                writeln!(writer, "No field paths were found; using whole overlay.")
-                    .map_err(|error| error.to_string())?;
+                ui.message("No field paths were found; using whole overlay.")?;
             } else {
-                let choice = choose_index(reader, writer, "Field", &field_labels, 0)?;
+                let choice = ui.select_one("Field", &field_labels, 0)?;
                 args.field = Some(field_labels[choice].clone());
             }
         }
         3 => {
+            let mut body = Vec::new();
             if !problem_paths.is_empty() {
-                writeln!(writer, "Known problem paths:").map_err(|error| error.to_string())?;
+                body.push("Known problem paths:".to_owned());
                 for path in problem_paths.iter().take(12) {
-                    writeln!(writer, "  - {path}").map_err(|error| error.to_string())?;
+                    body.push(format!("  - {path}"));
                 }
             }
-            let prefix = prompt_line(reader, writer, "Path prefix")?;
+            let prefix = ui.prompt_text("Path prefix", &body)?;
             if !prefix.trim().is_empty() {
                 args.path_prefixes.push(prefix.trim().to_owned());
             }
         }
         4 => {
-            let prefixes = prompt_line(
-                reader,
-                writer,
-                "Paste changed deck path prefixes, comma-separated",
+            let prefixes = ui.prompt_text(
+                "Changed deck path prefixes",
+                &["Paste changed deck path prefixes, comma-separated.".to_owned()],
             )?;
             args.path_prefixes.extend(
                 prefixes
@@ -394,66 +389,297 @@ fn configure_scope_interactively<R: BufRead, W: Write>(
     Ok(())
 }
 
-fn choose_index<R: BufRead, W: Write>(
-    reader: &mut R,
-    writer: &mut W,
-    label: &str,
-    options: &[String],
-    default_index: usize,
-) -> Result<usize, String> {
-    if options.is_empty() {
-        return Err(format!("no {label} options are available"));
-    }
-    writeln!(writer, "{label}:").map_err(|error| error.to_string())?;
-    for (index, option) in options.iter().enumerate() {
-        let marker = if index == default_index { ">" } else { " " };
-        writeln!(writer, "  {marker} {}. {option}", index + 1)
-            .map_err(|error| error.to_string())?;
-    }
-    loop {
-        write!(writer, "Select {label} [{}]: ", default_index + 1)
-            .map_err(|error| error.to_string())?;
-        writer.flush().map_err(|error| error.to_string())?;
-        let answer = read_trimmed_line(reader)?;
-        if answer.is_empty() {
-            return Ok(default_index);
-        }
-        if let Ok(number) = answer.parse::<usize>()
-            && (1..=options.len()).contains(&number)
-        {
-            return Ok(number - 1);
-        }
-        if let Some((index, _)) = options
-            .iter()
-            .enumerate()
-            .find(|(_, option)| option.eq_ignore_ascii_case(&answer))
-        {
-            return Ok(index);
-        }
-        writeln!(writer, "Enter a number between 1 and {}.", options.len())
-            .map_err(|error| error.to_string())?;
-    }
+struct TerminalUi<'a, R: Read, W: Write> {
+    reader: &'a mut R,
+    writer: &'a mut W,
+    raw_mode: bool,
 }
 
-fn prompt_line<R: BufRead, W: Write>(
-    reader: &mut R,
-    writer: &mut W,
-    prompt: &str,
-) -> Result<String, String> {
-    write!(writer, "{prompt}: ").map_err(|error| error.to_string())?;
-    writer.flush().map_err(|error| error.to_string())?;
-    read_trimmed_line(reader)
-}
+impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
+    fn new(reader: &'a mut R, writer: &'a mut W, raw_mode: bool) -> Result<Self, String> {
+        if raw_mode {
+            enable_raw_mode().map_err(|error| error.to_string())?;
+            write!(writer, "\x1b[?25l").map_err(|error| error.to_string())?;
+        }
+        Ok(Self {
+            reader,
+            writer,
+            raw_mode,
+        })
+    }
 
-fn read_trimmed_line<R: BufRead>(reader: &mut R) -> Result<String, String> {
-    let mut input = String::new();
-    let bytes = reader
-        .read_line(&mut input)
+    fn message(&mut self, message: &str) -> Result<(), String> {
+        if self.raw_mode {
+            self.clear()?;
+            writeln!(self.writer, "{}", color_stdout(message, "1;36"))
+                .map_err(|error| error.to_string())?;
+            writeln!(self.writer).map_err(|error| error.to_string())?;
+        } else {
+            writeln!(self.writer, "{}", color_stdout(message, "1;36"))
+                .map_err(|error| error.to_string())?;
+            writeln!(self.writer).map_err(|error| error.to_string())?;
+        }
+        self.writer.flush().map_err(|error| error.to_string())
+    }
+
+    fn finish_with_equivalent_command(&mut self, args: &TranslationArgs) -> Result<(), String> {
+        if self.raw_mode {
+            self.clear()?;
+        }
+        writeln!(self.writer, "Equivalent command:").map_err(|error| error.to_string())?;
+        writeln!(self.writer, "  {}", equivalent_command(args))
+            .map_err(|error| error.to_string())?;
+        writeln!(self.writer).map_err(|error| error.to_string())?;
+        self.writer.flush().map_err(|error| error.to_string())
+    }
+
+    fn select_one(
+        &mut self,
+        label: &str,
+        options: &[String],
+        default_index: usize,
+    ) -> Result<usize, String> {
+        if options.is_empty() {
+            return Err(format!("no {label} options are available"));
+        }
+        let mut selected = default_index.min(options.len() - 1);
+        loop {
+            self.render_select_one(label, options, selected)?;
+            match self.read_key()? {
+                TuiKey::Up => selected = selected.saturating_sub(1),
+                TuiKey::Down => selected = (selected + 1).min(options.len() - 1),
+                TuiKey::Enter => return Ok(selected),
+                TuiKey::Char('k') => selected = selected.saturating_sub(1),
+                TuiKey::Char('j') => selected = (selected + 1).min(options.len() - 1),
+                TuiKey::Char('q') | TuiKey::Esc => {
+                    return Err("interactive selection cancelled".to_owned());
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn select_many(
+        &mut self,
+        label: &str,
+        options: &[String],
+        selected_by_default: bool,
+    ) -> Result<Vec<usize>, String> {
+        if options.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut cursor = 0;
+        let mut selected = vec![selected_by_default; options.len()];
+        loop {
+            self.render_select_many(label, options, &selected, cursor)?;
+            match self.read_key()? {
+                TuiKey::Up => cursor = cursor.saturating_sub(1),
+                TuiKey::Down => cursor = (cursor + 1).min(options.len() - 1),
+                TuiKey::Char('k') => cursor = cursor.saturating_sub(1),
+                TuiKey::Char('j') => cursor = (cursor + 1).min(options.len() - 1),
+                TuiKey::Space => selected[cursor] = !selected[cursor],
+                TuiKey::Char('a') => {
+                    let all_selected = selected.iter().all(|value| *value);
+                    selected.fill(!all_selected);
+                }
+                TuiKey::Enter => {
+                    return Ok(selected
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, selected)| selected.then_some(index))
+                        .collect());
+                }
+                TuiKey::Char('q') | TuiKey::Esc => {
+                    return Err("interactive selection cancelled".to_owned());
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn prompt_text(&mut self, label: &str, body: &[String]) -> Result<String, String> {
+        let mut input = String::new();
+        loop {
+            self.render_text_prompt(label, body, &input)?;
+            match self.read_key()? {
+                TuiKey::Enter => return Ok(input),
+                TuiKey::Backspace => {
+                    input.pop();
+                }
+                TuiKey::Char(ch) => input.push(ch),
+                TuiKey::Esc => return Err("interactive text entry cancelled".to_owned()),
+                _ => {}
+            }
+        }
+    }
+
+    fn render_select_one(
+        &mut self,
+        label: &str,
+        options: &[String],
+        selected: usize,
+    ) -> Result<(), String> {
+        self.clear_if_raw()?;
+        writeln!(self.writer, "{}", color_stdout(label, "1;36"))
+            .map_err(|error| error.to_string())?;
+        writeln!(self.writer).map_err(|error| error.to_string())?;
+        for (index, option) in options.iter().enumerate() {
+            let marker = if index == selected { "›" } else { " " };
+            let option = if index == selected {
+                color_stdout(option, "1;32")
+            } else {
+                option.clone()
+            };
+            writeln!(self.writer, "  {marker} {option}").map_err(|error| error.to_string())?;
+        }
+        writeln!(self.writer).map_err(|error| error.to_string())?;
+        writeln!(self.writer, "↑/↓ move • Enter select • q cancel")
+            .map_err(|error| error.to_string())?;
+        self.writer.flush().map_err(|error| error.to_string())
+    }
+
+    fn render_select_many(
+        &mut self,
+        label: &str,
+        options: &[String],
+        selected: &[bool],
+        cursor: usize,
+    ) -> Result<(), String> {
+        self.clear_if_raw()?;
+        writeln!(self.writer, "{}", color_stdout(label, "1;36"))
+            .map_err(|error| error.to_string())?;
+        writeln!(self.writer).map_err(|error| error.to_string())?;
+        for (index, option) in options.iter().enumerate() {
+            let cursor_marker = if index == cursor { "›" } else { " " };
+            let selected_marker = if selected[index] { "[x]" } else { "[ ]" };
+            let line = format!("{selected_marker} {option}");
+            let line = if index == cursor {
+                color_stdout(&line, "1;32")
+            } else {
+                line
+            };
+            writeln!(self.writer, "  {cursor_marker} {line}").map_err(|error| error.to_string())?;
+        }
+        writeln!(self.writer).map_err(|error| error.to_string())?;
+        writeln!(
+            self.writer,
+            "↑/↓ move • Space toggle • a toggle all • Enter confirm • q cancel"
+        )
         .map_err(|error| error.to_string())?;
-    if bytes == 0 {
+        self.writer.flush().map_err(|error| error.to_string())
+    }
+
+    fn render_text_prompt(
+        &mut self,
+        label: &str,
+        body: &[String],
+        input: &str,
+    ) -> Result<(), String> {
+        self.clear_if_raw()?;
+        writeln!(self.writer, "{}", color_stdout(label, "1;36"))
+            .map_err(|error| error.to_string())?;
+        writeln!(self.writer).map_err(|error| error.to_string())?;
+        for line in body {
+            writeln!(self.writer, "{line}").map_err(|error| error.to_string())?;
+        }
+        if !body.is_empty() {
+            writeln!(self.writer).map_err(|error| error.to_string())?;
+        }
+        writeln!(self.writer, "> {input}").map_err(|error| error.to_string())?;
+        writeln!(self.writer).map_err(|error| error.to_string())?;
+        writeln!(self.writer, "Type text • Enter confirm • Esc cancel")
+            .map_err(|error| error.to_string())?;
+        self.writer.flush().map_err(|error| error.to_string())
+    }
+
+    fn clear_if_raw(&mut self) -> Result<(), String> {
+        if self.raw_mode {
+            self.clear()?;
+        }
+        Ok(())
+    }
+
+    fn clear(&mut self) -> Result<(), String> {
+        write!(self.writer, "\x1b[2J\x1b[H").map_err(|error| error.to_string())
+    }
+
+    fn read_key(&mut self) -> Result<TuiKey, String> {
+        if self.raw_mode {
+            return read_terminal_key();
+        }
+        read_scripted_key(self.reader)
+    }
+}
+
+impl<R: Read, W: Write> Drop for TerminalUi<'_, R, W> {
+    fn drop(&mut self) {
+        if self.raw_mode {
+            let _ = write!(self.writer, "\x1b[?25h");
+            let _ = self.writer.flush();
+            let _ = disable_raw_mode();
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TuiKey {
+    Up,
+    Down,
+    Enter,
+    Space,
+    Backspace,
+    Esc,
+    Char(char),
+    Other,
+}
+
+fn read_terminal_key() -> Result<TuiKey, String> {
+    loop {
+        let event = crossterm::event::read().map_err(|error| error.to_string())?;
+        let crossterm::event::Event::Key(key) = event else {
+            continue;
+        };
+        use crossterm::event::KeyCode;
+        return Ok(match key.code {
+            KeyCode::Up => TuiKey::Up,
+            KeyCode::Down => TuiKey::Down,
+            KeyCode::Enter => TuiKey::Enter,
+            KeyCode::Char(' ') => TuiKey::Space,
+            KeyCode::Char(ch) => TuiKey::Char(ch),
+            KeyCode::Backspace => TuiKey::Backspace,
+            KeyCode::Esc => TuiKey::Esc,
+            _ => TuiKey::Other,
+        });
+    }
+}
+
+fn read_scripted_key<R: Read>(reader: &mut R) -> Result<TuiKey, String> {
+    let mut byte = [0_u8; 1];
+    let count = reader.read(&mut byte).map_err(|error| error.to_string())?;
+    if count == 0 {
         return Err("interactive input ended before a selection was made".to_owned());
     }
-    Ok(input.trim().to_owned())
+    match byte[0] {
+        b'\n' | b'\r' => Ok(TuiKey::Enter),
+        b' ' => Ok(TuiKey::Space),
+        8 | 127 => Ok(TuiKey::Backspace),
+        27 => read_escape_sequence(reader),
+        byte if byte.is_ascii() && !byte.is_ascii_control() => Ok(TuiKey::Char(byte as char)),
+        _ => Ok(TuiKey::Other),
+    }
+}
+
+fn read_escape_sequence<R: Read>(reader: &mut R) -> Result<TuiKey, String> {
+    let mut rest = [0_u8; 2];
+    let count = reader.read(&mut rest).map_err(|error| error.to_string())?;
+    if count < 2 || rest[0] != b'[' {
+        return Ok(TuiKey::Esc);
+    }
+    Ok(match rest[1] {
+        b'A' => TuiKey::Up,
+        b'B' => TuiKey::Down,
+        _ => TuiKey::Other,
+    })
 }
 
 #[derive(Clone)]
@@ -567,11 +793,13 @@ fn direct_stub_edits_from_reports(
     edits
 }
 
-fn prompt_selective_apply<R: BufRead, W: Write>(
+fn prompt_selective_apply<R: Read, W: Write>(
     reports: &[ScopedTranslationReport],
     reader: &mut R,
     writer: &mut W,
+    raw_mode: bool,
 ) -> Result<BTreeMap<PathBuf, OverlayEdits>, String> {
+    let mut ui = TerminalUi::new(reader, writer, raw_mode)?;
     let rows = reports
         .iter()
         .enumerate()
@@ -587,47 +815,26 @@ fn prompt_selective_apply<R: BufRead, W: Write>(
         .collect::<Vec<_>>();
 
     if rows.is_empty() {
-        writeln!(
-            writer,
-            "No missing, stale, or invalid translation rows to apply."
-        )
-        .map_err(|error| error.to_string())?;
+        ui.message("No missing, stale, or invalid translation rows to apply.")?;
         return Ok(BTreeMap::new());
     }
 
-    writeln!(writer, "Selectable translation rows:").map_err(|error| error.to_string())?;
-    for (row_index, (report_index, entry_index)) in rows.iter().enumerate() {
-        let report = &reports[*report_index];
-        let entry = &report.report.entries[*entry_index];
-        writeln!(
-            writer,
-            "  {}. {} {} {} source={}",
-            row_index + 1,
-            report.target,
-            report.overlay_id,
-            entry.category.as_str(),
-            yaml_scalar(&entry.source)
-        )
-        .map_err(|error| error.to_string())?;
-        writeln!(writer, "     {}", entry.path).map_err(|error| error.to_string())?;
-    }
-
-    let selected = loop {
-        let answer = prompt_line(
-            reader,
-            writer,
-            "Select rows to edit (numbers, all, none) [all]",
-        )?;
-        let answer = if answer.is_empty() {
-            "all".to_owned()
-        } else {
-            answer
-        };
-        match parse_row_selection(&answer, rows.len()) {
-            Ok(selection) => break selection,
-            Err(error) => writeln!(writer, "{error}").map_err(|error| error.to_string())?,
-        }
-    };
+    let row_labels = rows
+        .iter()
+        .map(|(report_index, entry_index)| {
+            let report = &reports[*report_index];
+            let entry = &report.report.entries[*entry_index];
+            format!(
+                "{} {} {} source={} — {}",
+                report.target,
+                report.overlay_id,
+                entry.category.as_str(),
+                yaml_scalar(&entry.source),
+                entry.path
+            )
+        })
+        .collect::<Vec<_>>();
+    let selected = ui.select_many("Rows to edit", &row_labels, true)?;
 
     let mut edits = BTreeMap::<PathBuf, OverlayEdits>::new();
     for row_index in selected {
@@ -637,53 +844,47 @@ fn prompt_selective_apply<R: BufRead, W: Write>(
         match entry.category {
             TranslationCoverageCategory::UntranslatedFallback => {
                 let context = contextual_context_for_entry(entry);
-                writeln!(
-                    writer,
-                    "{} at {} source={}",
-                    entry.category.as_str(),
-                    entry.path,
-                    yaml_scalar(&entry.source)
-                )
-                .map_err(|error| error.to_string())?;
-                writeln!(writer, "  d. add direct source→source stub")
-                    .map_err(|error| error.to_string())?;
-                writeln!(
-                    writer,
-                    "  c. add contextual source→source stub at {context}"
-                )
-                .map_err(|error| error.to_string())?;
-                writeln!(writer, "  i. add ignore path for this deck path")
-                    .map_err(|error| error.to_string())?;
-                writeln!(writer, "  s. skip").map_err(|error| error.to_string())?;
-                let action =
-                    prompt_action(reader, writer, "Action [d]", &["d", "c", "i", "s"], "d")?;
+                let action_labels = vec![
+                    "add direct source→source stub".to_owned(),
+                    format!("add contextual source→source stub at {context}"),
+                    "add ignore path for this deck path".to_owned(),
+                    "skip".to_owned(),
+                ];
+                let action = ui.select_one(
+                    &format!(
+                        "{} at {} source={}",
+                        entry.category.as_str(),
+                        entry.path,
+                        yaml_scalar(&entry.source)
+                    ),
+                    &action_labels,
+                    0,
+                )?;
                 let file_edits = edits.entry(report.overlay_path.clone()).or_default();
-                match action.as_str() {
-                    "d" => {
+                match action {
+                    0 => {
                         file_edits.direct.insert(entry.source.clone());
                     }
-                    "c" => {
+                    1 => {
                         file_edits
                             .contextual
                             .entry(context)
                             .or_default()
                             .insert(entry.source.clone());
                     }
-                    "i" => {
+                    2 => {
                         file_edits.ignore_paths.insert(entry.path.clone());
                     }
-                    "s" => {}
+                    3 => {}
                     _ => unreachable!(),
                 }
             }
             _ => {
-                writeln!(
-                    writer,
+                ui.message(&format!(
                     "{} at {} is stale/invalid; no safe automatic rewrite is applied, skipping.",
                     entry.category.as_str(),
                     entry.path
-                )
-                .map_err(|error| error.to_string())?;
+                ))?;
             }
         }
     }
@@ -693,61 +894,11 @@ fn prompt_selective_apply<R: BufRead, W: Write>(
         return Ok(edits);
     }
 
-    let confirm = prompt_action(
-        reader,
-        writer,
-        "Apply selected changes? [y]",
-        &["y", "n"],
-        "y",
-    )?;
-    if confirm == "y" {
+    let confirm_labels = vec!["apply selected changes".to_owned(), "cancel".to_owned()];
+    if ui.select_one("Apply selected changes?", &confirm_labels, 0)? == 0 {
         Ok(edits)
     } else {
         Ok(BTreeMap::new())
-    }
-}
-
-fn parse_row_selection(input: &str, row_count: usize) -> Result<Vec<usize>, String> {
-    let input = input.trim();
-    if input.eq_ignore_ascii_case("none") || input.eq_ignore_ascii_case("n") {
-        return Ok(Vec::new());
-    }
-    if input.eq_ignore_ascii_case("all") || input.eq_ignore_ascii_case("a") {
-        return Ok((0..row_count).collect());
-    }
-    let mut selected = BTreeSet::new();
-    for part in input.split(',') {
-        let part = part.trim();
-        let number = part
-            .parse::<usize>()
-            .map_err(|_| format!("invalid row selection {part:?}"))?;
-        if !(1..=row_count).contains(&number) {
-            return Err(format!("row {number} is outside 1..={row_count}"));
-        }
-        selected.insert(number - 1);
-    }
-    Ok(selected.into_iter().collect())
-}
-
-fn prompt_action<R: BufRead, W: Write>(
-    reader: &mut R,
-    writer: &mut W,
-    prompt: &str,
-    valid: &[&str],
-    default: &str,
-) -> Result<String, String> {
-    loop {
-        let answer = prompt_line(reader, writer, prompt)?;
-        let action = if answer.is_empty() {
-            default.to_owned()
-        } else {
-            answer.to_ascii_lowercase()
-        };
-        if valid.iter().any(|candidate| *candidate == action) {
-            return Ok(action);
-        }
-        writeln!(writer, "Choose one of: {}", valid.join(", "))
-            .map_err(|error| error.to_string())?;
     }
 }
 
@@ -906,6 +1057,75 @@ fn compose_lenient_translation_overlay(
             overlay.id
         )
     })
+}
+
+fn print_no_translation_reports(args: &TranslationArgs) -> Result<(), String> {
+    let non_dictionary = non_dictionary_translation_overlays(args)?;
+    if non_dictionary.is_empty() {
+        println!(
+            "{}",
+            color_stdout(
+                "No translation coverage entries matched the selected target and scope.",
+                "33"
+            )
+        );
+        println!(
+            "Try a broader scope, or run `brainbrew translations --manifest {} --all-targets`.",
+            args.manifest_path.display()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{}",
+        color_stdout(
+            "No translation dictionary coverage reports matched the selected target and scope.",
+            "33"
+        )
+    );
+    println!();
+    println!(
+        "The selected target includes translation overlays that do not use a `translations:` dictionary yet:"
+    );
+    for overlay in non_dictionary {
+        println!("  - {} ({})", overlay.id, overlay.label);
+    }
+    println!();
+    println!(
+        "`brainbrew translations` reports source-keyed translation dictionaries such as `translations.direct`, `translations.contextual`, and `translations.target_additions`."
+    );
+    println!(
+        "Patch-style translation overlays still compose, but they do not expose coverage data for this workflow yet."
+    );
+    Ok(())
+}
+
+fn non_dictionary_translation_overlays(
+    args: &TranslationArgs,
+) -> Result<Vec<OverlayChoice>, String> {
+    let manifest = read_manifest(&args.manifest_path)?;
+    let target_names = selected_target_names(&manifest, args);
+    let mut choices = BTreeSet::<OverlayChoice>::new();
+    for target in target_names {
+        let plan = plan_manifest_target_with_packages(
+            &args.manifest_path,
+            &target,
+            &args.include_paths,
+            &args.package_roots,
+        )?;
+        for (planned, overlay) in &plan.overlays {
+            if overlay.kind == OverlayKind::Translation
+                && overlay.translations.is_none()
+                && overlay_matches_scope(&target, planned, overlay, args)
+            {
+                choices.insert(OverlayChoice {
+                    id: planned.id.clone(),
+                    label: planned.display_file.clone(),
+                });
+            }
+        }
+    }
+    Ok(choices.into_iter().collect())
 }
 
 fn print_human_reports(reports: &[ScopedTranslationReport]) {
@@ -1213,15 +1433,20 @@ fn translation_overlay_choices(args: &TranslationArgs) -> Result<Vec<OverlayChoi
             &args.package_roots,
         )?;
         for (planned, overlay) in &plan.overlays {
-            if overlay.translations.is_some()
+            if overlay.kind == OverlayKind::Translation
                 && args
                     .language
                     .as_ref()
                     .is_none_or(|language| language_matches(language, &target, planned, overlay))
             {
+                let suffix = if overlay.translations.is_some() {
+                    ""
+                } else {
+                    "  (no translations: dictionary)"
+                };
                 choices.insert(OverlayChoice {
                     id: planned.id.clone(),
-                    label: format!("{}  {}", planned.id, planned.display_file),
+                    label: format!("{}  {}{}", planned.id, planned.display_file, suffix),
                 });
             }
         }
@@ -1231,31 +1456,40 @@ fn translation_overlay_choices(args: &TranslationArgs) -> Result<Vec<OverlayChoi
 
 fn inferred_languages(manifest: &FederatedDeckManifest) -> Vec<String> {
     let mut languages = BTreeSet::new();
-    for target in manifest.targets.keys() {
-        if let Some((language, _)) = target.split_once('-')
-            && (2..=8).contains(&language.len())
-            && language.chars().all(|ch| ch.is_ascii_lowercase())
-        {
-            languages.insert(language.to_owned());
-        }
-    }
     for (id, overlay) in &manifest.overlays {
-        if let Some(language) = id.rsplit(['.', '-']).next()
-            && (2..=8).contains(&language.len())
-            && language.chars().all(|ch| ch.is_ascii_lowercase())
-        {
-            languages.insert(language.to_owned());
+        let is_translation_overlay = overlay.kind.as_deref() == Some("translation")
+            || id.contains("translation.")
+            || id.contains("translation-");
+        if !is_translation_overlay {
+            continue;
         }
-        if let Some(stem) = Path::new(&overlay.file)
+        maybe_insert_language(id.rsplit(['.', '-']).next(), &mut languages);
+        let stem = Path::new(&overlay.file)
             .file_stem()
-            .and_then(|stem| stem.to_str())
-            && (2..=8).contains(&stem.len())
-            && stem.chars().all(|ch| ch.is_ascii_lowercase())
-        {
-            languages.insert(stem.to_owned());
+            .and_then(|stem| stem.to_str());
+        if let Some(stem) = stem {
+            if let Some((_, suffix)) = stem.rsplit_once(['-', '.']) {
+                maybe_insert_language(Some(suffix), &mut languages);
+            } else {
+                maybe_insert_language(Some(stem), &mut languages);
+            }
         }
     }
     languages.into_iter().collect()
+}
+
+fn maybe_insert_language(candidate: Option<&str>, languages: &mut BTreeSet<String>) {
+    let Some(language) = candidate else {
+        return;
+    };
+    if (2..=8).contains(&language.len())
+        && language
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch == '-')
+        && language != "translation"
+    {
+        languages.insert(language.to_owned());
+    }
 }
 
 fn note_id_from_path(path: &str) -> Option<String> {

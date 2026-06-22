@@ -957,6 +957,47 @@ fn translations_missing_manifest_lists_nearby_manifests() {
 }
 
 #[test]
+fn translations_reports_when_selected_target_has_no_dictionary_overlays() {
+    let manifest = workspace_root().join("fixtures/ug-style/brainbrew.yaml");
+    let output = run([
+        "translations",
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--target",
+        "full-demo",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("No translation dictionary coverage reports matched"));
+    assert!(out.contains("translation.es"));
+    assert!(out.contains("translation-sv.yaml"));
+    assert!(out.contains("do not use a `translations:` dictionary"));
+}
+
+#[test]
+fn translations_interactive_language_options_come_from_translation_overlays_only() {
+    let manifest = workspace_root().join("fixtures/ug-style/brainbrew.yaml");
+    let output = run_with_stdin(
+        [
+            "translate",
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--interactive",
+        ],
+        "\n\nq",
+    );
+
+    assert!(!output.status.success());
+    let out = stdout(&output);
+    assert!(out.contains("Language filter"));
+    assert!(out.contains("es"));
+    assert!(out.contains("sv"));
+    assert!(!out.contains("capital"));
+    assert!(!out.contains("hint"));
+}
+
+#[test]
 fn translations_human_output_can_be_colored_but_json_stays_plain() {
     let dir = temp_dir("translations-color");
     write_translation_workspace(&dir);
@@ -1002,21 +1043,23 @@ fn translations_interactive_derives_selector_options_and_prints_equivalent_comma
             dir.join("brainbrew.yaml").to_str().unwrap(),
             "--interactive",
         ],
-        "2\n\n\n\n\n",
+        "\x1b[B\n\n\n\n\n",
     );
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let out = stdout(&output);
     assert!(out.contains("Brain Brew translation coverage"));
-    assert!(out.contains("Target:"));
+    assert!(out.contains("Target"));
     assert!(out.contains("da-release"));
     assert!(out.contains("da-standard"));
-    assert!(out.contains("Translation overlay:"));
+    assert!(out.contains("Translation overlay"));
     assert!(out.contains("overlay.translation.da"));
-    assert!(out.contains("Scope:"));
+    assert!(out.contains("Scope"));
     assert!(out.contains("Equivalent command:"));
     assert!(out.contains("brainbrew translations"));
     assert!(out.contains("--target da-standard"));
+    assert!(!out.contains("Select Target"));
+    assert!(!out.contains("1. da-release"));
 }
 
 #[test]
@@ -1037,7 +1080,7 @@ fn translations_interactive_apply_can_insert_contextual_stub() {
             "--apply",
             "--interactive",
         ],
-        "\n\n\nc\ny\n",
+        "\n\n\n\x1b[B\n\n",
     );
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -1063,7 +1106,7 @@ fn translations_interactive_apply_can_insert_ignore_path() {
             "--apply",
             "--interactive",
         ],
-        "\n\n\ni\ny\n",
+        "\n\n\n\x1b[B\x1b[B\n\n",
     );
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -1846,6 +1889,14 @@ fn run_with_cache<const N: usize>(args: [&str; N], cache: &Path) -> std::process
         .env("BRAINBREW_CACHE_DIR", cache)
         .output()
         .expect("command runs")
+}
+
+fn workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("crate lives under crates/brain-brew-cli")
+        .to_path_buf()
 }
 
 fn write_manifest_workspace(dir: &Path) {

@@ -20,6 +20,7 @@ path = "src/main.rs"
 
 [dependencies]
 base64 = "0.22"
+crossterm = "0.28"
 flate2 = "1"
 nix-nar = "0.4"
 brain-brew-core.workspace = true
