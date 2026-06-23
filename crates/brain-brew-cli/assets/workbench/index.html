@@ -5,13 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Brain Brew Deck Workbench</title>
     <base href="/" />
-    <link rel="stylesheet" href="/workbench-dc5d231e5bc3af58.css" integrity="sha384-5e4ZCQTXBzi97/rbiEfMzg0KNNeBNTFikcimrwq4qBRqFHmL6WdFK0J4orl0l/pf"/>
-  <link rel="modulepreload" href="/brain_brew_workbench_ui-9575fc3c29e6b0e6.js" crossorigin="anonymous" integrity="sha384-cdUyIA6zmZvWwXdtm11li/ALwARrFDIP6TsIFknBKt1V0JKbm408TJdCDnzb4+jC"><link rel="preload" href="/brain_brew_workbench_ui-9575fc3c29e6b0e6_bg.wasm" crossorigin="anonymous" integrity="sha384-M/0XavmfF6aGp1/tcU2SNWab43GtNY+HyFrUtX4dCMP6tScCeLiE5DGQyvYw29h9" as="fetch" type="application/wasm"></head>
+    <link rel="stylesheet" href="/workbench-5954e6fbe1a2b280.css" integrity="sha384-hNlIl+KbA49bH0FerageDMo7CnUoDDBZli+fL7oExJ8qeobp1nvn+2vZni4K5G/Y"/>
+  <link rel="modulepreload" href="/brain_brew_workbench_ui-98712daa74064f1f.js" crossorigin="anonymous" integrity="sha384-Z0HRK60HkXYaRc/sYT2AHrfiSbA2kWNb6GBf/9AQ/TEt1s8FTZmWZ62cxiUpGPxe"><link rel="preload" href="/brain_brew_workbench_ui-98712daa74064f1f_bg.wasm" crossorigin="anonymous" integrity="sha384-GQUb7u1HjEuuLd1axgluV37mQWypjrqLd+7m6h00TMqw48DS2SkPWDu52BsIKQMg" as="fetch" type="application/wasm"></head>
   <body>
+    <div id="brainbrew-workbench-e2e" data-status="loading">
+      Brain Brew Deck Workbench loading workspace metadata
+    </div>
     
 <script type="module">
-import init, * as bindings from '/brain_brew_workbench_ui-9575fc3c29e6b0e6.js';
-const wasm = await init({ module_or_path: '/brain_brew_workbench_ui-9575fc3c29e6b0e6_bg.wasm' });
+import init, * as bindings from '/brain_brew_workbench_ui-98712daa74064f1f.js';
+const wasm = await init({ module_or_path: '/brain_brew_workbench_ui-98712daa74064f1f_bg.wasm' });
 
 
 window.wasmBindings = bindings;

@@ -9,7 +9,10 @@ in
   packages = [
     pkgs.cargo
     pkgs.binaryen
+    pkgs.chromedriver
+    pkgs.chromium
     pkgs.clippy
+    pkgs.curl
     pkgs.lld
     pkgs.nodejs_22
     pkgs.rustc
@@ -28,9 +31,9 @@ in
   '';
   scripts.fmt.exec = "cargo fmt --all";
   scripts."fmt:check".exec = "cargo fmt --all -- --check";
-  scripts.check.exec = "cargo check --workspace --all-targets";
-  scripts.test.exec = "cargo test --workspace --all-targets";
-  scripts.clippy.exec = "cargo clippy --workspace --all-targets -- -D warnings";
+  scripts.check.exec = "cargo check --workspace --exclude brain-brew-workbench-e2e --all-targets";
+  scripts.test.exec = "cargo test --workspace --exclude brain-brew-workbench-e2e --all-targets";
+  scripts.clippy.exec = "cargo clippy --workspace --exclude brain-brew-workbench-e2e --all-targets -- -D warnings";
   scripts."workbench-ui-build".exec = ''
     set -euo pipefail
     cd crates/brain-brew-workbench-ui
@@ -45,6 +48,36 @@ in
     set -euo pipefail
     cd crates/brain-brew-workbench-ui
     trunk build --release --dist ../brain-brew-cli/assets/workbench --public-url /
+  '';
+  scripts.e2e.exec = ''
+    set -euo pipefail
+    artifact_dir="''${BRAINBREW_E2E_ARTIFACT_DIR:-$PWD/target/workbench-e2e-artifacts}"
+    webdriver_port="''${BRAINBREW_WEBDRIVER_PORT:-9515}"
+    webdriver_url="http://127.0.0.1:''${webdriver_port}"
+    mkdir -p "$artifact_dir"
+
+    (cd crates/brain-brew-workbench-ui && trunk build --dist ../../target/workbench-ui --public-url /)
+    cargo build -p brainbrew
+
+    export BRAINBREW_E2E_ARTIFACT_DIR="$artifact_dir"
+    export BRAINBREW_E2E_BIN="''${BRAINBREW_E2E_BIN:-$PWD/target/debug/brainbrew}"
+    export BRAINBREW_E2E_DEV_ASSETS="''${BRAINBREW_E2E_DEV_ASSETS:-$PWD/target/workbench-ui}"
+    export BRAINBREW_CHROME_BINARY="''${BRAINBREW_CHROME_BINARY:-$(command -v chromium)}"
+    export WEBDRIVER_URL="''${WEBDRIVER_URL:-$webdriver_url}"
+
+    chromedriver --port="$webdriver_port" --log-path="$artifact_dir/chromedriver.log" &
+    webdriver_pid=$!
+    trap 'kill "$webdriver_pid" 2>/dev/null || true; wait "$webdriver_pid" 2>/dev/null || true' EXIT
+
+    for _ in $(seq 1 50); do
+      if curl --silent --fail "$webdriver_url/status" > "$artifact_dir/chromedriver-status.json"; then
+        break
+      fi
+      sleep 0.2
+    done
+    curl --silent --fail "$webdriver_url/status" > "$artifact_dir/chromedriver-status.json"
+
+    cargo test -p brain-brew-workbench-e2e -- --nocapture
   '';
 
   scripts."docs:install".exec = "npm --prefix documentation install";
@@ -74,14 +107,15 @@ in
   scripts.ci.exec = ''
     set -euo pipefail
     cargo fmt --all -- --check
-    cargo test --workspace --all-targets
-    cargo clippy --workspace --all-targets -- -D warnings
+    cargo test --workspace --exclude brain-brew-workbench-e2e --all-targets
+    cargo clippy --workspace --exclude brain-brew-workbench-e2e --all-targets -- -D warnings
+    e2e
   '';
 
   enterTest = ''
     set -euo pipefail
     cargo fmt --all -- --check
-    cargo test --workspace --all-targets
-    cargo clippy --workspace --all-targets -- -D warnings
+    cargo test --workspace --exclude brain-brew-workbench-e2e --all-targets
+    cargo clippy --workspace --exclude brain-brew-workbench-e2e --all-targets -- -D warnings
   '';
 }

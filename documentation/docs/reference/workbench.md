@@ -34,3 +34,11 @@ devenv shell workbench-ui-build
 devenv shell test
 devenv shell clippy
 ```
+
+Browser E2E tests are required for user-visible workbench slices:
+
+```bash
+devenv shell e2e
+```
+
+The E2E harness lives in `crates/brain-brew-workbench-e2e`, uses Rust `thirtyfour` with devenv-provided Chromium/chromedriver, and writes failure screenshots/logs under `target/workbench-e2e-artifacts` by default. `devenv shell ci` includes this E2E gate; `devenv shell test` remains the faster non-browser Rust suite.

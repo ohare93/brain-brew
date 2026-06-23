@@ -64,15 +64,18 @@ impl WorkbenchApp {
         match message {
             Message::RefreshWorkspace => {
                 self.status = "Refreshing workspace metadata…".to_owned();
+                publish_workspace_probe("loading", self.status.as_str(), None);
                 Task::perform(fetch_workspace(), Message::WorkspaceLoaded)
             }
             Message::WorkspaceLoaded(Ok(summary)) => {
                 self.status = "Workspace metadata loaded from /api/workspace.".to_owned();
+                publish_workspace_probe("loaded", self.status.as_str(), Some(&summary));
                 self.workspace = Some(summary);
                 Task::none()
             }
             Message::WorkspaceLoaded(Err(error)) => {
                 self.status = format!("Unable to load workspace metadata: {error}");
+                publish_workspace_probe("error", self.status.as_str(), None);
                 Task::none()
             }
         }
@@ -160,6 +163,40 @@ fn panel<'a>(
     .padding(18)
     .height(Length::Fill)
 }
+
+#[cfg(target_arch = "wasm32")]
+fn publish_workspace_probe(status: &str, message: &str, workspace: Option<&WorkspaceSummary>) {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    let Some(element) = document.get_element_by_id("brainbrew-workbench-e2e") else {
+        return;
+    };
+
+    let _ = element.set_attribute("data-status", status);
+    let _ = element.set_attribute("data-message", message);
+    if let Some(workspace) = workspace {
+        let language_count = workspace.language_count.to_string();
+        let target_count = workspace.target_count.to_string();
+        let fingerprint_count = workspace.fingerprint_count.to_string();
+        let _ = element.set_attribute("data-manifest", workspace.manifest.as_str());
+        let _ = element.set_attribute("data-language-count", language_count.as_str());
+        let _ = element.set_attribute("data-target-count", target_count.as_str());
+        let _ = element.set_attribute("data-fingerprint-count", fingerprint_count.as_str());
+        element.set_text_content(Some(&format!(
+            "Brain Brew Deck Workbench loaded {} language(s), {} target(s), and {} watched file(s) from {}",
+            workspace.language_count,
+            workspace.target_count,
+            workspace.fingerprint_count,
+            workspace.manifest
+        )));
+    } else {
+        element.set_text_content(Some(message));
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn publish_workspace_probe(_status: &str, _message: &str, _workspace: Option<&WorkspaceSummary>) {}
 
 #[cfg(target_arch = "wasm32")]
 async fn fetch_workspace() -> Result<WorkspaceSummary, String> {
