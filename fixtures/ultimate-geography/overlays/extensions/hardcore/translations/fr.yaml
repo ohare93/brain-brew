@@ -1,6 +1,8 @@
 id: overlay.translation.hardcore.fr
 kind: translation
 translations:
+  direct:
+    slightly lighter blue: 'bleu légèrement plus clair'
   contextual:
     notes.note:
       bonaire:
@@ -22,7 +24,6 @@ translations:
       gal-pagos-islands:
         'Galápagos Islands': 'Îles Galápagos'
         Province of Ecuador.: 'Province de l''Équateur.'
-        'Sierra Leone (slightly lighter blue)': 'Sierra Leone (bleu légèrement plus clair)'
       melilla:
         Autonomous city of Spain: 'Ville autonome d’Espagne.'
       montserrat:

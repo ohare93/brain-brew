@@ -2783,11 +2783,17 @@ fn apply_field_change(
         | ChangeIntent::Merge
         | ChangeIntent::Replace
         | ChangeIntent::Override => {
+            if let Some(message) = &change.message {
+                note.fields.insert(field_id.clone(), String::new());
+                note.field_messages
+                    .insert(field_id.clone(), message.clone());
+                return;
+            }
             let Some(value) = &change.value else {
                 errors.push(ComposeError::new(
                     ComposeErrorKind::MissingOverlayPayload,
                     path,
-                    format!("field change for {field_id} must include a value"),
+                    format!("field change for {field_id} must include a value or message"),
                 ));
                 return;
             };
@@ -3759,6 +3765,7 @@ pub struct MediaChange {
 pub struct FieldChange {
     pub intent: ChangeIntent,
     pub value: Option<String>,
+    pub message: Option<StructuredMessage>,
     pub expected_base: Option<ExpectedBase>,
 }
 

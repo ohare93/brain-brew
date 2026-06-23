@@ -997,6 +997,7 @@ fn extension_overlay_can_add_a_note_type_field_and_backfill_note_values() {
                     FieldChange {
                         intent: ChangeIntent::Add,
                         value: Some("5.6 million".to_owned()),
+                        message: None,
                         expected_base: None,
                     },
                 )]),
@@ -1431,6 +1432,7 @@ fn overlay_replacing_capital(
                     FieldChange {
                         intent,
                         value: Some(value.to_owned()),
+                        message: None,
                         expected_base,
                     },
                 )]),

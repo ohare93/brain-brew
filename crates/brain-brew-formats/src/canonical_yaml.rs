@@ -339,6 +339,12 @@ struct FieldAdditionsForFormat {
     values: BTreeMap<StableId, BTreeMap<StableId, String>>,
 }
 
+#[derive(Clone)]
+enum FieldFillForFormat {
+    Scalar(String),
+    Message(StructuredMessage),
+}
+
 fn split_field_additions_for_format(
     overlay: &Overlay,
 ) -> (
@@ -432,10 +438,10 @@ fn split_field_additions_for_format(
 fn split_field_fills_for_format(
     mut note_changes: BTreeMap<StableId, NoteChange>,
 ) -> (
-    BTreeMap<StableId, BTreeMap<StableId, String>>,
+    BTreeMap<StableId, BTreeMap<StableId, FieldFillForFormat>>,
     BTreeMap<StableId, NoteChange>,
 ) {
-    let mut field_fills = BTreeMap::<StableId, BTreeMap<StableId, String>>::new();
+    let mut field_fills = BTreeMap::<StableId, BTreeMap<StableId, FieldFillForFormat>>::new();
 
     for (note_id, change) in &note_changes {
         if change.intent != ChangeIntent::Merge {
@@ -446,7 +452,7 @@ fn split_field_fills_for_format(
                 field_fills
                     .entry(note_id.clone())
                     .or_default()
-                    .insert(field_id.clone(), value.to_owned());
+                    .insert(field_id.clone(), value);
             }
         }
     }
@@ -464,11 +470,18 @@ fn split_field_fills_for_format(
     (field_fills, note_changes)
 }
 
-fn field_fill_value(change: &FieldChange) -> Option<&str> {
+fn field_fill_value(change: &FieldChange) -> Option<FieldFillForFormat> {
     if change.intent == ChangeIntent::Replace
         && matches!(change.expected_base, Some(ExpectedBase::Value(ref value)) if value.is_empty())
     {
-        change.value.as_deref()
+        if let Some(message) = &change.message {
+            Some(FieldFillForFormat::Message(message.clone()))
+        } else {
+            change
+                .value
+                .as_ref()
+                .map(|value| FieldFillForFormat::Scalar(value.clone()))
+        }
     } else {
         None
     }
@@ -523,14 +536,21 @@ fn write_field_additions(
 
 fn write_field_fills(
     out: &mut String,
-    field_fills: &BTreeMap<StableId, BTreeMap<StableId, String>>,
+    field_fills: &BTreeMap<StableId, BTreeMap<StableId, FieldFillForFormat>>,
 ) {
     writeln!(out, "field_fills:").expect("writing to a string cannot fail");
     for (note_id, fields) in field_fills {
         writeln!(out, "  {note_id}:").expect("writing to a string cannot fail");
         for (field_id, value) in fields {
-            writeln!(out, "    {field_id}: {}", yaml_scalar(value))
-                .expect("writing to a string cannot fail");
+            match value {
+                FieldFillForFormat::Scalar(value) => {
+                    writeln!(out, "    {field_id}: {}", yaml_scalar(value))
+                        .expect("writing to a string cannot fail");
+                }
+                FieldFillForFormat::Message(message) => {
+                    write_structured_message_field(out, "    ", field_id, message);
+                }
+            }
         }
     }
 }
@@ -767,6 +787,10 @@ fn write_field_change(out: &mut String, indent: &str, field_id: &StableId, chang
     if let Some(value) = &change.value {
         write_multiline_or_scalar(out, &format!("{indent}  "), "value", value);
     }
+    if let Some(message) = &change.message {
+        writeln!(out, "{indent}  message:").expect("writing to a string cannot fail");
+        write_message_components(out, &format!("{indent}    "), message);
+    }
     if let Some(expected_base) = &change.expected_base {
         write_expected_base(out, &format!("{indent}  "), expected_base);
     }
@@ -852,18 +876,22 @@ fn write_structured_message_field(
 ) {
     writeln!(out, "{indent}{field_id}:").expect("writing to a string cannot fail");
     writeln!(out, "{indent}  message:").expect("writing to a string cannot fail");
+    write_message_components(out, &format!("{indent}    "), message);
+}
+
+fn write_message_components(out: &mut String, indent: &str, message: &StructuredMessage) {
     for component in &message.components {
         match component {
             MessageComponent::Literal(value) => {
-                writeln!(out, "{indent}    - literal: {}", yaml_scalar(value))
+                writeln!(out, "{indent}- literal: {}", yaml_scalar(value))
                     .expect("writing to a string cannot fail");
             }
             MessageComponent::Text(value) => {
-                writeln!(out, "{indent}    - text: {}", yaml_scalar(value))
+                writeln!(out, "{indent}- text: {}", yaml_scalar(value))
                     .expect("writing to a string cannot fail");
             }
             MessageComponent::FieldRef(reference) => {
-                writeln!(out, "{indent}    - ref: {}", yaml_scalar(reference))
+                writeln!(out, "{indent}- ref: {}", yaml_scalar(reference))
                     .expect("writing to a string cannot fail");
             }
         }
@@ -1009,7 +1037,7 @@ struct OverlayYaml {
     #[serde(default)]
     field_additions: BTreeMap<String, FieldAdditionsYaml>,
     #[serde(default)]
-    field_fills: BTreeMap<String, BTreeMap<String, String>>,
+    field_fills: BTreeMap<String, BTreeMap<String, FieldValueYaml>>,
     #[serde(default)]
     notes: BTreeMap<String, NoteChangeYaml>,
     #[serde(default)]
@@ -1152,6 +1180,7 @@ impl FieldAdditionsYaml {
                     FieldChange {
                         intent: ChangeIntent::Add,
                         value: Some(value),
+                        message: None,
                         expected_base: None,
                     },
                 );
@@ -1163,7 +1192,7 @@ impl FieldAdditionsYaml {
 }
 
 fn apply_field_fills(
-    field_fills: BTreeMap<String, BTreeMap<String, String>>,
+    field_fills: BTreeMap<String, BTreeMap<String, FieldValueYaml>>,
     note_changes: &mut BTreeMap<StableId, NoteChange>,
 ) -> Result<(), CanonicalYamlError> {
     for (note_id, fields) in field_fills {
@@ -1188,11 +1217,16 @@ fn apply_field_fills(
                     "field_fills.{note_id}.{field_id} conflicts with another field change"
                 )));
             }
+            let (value, message) = match value {
+                FieldValueYaml::Scalar(value) => (Some(value), None),
+                FieldValueYaml::Message(message) => (None, Some(message.into_structured_message())),
+            };
             note_change.fields.insert(
                 field_id,
                 FieldChange {
                     intent: ChangeIntent::Replace,
-                    value: Some(value),
+                    value,
+                    message,
                     expected_base: Some(ExpectedBase::Value(String::new())),
                 },
             );
@@ -1650,6 +1684,8 @@ struct FieldChangeYaml {
     #[serde(default)]
     value: Option<String>,
     #[serde(default)]
+    message: Option<Vec<MessageComponentYaml>>,
+    #[serde(default)]
     expected_base: Option<ExpectedBaseYaml>,
 }
 
@@ -1658,6 +1694,9 @@ impl FieldChangeYaml {
         Ok(FieldChange {
             intent: parse_change_intent(&self.intent)?,
             value: self.value,
+            message: self
+                .message
+                .map(|message| FieldMessageYaml { message }.into_structured_message()),
             expected_base: self
                 .expected_base
                 .map(ExpectedBaseYaml::into_expected_base)

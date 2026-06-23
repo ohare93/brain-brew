@@ -1,6 +1,8 @@
 id: overlay.translation.hardcore.nb
 kind: translation
 translations:
+  direct:
+    slightly lighter blue: 'noe lysere blå'
   contextual:
     notes.note:
       bonaire:
@@ -22,7 +24,6 @@ translations:
       gal-pagos-islands:
         'Galápagos Islands': 'Galápagosøyene'
         Province of Ecuador.: Region i Ecuador.
-        'Sierra Leone (slightly lighter blue)': 'Sierra Leone (noe lysere blå)'
       melilla:
         Autonomous city of Spain: 'Spansk by og enklave på Marokkos middelhavskyst.'
       montserrat:

@@ -126,6 +126,7 @@ fn draft_note_changes(left: &CanonicalDeck, right: &CanonicalDeck, overlay: &mut
                     FieldChange {
                         intent: ChangeIntent::Replace,
                         value: Some(right_value.clone()),
+                        message: None,
                         expected_base: Some(ExpectedBase::Value(left_value.clone())),
                     },
                 );

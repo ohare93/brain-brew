@@ -78,6 +78,26 @@ fn ultimate_geography_fixture_uses_file_includes_for_large_source_text() {
 }
 
 #[test]
+fn ultimate_geography_fixture_uses_structured_messages_for_flag_similarity() {
+    let root = fixture_root();
+    for relative_path in ["deck.yaml", "overlays/extensions/hardcore.yaml"] {
+        let source = fs::read_to_string(root.join(relative_path)).unwrap();
+        assert!(
+            source.contains("field.flag-similarity:\n        message:")
+                || source.contains("field.flag-similarity:\n          message:"),
+            "{relative_path} should use structured messages for non-empty flag similarity fields"
+        );
+        assert!(
+            !source.lines().any(
+                |line| line.trim_start().starts_with("field.flag-similarity: '")
+                    && line.trim() != "field.flag-similarity: ''"
+            ),
+            "{relative_path} should not keep long scalar flag similarity strings"
+        );
+    }
+}
+
+#[test]
 fn ultimate_geography_fixture_manifest_composes_all_targets() {
     let root = fixture_root();
     let manifest = read_manifest(&root);
@@ -608,6 +628,7 @@ fn ug_regression_field_definition_changes_flow_to_crowdanki_for_every_target() {
             FieldChange {
                 intent: ChangeIntent::Add,
                 value: Some(finland_value.clone()),
+                message: None,
                 expected_base: None,
             },
         );
@@ -860,6 +881,7 @@ fn ug_regression_note_changes_flow_to_crowdanki_for_every_target() {
             FieldChange {
                 intent: ChangeIntent::Override,
                 value: Some(new_value.clone()),
+                message: None,
                 expected_base: Some(ExpectedBase::Value(current_value)),
             },
         );
@@ -893,6 +915,7 @@ fn ug_regression_note_changes_flow_to_crowdanki_for_every_target() {
             FieldChange {
                 intent: ChangeIntent::Override,
                 value: Some("${regression.country}".to_owned()),
+                message: None,
                 expected_base: Some(ExpectedBase::Value(current_value)),
             },
         );
