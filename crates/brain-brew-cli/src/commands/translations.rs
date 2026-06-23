@@ -1784,6 +1784,8 @@ fn context_unit_json(unit: &TranslationContextUnit) -> serde_json::Value {
             "template_id": card.template_id.as_str(),
             "template_name": card.template_name,
             "sides": card.sides.iter().map(|side| side.as_str()).collect::<Vec<_>>(),
+            "question_format": card.question_format,
+            "answer_format": card.answer_format,
         })).collect::<Vec<_>>(),
     })
 }

@@ -1505,6 +1505,8 @@ fn card_contexts_for_field(note_type: &NoteType, field_name: &str) -> Vec<Transl
                     template_id: template.id.clone(),
                     template_name: template.name.clone(),
                     sides,
+                    question_format: template.question_format.clone(),
+                    answer_format: template.answer_format.clone(),
                 })
             }
         })
@@ -3983,6 +3985,10 @@ pub struct TranslationCardContext {
     pub template_id: StableId,
     pub template_name: String,
     pub sides: BTreeSet<CardTemplateSide>,
+    /// Near-rendered card front template snippet where this string may appear.
+    pub question_format: String,
+    /// Near-rendered card back template snippet where this string may appear.
+    pub answer_format: String,
 }
 
 /// Card side where a translated field appears.

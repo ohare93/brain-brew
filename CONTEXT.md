@@ -16,6 +16,10 @@ _Avoid_: note list, CSV file, Anki export
 A person responsible for evolving and publishing a shared flashcard deck.
 _Avoid_: learner, reviewer, end user
 
+**Deck Workbench**:
+An ergonomic authoring and review interface for working with a Federated Deck workspace without treating the interface as canonical storage.
+_Avoid_: web app source of truth, generated HTML report, translator-only app
+
 **Learner**:
 A person who studies with a shared deck and may have private changes to preserve.
 _Avoid_: deck maintainer, publisher
@@ -88,6 +92,14 @@ _Avoid_: note ID, canonical ID
 A bounded set of changes applied to a base deck without replacing the base deck.
 _Avoid_: fork, duplicate deck
 
+**Source Language**:
+The language of the base deck text used as the reference for translation work.
+_Avoid_: hard-coded English assumption, target language
+
+**Target Language**:
+A language produced from the source language by a Translation Overlay.
+_Avoid_: separate translated deck, independent deck language
+
 **Translation Overlay**:
 An overlay that changes deck language or localized text.
 _Avoid_: separate translated deck
@@ -113,8 +125,12 @@ A named text value defined on a deck, note type, card template, or note and refe
 _Avoid_: recipe variable, runtime Anki field
 
 **Translation Dictionary**:
-A translation overlay section mapping direct source text, contextual source text, explicit no-change decisions for reviewed unchanged text, target-language additions for blank source fields, source variables, and adapter IDs, with non-blank source keys acting as implicit expected bases.
+A translation overlay section mapping direct source text, contextual source text, explicit no-change decisions for reviewed unchanged text, target-language additions for blank source fields, source variables, adapter IDs, and stale translation records, with non-blank source keys acting as implicit expected bases.
 _Avoid_: CSV importer, global localization database
+
+**Stale Translation Record**:
+A Translation Dictionary review item that applies a prior target text to changed source text while warning that the translation needs review.
+_Avoid_: stale key only, automatic silent migration
 
 **Field Fill**:
 An overlay shorthand for filling existing blank note fields with new content while requiring the upstream field to still be blank.
@@ -139,6 +155,10 @@ _Avoid_: unordered overlay set, dependency graph
 **Overlay Catalog**:
 A named collection of overlays available in a Federated Deck.
 _Avoid_: raw file list, package solver
+
+**Language Catalog**:
+A named collection of source and target languages available in a Federated Deck, connecting target languages to their Translation Overlays and Build Targets.
+_Avoid_: target naming convention, hard-coded language list
 
 **Overlay Dependency**:
 A requirement that one overlay include and apply another overlay before itself.
@@ -181,6 +201,7 @@ _Avoid_: import only, export only, one-way conversion
 - **Brain Brew** primarily serves **Deck Maintainers**.
 - A **Deck Maintainer** publishes one or more **Shared Decks**.
 - A **Deck Maintainer** may publish a **Federated Deck** as a composable shared-deck source package.
+- A **Deck Workbench** helps people review or author a **Federated Deck** while preserving source files as canonical storage.
 - A **Federated Deck** may contribute a base **Deck**, **Overlays**, or both.
 - **Federated Decks** compose through **Deck Federation** to produce **Resolved Decks**.
 - A **Learner** studies a **Shared Deck** and may have a **Personal Overlay**.
@@ -200,12 +221,15 @@ _Avoid_: import only, export only, one-way conversion
 - **Deck Federation** combines one base **Deck** with zero or more **Overlays**.
 - An **Overlay** contains an **Overlay Fragment**.
 - An **Overlay** may use a **Translation Dictionary** to translate extracted source text without repeating per-field replacement boilerplate.
+- A **Translation Dictionary** may contain **Stale Translation Records** when source text changes invalidate existing target-language decisions.
 - An **Overlay** may use **Field Fills** to add content to existing blank note fields without misclassifying that content as a translation.
 - A **Source Variable** lets shared card template structure refer to phrase values translated by a **Translation Dictionary**.
 - An **Overlay** uses **Change Intents** to change **Deck Entities** by **Stable ID**.
 - Replace, remove, and override **Change Intents** require an **Expected Base**.
 - A remove **Change Intent** creates a **Tombstone**.
 - An **Overlay Catalog** names the overlays available in a **Federated Deck**.
+- A **Language Catalog** names the **Source Language** and **Target Languages** available in a **Federated Deck**.
+- A **Target Language** is produced by applying a **Translation Overlay** to source-language content.
 - An **Overlay Dependency** constrains the order of an **Overlay Stack**.
 - An **Overlay Stack** applies overlays in declared or dependency-expanded order.
 - A **Build Target** selects overlays from an **Overlay Catalog** for composition.
@@ -237,3 +261,5 @@ _Avoid_: import only, export only, one-way conversion
 - "translated deck identity" could mean a separate stable identity per language; resolved: translations use language-neutral **Stable IDs** for the same conceptual **Deck Entities** and language-specific external identities remain **Adapter IDs**.
 - "Ultimate Geography support" could mean product-specific application behavior; resolved: Ultimate Geography is a demanding case study and parity fixture for general Brain Brew federation behavior, not a special-purpose application feature.
 - "migration import" could mean Brain Brew should convert every legacy source layout; resolved: initial migration means refactoring into **Canonical Deck Files** and proving output parity, not building public legacy source importers.
+- "webview" and "Iced server" were used for an interactive editing surface; resolved: the product concept is a **Deck Workbench**, and it must not become a separate source of truth.
+- "language" could mean either source text language or translated output language; resolved: use **Source Language** for the base text and **Target Language** for languages produced by **Translation Overlays**.

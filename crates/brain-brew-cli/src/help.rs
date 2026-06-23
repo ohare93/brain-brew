@@ -13,7 +13,7 @@ pub(crate) fn general() -> String {
             "  import    Import CrowdAnki into CanonicalDeck YAML\n",
             "  lock      Update or verify locked federated package inputs\n",
             "  targets   List manifest targets\n",
-            "  translations Report/apply translation coverage stubs (aliases: translate, translation)\n",
+            "  translations Report/apply translation coverage (aliases: translate, translation)\n",
             "  verify    Run manifest formatting, composition, validation, media, and golden checks\n",
             "  explain   Explain a manifest target and its overlay stack\n",
             "  diff      Compare decks semantically, or emit an overlay draft\n\n",

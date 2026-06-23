@@ -957,6 +957,46 @@ fn translations_missing_manifest_lists_nearby_manifests() {
 }
 
 #[test]
+fn translations_help_does_not_advertise_rejected_static_editor_flags() {
+    let output = run(["translations", "--help"]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(!out.contains("--web-editor"));
+    assert!(!out.contains("--apply-editor-edits"));
+    assert!(!out.contains("translator editor"));
+}
+
+#[test]
+fn translations_rejects_rejected_static_editor_flags() {
+    let dir = temp_dir("translations-rejected-static-editor-flags");
+    write_translation_workspace(&dir);
+
+    let web = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--web-editor",
+        "--out",
+        dir.join("editor.html").to_str().unwrap(),
+    ]);
+    assert!(!web.status.success());
+    assert!(stderr(&web).contains("unexpected translations argument \"--web-editor\""));
+
+    let apply = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--apply-editor-edits",
+        dir.join("edits.json").to_str().unwrap(),
+    ]);
+    assert!(!apply.status.success());
+    assert!(stderr(&apply).contains("unexpected translations argument \"--apply-editor-edits\""));
+}
+
+#[test]
 fn translations_reports_when_selected_target_has_no_dictionary_overlays() {
     let manifest = workspace_root().join("fixtures/ug-style/brainbrew.yaml");
     let output = run([
@@ -1089,7 +1129,24 @@ fn translations_context_view_json_exposes_reusable_context_model() {
     assert_eq!(unit["note_fields"][0]["translated"], "Canarias");
     assert_eq!(unit["source"], "Autonomous community of Spain.");
     assert_eq!(unit["translated"], "Comunidad autónoma de España.");
-    assert!(unit["card_templates"].as_array().unwrap().len() >= 4);
+    let card_templates = unit["card_templates"].as_array().unwrap();
+    assert!(card_templates.len() >= 4);
+    let country_capital = card_templates
+        .iter()
+        .find(|card| card["template_id"] == "template.country-capital")
+        .expect("country-capital card context is present");
+    assert!(
+        country_capital["question_format"]
+            .as_str()
+            .unwrap()
+            .contains("{{Country info}}")
+    );
+    assert!(
+        country_capital["answer_format"]
+            .as_str()
+            .unwrap()
+            .contains("{{Capital}}")
+    );
 }
 
 #[test]

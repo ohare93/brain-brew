@@ -18,6 +18,10 @@ The ADRs are written in hindsight around the decisions that still shape the Rust
 | [0008](0008-use-source-variables-and-translation-dictionaries.md) | Use Source Variables and Translation Dictionaries | Accepted | 2026-05-25 |
 | [0009](0009-use-manifests-targets-and-locks-before-a-recipe-dsl.md) | Use Manifests, Targets, and Locks Before a Recipe DSL | Accepted | 2026-05-25 |
 | [0010](0010-fail-closed-on-unsupported-adapter-data.md) | Fail Closed on Unsupported Adapter Data | Accepted | 2026-05-25 |
+| [0011](0011-use-a-local-deck-workbench-server-with-iced-wasm-ui.md) | Use a Local Deck Workbench Server with an Iced/WASM UI | Accepted | 2026-06-23 |
+| [0012](0012-add-manifest-language-catalog-and-translation-profile.md) | Add Manifest Language Catalog and Translation Profile | Accepted | 2026-06-23 |
+| [0013](0013-use-stale-translation-records-for-source-text-changes.md) | Use Stale Translation Records for Source Text Changes | Accepted | 2026-06-23 |
+| [0014](0014-require-workbench-api-and-browser-e2e-tests.md) | Require Workbench API and Browser E2E Tests | Accepted | 2026-06-23 |
 
 ## Process
 

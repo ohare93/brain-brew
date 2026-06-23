@@ -79,6 +79,16 @@ brainbrew explain --manifest brainbrew.yaml --target en-standard --json
 
 Shows expanded overlay stack and resulting changes.
 
+## `translations` / `translate`
+
+```bash
+brainbrew translations --manifest brainbrew.yaml --target da-standard
+brainbrew translations --manifest brainbrew.yaml --target da-standard --context
+brainbrew translations --manifest brainbrew.yaml --all-targets --summary
+```
+
+Reports translation coverage, shows terminal note/card context, summarizes translation state, or applies reviewed translation stubs back to canonical translation overlay YAML.
+
 ## `verify`
 
 ```bash
