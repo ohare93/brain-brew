@@ -472,6 +472,45 @@ fn workbench_note_pivot_exposes_target_translation_data_and_media() {
 }
 
 #[test]
+fn workbench_comparison_pane_summarizes_note_source_string_and_card_context() {
+    let dir = temp_dir("workbench-comparison-pane");
+    write_workbench_repeated_source_multi_language_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let comparison = get_json(
+        &server.url("/api/workbench/comparison-pane?language=nb&target=standard&overlay=base"),
+    );
+    assert_eq!(comparison["language"]["code"], "nb");
+    assert_eq!(comparison["target_label"], "standard");
+    assert!(
+        comparison["content_groups"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|group| group == "Europe")
+    );
+    let strings = comparison["source_string_pivot"]["strings"]
+        .as_array()
+        .unwrap();
+    let shared = strings
+        .iter()
+        .find(|string| string["source"] == "Shared capital")
+        .unwrap();
+    assert_eq!(shared["target_preview"], "Felles hovedstad");
+    assert_eq!(shared["occurrence_count"], 2);
+    assert!(comparison["card_pivot"]["cards"].as_array().unwrap().len() >= 2);
+    assert!(comparison["note_pivot"]["notes"].as_array().unwrap().len() >= 2);
+}
+
+#[test]
 fn workbench_apply_groups_multi_pane_edits_by_file_and_content_group() {
     let dir = temp_dir("workbench-multi-pane-apply");
     write_multi_language_workbench_workspace(&dir);
@@ -4015,6 +4054,80 @@ translations:
       Shared capital: Finsk fælles
 "#,
     );
+}
+
+fn write_workbench_repeated_source_multi_language_workspace(dir: &Path) {
+    write_workbench_repeated_source_deck(dir);
+    fs::write(
+        dir.join("da.yaml"),
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Estonia: Estland
+    Finland: Finland
+    Shared capital: Fælles hovedstad
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("nb.yaml"),
+        r#"id: overlay.translation.nb
+kind: translation
+translations:
+  direct:
+    Estonia: Estland
+    Finland: Finland
+    Shared capital: Felles hovedstad
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.translation.da:
+    file: da.yaml
+    kind: translation
+  overlay.translation.nb:
+    file: nb.yaml
+    kind: translation
+targets:
+  da-standard:
+    overlays:
+      - overlay.translation.da
+  en-standard:
+    overlays: []
+  nb-standard:
+    overlays:
+      - overlay.translation.nb
+languages:
+  da:
+    display_name: Danish
+    translation_overlays:
+      base: overlay.translation.da
+    primary_target: standard
+    targets:
+      standard: da-standard
+  en:
+    display_name: English
+    source: true
+    primary_target: standard
+    targets:
+      standard: en-standard
+  nb:
+    display_name: Norwegian
+    translation_overlays:
+      base: overlay.translation.nb
+    primary_target: standard
+    targets:
+      standard: nb-standard
+translation_profile:
+  structural_fields:
+    - field.flag
+"#,
+    )
+    .unwrap();
 }
 
 fn write_workbench_repeated_source_deck(dir: &Path) {

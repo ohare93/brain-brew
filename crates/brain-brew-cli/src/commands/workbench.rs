@@ -174,6 +174,7 @@ fn app(metadata: Arc<WorkspaceMetadata>, dev_assets: Option<PathBuf>) -> Router 
             get(source_string_pivot),
         )
         .route("/api/workbench/card-pivot", get(card_pivot))
+        .route("/api/workbench/comparison-pane", get(comparison_pane))
         .route(
             "/api/workbench/new-language-preview",
             get(new_language_preview),
@@ -235,6 +236,16 @@ async fn card_pivot(
 ) -> Result<Json<Value>, (StatusCode, String)> {
     metadata
         .card_pivot_json(&query)
+        .map(Json)
+        .map_err(workbench_api_error)
+}
+
+async fn comparison_pane(
+    State(metadata): State<Arc<WorkspaceMetadata>>,
+    Query(query): Query<ComparisonPaneQuery>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    metadata
+        .comparison_pane_json(&query)
         .map(Json)
         .map_err(workbench_api_error)
 }
@@ -421,6 +432,50 @@ impl WorkspaceMetadata {
             query.filter.as_deref(),
             query.content_group.as_deref(),
         ))
+    }
+
+    fn comparison_pane_json(&self, query: &ComparisonPaneQuery) -> Result<Value, String> {
+        let manifest = self.current_manifest()?;
+        let context = self.selected_translation_context(
+            &manifest,
+            query.language.as_deref(),
+            query.target.as_deref(),
+            query.overlay.as_deref(),
+        )?;
+        Ok(json!({
+            "language": {
+                "code": context.selection.language_code,
+                "display_name": context.selection.language_display_name,
+            },
+            "target": {
+                "label": context.selection.target_label,
+                "id": context.selection.target_id,
+            },
+            "overlay": {
+                "label": context.selection.overlay_label,
+                "id": context.selection.overlay_id,
+            },
+            "target_label": context.selection.target_label,
+            "content_groups": main_field_rows(&context.source_deck, &context.selection, &context.report.entries)
+                .iter()
+                .flat_map(|row| content_group_badges_for_note(&context.source_deck, &row.note_id))
+                .collect::<BTreeSet<_>>(),
+            "note_pivot": note_pivot_json_from_context(&context, &manifest, None, None),
+            "source_string_pivot": source_string_pivot_json_from_context(
+                &context,
+                &manifest,
+                query.source.as_deref(),
+                query.content_group.as_deref(),
+                None,
+            ),
+            "card_pivot": card_pivot_json_from_context(
+                &context,
+                &manifest,
+                query.card.as_deref(),
+                None,
+                query.content_group.as_deref(),
+            ),
+        }))
     }
 
     fn new_language_preview_json(&self, query: &NewLanguagePreviewQuery) -> Result<Value, String> {
@@ -975,6 +1030,16 @@ struct CardPivotQuery {
     overlay: Option<String>,
     card: Option<String>,
     filter: Option<String>,
+    content_group: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+struct ComparisonPaneQuery {
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    source: Option<String>,
+    card: Option<String>,
     content_group: Option<String>,
 }
 

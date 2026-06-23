@@ -78,6 +78,14 @@ The Card pivot reviews produced cards one at a time, where a card is a Note rend
 - Field inspectors expose the underlying note-field source and translation rows used by that card. Browser edits can stage target translation edits or source note-field edits and use the shared Apply preview/confirmation APIs.
 - The Card pivot does not introduce card-specific storage; writes still update canonical translation/source YAML through Workbench Apply.
 
+## Comparison language panes
+
+Comparison panes let maintainers review another target language beside the active pivot without changing canonical storage rules:
+
+- `GET /api/workbench/comparison-pane` returns Note, Source String, and Card pivot summaries for one comparison language/target/overlay selection.
+- The browser pane shows target text, translation status, content-group context, Source String rows, and Card preview context for that comparison language.
+- Comparison panes can stay read-only or be toggled writable. Writable comparison edits stage translation entries with that pane's own language/target/overlay scope, so editing one language does not affect another unless those edits are explicitly staged and applied.
+
 ## Flexible pane layouts
 
 Pane layout controls turn read/write status into a workflow preset instead of a product limit:

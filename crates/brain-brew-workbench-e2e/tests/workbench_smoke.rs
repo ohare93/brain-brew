@@ -507,6 +507,8 @@ async fn run_multi_pane_smoke(
     wait_for_element(driver, &format!("#{nb_input_id}"))
         .await
         .context("secondary target pane appears")?;
+    wait_for_text(driver, "Shared capital → Felles hovedstad").await?;
+    wait_for_text(driver, "Card comparison").await?;
     wait_for_element(driver, "#secondary-pane-writable")
         .await?
         .click()
@@ -600,11 +602,12 @@ async fn run_multi_pane_smoke(
         fs::read_to_string(workspace.join("deck.yaml"))?.contains("field.country: Finland pane")
     );
     let da = fs::read_to_string(workspace.join("da.yaml"))?;
-    assert!(da.contains("Helsinki: Helsingfors pane"));
+    assert!(da.contains("Shared capital: Helsingfors pane"));
     assert!(da.contains("old_source: Finland"));
     assert!(da.contains("new_source: Finland pane"));
     assert!(
-        fs::read_to_string(workspace.join("nb.yaml"))?.contains("Helsinki: Helsinki norsk pane")
+        fs::read_to_string(workspace.join("nb.yaml"))?
+            .contains("Shared capital: Helsinki norsk pane")
     );
     Ok(())
 }
@@ -1076,21 +1079,27 @@ fn write_small_workbench_fixture(dir: &Path) -> Result<()> {
 }
 
 fn write_multi_language_workbench_fixture(dir: &Path) -> Result<()> {
-    fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML)?;
+    fs::write(dir.join("deck.yaml"), MULTI_LANGUAGE_CANONICAL_YAML)?;
     fs::write(
         dir.join("da.yaml"),
         r#"id: overlay.translation.da
 kind: translation
 translations:
   direct:
+    Estonia: Estland
     Finland: Finland
+    Shared capital: Fælles hovedstad
 "#,
     )?;
     fs::write(
         dir.join("nb.yaml"),
         r#"id: overlay.translation.nb
 kind: translation
-translations: {}
+translations:
+  direct:
+    Estonia: Estland
+    Finland: Finland
+    Shared capital: Felles hovedstad
 "#,
     )?;
     fs::write(
@@ -1212,6 +1221,63 @@ translation_profile:
     )?;
     Ok(())
 }
+
+const MULTI_LANGUAGE_CANONICAL_YAML: &str = r#"deck:
+  id: deck.multi-language-workbench-smoke
+  name: Multi-language Workbench Smoke
+  description: A small repeated-source E2E deck fixture.
+  adapter_ids:
+    crowdanki:uuid: 63c5ba66-9a65-11e8-90c9-a0481cc15658
+note_types:
+  note-type.country:
+    name: Country
+    field_order:
+      - field.country
+      - field.capital
+      - field.flag
+    fields:
+      field.capital:
+        name: Capital
+      field.country:
+        name: Country
+      field.flag:
+        name: Flag
+    card_template_order:
+      - template.country-capital
+    card_templates:
+      template.country-capital:
+        name: Country - Capital
+        question_format: '{{Country}}'
+        answer_format: '{{FrontSide}}<hr id=answer>{{Capital}}'
+        adapter_ids: {}
+    styling: |
+      .card { font-family: sans-serif; }
+    adapter_ids:
+      crowdanki:uuid: cccccccc-cccc-cccc-cccc-cccccccccccc
+notes:
+  note.finland:
+    note_type_id: note-type.country
+    fields:
+      field.capital: Shared capital
+      field.country: Finland
+      field.flag: '<img src="fi.png">'
+    tags:
+      - Europe
+    adapter_ids:
+      crowdanki:guid: multi-fi-guid
+  note.estonia:
+    note_type_id: note-type.country
+    fields:
+      field.capital: Shared capital
+      field.country: Estonia
+      field.flag: '<img src="ee.png">'
+    tags:
+      - Europe
+    adapter_ids:
+      crowdanki:guid: multi-ee-guid
+media: {}
+tombstones: []
+"#;
 
 const SAMPLE_CANONICAL_YAML: &str = r#"deck:
   id: deck.workbench-smoke

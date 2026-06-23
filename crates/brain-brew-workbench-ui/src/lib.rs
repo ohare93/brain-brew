@@ -1625,8 +1625,7 @@ fn attach_secondary_pane_loader(pivot: &Value) {
         };
         let target = pivot["target"]["label"].as_str().map(str::to_owned);
         wasm_bindgen_futures::spawn_local(async move {
-            match fetch_note_pivot_query(Some(language), target, Some("base".to_owned()), None)
-                .await
+            match fetch_comparison_pane_query(Some(language), target, Some("base".to_owned())).await
             {
                 Ok(pane) => publish_secondary_target_pane(&pane),
                 Err(error) => render_secondary_pane_error(&error),
@@ -1643,13 +1642,16 @@ fn attach_secondary_pane_loader(pivot: &Value) {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn publish_secondary_target_pane(pane: &Value) {
+fn publish_secondary_target_pane(comparison: &Value) {
     let Some(document) = web_sys::window().and_then(|window| window.document()) else {
         return;
     };
     let Some(container) = document.get_element_by_id("secondary-target-pane") else {
         return;
     };
+    let pane = &comparison["note_pivot"];
+    let source_strings = &comparison["source_string_pivot"];
+    let cards = &comparison["card_pivot"];
     let language = pane["language"]["code"].as_str().unwrap_or("");
     let target = pane["target"]["label"].as_str().unwrap_or("");
     let overlay = pane["overlay"]["label"].as_str().unwrap_or("");
@@ -1694,7 +1696,37 @@ fn publish_secondary_target_pane(pane: &Value) {
             ));
         }
     }
-    html.push_str("</tbody></table></section>");
+    html.push_str("</tbody></table>");
+    html.push_str(
+        "<section class=\"comparison-source-strings\"><h5>Source String comparison</h5><ul>",
+    );
+    for string in source_strings["strings"].as_array().into_iter().flatten() {
+        html.push_str(&format!(
+            "<li class=\"comparison-source-string-row\" data-source=\"{}\">{} → {} ({})</li>",
+            escape_html(string["source"].as_str().unwrap_or("")),
+            escape_html(string["source"].as_str().unwrap_or("")),
+            escape_html(string["target_preview"].as_str().unwrap_or("")),
+            escape_html(string["status"].as_str().unwrap_or("unknown")),
+        ));
+    }
+    html.push_str("</ul></section>");
+    html.push_str("<section class=\"comparison-cards\"><h5>Card comparison</h5><ul>");
+    for card in cards["cards"].as_array().into_iter().flatten() {
+        html.push_str(&format!(
+            "<li class=\"comparison-card-row\" data-card-id=\"{}\">{} · {} · {}</li>",
+            escape_html(card["card_id"].as_str().unwrap_or("")),
+            escape_html(card["title"].as_str().unwrap_or("card")),
+            escape_html(card["template_name"].as_str().unwrap_or("template")),
+            escape_html(card["status"].as_str().unwrap_or("unknown")),
+        ));
+    }
+    html.push_str("</ul>");
+    if let Some(card) = cards.get("selected_card").filter(|value| !value.is_null()) {
+        html.push_str("<div class=\"comparison-card-preview\">");
+        html.push_str(&preview_html(&card["target_preview"]));
+        html.push_str("</div>");
+    }
+    html.push_str("</section></section>");
     container.set_inner_html(&html);
     register_secondary_target_handlers(pane);
     attach_secondary_writable_handler();
@@ -2906,6 +2938,16 @@ async fn fetch_note_pivot_query(
         params.push(format!("filter={}", encode_query_component(&filter)));
     }
     get_workbench_json("/api/workbench/note-pivot", params).await
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn fetch_comparison_pane_query(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+) -> Result<Value, String> {
+    let params = workbench_selection_params(language, target, overlay);
+    get_workbench_json("/api/workbench/comparison-pane", params).await
 }
 
 #[cfg(target_arch = "wasm32")]
