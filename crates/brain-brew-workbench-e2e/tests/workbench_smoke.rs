@@ -105,6 +105,30 @@ async fn workbench_source_string_pivot_stages_direct_translation() -> Result<()>
 }
 
 #[tokio::test]
+async fn workbench_optional_metadata_checklist_edits_separately() -> Result<()> {
+    let artifacts = ArtifactDir::new("optional-metadata")?;
+    let workspace = TempDir::new().context("create optional metadata E2E workspace")?;
+    write_optional_metadata_workbench_fixture(workspace.path())?;
+
+    let server = RunningWorkbenchServer::spawn(
+        workspace.path().join("brainbrew.yaml"),
+        dev_assets_path(),
+        artifacts.path(),
+    )?;
+    let driver = new_driver().await.context("connect to WebDriver")?;
+
+    let optional_result = run_optional_metadata_smoke(&driver, &server, workspace.path()).await;
+    if let Err(error) = &optional_result {
+        let _ = artifacts.save_browser_failure(&driver, error).await;
+    }
+    let quit_result = driver.quit().await.context("quit browser session");
+
+    optional_result?;
+    quit_result?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn workbench_multi_pane_layout_applies_grouped_changes_across_files() -> Result<()> {
     let artifacts = ArtifactDir::new("multi-pane")?;
     let workspace = TempDir::new().context("create multi-pane E2E workspace")?;
@@ -301,7 +325,7 @@ async fn run_edit_apply_smoke(
         .await
         .context("type target translation")?;
     wait_for_text(driver, "Helsingfors").await?;
-    wait_for_text(driver, "Progress: 2 / 2 complete").await?;
+    wait_for_text(driver, "Main note-field progress: 2 / 2 complete").await?;
 
     driver.refresh().await.context("refresh browser")?;
     wait_for_loaded_probe(driver).await?;
@@ -377,7 +401,7 @@ async fn run_new_language_scaffold_smoke(
         .click()
         .await
         .context("create new language")?;
-    wait_for_text(driver, "Progress: 0 / 2 complete").await?;
+    wait_for_text(driver, "Main note-field progress: 0 / 2 complete").await?;
     let selected_language = driver
         .execute(
             "return document.getElementById('language-select').value;",
@@ -402,7 +426,7 @@ async fn run_new_language_scaffold_smoke(
         .send_keys("Helsingfors nb")
         .await
         .context("type first translation in new language")?;
-    wait_for_text(driver, "Progress: 1 / 2 complete").await?;
+    wait_for_text(driver, "Main note-field progress: 1 / 2 complete").await?;
     wait_for_element(driver, "#apply-confirm-button")
         .await?
         .click()
@@ -461,6 +485,50 @@ async fn run_source_string_direct_smoke(
     wait_for_apply_output(driver, "Applied").await?;
     let overlay = fs::read_to_string(workspace.join("da.yaml"))?;
     assert!(overlay.contains("Helsinki: Helsingfors via strings"));
+    Ok(())
+}
+
+async fn run_optional_metadata_smoke(
+    driver: &WebDriver,
+    server: &RunningWorkbenchServer,
+    workspace: &Path,
+) -> Result<()> {
+    driver
+        .goto(server.url("/").as_str())
+        .await
+        .context("open Workbench")?;
+    wait_for_text(driver, "Main note-field progress: 2 / 2 complete").await?;
+    wait_for_text(driver, "Optional metadata").await?;
+    wait_for_text(driver, "Old Workbench").await?;
+
+    let input = wait_for_element(driver, "#optional-translation-input-deck_name")
+        .await
+        .context("optional deck name input appears")?;
+    input.clear().await.context("clear optional deck name")?;
+    input
+        .send_keys("Arbejdsbord Røgtest")
+        .await
+        .context("type optional deck name")?;
+    wait_for_text(driver, "staged_direct").await?;
+
+    wait_for_element(driver, "#apply-preview-button")
+        .await?
+        .click()
+        .await
+        .context("preview optional metadata apply")?;
+    wait_for_apply_output(driver, "Apply preview").await?;
+    wait_for_apply_output(driver, "da.yaml").await?;
+    wait_for_apply_output(driver, "workspace").await?;
+    assert!(!fs::read_to_string(workspace.join("da.yaml"))?.contains("Arbejdsbord Røgtest"));
+
+    wait_for_element(driver, "#apply-confirm-button")
+        .await?
+        .click()
+        .await
+        .context("confirm optional metadata apply")?;
+    wait_for_apply_output(driver, "Applied").await?;
+    assert!(fs::read_to_string(workspace.join("da.yaml"))?.contains("Arbejdsbord Røgtest"));
+    assert!(fs::read_to_string(workspace.join("deck.yaml"))?.contains("name: Workbench Smoke"));
     Ok(())
 }
 
@@ -1076,6 +1144,63 @@ fn workspace_root() -> PathBuf {
 fn write_small_workbench_fixture(dir: &Path) -> Result<()> {
     fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML)?;
     write_translation_overlay_and_manifest(dir)
+}
+
+fn write_optional_metadata_workbench_fixture(dir: &Path) -> Result<()> {
+    fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML)?;
+    fs::write(
+        dir.join("da.yaml"),
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Finland: Finland
+    Helsinki: Helsinki
+  stale_records:
+    - old_source: Old Workbench
+      new_source: Workbench Smoke
+      target: Gammelt arbejdsbord
+      context: deck.name
+"#,
+    )?;
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.translation.da:
+    file: da.yaml
+    kind: translation
+targets:
+  da-standard:
+    overlays:
+      - overlay.translation.da
+  en-standard:
+    overlays: []
+languages:
+  da:
+    display_name: Danish
+    translation_overlays:
+      base: overlay.translation.da
+    primary_target: standard
+    targets:
+      standard: da-standard
+  en:
+    display_name: English
+    source: true
+    primary_target: standard
+    targets:
+      standard: en-standard
+translation_profile:
+  structural_fields:
+    - field.flag
+  optional_paths:
+    - deck.*
+    - note_types.*.fields.*.name
+    - note_types.*.card_templates.*.name
+    - notes.*.tags.*
+"#,
+    )?;
+    Ok(())
 }
 
 fn write_multi_language_workbench_fixture(dir: &Path) -> Result<()> {

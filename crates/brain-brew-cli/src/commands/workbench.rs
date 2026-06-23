@@ -175,6 +175,7 @@ fn app(metadata: Arc<WorkspaceMetadata>, dev_assets: Option<PathBuf>) -> Router 
         )
         .route("/api/workbench/card-pivot", get(card_pivot))
         .route("/api/workbench/comparison-pane", get(comparison_pane))
+        .route("/api/workbench/optional-metadata", get(optional_metadata))
         .route(
             "/api/workbench/new-language-preview",
             get(new_language_preview),
@@ -246,6 +247,16 @@ async fn comparison_pane(
 ) -> Result<Json<Value>, (StatusCode, String)> {
     metadata
         .comparison_pane_json(&query)
+        .map(Json)
+        .map_err(workbench_api_error)
+}
+
+async fn optional_metadata(
+    State(metadata): State<Arc<WorkspaceMetadata>>,
+    Query(query): Query<OptionalMetadataQuery>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    metadata
+        .optional_metadata_json(&query)
         .map(Json)
         .map_err(workbench_api_error)
 }
@@ -432,6 +443,17 @@ impl WorkspaceMetadata {
             query.filter.as_deref(),
             query.content_group.as_deref(),
         ))
+    }
+
+    fn optional_metadata_json(&self, query: &OptionalMetadataQuery) -> Result<Value, String> {
+        let manifest = self.current_manifest()?;
+        let context = self.selected_translation_context(
+            &manifest,
+            query.language.as_deref(),
+            query.target.as_deref(),
+            query.overlay.as_deref(),
+        )?;
+        Ok(optional_metadata_json_from_context(&context, &manifest))
     }
 
     fn comparison_pane_json(&self, query: &ComparisonPaneQuery) -> Result<Value, String> {
@@ -1034,6 +1056,13 @@ struct CardPivotQuery {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
+struct OptionalMetadataQuery {
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
 struct ComparisonPaneQuery {
     language: Option<String>,
     target: Option<String>,
@@ -1570,6 +1599,7 @@ fn note_pivot_json_from_context(
         .collect::<BTreeMap<_, _>>();
     let source_counts = main_field_source_counts(&context.source_deck, &context.selection, context);
     let progress = main_progress(&context.source_deck, context, &entries_by_path);
+    let optional_progress = optional_metadata_progress(&optional_metadata_rows(context, manifest));
     let notes = note_pivot_notes_json(
         &context.source_deck,
         &context.target_deck,
@@ -1601,8 +1631,42 @@ fn note_pivot_json_from_context(
             "available": ["all", "missing", "stale", "needs_work"],
         },
         "progress": progress,
+        "optional_progress": optional_progress,
         "notes": notes,
         "stale_entries": stale_entries_json(&context.report.entries),
+    })
+}
+
+fn optional_metadata_json_from_context(
+    context: &SelectedTranslationContext,
+    manifest: &FederatedDeckManifest,
+) -> Value {
+    let entries_by_path = context
+        .report
+        .entries
+        .iter()
+        .map(|entry| (entry.path.as_str(), entry))
+        .collect::<BTreeMap<_, _>>();
+    let items = optional_metadata_rows(context, manifest);
+    let optional_progress = optional_metadata_progress(&items);
+    json!({
+        "language": {
+            "code": context.selection.language_code,
+            "display_name": context.selection.language_display_name,
+        },
+        "target": {
+            "label": context.selection.target_label,
+            "id": context.selection.target_id,
+        },
+        "overlay": {
+            "label": context.selection.overlay_label,
+            "id": context.selection.overlay_id,
+            "file": context.selection.overlay_display_file,
+        },
+        "main_progress": main_progress(&context.source_deck, context, &entries_by_path),
+        "optional_progress": optional_progress,
+        "items": items.iter().map(optional_metadata_item_json).collect::<Vec<_>>(),
+        "profile_optional_paths": manifest.translation_profile.optional_paths,
     })
 }
 
@@ -2286,11 +2350,9 @@ fn main_progress(
         .iter()
         .filter(|row| row.category == TranslationCoverageCategory::UntranslatedFallback)
         .count();
-    let stale = context
-        .report
-        .entries
+    let stale = rows
         .iter()
-        .filter(|entry| is_stale_category(entry.category))
+        .filter(|row| is_stale_category(row.category))
         .count();
     let percent = complete
         .checked_mul(100)
@@ -2304,6 +2366,155 @@ fn main_progress(
         "needs_work": missing + stale,
         "percent": percent,
     })
+}
+
+#[derive(Clone, Debug)]
+struct OptionalMetadataRow {
+    path: String,
+    source: String,
+    translated: String,
+    category: TranslationCoverageCategory,
+    metadata_category: String,
+    profile_optional: bool,
+    warning: Option<String>,
+}
+
+fn optional_metadata_rows(
+    context: &SelectedTranslationContext,
+    manifest: &FederatedDeckManifest,
+) -> Vec<OptionalMetadataRow> {
+    let main_paths = main_field_rows(
+        &context.source_deck,
+        &context.selection,
+        &context.report.entries,
+    )
+    .into_iter()
+    .filter(|row| !row.structural)
+    .map(|row| row.path)
+    .collect::<BTreeSet<_>>();
+    context
+        .report
+        .entries
+        .iter()
+        .filter(|entry| !main_paths.contains(entry.path.as_str()))
+        .filter(|entry| optional_metadata_category(&entry.path).is_some())
+        .map(|entry| {
+            let profile_optional =
+                path_matches_any(&manifest.translation_profile.optional_paths, &entry.path);
+            let warning = is_stale_category(entry.category).then(|| match &entry.old_source {
+                Some(old) => format!("stale: source changed from {old:?}"),
+                None => "stale optional metadata".to_owned(),
+            });
+            OptionalMetadataRow {
+                path: entry.path.clone(),
+                source: entry.source.clone(),
+                translated: entry
+                    .translated
+                    .clone()
+                    .unwrap_or_else(|| entry.source.clone()),
+                category: entry.category,
+                metadata_category: optional_metadata_category(&entry.path)
+                    .unwrap_or("metadata")
+                    .to_owned(),
+                profile_optional,
+                warning,
+            }
+        })
+        .collect()
+}
+
+fn optional_metadata_progress(rows: &[OptionalMetadataRow]) -> Value {
+    let total = rows.len();
+    let complete = rows
+        .iter()
+        .filter(|row| optional_row_status(row) == "complete")
+        .count();
+    let missing = rows
+        .iter()
+        .filter(|row| optional_row_status(row) == "missing")
+        .count();
+    let stale = rows
+        .iter()
+        .filter(|row| optional_row_status(row) == "stale")
+        .count();
+    json!({
+        "complete": complete,
+        "total": total,
+        "missing": missing,
+        "stale": stale,
+        "needs_work": missing + stale,
+    })
+}
+
+fn optional_metadata_item_json(row: &OptionalMetadataRow) -> Value {
+    json!({
+        "path": row.path,
+        "source": row.source,
+        "target": row.translated,
+        "status": optional_row_status(row),
+        "coverage_category": format!("{:?}", row.category),
+        "metadata_category": row.metadata_category,
+        "profile_optional": row.profile_optional,
+        "warning": row.warning,
+        "editable": true,
+    })
+}
+
+fn optional_row_status(row: &OptionalMetadataRow) -> &'static str {
+    if is_stale_category(row.category) {
+        "stale"
+    } else if row.category == TranslationCoverageCategory::UntranslatedFallback {
+        "missing"
+    } else {
+        "complete"
+    }
+}
+
+fn optional_metadata_category(path: &str) -> Option<&'static str> {
+    if path.starts_with("translations.stale_records.") {
+        return Some("stale translation record");
+    }
+    if path.starts_with("deck.variables.") {
+        Some("deck variable")
+    } else if path == "deck.name" || path == "deck.description" || path.starts_with("deck.") {
+        Some("deck metadata")
+    } else if path.contains(".fields.") && path.ends_with(".name") {
+        Some("field label")
+    } else if path.contains(".card_templates.") && path.ends_with(".name") {
+        Some("card template name")
+    } else if path.contains(".card_templates.") && path.contains(".variables.") {
+        Some("card template variable")
+    } else if path.contains(".variables.") {
+        Some("variable")
+    } else if path.contains(".adapter_ids.") {
+        Some("adapter id")
+    } else if path.starts_with("note_types.") && path.ends_with(".name") {
+        Some("note type name")
+    } else if path.contains(".tags.") {
+        Some("tag")
+    } else if path.ends_with(".format") {
+        Some("structured message format")
+    } else {
+        None
+    }
+}
+
+fn path_matches_any(patterns: &[String], path: &str) -> bool {
+    patterns
+        .iter()
+        .any(|pattern| path_matches_pattern(pattern, path))
+}
+
+fn path_matches_pattern(pattern: &str, path: &str) -> bool {
+    let pattern_parts = pattern.split('.').collect::<Vec<_>>();
+    let path_parts = path.split('.').collect::<Vec<_>>();
+    if pattern_parts.len() != path_parts.len() {
+        return false;
+    }
+    pattern_parts
+        .iter()
+        .zip(path_parts.iter())
+        .all(|(pattern, part)| *pattern == "*" || *pattern == *part)
 }
 
 fn note_pivot_notes_json(
@@ -3167,6 +3378,14 @@ fn editable_sources_by_path(context: &SelectedTranslationContext) -> BTreeMap<St
     {
         sources.entry(row.path).or_insert(row.source);
     }
+    for entry in &context.report.entries {
+        if entry.source.is_empty() || optional_metadata_category(&entry.path).is_none() {
+            continue;
+        }
+        sources
+            .entry(entry.path.clone())
+            .or_insert_with(|| entry.source.clone());
+    }
     sources
 }
 
@@ -3189,23 +3408,50 @@ fn contextual_path_for_edit(
     };
     let row = source_rows
         .iter()
-        .find(|row| row.path == edit.path && row.source == edit.source && !row.structural)
-        .ok_or_else(|| format!("invalid contextual edit path {:?}", edit.path))?;
-    if let Some(context_path) = &edit.context_path {
-        if context_path == &row.path
-            || row
-                .path
-                .strip_prefix(context_path)
-                .is_some_and(|suffix| suffix.starts_with('.'))
-        {
-            return Ok(context_path.clone());
+        .find(|row| row.path == edit.path && row.source == edit.source && !row.structural);
+    if let Some(row) = row {
+        if let Some(context_path) = &edit.context_path {
+            if context_path == &row.path
+                || row
+                    .path
+                    .strip_prefix(context_path)
+                    .is_some_and(|suffix| suffix.starts_with('.'))
+            {
+                return Ok(context_path.clone());
+            }
+            return Err(format!(
+                "invalid contextual edit context {:?} for {}",
+                context_path, edit.path
+            ));
         }
-        return Err(format!(
-            "invalid contextual edit context {:?} for {}",
-            context_path, edit.path
-        ));
+        return Ok(contextual_path_for_row(row, &context.report.entries));
     }
-    Ok(contextual_path_for_row(row, &context.report.entries))
+
+    if optional_metadata_category(&edit.path).is_some()
+        && context
+            .report
+            .entries
+            .iter()
+            .any(|entry| entry.path == edit.path && entry.source == edit.source)
+    {
+        if let Some(context_path) = &edit.context_path {
+            if context_path == &edit.path
+                || edit
+                    .path
+                    .strip_prefix(context_path)
+                    .is_some_and(|suffix| suffix.starts_with('.'))
+            {
+                return Ok(context_path.clone());
+            }
+            return Err(format!(
+                "invalid contextual edit context {:?} for {}",
+                context_path, edit.path
+            ));
+        }
+        return Ok(edit.path.clone());
+    }
+
+    Err(format!("invalid contextual edit path {:?}", edit.path))
 }
 
 fn apply_staged_edits_to_overlay(
@@ -3217,15 +3463,12 @@ fn apply_staged_edits_to_overlay(
     let translations = overlay.translations.get_or_insert_with(Default::default);
     let mut changed = Vec::new();
     for edit in edits {
-        if !edit.path.starts_with("notes.") || !edit.path.contains(".fields.") {
-            return Err(format!("invalid note-field edit path {:?}", edit.path));
-        }
         if edit.source.is_empty() {
             return Err(format!("invalid empty source for {}", edit.path));
         }
         let Some(expected_source) = editable_sources.get(edit.path.as_str()) else {
             return Err(format!(
-                "invalid edit path {:?}; choose an editable note field in the selected target",
+                "invalid edit path {:?}; choose an editable translation source in the selected target",
                 edit.path
             ));
         };

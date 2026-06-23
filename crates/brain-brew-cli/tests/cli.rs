@@ -472,6 +472,77 @@ fn workbench_note_pivot_exposes_target_translation_data_and_media() {
 }
 
 #[test]
+fn workbench_optional_metadata_progress_and_apply_are_separate_from_main_fields() {
+    let dir = temp_dir("workbench-optional-metadata");
+    write_workbench_optional_metadata_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let pivot = get_json(&server.url("/api/workbench/note-pivot?language=da"));
+    assert_eq!(pivot["progress"]["total"], 2);
+    assert_eq!(pivot["progress"]["complete"], 2);
+    assert_eq!(pivot["progress"]["stale"], 0);
+    assert!(pivot["optional_progress"]["stale"].as_u64().unwrap() >= 1);
+
+    let optional = get_json(&server.url("/api/workbench/optional-metadata?language=da"));
+    assert_eq!(optional["main_progress"]["complete"], 2);
+    let deck_name = optional["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["path"] == "deck.name")
+        .unwrap();
+    assert_eq!(deck_name["status"], "stale");
+    assert!(
+        deck_name["warning"]
+            .as_str()
+            .unwrap()
+            .contains("Old Workbench")
+    );
+
+    let request = serde_json::json!({
+        "language": "da",
+        "edits": [{
+            "kind": "translation",
+            "path": "deck.name",
+            "source": "Ultimate Geography",
+            "value": "Arbejdsbord Røgtest",
+            "mode": "direct"
+        }]
+    });
+    let preview = post_json(&server.url("/api/workbench/apply-preview"), request.clone());
+    assert_eq!(preview["validation"]["ok"], true);
+    assert_eq!(preview["changed_entries"][0]["path"], "deck.name");
+    assert!(
+        preview["file_groups"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|file| file["file"] == "da.yaml")
+    );
+    assert!(
+        !fs::read_to_string(dir.join("da.yaml"))
+            .unwrap()
+            .contains("Arbejdsbord Røgtest")
+    );
+
+    let applied = post_json(&server.url("/api/workbench/apply"), request);
+    assert_eq!(applied["applied"], true);
+    assert!(
+        fs::read_to_string(dir.join("da.yaml"))
+            .unwrap()
+            .contains("Arbejdsbord Røgtest")
+    );
+}
+
+#[test]
 fn workbench_comparison_pane_summarizes_note_source_string_and_card_context() {
     let dir = temp_dir("workbench-comparison-pane");
     write_workbench_repeated_source_multi_language_workspace(&dir);
@@ -4054,6 +4125,64 @@ translations:
       Shared capital: Finsk fælles
 "#,
     );
+}
+
+fn write_workbench_optional_metadata_workspace(dir: &Path) {
+    fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML).unwrap();
+    fs::write(
+        dir.join("da.yaml"),
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Finland: Finland
+    Helsinki: Helsinki
+  stale_records:
+    - old_source: Old Workbench
+      new_source: Ultimate Geography
+      target: Gammel arbejdsbord
+      context: deck.name
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.translation.da:
+    file: da.yaml
+    kind: translation
+targets:
+  da-standard:
+    overlays:
+      - overlay.translation.da
+  en-standard:
+    overlays: []
+languages:
+  da:
+    display_name: Danish
+    translation_overlays:
+      base: overlay.translation.da
+    primary_target: standard
+    targets:
+      standard: da-standard
+  en:
+    display_name: English
+    source: true
+    primary_target: standard
+    targets:
+      standard: en-standard
+translation_profile:
+  structural_fields:
+    - field.flag
+  optional_paths:
+    - deck.*
+    - note_types.*.fields.*.name
+    - note_types.*.card_templates.*.name
+    - notes.*.tags.*
+"#,
+    )
+    .unwrap();
 }
 
 fn write_workbench_repeated_source_multi_language_workspace(dir: &Path) {

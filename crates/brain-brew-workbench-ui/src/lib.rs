@@ -296,7 +296,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
     ));
     html.push_str("</header>");
     html.push_str(&format!(
-        "<section id=\"translation-progress\" data-complete=\"{}\" data-total=\"{}\" data-missing=\"{}\" data-stale=\"{}\">Progress: {} / {} complete, {} missing, {} stale (<span id=\"staged-edit-count\">0</span> staged)</section>",
+        "<section id=\"translation-progress\" data-complete=\"{}\" data-total=\"{}\" data-missing=\"{}\" data-stale=\"{}\">Main note-field progress: {} / {} complete, {} missing, {} stale (<span id=\"staged-edit-count\">0</span> staged)</section>",
         progress["complete"].as_u64().unwrap_or(0),
         progress["total"].as_u64().unwrap_or(0),
         progress["missing"].as_u64().unwrap_or(0),
@@ -305,6 +305,18 @@ fn publish_note_pivot_panel(pivot: &Value) {
         progress["total"].as_u64().unwrap_or(0),
         progress["missing"].as_u64().unwrap_or(0),
         progress["stale"].as_u64().unwrap_or(0),
+    ));
+    let optional_progress = &pivot["optional_progress"];
+    html.push_str(&format!(
+        "<section id=\"optional-progress\" data-complete=\"{}\" data-total=\"{}\" data-missing=\"{}\" data-stale=\"{}\">Optional metadata: {} / {} complete, {} missing, {} stale</section>",
+        optional_progress["complete"].as_u64().unwrap_or(0),
+        optional_progress["total"].as_u64().unwrap_or(0),
+        optional_progress["missing"].as_u64().unwrap_or(0),
+        optional_progress["stale"].as_u64().unwrap_or(0),
+        optional_progress["complete"].as_u64().unwrap_or(0),
+        optional_progress["total"].as_u64().unwrap_or(0),
+        optional_progress["missing"].as_u64().unwrap_or(0),
+        optional_progress["stale"].as_u64().unwrap_or(0),
     ));
     html.push_str("<nav class=\"overlay-badges\">");
     for badge in pivot["overlay_badges"].as_array().into_iter().flatten() {
@@ -338,6 +350,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
 
     html.push_str("<section id=\"card-pivot-panel\" class=\"card-pivot\"><p>Loading card pivot…</p></section>");
     html.push_str("<section id=\"source-string-pivot-panel\" class=\"source-string-pivot\"><p>Loading source string pivot…</p></section>");
+    html.push_str("<section id=\"optional-metadata-panel\" class=\"optional-metadata\"><p>Loading optional metadata…</p></section>");
     html.push_str("<section class=\"apply-box\"><button id=\"apply-preview-button\" type=\"button\">Apply preview</button> <button id=\"apply-confirm-button\" type=\"button\">Confirm Apply</button><pre id=\"apply-preview-output\"></pre></section>");
     html.push_str("</article>");
     panel.set_inner_html(&html);
@@ -352,6 +365,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
     refresh_progress_from_dom();
     load_card_pivot_for_pivot(pivot, None, None, None);
     load_source_string_pivot_for_pivot(pivot, None, None, None);
+    load_optional_metadata_for_pivot(pivot);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1498,6 +1512,92 @@ fn load_source_string_pivot_for_pivot(
 }
 
 #[cfg(target_arch = "wasm32")]
+fn load_optional_metadata_for_pivot(pivot: &Value) {
+    let language = pivot["language"]["code"].as_str().map(str::to_owned);
+    let target = pivot["target"]["label"].as_str().map(str::to_owned);
+    let overlay = pivot["overlay"]["label"].as_str().map(str::to_owned);
+    wasm_bindgen_futures::spawn_local(async move {
+        match fetch_optional_metadata_query(language, target, overlay).await {
+            Ok(optional) => publish_optional_metadata_panel(&optional),
+            Err(error) => {
+                if let Some(document) = web_sys::window().and_then(|window| window.document())
+                    && let Some(panel) = document.get_element_by_id("optional-metadata-panel")
+                {
+                    panel.set_inner_html(&format!(
+                        "<p class=\"workbench-error\">{}</p>",
+                        escape_html(&error)
+                    ));
+                }
+            }
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn publish_optional_metadata_panel(optional: &Value) {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    let Some(panel) = document.get_element_by_id("optional-metadata-panel") else {
+        return;
+    };
+    let language = optional["language"]["code"].as_str().unwrap_or("");
+    let target = optional["target"]["label"].as_str().unwrap_or("");
+    let overlay = optional["overlay"]["label"].as_str().unwrap_or("");
+    let prefix = storage_prefix_for_parts(language, target, overlay);
+    let progress = &optional["optional_progress"];
+    let mut html = format!(
+        "<section id=\"optional-metadata-checklist\" data-storage-prefix=\"{}\"><h3>Optional metadata checklist</h3><p>Main note-field completion is separate. Optional metadata: {} / {} complete, {} missing, {} stale.</p>",
+        escape_html(&prefix),
+        progress["complete"].as_u64().unwrap_or(0),
+        progress["total"].as_u64().unwrap_or(0),
+        progress["missing"].as_u64().unwrap_or(0),
+        progress["stale"].as_u64().unwrap_or(0),
+    );
+    html.push_str("<table><thead><tr><th>Category</th><th>Path</th><th>Source</th><th>Target</th><th>Status</th></tr></thead><tbody>");
+    for item in optional["items"].as_array().into_iter().flatten() {
+        let path = item["path"].as_str().unwrap_or("");
+        let source = item["source"].as_str().unwrap_or("");
+        let id = id_for_path(path);
+        let staged = staged_edit_for_pane(language, target, overlay, path, source);
+        let value = staged
+            .as_ref()
+            .and_then(|edit| edit["value"].as_str())
+            .or_else(|| item["target"].as_str())
+            .unwrap_or(source);
+        let status = staged
+            .as_ref()
+            .map(|_| "staged_direct".to_owned())
+            .unwrap_or_else(|| item["status"].as_str().unwrap_or("unknown").to_owned());
+        let warning = item["warning"].as_str().unwrap_or("");
+        html.push_str(&format!(
+            "<tr class=\"optional-metadata-row\" data-path=\"{}\" data-source=\"{}\"><td>{}</td><td>{}</td><td>{}</td><td><input id=\"optional-translation-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\"></td><td id=\"optional-status-{}\">{} {}</td></tr>",
+            escape_html(path),
+            escape_html(source),
+            escape_html(item["metadata_category"].as_str().unwrap_or("metadata")),
+            escape_html(path),
+            escape_html(source),
+            id,
+            escape_html(value),
+            escape_html(path),
+            escape_html(source),
+            id,
+            escape_html(&status),
+            escape_html(warning),
+        ));
+    }
+    html.push_str("</tbody></table></section>");
+    panel.set_inner_html(&html);
+    register_optional_metadata_handlers(optional);
+    let target_writable = checkbox_checked(&document, "target-pane-writable");
+    apply_pane_writability(
+        checkbox_checked(&document, "source-pane-writable"),
+        target_writable,
+    );
+    update_staged_count(&prefix);
+}
+
+#[cfg(target_arch = "wasm32")]
 fn css_escape(input: &str) -> String {
     input.replace('\\', "\\\\").replace('"', "\\\"")
 }
@@ -1566,7 +1666,7 @@ fn apply_pane_writability(source_writable: bool, target_writable: bool) {
     );
     set_controls_disabled(
         &document,
-        "input[id^='translation-input-'], select[id^='translation-mode-'], input[id^='card-translation-input-'], select[id^='card-translation-mode-'], input[id^='source-string-direct-input'], button[id^='source-string-direct-stage'], button[id^='source-string-no-change'], input[id^='source-string-contextual-input-'], button[id^='source-string-contextual-stage-']",
+        "input[id^='translation-input-'], select[id^='translation-mode-'], input[id^='card-translation-input-'], select[id^='card-translation-mode-'], input[id^='optional-translation-input-'], input[id^='source-string-direct-input'], button[id^='source-string-direct-stage'], button[id^='source-string-no-change'], input[id^='source-string-contextual-input-'], button[id^='source-string-contextual-stage-']",
         !target_writable,
     );
 }
@@ -2225,6 +2325,87 @@ fn register_field_handlers(pivot: &Value) {
 }
 
 #[cfg(target_arch = "wasm32")]
+fn register_optional_metadata_handlers(optional: &Value) {
+    let language = optional["language"]["code"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
+    let target = optional["target"]["label"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
+    let overlay = optional["overlay"]["label"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
+    for item in optional["items"].as_array().into_iter().flatten() {
+        let path = item["path"].as_str().unwrap_or("").to_owned();
+        let source = item["source"].as_str().unwrap_or("").to_owned();
+        let id = id_for_path(&path);
+        attach_optional_metadata_handler(
+            language.clone(),
+            target.clone(),
+            overlay.clone(),
+            id,
+            path,
+            source,
+        );
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_optional_metadata_handler(
+    language: String,
+    target: String,
+    overlay: String,
+    id: String,
+    path: String,
+    source: String,
+) {
+    let input_id = format!("optional-translation-input-{id}");
+    let status_id = format!("optional-status-{id}");
+    let prefix = storage_prefix_for_parts(&language, &target, &overlay);
+    let key = format!("{prefix}translation::{path}::{source}");
+    let closure_input_id = input_id.clone();
+    let closure_status_id = status_id.clone();
+    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+            return;
+        };
+        let Some(input) = document
+            .get_element_by_id(&closure_input_id)
+            .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+        else {
+            return;
+        };
+        let edit = serde_json::json!({
+            "kind": "translation",
+            "path": path.clone(),
+            "source": source.clone(),
+            "value": input.value(),
+            "mode": "direct",
+            "language": language.clone(),
+            "target": target.clone(),
+            "overlay": overlay.clone(),
+        });
+        if let Some(storage) = local_storage() {
+            let _ = storage.set_item(&key, &edit.to_string());
+        }
+        if let Some(status) = document.get_element_by_id(&closure_status_id) {
+            status.set_text_content(Some("staged_direct"));
+        }
+        update_staged_count(&prefix);
+    }));
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id(&input_id))
+    {
+        let _ = element.add_event_listener_with_callback("input", closure.as_ref().unchecked_ref());
+    }
+    closure.forget();
+}
+
+#[cfg(target_arch = "wasm32")]
 fn attach_stage_handler(
     pivot: &Value,
     id: &str,
@@ -2573,7 +2754,7 @@ fn refresh_progress_from_dom() {
         let _ = progress.set_attribute("data-complete", &complete.to_string());
         let _ = progress.set_attribute("data-missing", &missing.to_string());
         progress.set_inner_html(&format!(
-            "Progress: {complete} / {total} complete, {missing} missing, {stale} stale (<span id=\"staged-edit-count\" data-count=\"{staged}\">{staged}</span> staged)"
+            "Main note-field progress: {complete} / {total} complete, {missing} missing, {stale} stale (<span id=\"staged-edit-count\" data-count=\"{staged}\">{staged}</span> staged)"
         ));
     }
 }
@@ -2948,6 +3129,16 @@ async fn fetch_comparison_pane_query(
 ) -> Result<Value, String> {
     let params = workbench_selection_params(language, target, overlay);
     get_workbench_json("/api/workbench/comparison-pane", params).await
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn fetch_optional_metadata_query(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+) -> Result<Value, String> {
+    let params = workbench_selection_params(language, target, overlay);
+    get_workbench_json("/api/workbench/optional-metadata", params).await
 }
 
 #[cfg(target_arch = "wasm32")]
