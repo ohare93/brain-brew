@@ -42,3 +42,14 @@ devenv shell e2e
 ```
 
 The E2E harness lives in `crates/brain-brew-workbench-e2e`, uses Rust `thirtyfour` with devenv-provided Chromium/chromedriver, and writes failure screenshots/logs under `target/workbench-e2e-artifacts` by default. `devenv shell ci` includes this E2E gate; `devenv shell test` remains the faster non-browser Rust suite.
+
+## Note pivot translation slice
+
+The first workbench slice exposes target-translation editing only:
+
+- `GET /api/workbench/note-pivot` returns the selected target language, target, translation overlay, main note-field progress, note rows, field statuses, occurrence counts, and near-Anki source/target previews.
+- `POST /api/workbench/apply-preview` accepts browser-local staged edits and returns changed entries, affected overlay files, and validation results without writing YAML.
+- `POST /api/workbench/apply` repeats validation and rewrites the selected Translation Overlay as canonical YAML.
+- Browser-local staged edits are stored in localStorage until Apply, so refresh keeps unsaved target translations while canonical YAML remains unchanged.
+
+Source edits, stale-record creation, new language scaffolding, and richer pivots are later slices.

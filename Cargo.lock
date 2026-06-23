@@ -459,6 +459,8 @@ dependencies = [
  "gloo-net",
  "iced",
  "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 
@@ -474,6 +476,7 @@ dependencies = [
  "flate2",
  "include_dir",
  "nix-nar",
+ "serde",
  "serde_json",
  "sha2",
  "tar",

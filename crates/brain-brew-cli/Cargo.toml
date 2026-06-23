@@ -26,6 +26,7 @@ include_dir = "0.7"
 nix-nar = "0.4"
 brain-brew-core.workspace = true
 brain-brew-formats.workspace = true
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 tar = "0.4"

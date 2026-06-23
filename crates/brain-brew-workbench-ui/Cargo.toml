@@ -19,7 +19,9 @@ serde_json = "1"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 gloo-net = { version = "0.6", features = ["http"] }
 iced = { version = "0.14", default-features = false, features = ["fira-sans", "tiny-skia", "web-colors", "webgl"] }
-web-sys = { version = "0.3", features = ["Document", "Element", "Window"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["Document", "Element", "Event", "EventTarget", "HtmlInputElement", "HtmlSelectElement", "Node", "NodeList", "Storage", "Window"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 iced = "0.14"

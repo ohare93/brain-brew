@@ -205,6 +205,191 @@ fn workbench_serve_uses_available_port_and_embedded_assets_by_default() {
 }
 
 #[test]
+fn workbench_note_pivot_exposes_target_translation_data_and_media() {
+    let dir = temp_dir("workbench-note-pivot");
+    write_workbench_workspace(&dir);
+    fs::create_dir_all(dir.join("media/flags")).unwrap();
+    fs::write(dir.join("media/flags/fi.png"), b"png").unwrap();
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let pivot = get_json(&server.url("/api/workbench/note-pivot?language=da&target=standard"));
+    assert_eq!(pivot["language"]["code"], "da");
+    assert_eq!(pivot["target"]["id"], "da-standard");
+    assert_eq!(pivot["overlay"]["id"], "overlay.translation.da");
+    assert_eq!(pivot["selection_options"]["languages"][0]["code"], "da");
+    assert_eq!(
+        pivot["selection_options"]["targets"][0]["label"],
+        "standard"
+    );
+    assert_eq!(pivot["selection_options"]["overlays"][0]["label"], "base");
+    assert_eq!(pivot["progress"]["total"], 2);
+    assert_eq!(pivot["progress"]["complete"], 1);
+    assert_eq!(pivot["progress"]["missing"], 1);
+    assert_eq!(pivot["overlay_badges"][0]["label"], "base");
+    let note = &pivot["notes"][0];
+    assert_eq!(note["note_id"], "note.finland");
+    assert!(
+        note["source_preview"]["cards"][0]["question_html"]
+            .as_str()
+            .unwrap()
+            .contains("Finland")
+    );
+    assert!(
+        note["source_preview"]["cards"][0]["answer_html"]
+            .as_str()
+            .unwrap()
+            .contains("Helsinki")
+    );
+    let capital = note["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["field_id"] == "field.capital")
+        .unwrap();
+    assert_eq!(capital["status"], "untranslated_fallback");
+    assert_eq!(capital["occurrence_count"], 1);
+    assert_eq!(capital["controls"][0], "direct");
+    let flag = note["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["field_id"] == "field.flag")
+        .unwrap();
+    assert_eq!(flag["structural"], true);
+    assert_eq!(flag["editable"], false);
+
+    let missing = get_json(&server.url("/api/workbench/note-pivot?language=da&filter=missing"));
+    assert_eq!(missing["notes"].as_array().unwrap().len(), 1);
+
+    let media = ureq::get(&server.url("/api/media/flags/fi.png"))
+        .call()
+        .expect("GET declared media succeeds");
+    assert_eq!(media.status(), 200);
+    assert_eq!(
+        media.header("content-type").unwrap_or_default(),
+        "image/png"
+    );
+}
+
+#[test]
+fn workbench_apply_preview_and_apply_write_translation_overlay() {
+    let dir = temp_dir("workbench-apply");
+    write_workbench_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+    let request = serde_json::json!({
+        "language": "da",
+        "target": "standard",
+        "overlay": "base",
+        "edits": [{
+            "path": "notes.note.finland.fields.field.capital",
+            "source": "Helsinki",
+            "value": "Helsingfors",
+            "mode": "direct"
+        }]
+    });
+
+    let rejected = ureq::post(&server.url("/api/workbench/apply-preview"))
+        .set("content-type", "application/json")
+        .send_string(
+            &serde_json::json!({
+                "language": "da",
+                "target": "standard",
+                "overlay": "base",
+                "edits": [{
+                    "path": "notes.note.finland.fields.field.capital",
+                    "source": "Bogus",
+                    "value": "Stale",
+                    "mode": "direct"
+                }]
+            })
+            .to_string(),
+        )
+        .expect_err("stale staged source is rejected");
+    match rejected {
+        ureq::Error::Status(status, response) => {
+            assert_eq!(status, 400);
+            assert!(response.into_string().unwrap().contains("invalid source"));
+        }
+        other => panic!("unexpected stale-source error: {other}"),
+    }
+
+    let contextual_preview = post_json(
+        &server.url("/api/workbench/apply-preview"),
+        serde_json::json!({
+            "language": "da",
+            "target": "standard",
+            "overlay": "base",
+            "edits": [{
+                "path": "notes.note.finland.fields.field.capital",
+                "source": "Helsinki",
+                "value": "Helsingfors",
+                "mode": "contextual"
+            }]
+        }),
+    );
+    assert_eq!(contextual_preview["validation"]["ok"], true);
+    assert_eq!(
+        contextual_preview["changed_entries"][0]["path"],
+        "notes.note.finland"
+    );
+    assert_eq!(
+        contextual_preview["changed_entries"][0]["field_path"],
+        "notes.note.finland.fields.field.capital"
+    );
+    assert!(
+        !fs::read_to_string(dir.join("da.yaml"))
+            .unwrap()
+            .contains("contextual")
+    );
+
+    let preview = post_json(&server.url("/api/workbench/apply-preview"), request.clone());
+    assert_eq!(preview["mode"], "preview");
+    assert_eq!(preview["applied"], false);
+    assert_eq!(preview["validation"]["ok"], true);
+    assert_eq!(preview["affected_files"][0]["path"], "da.yaml");
+    assert_eq!(preview["changed_entries"][0]["source"], "Helsinki");
+    assert!(
+        !fs::read_to_string(dir.join("da.yaml"))
+            .unwrap()
+            .contains("Helsingfors")
+    );
+
+    let applied = post_json(&server.url("/api/workbench/apply"), request);
+    assert_eq!(applied["mode"], "write");
+    assert_eq!(applied["applied"], true);
+    let overlay = fs::read_to_string(dir.join("da.yaml")).unwrap();
+    assert!(overlay.contains("Helsinki: Helsingfors"));
+
+    let pivot = get_json(&server.url("/api/workbench/note-pivot?language=da&target=standard"));
+    assert_eq!(pivot["progress"]["complete"], 2);
+    let capital = pivot["notes"][0]["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["field_id"] == "field.capital")
+        .unwrap()
+        .clone();
+    assert_eq!(capital["target"], "Helsingfors");
+    assert_eq!(capital["status"], "direct_translation");
+}
+
+#[test]
 fn workbench_serve_can_use_dev_asset_directory() {
     let dir = temp_dir("workbench-dev-assets");
     write_workbench_workspace(&dir);
@@ -2730,6 +2915,15 @@ fn spawn_workbench_server<const N: usize>(args: [&str; N]) -> RunningWorkbenchSe
 
 fn get_json(url: &str) -> serde_json::Value {
     let response = ureq::get(url).call().expect("GET succeeds");
+    assert_eq!(response.status(), 200);
+    serde_json::from_str(&response.into_string().unwrap()).expect("response is JSON")
+}
+
+fn post_json(url: &str, body: serde_json::Value) -> serde_json::Value {
+    let response = ureq::post(url)
+        .set("content-type", "application/json")
+        .send_string(&body.to_string())
+        .expect("POST succeeds");
     assert_eq!(response.status(), 200);
     serde_json::from_str(&response.into_string().unwrap()).expect("response is JSON")
 }
