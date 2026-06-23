@@ -97,22 +97,24 @@ notes:
   note.finland:
     fields:
       field.flag-similarity:
-        message:
-          - ref: notes.note.iceland.fields.field.country
-          - literal: ' ('
-          - text: blue background with a white cross
-          - literal: '), '
-          - ref: notes.note.norway.fields.field.country
-          - literal: ' ('
-          - text: red background with a blue cross
-          - literal: ')'
+        format: '{country_1} ({description_1}), {country_2} ({description_2})'
+        variables:
+          country_1:
+            ref: notes.note.iceland.fields.field.country
+          description_1:
+            text: blue background with a white cross
+          country_2:
+            ref: notes.note.norway.fields.field.country
+          description_2:
+            text: red background with a blue cross
 ```
 
-Components mean:
+Message variables mean:
 
+- `format` is inline at the usage site and renders `{variable}` placeholders. It is not required for translation coverage by default, but it can be translated directly or contextually when a target language needs different glue, ordering, spacing, or separators;
 - `ref` points at another note field and can reuse that field's existing translation, such as a country-name entry in `translations.direct`;
-- `text` is an editable translatable fragment and appears in translation coverage at a component path such as `notes.note.finland.fields.field.flag-similarity.message.2`;
-- `literal` is non-translatable glue for punctuation, spaces, or markup.
+- `text` is an editable translatable fragment and appears in translation coverage at a named component path such as `notes.note.finland.fields.field.flag-similarity.message.variables.description_1`;
+- `literal` can still be used for a named non-translatable variable, but punctuation and separators usually belong in `format`.
 
 Translation overlay:
 
@@ -123,8 +125,16 @@ translations:
     Norway: Norge
     red background with a blue cross: rød bakgrunn med blått kors
   contextual:
-    notes.note.finland:
+    notes.note.finland.fields.field.flag-similarity.message.variables.description_1:
       blue background with a white cross: blå bakgrunn med hvitt kors
+```
+
+If the target language needs different glue for this field shape, translate the format string instead of overriding the whole rendered field:
+
+```yaml
+translations:
+  direct:
+    '{country_1} ({description_1}), {country_2} ({description_2})': '{country_1}({description_1})、{country_2}({description_2})'
 ```
 
 The resolved field exported to Anki is still a plain string:

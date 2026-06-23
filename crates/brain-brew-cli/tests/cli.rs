@@ -1047,7 +1047,7 @@ fn translations_context_view_wraps_long_ug_flag_similarity_context() {
         "overlay.translation.es",
         "--context",
         "--source",
-        "Iceland (blue background",
+        "blue background, red and white cross",
     ]);
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -1056,7 +1056,8 @@ fn translations_context_view_wraps_long_ug_flag_similarity_context() {
     assert!(out.contains("field: field.flag-similarity (Flag similarity)"));
     assert!(out.contains("template.flag-country [answer]"));
     assert!(out.contains("Iceland (blue background,"));
-    assert!(out.contains("Noruega (fondo rojo, cruz"));
+    assert!(out.contains("Islandia (fondo azul,"));
+    assert!(out.contains("Noruega"));
 }
 
 #[test]
@@ -1297,7 +1298,7 @@ fn translations_default_report_focuses_on_translatable_note_text() {
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let out = stdout(&output);
     assert!(out.contains("missing text translations: 0"));
-    assert!(out.contains("intentionally unchanged text: 306"));
+    assert!(out.contains("intentionally unchanged text: 329"));
     assert!(out.contains("hidden structural/media/tag fallbacks:"));
     assert!(out.contains("hint: use --full"));
     assert!(!out.contains("deck.description source="));

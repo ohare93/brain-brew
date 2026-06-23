@@ -162,6 +162,79 @@ tombstones: []
 }
 
 #[test]
+fn parses_formats_and_resolves_formatted_structured_message_fields() {
+    let yaml = r#"deck:
+  id: deck.message-format
+  name: Message Format
+  description: ''
+  adapter_ids: {}
+note_types:
+  note-type.country:
+    name: Country
+    field_order:
+      - field.country
+      - field.flag-similarity
+    fields:
+      field.country:
+        name: Country
+      field.flag-similarity:
+        name: Flag similarity
+    card_template_order: []
+    card_templates: {}
+    styling: ''
+    adapter_ids: {}
+notes:
+  note.finland:
+    note_type_id: note-type.country
+    fields:
+      field.country: Finland
+      field.flag-similarity:
+        format: '{country} ({description})'
+        variables:
+          country:
+            ref: notes.note.iceland.fields.field.country
+          description:
+            text: blue background with a white cross
+    tags: []
+    adapter_ids: {}
+  note.iceland:
+    note_type_id: note-type.country
+    fields:
+      field.country: Iceland
+      field.flag-similarity: ''
+    tags: []
+    adapter_ids: {}
+media: {}
+tombstones: []
+"#;
+
+    let deck = canonical_yaml::from_str(yaml).expect("formatted structured message yaml parses");
+
+    assert_eq!(
+        deck.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
+        "Iceland (blue background with a white cross)"
+    );
+    let message = &deck.notes[&sid("note.finland")].field_messages[&sid("field.flag-similarity")];
+    assert_eq!(message.format.as_deref(), Some("{country} ({description})"));
+    assert!(message.variables.contains_key("description"));
+
+    let formatted = canonical_yaml::to_string(&deck).expect("formatted message emits");
+    assert!(
+        formatted.contains("field.flag-similarity:\n        format: '{country} ({description})'")
+    );
+    assert!(
+        formatted.contains(
+            "          country:\n            ref: notes.note.iceland.fields.field.country"
+        )
+    );
+    assert!(
+        formatted.contains(
+            "          description:\n            text: blue background with a white cross"
+        )
+    );
+}
+
+#[test]
 fn translation_dictionary_overlay_translates_variables_fields_and_adapter_ids() {
     let deck = canonical_yaml::from_str(
         r#"deck:

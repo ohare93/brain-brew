@@ -1759,8 +1759,19 @@ fn context_unit_json(unit: &TranslationContextUnit) -> serde_json::Value {
         "message": unit.message.as_ref().map(|message| json!({
             "source": message.source,
             "translated": message.translated,
+            "format": message.format.as_ref().map(|component| json!({
+                "index": component.index,
+                "name": component.name,
+                "kind": component.kind.as_str(),
+                "path": component.path,
+                "source": component.source,
+                "translated": component.translated,
+                "reference": component.reference,
+                "status": component.category.map(|category| category.as_str()),
+            })),
             "components": message.components.iter().map(|component| json!({
                 "index": component.index,
+                "name": component.name,
                 "kind": component.kind.as_str(),
                 "path": component.path,
                 "source": component.source,
@@ -1905,15 +1916,24 @@ fn print_message_context(message: &TranslationMessageContext, language: &str) {
         compact_context_value(&message.source),
         compact_context_value(&message.translated)
     );
+    if let Some(format) = &message.format {
+        println!(
+            "      {:<32} {} | {}",
+            "format",
+            compact_context_value(&format.source),
+            compact_context_value(&format.translated)
+        );
+    }
     for component in &message.components {
+        let label_prefix = component
+            .name
+            .as_deref()
+            .map_or_else(|| format!("[{}]", component.index), ToOwned::to_owned);
         let label = match component.reference.as_deref() {
-            Some(reference) => format!(
-                "[{}] {} {}",
-                component.index,
-                component.kind.as_str(),
-                reference
-            ),
-            None => format!("[{}] {}", component.index, component.kind.as_str()),
+            Some(reference) => {
+                format!("{} {} {}", label_prefix, component.kind.as_str(), reference)
+            }
+            None => format!("{} {}", label_prefix, component.kind.as_str()),
         };
         println!(
             "      {:<32} {} | {}",

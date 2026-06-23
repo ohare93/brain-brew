@@ -819,13 +819,15 @@ fn translation_dictionary_resolves_structured_message_components() {
         .expect("translation overlay has coverage");
     assert!(report.entries.iter().any(|entry| {
         entry.category == TranslationCoverageCategory::DirectTranslation
-            && entry.path == "notes.note.finland.fields.field.flag-similarity.message.0"
+            && entry.path
+                == "notes.note.finland.fields.field.flag-similarity.message.variables.country_1"
             && entry.source == "Iceland"
             && entry.translated.as_deref() == Some("Island")
     }));
     assert!(report.entries.iter().any(|entry| {
         entry.category == TranslationCoverageCategory::ContextualOverride
-            && entry.path == "notes.note.finland.fields.field.flag-similarity.message.2"
+            && entry.path
+                == "notes.note.finland.fields.field.flag-similarity.message.variables.description_1"
             && entry.source == "blue background with a white cross"
             && entry.translated.as_deref() == Some("blå bakgrunn med hvitt kors")
     }));
@@ -835,6 +837,68 @@ fn translation_dictionary_resolves_structured_message_components() {
     assert_eq!(
         resolved.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
         "Island (blå bakgrunn med hvitt kors), Norge (rød bakgrunn med blått kors)"
+    );
+}
+
+#[test]
+fn translation_dictionary_can_translate_structured_message_format() {
+    let base = ug_style_deck_with_flag_similarity_message();
+    let format_source = "{country_1} ({description_1}), {country_2} ({description_2})";
+    let overlay = Overlay {
+        id: sid("overlay.translation.zh"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::from([
+                ("Iceland".to_owned(), "冰岛".to_owned()),
+                ("Norway".to_owned(), "挪威".to_owned()),
+                (
+                    format_source.to_owned(),
+                    "{country_1}({description_1})、{country_2}({description_2})".to_owned(),
+                ),
+                (
+                    "blue background with a white cross".to_owned(),
+                    "蓝底白十字".to_owned(),
+                ),
+                (
+                    "red background with a blue cross".to_owned(),
+                    "红底蓝十字".to_owned(),
+                ),
+            ]),
+            contextual: BTreeMap::new(),
+            no_change: BTreeSet::new(),
+            target_additions: BTreeMap::new(),
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            require_complete: true,
+            ignore_paths: BTreeSet::from([
+                "deck.*".to_owned(),
+                "note_types.*".to_owned(),
+                "notes.*.fields.field.country".to_owned(),
+                "notes.*.fields.field.capital".to_owned(),
+                "notes.*.fields.field.flag".to_owned(),
+                "notes.*.tags.*".to_owned(),
+            ]),
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let report = base
+        .translation_coverage(&overlay)
+        .expect("translation overlay has coverage");
+    assert!(report.entries.iter().any(|entry| {
+        entry.category == TranslationCoverageCategory::DirectTranslation
+            && entry.path == "notes.note.finland.fields.field.flag-similarity.message.format"
+            && entry.source == format_source
+    }));
+
+    let resolved = base.compose(&[overlay]).expect("translations compose");
+
+    assert_eq!(
+        resolved.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
+        "冰岛(蓝底白十字)、挪威(红底蓝十字)"
     );
 }
 
@@ -930,7 +994,8 @@ fn translation_dictionary_reports_structured_message_missing_and_stale_component
         .expect("translation overlay has coverage");
     assert!(report.entries.iter().any(|entry| {
         entry.category == TranslationCoverageCategory::UntranslatedFallback
-            && entry.path == "notes.note.finland.fields.field.flag-similarity.message.2"
+            && entry.path
+                == "notes.note.finland.fields.field.flag-similarity.message.variables.description_1"
             && entry.source == "blue background with a white cross"
     }));
     assert!(report.entries.iter().any(|entry| {
@@ -943,7 +1008,8 @@ fn translation_dictionary_reports_structured_message_missing_and_stale_component
         .expect_err("strict structured message components fail");
     assert!(report.errors.iter().any(|error| {
         error.kind == ComposeErrorKind::MissingTranslation
-            && error.path == "notes.note.finland.fields.field.flag-similarity.message.2"
+            && error.path
+                == "notes.note.finland.fields.field.flag-similarity.message.variables.description_1"
             && error
                 .message
                 .contains("missing direct or contextual translation")
@@ -1570,16 +1636,28 @@ fn ug_style_deck_with_flag_similarity_message() -> CanonicalDeck {
     finland.field_messages.insert(
         sid("field.flag-similarity"),
         StructuredMessage {
-            components: vec![
-                MessageComponent::FieldRef("notes.note.iceland.fields.field.country".to_owned()),
-                MessageComponent::Literal(" (".to_owned()),
-                MessageComponent::Text("blue background with a white cross".to_owned()),
-                MessageComponent::Literal("), ".to_owned()),
-                MessageComponent::FieldRef("notes.note.norway.fields.field.country".to_owned()),
-                MessageComponent::Literal(" (".to_owned()),
-                MessageComponent::Text("red background with a blue cross".to_owned()),
-                MessageComponent::Literal(")".to_owned()),
-            ],
+            components: Vec::new(),
+            format: Some("{country_1} ({description_1}), {country_2} ({description_2})".to_owned()),
+            variables: BTreeMap::from([
+                (
+                    "country_1".to_owned(),
+                    MessageComponent::FieldRef(
+                        "notes.note.iceland.fields.field.country".to_owned(),
+                    ),
+                ),
+                (
+                    "description_1".to_owned(),
+                    MessageComponent::Text("blue background with a white cross".to_owned()),
+                ),
+                (
+                    "country_2".to_owned(),
+                    MessageComponent::FieldRef("notes.note.norway.fields.field.country".to_owned()),
+                ),
+                (
+                    "description_2".to_owned(),
+                    MessageComponent::Text("red background with a blue cross".to_owned()),
+                ),
+            ]),
         },
     );
     deck.resolve_structured_messages()

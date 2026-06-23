@@ -788,8 +788,7 @@ fn write_field_change(out: &mut String, indent: &str, field_id: &StableId, chang
         write_multiline_or_scalar(out, &format!("{indent}  "), "value", value);
     }
     if let Some(message) = &change.message {
-        writeln!(out, "{indent}  message:").expect("writing to a string cannot fail");
-        write_message_components(out, &format!("{indent}    "), message);
+        write_structured_message_value(out, &format!("{indent}  "), message);
     }
     if let Some(expected_base) = &change.expected_base {
         write_expected_base(out, &format!("{indent}  "), expected_base);
@@ -875,25 +874,49 @@ fn write_structured_message_field(
     message: &StructuredMessage,
 ) {
     writeln!(out, "{indent}{field_id}:").expect("writing to a string cannot fail");
-    writeln!(out, "{indent}  message:").expect("writing to a string cannot fail");
-    write_message_components(out, &format!("{indent}    "), message);
+    write_structured_message_value(out, &format!("{indent}  "), message);
+}
+
+fn write_structured_message_value(out: &mut String, indent: &str, message: &StructuredMessage) {
+    if let Some(format) = &message.format {
+        writeln!(out, "{indent}format: {}", yaml_scalar(format))
+            .expect("writing to a string cannot fail");
+        writeln!(out, "{indent}variables:").expect("writing to a string cannot fail");
+        for (name, component) in &message.variables {
+            writeln!(out, "{indent}  {name}:").expect("writing to a string cannot fail");
+            write_message_component(out, &format!("{indent}    "), component, false);
+        }
+    } else {
+        writeln!(out, "{indent}message:").expect("writing to a string cannot fail");
+        write_message_components(out, &format!("{indent}  "), message);
+    }
 }
 
 fn write_message_components(out: &mut String, indent: &str, message: &StructuredMessage) {
     for component in &message.components {
-        match component {
-            MessageComponent::Literal(value) => {
-                writeln!(out, "{indent}- literal: {}", yaml_scalar(value))
-                    .expect("writing to a string cannot fail");
-            }
-            MessageComponent::Text(value) => {
-                writeln!(out, "{indent}- text: {}", yaml_scalar(value))
-                    .expect("writing to a string cannot fail");
-            }
-            MessageComponent::FieldRef(reference) => {
-                writeln!(out, "{indent}- ref: {}", yaml_scalar(reference))
-                    .expect("writing to a string cannot fail");
-            }
+        write_message_component(out, indent, component, true);
+    }
+}
+
+fn write_message_component(
+    out: &mut String,
+    indent: &str,
+    component: &MessageComponent,
+    list: bool,
+) {
+    let prefix = if list { "- " } else { "" };
+    match component {
+        MessageComponent::Literal(value) => {
+            writeln!(out, "{indent}{prefix}literal: {}", yaml_scalar(value))
+                .expect("writing to a string cannot fail");
+        }
+        MessageComponent::Text(value) => {
+            writeln!(out, "{indent}{prefix}text: {}", yaml_scalar(value))
+                .expect("writing to a string cannot fail");
+        }
+        MessageComponent::FieldRef(reference) => {
+            writeln!(out, "{indent}{prefix}ref: {}", yaml_scalar(reference))
+                .expect("writing to a string cannot fail");
         }
     }
 }
@@ -1219,6 +1242,9 @@ fn apply_field_fills(
             }
             let (value, message) = match value {
                 FieldValueYaml::Scalar(value) => (Some(value), None),
+                FieldValueYaml::Formatted(message) => {
+                    (None, Some(message.into_structured_message()))
+                }
                 FieldValueYaml::Message(message) => (None, Some(message.into_structured_message())),
             };
             note_change.fields.insert(
@@ -1686,17 +1712,31 @@ struct FieldChangeYaml {
     #[serde(default)]
     message: Option<Vec<MessageComponentYaml>>,
     #[serde(default)]
+    format: Option<String>,
+    #[serde(default)]
+    variables: BTreeMap<String, MessageComponentYaml>,
+    #[serde(default)]
     expected_base: Option<ExpectedBaseYaml>,
 }
 
 impl FieldChangeYaml {
     fn into_field_change(self) -> Result<FieldChange, CanonicalYamlError> {
+        let message = if let Some(format) = self.format {
+            Some(
+                FormattedMessageYaml {
+                    format,
+                    variables: self.variables,
+                }
+                .into_structured_message(),
+            )
+        } else {
+            self.message
+                .map(|message| ComponentMessageYaml { message }.into_structured_message())
+        };
         Ok(FieldChange {
             intent: parse_change_intent(&self.intent)?,
             value: self.value,
-            message: self
-                .message
-                .map(|message| FieldMessageYaml { message }.into_structured_message()),
+            message,
             expected_base: self
                 .expected_base
                 .map(ExpectedBaseYaml::into_expected_base)
@@ -1951,6 +1991,10 @@ impl NoteYaml {
                 FieldValueYaml::Scalar(value) => {
                     fields.insert(field_id, value);
                 }
+                FieldValueYaml::Formatted(message) => {
+                    fields.insert(field_id.clone(), String::new());
+                    field_messages.insert(field_id, message.into_structured_message());
+                }
                 FieldValueYaml::Message(message) => {
                     fields.insert(field_id.clone(), String::new());
                     field_messages.insert(field_id, message.into_structured_message());
@@ -1973,22 +2017,46 @@ impl NoteYaml {
 #[serde(untagged)]
 enum FieldValueYaml {
     Scalar(String),
-    Message(FieldMessageYaml),
+    Formatted(FormattedMessageYaml),
+    Message(ComponentMessageYaml),
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct FieldMessageYaml {
+struct ComponentMessageYaml {
     message: Vec<MessageComponentYaml>,
 }
 
-impl FieldMessageYaml {
+impl ComponentMessageYaml {
     fn into_structured_message(self) -> StructuredMessage {
         StructuredMessage {
             components: self
                 .message
                 .into_iter()
                 .map(MessageComponentYaml::into_component)
+                .collect(),
+            format: None,
+            variables: BTreeMap::new(),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FormattedMessageYaml {
+    format: String,
+    variables: BTreeMap<String, MessageComponentYaml>,
+}
+
+impl FormattedMessageYaml {
+    fn into_structured_message(self) -> StructuredMessage {
+        StructuredMessage {
+            components: Vec::new(),
+            format: Some(self.format),
+            variables: self
+                .variables
+                .into_iter()
+                .map(|(name, component)| (name, component.into_component()))
                 .collect(),
         }
     }

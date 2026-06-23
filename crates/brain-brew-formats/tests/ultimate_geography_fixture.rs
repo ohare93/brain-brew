@@ -83,9 +83,9 @@ fn ultimate_geography_fixture_uses_structured_messages_for_flag_similarity() {
     for relative_path in ["deck.yaml", "overlays/extensions/hardcore.yaml"] {
         let source = fs::read_to_string(root.join(relative_path)).unwrap();
         assert!(
-            source.contains("field.flag-similarity:\n        message:")
-                || source.contains("field.flag-similarity:\n          message:"),
-            "{relative_path} should use structured messages for non-empty flag similarity fields"
+            source.contains("field.flag-similarity:\n        format:")
+                || source.contains("field.flag-similarity:\n          format:"),
+            "{relative_path} should use inline formatted structured messages for non-empty flag similarity fields"
         );
         assert!(
             !source.lines().any(
@@ -94,6 +94,41 @@ fn ultimate_geography_fixture_uses_structured_messages_for_flag_similarity() {
             ),
             "{relative_path} should not keep long scalar flag similarity strings"
         );
+    }
+
+    let manifest = read_manifest(&root);
+    let flag_similarity_sources: BTreeSet<_> = ["en-standard", "en-hardcore-standard"]
+        .into_iter()
+        .flat_map(|target| {
+            let deck = compose_target(&root, &manifest, target);
+            deck.notes
+                .values()
+                .filter_map(|note| note.fields.get(&sid("field.flag-similarity")))
+                .filter(|value| !value.is_empty())
+                .cloned()
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+    for overlay_ref in manifest
+        .overlays
+        .values()
+        .filter(|overlay| overlay.kind.as_deref() == Some("translation"))
+    {
+        let overlay_path = root.join(&overlay_ref.file);
+        let overlay = read_overlay_file(&root, &overlay_path)
+            .unwrap_or_else(|error| panic!("{} parses: {error}", overlay_ref.file));
+        let translations = overlay
+            .translations
+            .as_ref()
+            .unwrap_or_else(|| panic!("{} uses translation dictionary", overlay_ref.file));
+        for source in &flag_similarity_sources {
+            assert!(
+                !translations.direct.contains_key(source),
+                "{} should translate structured flag-similarity components, not duplicate the full composite source key {source:?}",
+                overlay_ref.file
+            );
+        }
     }
 }
 

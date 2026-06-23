@@ -55,21 +55,33 @@ kind: personal    # learner/local source content
 
 ## Structured field messages
 
-Note fields are usually scalar strings. For genuinely composite text that should reuse existing translations, a field may use a structured `message` instead:
+Note fields are usually scalar strings. For genuinely composite text that should reuse existing translations, a field may use an inline `format` with named message variables:
 
 ```yaml
 notes:
   note.finland:
     fields:
       field.flag-similarity:
-        message:
-          - ref: notes.note.iceland.fields.field.country
-          - literal: ' ('
-          - text: blue background with a white cross
-          - literal: ')'
+        format: '{country} ({description})'
+        variables:
+          country:
+            ref: notes.note.iceland.fields.field.country
+          description:
+            text: blue background with a white cross
 ```
 
-`ref` resolves another note field before export, `text` is extracted for translation coverage, and `literal` is non-translatable glue. Adapter exports receive a plain resolved string.
+`format` renders `{variable}` placeholders and can itself be translated when a language needs different glue or ordering. `ref` resolves another note field before export, `text` is extracted for translation coverage at the named variable path, and `literal` is available for non-translatable named variables. Adapter exports receive a plain resolved string.
+
+The older positional component form remains accepted for simple cases:
+
+```yaml
+field.flag-similarity:
+  message:
+    - ref: notes.note.iceland.fields.field.country
+    - literal: ' ('
+    - text: blue background with a white cross
+    - literal: ')'
+```
 
 ## Translation dictionary
 
