@@ -43,13 +43,17 @@ devenv shell e2e
 
 The E2E harness lives in `crates/brain-brew-workbench-e2e`, uses Rust `thirtyfour` with devenv-provided Chromium/chromedriver, and writes failure screenshots/logs under `target/workbench-e2e-artifacts` by default. `devenv shell ci` includes this E2E gate; `devenv shell test` remains the faster non-browser Rust suite.
 
-## Note pivot translation slice
+## Note pivot editing slice
 
-The first workbench slice exposes target-translation editing only:
+The current note pivot supports target-translation edits and constrained source note-field edits:
 
-- `GET /api/workbench/note-pivot` returns the selected target language, target, translation overlay, main note-field progress, note rows, field statuses, occurrence counts, and near-Anki source/target previews.
-- `POST /api/workbench/apply-preview` accepts browser-local staged edits and returns changed entries, affected overlay files, and validation results without writing YAML.
-- `POST /api/workbench/apply` repeats validation and rewrites the selected Translation Overlay as canonical YAML.
-- Browser-local staged edits are stored in localStorage until Apply, so refresh keeps unsaved target translations while canonical YAML remains unchanged.
+- `GET /api/workbench/note-pivot` returns the selected target language, target, translation overlay, main note-field progress, note rows, field statuses, occurrence counts, source edit controls, and near-Anki source/target previews.
+- `POST /api/workbench/apply-preview` accepts browser-local staged edits and returns changed entries, affected source/overlay files, and validation results without writing YAML.
+- `POST /api/workbench/apply` repeats validation, applies source edits first, then applies target translation edits against the updated source state.
+- Target translation edits rewrite the selected Translation Overlay as canonical YAML.
+- Source note-field edits rewrite the Canonical Deck File, except `!include`-backed scalar fields rewrite the included file and keep the include reference intact.
+- Repeated source text edits default to the current field only. The browser UI shows the occurrence count and offers an all-occurrences scope.
+- Source edits default affected translations to Stale Translation Records. Maintainers can instead migrate the existing translation key to the new source while preserving target text.
+- Browser-local staged edits are stored in localStorage until Apply, so refresh keeps unsaved source and target edits while canonical YAML remains unchanged.
 
-Source edits, stale-record creation, new language scaffolding, and richer pivots are later slices.
+New language scaffolding and richer card/source-string pivots are later slices.

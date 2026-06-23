@@ -265,6 +265,7 @@ fn workbench_note_pivot_exposes_target_translation_data_and_media() {
         .unwrap();
     assert_eq!(flag["structural"], true);
     assert_eq!(flag["editable"], false);
+    assert_eq!(flag["source_editable"], true);
 
     let missing = get_json(&server.url("/api/workbench/note-pivot?language=da&filter=missing"));
     assert_eq!(missing["notes"].as_array().unwrap().len(), 1);
@@ -387,6 +388,312 @@ fn workbench_apply_preview_and_apply_write_translation_overlay() {
         .clone();
     assert_eq!(capital["target"], "Helsingfors");
     assert_eq!(capital["status"], "direct_translation");
+}
+
+#[test]
+fn workbench_source_edits_create_contextual_stale_records_for_changed_occurrence() {
+    let dir = temp_dir("workbench-source-stale");
+    write_workbench_repeated_source_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let request = serde_json::json!({
+        "language": "da",
+        "target": "standard",
+        "overlay": "base",
+        "edits": [{
+            "kind": "source",
+            "path": "notes.note.finland.fields.field.capital",
+            "source": "Shared capital",
+            "value": "Finnish capital",
+            "scope": "field",
+            "impact_action": "stale_record"
+        }]
+    });
+
+    let preview = post_json(&server.url("/api/workbench/apply-preview"), request.clone());
+    assert_eq!(preview["mode"], "preview");
+    assert_eq!(preview["applied"], false);
+    assert_eq!(preview["validation"]["ok"], true);
+    assert!(
+        preview["affected_files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|file| file["path"] == "deck.yaml")
+    );
+    assert!(
+        preview["affected_files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|file| file["path"] == "da.yaml")
+    );
+    assert!(
+        preview["changed_entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| {
+                entry["mode"] == "stale_record"
+                    && entry["old_source"] == "Shared capital"
+                    && entry["new_source"] == "Finnish capital"
+                    && entry["target"] == "Fælles hovedstad"
+                    && entry["context"] == "notes.note.finland"
+            })
+    );
+    assert!(
+        !fs::read_to_string(dir.join("deck.yaml"))
+            .unwrap()
+            .contains("Finnish capital")
+    );
+    assert!(
+        !fs::read_to_string(dir.join("da.yaml"))
+            .unwrap()
+            .contains("stale_records")
+    );
+
+    let applied = post_json(&server.url("/api/workbench/apply"), request);
+    assert_eq!(applied["mode"], "write");
+    assert_eq!(applied["applied"], true);
+    let deck = fs::read_to_string(dir.join("deck.yaml")).unwrap();
+    assert!(deck.contains("field.capital: Finnish capital"));
+    assert!(deck.contains("field.capital: Shared capital"));
+    let overlay = fs::read_to_string(dir.join("da.yaml")).unwrap();
+    assert!(overlay.contains("Shared capital:"));
+    assert!(overlay.contains("Fælles hovedstad"));
+    assert!(overlay.contains("stale_records:"));
+    assert!(overlay.contains("old_source: Shared capital"));
+    assert!(overlay.contains("new_source: Finnish capital"));
+    assert!(overlay.contains("target:"));
+    assert!(overlay.contains("context: notes.note.finland"));
+
+    let pivot = get_json(&server.url("/api/workbench/note-pivot?language=da&target=standard"));
+    let finland_capital = pivot["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|note| note["note_id"] == "note.finland")
+        .unwrap()["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["field_id"] == "field.capital")
+        .unwrap()
+        .clone();
+    assert_eq!(finland_capital["source"], "Finnish capital");
+    assert_eq!(finland_capital["target"], "Fælles hovedstad");
+    assert_eq!(finland_capital["status"], "stale_translation_record");
+    let estonia_capital = pivot["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|note| note["note_id"] == "note.estonia")
+        .unwrap()["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["field_id"] == "field.capital")
+        .unwrap()
+        .clone();
+    assert_eq!(estonia_capital["source"], "Shared capital");
+    assert_eq!(estonia_capital["status"], "direct_translation");
+}
+
+#[test]
+fn workbench_source_edits_preserve_contextual_impacts_per_occurrence() {
+    let dir = temp_dir("workbench-source-contextual-stale");
+    write_workbench_repeated_source_contextual_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+    let request = serde_json::json!({
+        "language": "da",
+        "target": "standard",
+        "overlay": "base",
+        "edits": [{
+            "kind": "source",
+            "path": "notes.note.finland.fields.field.capital",
+            "source": "Shared capital",
+            "value": "Regional capital",
+            "scope": "all_occurrences",
+            "impact_action": "stale_record"
+        }]
+    });
+
+    let applied = post_json(&server.url("/api/workbench/apply"), request);
+    assert_eq!(applied["validation"]["ok"], true);
+    let stale_entries = applied["changed_entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|entry| entry["mode"] == "stale_record")
+        .collect::<Vec<_>>();
+    assert_eq!(stale_entries.len(), 2);
+    assert!(stale_entries.iter().any(|entry| {
+        entry["context"] == "notes.note.finland" && entry["target"] == "Finsk fælles"
+    }));
+    assert!(stale_entries.iter().any(|entry| {
+        entry["context"] == "notes.note.estonia" && entry["target"] == "Estisk fælles"
+    }));
+    let overlay = fs::read_to_string(dir.join("da.yaml")).unwrap();
+    assert!(overlay.contains("stale_records:"));
+    assert!(overlay.contains("Finsk fælles"));
+    assert!(overlay.contains("Estisk fælles"));
+    assert!(!overlay.contains("contextual:"));
+
+    let dir = temp_dir("workbench-source-contextual-migrate");
+    write_workbench_repeated_source_contextual_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+    let request = serde_json::json!({
+        "language": "da",
+        "target": "standard",
+        "overlay": "base",
+        "edits": [{
+            "kind": "source",
+            "path": "notes.note.finland.fields.field.capital",
+            "source": "Shared capital",
+            "value": "Regional capital",
+            "scope": "all_occurrences",
+            "impact_action": "migrate_key"
+        }]
+    });
+
+    let applied = post_json(&server.url("/api/workbench/apply"), request);
+    assert_eq!(applied["validation"]["ok"], true);
+    let migrated_entries = applied["changed_entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|entry| entry["mode"] == "migrate_key")
+        .collect::<Vec<_>>();
+    assert_eq!(migrated_entries.len(), 2);
+    let overlay = fs::read_to_string(dir.join("da.yaml")).unwrap();
+    assert!(overlay.contains("Regional capital:"));
+    assert!(overlay.contains("Finsk fælles"));
+    assert!(overlay.contains("Estisk fælles"));
+    assert!(!overlay.contains("Shared capital:"));
+    assert!(!overlay.contains("stale_records"));
+}
+
+#[test]
+fn workbench_source_edits_can_migrate_keys_change_all_and_preserve_includes() {
+    let dir = temp_dir("workbench-source-migrate");
+    write_workbench_repeated_source_workspace(&dir);
+    fs::create_dir_all(dir.join("content")).unwrap();
+    fs::write(dir.join("content/finland-capital.txt"), "Shared capital").unwrap();
+    let deck = fs::read_to_string(dir.join("deck.yaml")).unwrap().replacen(
+        "field.capital: Shared capital",
+        "field.capital: !include content/finland-capital.txt",
+        1,
+    );
+    fs::write(dir.join("deck.yaml"), deck).unwrap();
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let request = serde_json::json!({
+        "language": "da",
+        "target": "standard",
+        "overlay": "base",
+        "edits": [{
+            "kind": "source",
+            "path": "notes.note.finland.fields.field.capital",
+            "source": "Shared capital",
+            "value": "Migrated capital",
+            "scope": "all_occurrences",
+            "impact_action": "migrate_key"
+        }]
+    });
+
+    let applied = post_json(&server.url("/api/workbench/apply"), request);
+    assert_eq!(applied["validation"]["ok"], true);
+    let deck = fs::read_to_string(dir.join("deck.yaml")).unwrap();
+    assert!(deck.contains("field.capital: !include content/finland-capital.txt"));
+    assert!(deck.contains("field.capital: Migrated capital"));
+    assert_eq!(
+        fs::read_to_string(dir.join("content/finland-capital.txt")).unwrap(),
+        "Migrated capital"
+    );
+    let overlay = fs::read_to_string(dir.join("da.yaml")).unwrap();
+    assert!(overlay.contains("Migrated capital:"));
+    assert!(overlay.contains("Fælles hovedstad"));
+    assert!(!overlay.contains("Shared capital:"));
+    assert!(!overlay.contains("stale_records"));
+}
+
+#[test]
+fn workbench_mixed_source_then_translation_apply_uses_new_source_state() {
+    let dir = temp_dir("workbench-source-mixed");
+    write_workbench_repeated_source_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let request = serde_json::json!({
+        "language": "da",
+        "target": "standard",
+        "overlay": "base",
+        "edits": [
+            {
+                "kind": "source",
+                "path": "notes.note.finland.fields.field.capital",
+                "source": "Shared capital",
+                "value": "Finnish capital",
+                "scope": "field",
+                "impact_action": "stale_record"
+            },
+            {
+                "kind": "translation",
+                "path": "notes.note.finland.fields.field.capital",
+                "source": "Finnish capital",
+                "value": "Finsk hovedstad",
+                "mode": "contextual"
+            }
+        ]
+    });
+
+    let applied = post_json(&server.url("/api/workbench/apply"), request);
+    assert_eq!(applied["validation"]["ok"], true);
+    let overlay = fs::read_to_string(dir.join("da.yaml")).unwrap();
+    assert!(overlay.contains("Shared capital:"));
+    assert!(overlay.contains("Fælles hovedstad"));
+    assert!(overlay.contains("Finnish capital:"));
+    assert!(overlay.contains("Finsk hovedstad"));
+    assert!(!overlay.contains("stale_records"));
 }
 
 #[test]
@@ -3116,16 +3423,115 @@ fn write_manifest_workspace(dir: &Path) {
 
 fn write_workbench_workspace(dir: &Path) {
     fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML).unwrap();
-    fs::write(
-        dir.join("da.yaml"),
+    write_workbench_manifest_and_overlay(
+        dir,
         r#"id: overlay.translation.da
 kind: translation
 translations:
   direct:
     Finland: Finland
 "#,
+    );
+}
+
+fn write_workbench_repeated_source_workspace(dir: &Path) {
+    write_workbench_repeated_source_deck(dir);
+    write_workbench_manifest_and_overlay(
+        dir,
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Estonia: Estland
+    Finland: Finland
+    Shared capital: Fælles hovedstad
+"#,
+    );
+}
+
+fn write_workbench_repeated_source_contextual_workspace(dir: &Path) {
+    write_workbench_repeated_source_deck(dir);
+    write_workbench_manifest_and_overlay(
+        dir,
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Estonia: Estland
+    Finland: Finland
+  contextual:
+    notes.note.estonia:
+      Shared capital: Estisk fælles
+    notes.note.finland:
+      Shared capital: Finsk fælles
+"#,
+    );
+}
+
+fn write_workbench_repeated_source_deck(dir: &Path) {
+    fs::write(
+        dir.join("deck.yaml"),
+        r#"deck:
+  id: deck.workbench-repeated-source
+  name: Workbench Repeated Source
+  description: A small source edit fixture.
+  adapter_ids:
+    crowdanki:uuid: repeated-source-deck-uuid
+note_types:
+  note-type.country:
+    name: Country
+    field_order:
+      - field.country
+      - field.capital
+      - field.flag
+    fields:
+      field.capital:
+        name: Capital
+      field.country:
+        name: Country
+      field.flag:
+        name: Flag
+    card_template_order:
+      - template.country-capital
+    card_templates:
+      template.country-capital:
+        name: Country - Capital
+        question_format: '{{Country}}'
+        answer_format: '{{FrontSide}}<hr id=answer>{{Capital}}'
+        adapter_ids: {}
+    styling: ''
+    adapter_ids:
+      crowdanki:uuid: repeated-source-note-type-uuid
+notes:
+  note.finland:
+    note_type_id: note-type.country
+    fields:
+      field.capital: Shared capital
+      field.country: Finland
+      field.flag: '<img src="fi.png">'
+    tags:
+      - Europe
+    adapter_ids:
+      crowdanki:guid: repeated-source-fi-guid
+  note.estonia:
+    note_type_id: note-type.country
+    fields:
+      field.capital: Shared capital
+      field.country: Estonia
+      field.flag: '<img src="ee.png">'
+    tags:
+      - Europe
+    adapter_ids:
+      crowdanki:guid: repeated-source-ee-guid
+media: {}
+tombstones: []
+"#,
     )
     .unwrap();
+}
+
+fn write_workbench_manifest_and_overlay(dir: &Path, overlay: &str) {
+    fs::write(dir.join("da.yaml"), overlay).unwrap();
     fs::write(
         dir.join("brainbrew.yaml"),
         r#"base: deck.yaml

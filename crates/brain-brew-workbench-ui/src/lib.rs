@@ -232,13 +232,13 @@ fn publish_workspace_probe(_status: &str, _message: &str, _workspace: Option<&Wo
 
 #[cfg(target_arch = "wasm32")]
 fn publish_note_pivot_error(message: &str) {
-    if let Some(document) = web_sys::window().and_then(|window| window.document()) {
-        if let Some(element) = document.get_element_by_id("workbench-dom-panel") {
-            element.set_inner_html(&format!(
-                "<section class=\"workbench-error\">{}</section>",
-                escape_html(message)
-            ));
-        }
+    if let Some(document) = web_sys::window().and_then(|window| window.document())
+        && let Some(element) = document.get_element_by_id("workbench-dom-panel")
+    {
+        element.set_inner_html(&format!(
+            "<section class=\"workbench-error\">{}</section>",
+            escape_html(message)
+        ));
     }
 }
 
@@ -429,36 +429,70 @@ fn note_html(pivot: &Value, note: &Value) -> String {
     html.push_str("</section><section><h4>Target preview</h4><div class=\"target-preview\">");
     html.push_str(&preview_html(&note["target_preview"]));
     html.push_str("</div></section></div>");
-    html.push_str("<table class=\"field-editor\"><thead><tr><th>Field</th><th>Source</th><th>Target / staged edit</th><th>Status</th><th>Occurrences</th><th>Mode</th></tr></thead><tbody>");
+    html.push_str("<table class=\"field-editor\"><thead><tr><th>Field</th><th>Source / staged source edit</th><th>Target / staged edit</th><th>Status</th><th>Occurrences</th><th>Mode</th></tr></thead><tbody>");
     for field in note["fields"].as_array().into_iter().flatten() {
         let path = field["path"].as_str().unwrap_or("");
         let source = field["source"].as_str().unwrap_or("");
         let staged = staged_edit_for(pivot, path, source);
+        let staged_source = staged_source_edit_for(pivot, path, source);
         let value = staged
             .as_ref()
             .and_then(|edit| edit["value"].as_str())
             .unwrap_or_else(|| field["target"].as_str().unwrap_or(""));
+        let source_value = staged_source
+            .as_ref()
+            .and_then(|edit| edit["value"].as_str())
+            .unwrap_or(source);
         let mode = staged
             .as_ref()
             .and_then(|edit| edit["mode"].as_str())
             .unwrap_or("direct");
+        let source_scope = staged_source
+            .as_ref()
+            .and_then(|edit| edit["scope"].as_str())
+            .unwrap_or("field");
+        let source_impact = staged_source
+            .as_ref()
+            .and_then(|edit| edit["impact_action"].as_str())
+            .unwrap_or("stale_record");
         let id = id_for_path(path);
         let editable = field["editable"].as_bool().unwrap_or(false);
+        let source_editable = field["source_editable"].as_bool().unwrap_or(false);
         let readonly = if editable { "" } else { " readonly" };
-        let status = staged
+        let source_readonly = if staged_source.is_some() {
+            ""
+        } else {
+            " readonly"
+        };
+        let source_controls_disabled = if source_editable { "" } else { " disabled" };
+        let target_status = staged
             .as_ref()
             .and_then(|edit| edit["mode"].as_str())
-            .map(|mode| format!("staged_{mode}"))
+            .map(|mode| format!("staged_{mode}"));
+        let status = target_status
+            .or_else(|| staged_source.as_ref().map(|_| "staged_source".to_owned()))
             .unwrap_or_else(|| field["status"].as_str().unwrap_or("unknown").to_owned());
+        let occurrence_count = field["occurrence_count"].as_u64().unwrap_or(1);
         html.push_str(&format!(
-            "<tr data-field-path=\"{}\" data-note-id=\"{}\" data-field-id=\"{}\" data-editable=\"{}\" data-original-status=\"{}\"><td>{}</td><td class=\"source-text\">{}</td><td><input id=\"translation-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\" data-note-id=\"{}\" data-field-id=\"{}\"{} /><div id=\"target-text-{}\">{}</div></td><td id=\"status-text-{}\">{}</td><td>{} occurrence(s)</td><td><select id=\"translation-mode-{}\"{}><option value=\"direct\"{}>Direct</option><option value=\"contextual\"{}>Contextual</option><option value=\"no_change\"{}>No change</option></select></td></tr>",
+            "<tr data-field-path=\"{}\" data-note-id=\"{}\" data-field-id=\"{}\" data-editable=\"{}\" data-original-status=\"{}\"><td>{}</td><td class=\"source-text\"><span id=\"source-text-{}\">{}</span><div class=\"source-edit-controls\"><button id=\"source-edit-toggle-{}\" type=\"button\"{}>Edit source</button><input id=\"source-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\" data-note-id=\"{}\" data-field-id=\"{}\"{}{} /></div></td><td><input id=\"translation-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\" data-note-id=\"{}\" data-field-id=\"{}\"{} /><div id=\"target-text-{}\">{}</div></td><td id=\"status-text-{}\">{}</td><td>{} occurrence(s)<br><select id=\"source-scope-{}\"{}><option value=\"field\"{}>This field only</option><option value=\"all_occurrences\"{}>All occurrences</option></select></td><td><select id=\"translation-mode-{}\"{}><option value=\"direct\"{}>Direct</option><option value=\"contextual\"{}>Contextual</option><option value=\"no_change\"{}>No change</option></select><br><label>Source impact <select id=\"source-impact-{}\"{}><option value=\"stale_record\"{}>Create stale record</option><option value=\"migrate_key\"{}>Migrate key</option></select></label></td></tr>",
             escape_html(path),
             escape_html(note["note_id"].as_str().unwrap_or("")),
             escape_html(field["field_id"].as_str().unwrap_or("")),
             editable,
             escape_html(field["status"].as_str().unwrap_or("unknown")),
             escape_html(field["field_name"].as_str().unwrap_or("field")),
+            id,
+            escape_html(source_value),
+            id,
+            source_controls_disabled,
+            id,
+            escape_html(source_value),
+            escape_html(path),
             escape_html(source),
+            escape_html(note["note_id"].as_str().unwrap_or("")),
+            escape_html(field["field_id"].as_str().unwrap_or("")),
+            source_readonly,
+            source_controls_disabled,
             id,
             escape_html(value),
             escape_html(path),
@@ -470,12 +504,20 @@ fn note_html(pivot: &Value, note: &Value) -> String {
             escape_html(value),
             id,
             escape_html(&status),
-            field["occurrence_count"].as_u64().unwrap_or(1),
+            occurrence_count,
+            id,
+            source_controls_disabled,
+            selected_attr(source_scope, "field"),
+            selected_attr(source_scope, "all_occurrences"),
             id,
             if editable { "" } else { " disabled" },
             selected_attr(mode, "direct"),
             selected_attr(mode, "contextual"),
             selected_attr(mode, "no_change"),
+            id,
+            source_controls_disabled,
+            selected_attr(source_impact, "stale_record"),
+            selected_attr(source_impact, "migrate_key"),
         ));
     }
     html.push_str("</tbody></table></section>");
@@ -604,14 +646,23 @@ fn register_field_handlers(pivot: &Value) {
     for note in pivot["notes"].as_array().into_iter().flatten() {
         let note_id = note["note_id"].as_str().unwrap_or("").to_owned();
         for field in note["fields"].as_array().into_iter().flatten() {
-            if !field["editable"].as_bool().unwrap_or(false) {
-                continue;
-            }
             let path = field["path"].as_str().unwrap_or("").to_owned();
             let source = field["source"].as_str().unwrap_or("").to_owned();
             let field_id = field["field_id"].as_str().unwrap_or("").to_owned();
             let id = id_for_path(&path);
-            attach_stage_handler(pivot, &id, path, source, note_id.clone(), field_id);
+            if field["source_editable"].as_bool().unwrap_or(false) {
+                attach_source_stage_handler(
+                    pivot,
+                    &id,
+                    path.clone(),
+                    source.clone(),
+                    note_id.clone(),
+                    field_id.clone(),
+                );
+            }
+            if field["editable"].as_bool().unwrap_or(false) {
+                attach_stage_handler(pivot, &id, path, source, note_id.clone(), field_id);
+            }
         }
     }
 }
@@ -629,6 +680,7 @@ fn attach_stage_handler(
     let prefix = storage_prefix(pivot);
     let input_id = format!("translation-input-{id}");
     let mode_id = format!("translation-mode-{id}");
+    let source_input_id = format!("source-input-{id}");
     let target_id = format!("target-text-{id}");
     let status_id = format!("status-text-{id}");
     for element_id in [input_id.clone(), mode_id.clone()] {
@@ -638,6 +690,7 @@ fn attach_stage_handler(
         let source = source.clone();
         let input_id = input_id.clone();
         let mode_id = mode_id.clone();
+        let source_input_id = source_input_id.clone();
         let target_id = target_id.clone();
         let status_id = status_id.clone();
         let note_id = note_id.clone();
@@ -659,9 +712,23 @@ fn attach_stage_handler(
                 return;
             };
             let value = input.value();
+            let source_key = source_edit_storage_key_from_parts(&prefix, &path, &source);
+            let effective_source = local_storage()
+                .and_then(|storage| storage.get_item(&source_key).ok().flatten())
+                .and_then(|stored| serde_json::from_str::<Value>(&stored).ok())
+                .and_then(|edit| edit["value"].as_str().map(str::to_owned))
+                .or_else(|| {
+                    document
+                        .get_element_by_id(&source_input_id)
+                        .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+                        .map(|input| input.value())
+                        .filter(|value| value != &source)
+                })
+                .unwrap_or_else(|| source.clone());
             let edit = serde_json::json!({
+                "kind": "translation",
                 "path": path,
-                "source": source,
+                "source": effective_source,
                 "value": value,
                 "mode": mode.value(),
             });
@@ -692,6 +759,126 @@ fn attach_stage_handler(
 }
 
 #[cfg(target_arch = "wasm32")]
+fn attach_source_stage_handler(
+    pivot: &Value,
+    id: &str,
+    path: String,
+    source: String,
+    note_id: String,
+    field_id: String,
+) {
+    let key = source_edit_storage_key(pivot, &path, &source);
+    let prefix = storage_prefix(pivot);
+    let input_id = format!("source-input-{id}");
+    let scope_id = format!("source-scope-{id}");
+    let impact_id = format!("source-impact-{id}");
+    let source_text_id = format!("source-text-{id}");
+    let status_id = format!("status-text-{id}");
+    let toggle_id = format!("source-edit-toggle-{id}");
+    let translation_key = edit_storage_key(pivot, &path, &source);
+
+    {
+        let input_id = input_id.clone();
+        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+                return;
+            };
+            if let Some(input) = document
+                .get_element_by_id(&input_id)
+                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+            {
+                input.set_read_only(false);
+                let _ = input.focus();
+            }
+        }));
+        if let Some(element) = web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.get_element_by_id(&toggle_id))
+        {
+            let _ =
+                element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+        }
+        closure.forget();
+    }
+
+    for element_id in [input_id.clone(), scope_id.clone(), impact_id.clone()] {
+        let key = key.clone();
+        let prefix = prefix.clone();
+        let path = path.clone();
+        let source = source.clone();
+        let input_id = input_id.clone();
+        let scope_id = scope_id.clone();
+        let impact_id = impact_id.clone();
+        let source_text_id = source_text_id.clone();
+        let status_id = status_id.clone();
+        let translation_key = translation_key.clone();
+        let note_id = note_id.clone();
+        let field_id = field_id.clone();
+        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+                return;
+            };
+            let Some(input) = document
+                .get_element_by_id(&input_id)
+                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+            else {
+                return;
+            };
+            let Some(scope) = document
+                .get_element_by_id(&scope_id)
+                .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
+            else {
+                return;
+            };
+            let Some(impact) = document
+                .get_element_by_id(&impact_id)
+                .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
+            else {
+                return;
+            };
+            let value = input.value();
+            let edit = serde_json::json!({
+                "kind": "source",
+                "path": path,
+                "source": source,
+                "value": value,
+                "scope": scope.value(),
+                "impact_action": impact.value(),
+            });
+            if let Some(storage) = local_storage() {
+                let _ = storage.set_item(&key, &edit.to_string());
+                if let Some(stored_translation) = storage.get_item(&translation_key).ok().flatten()
+                    && let Ok(mut translation_edit) =
+                        serde_json::from_str::<Value>(&stored_translation)
+                {
+                    translation_edit["source"] = Value::String(value.clone());
+                    let _ = storage.set_item(&translation_key, &translation_edit.to_string());
+                }
+            }
+            if let Some(source_text) = document.get_element_by_id(&source_text_id) {
+                source_text.set_text_content(Some(&input.value()));
+            }
+            if let Some(status) = document.get_element_by_id(&status_id) {
+                status.set_text_content(Some("staged_source"));
+            }
+            update_source_preview_field(&document, &note_id, &field_id, &input.value());
+            update_staged_count(&prefix);
+            refresh_progress_from_dom();
+        }));
+        if let Some(element) = web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.get_element_by_id(&element_id))
+        {
+            let _ =
+                element.add_event_listener_with_callback("input", closure.as_ref().unchecked_ref());
+            let _ = element
+                .add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
+        }
+        closure.forget();
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 fn restore_staged_dom_state(pivot: &Value) {
     let Some(document) = web_sys::window().and_then(|window| window.document()) else {
         return;
@@ -702,12 +889,30 @@ fn restore_staged_dom_state(pivot: &Value) {
             let path = field["path"].as_str().unwrap_or("");
             let source = field["source"].as_str().unwrap_or("");
             let field_id = field["field_id"].as_str().unwrap_or("");
+            let id = id_for_path(path);
+            if let Some(staged_source) = staged_source_edit_for(pivot, path, source) {
+                let value = staged_source["value"].as_str().unwrap_or(source);
+                if let Some(input) = document
+                    .get_element_by_id(&format!("source-input-{id}"))
+                    .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+                {
+                    input.set_value(value);
+                    input.set_read_only(false);
+                }
+                if let Some(source_text) = document.get_element_by_id(&format!("source-text-{id}"))
+                {
+                    source_text.set_text_content(Some(value));
+                }
+                if let Some(status) = document.get_element_by_id(&format!("status-text-{id}")) {
+                    status.set_text_content(Some("staged_source"));
+                }
+                update_source_preview_field(&document, note_id, field_id, value);
+            }
             let Some(staged) = staged_edit_for(pivot, path, source) else {
                 continue;
             };
             let value = staged["value"].as_str().unwrap_or("");
             let mode = staged["mode"].as_str().unwrap_or("direct");
-            let id = id_for_path(path);
             if let Some(target) = document.get_element_by_id(&format!("target-text-{id}")) {
                 target.set_text_content(Some(value));
             }
@@ -726,9 +931,30 @@ fn update_target_preview_field(
     field_id: &str,
     value: &str,
 ) {
+    update_preview_field(document, note_id, field_id, ".target-preview", value);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn update_source_preview_field(
+    document: &web_sys::Document,
+    note_id: &str,
+    field_id: &str,
+    value: &str,
+) {
+    update_preview_field(document, note_id, field_id, "section:first-child", value);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn update_preview_field(
+    document: &web_sys::Document,
+    note_id: &str,
+    field_id: &str,
+    preview_selector: &str,
+    value: &str,
+) {
     let selector = format!(
-        ".note-card[data-note-id=\"{}\"] .target-preview [data-preview-field-id=\"{}\"]",
-        note_id, field_id
+        ".note-card[data-note-id=\"{}\"] {} [data-preview-field-id=\"{}\"]",
+        note_id, preview_selector, field_id
     );
     let Ok(nodes) = document.query_selector_all(&selector) else {
         return;
@@ -881,12 +1107,22 @@ fn apply_result_text(heading: &str, value: &Value) -> String {
     }
     lines.push("Changed entries:".to_owned());
     for entry in value["changed_entries"].as_array().into_iter().flatten() {
+        let old_value = entry["source"]
+            .as_str()
+            .or_else(|| entry["old_source"].as_str())
+            .or_else(|| entry["old"].as_str())
+            .unwrap_or("");
+        let new_value = entry["new"]
+            .as_str()
+            .or_else(|| entry["new_source"].as_str())
+            .or_else(|| entry["target"].as_str())
+            .unwrap_or("");
         lines.push(format!(
             "- {} {}: {} -> {}",
             entry["mode"].as_str().unwrap_or("edit"),
             entry["path"].as_str().unwrap_or("unknown path"),
-            entry["source"].as_str().unwrap_or(""),
-            entry["new"].as_str().unwrap_or("")
+            old_value,
+            new_value
         ));
     }
     lines.push(format!(
@@ -932,6 +1168,18 @@ fn staged_edit_for(pivot: &Value, path: &str, source: &str) -> Option<Value> {
 }
 
 #[cfg(target_arch = "wasm32")]
+fn staged_source_edit_for(pivot: &Value, path: &str, source: &str) -> Option<Value> {
+    local_storage()
+        .and_then(|storage| {
+            storage
+                .get_item(&source_edit_storage_key(pivot, path, source))
+                .ok()
+                .flatten()
+        })
+        .and_then(|value| serde_json::from_str(&value).ok())
+}
+
+#[cfg(target_arch = "wasm32")]
 fn collect_staged_edits(pivot: &Value) -> Vec<Value> {
     let prefix = storage_prefix(pivot);
     let Some(storage) = local_storage() else {
@@ -943,13 +1191,15 @@ fn collect_staged_edits(pivot: &Value) -> Vec<Value> {
         let Some(key) = storage.key(index).ok().flatten() else {
             continue;
         };
-        if !key.starts_with(&prefix) {
+        if !key.starts_with(&format!("{prefix}translation::"))
+            && !key.starts_with(&format!("{prefix}source::"))
+        {
             continue;
         }
-        if let Some(value) = storage.get_item(&key).ok().flatten() {
-            if let Ok(edit) = serde_json::from_str::<Value>(&value) {
-                edits.push(edit);
-            }
+        if let Some(value) = storage.get_item(&key).ok().flatten()
+            && let Ok(edit) = serde_json::from_str::<Value>(&value)
+        {
+            edits.push(edit);
         }
     }
     edits
@@ -993,7 +1243,17 @@ fn update_staged_count(prefix: &str) {
 
 #[cfg(target_arch = "wasm32")]
 fn edit_storage_key(pivot: &Value, path: &str, source: &str) -> String {
-    format!("{}{}::{}", storage_prefix(pivot), path, source)
+    format!("{}translation::{}::{}", storage_prefix(pivot), path, source)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn source_edit_storage_key(pivot: &Value, path: &str, source: &str) -> String {
+    source_edit_storage_key_from_parts(&storage_prefix(pivot), path, source)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn source_edit_storage_key_from_parts(prefix: &str, path: &str, source: &str) -> String {
+    format!("{prefix}source::{path}::{source}")
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -13,8 +13,8 @@ use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use brain_brew_core::{
-    CanonicalDeck, CardTemplate, Note, NoteType, Overlay, StableId, TranslationCoverageCategory,
-    TranslationCoverageEntry, TranslationDictionary,
+    CanonicalDeck, CardTemplate, Note, NoteType, Overlay, StableId, StaleTranslationRecord,
+    TranslationCoverageCategory, TranslationCoverageEntry, TranslationDictionary,
 };
 use brain_brew_formats::canonical_yaml;
 use brain_brew_formats::manifest::{FederatedDeckManifest, LanguageManifestEntry};
@@ -341,23 +341,69 @@ impl WorkspaceMetadata {
             return Err("missing staged edits".to_owned());
         }
 
+        let source_edits = request
+            .edits
+            .iter()
+            .filter(|edit| edit.kind == WorkbenchEditKind::Source)
+            .cloned()
+            .collect::<Vec<_>>();
+        let translation_edits = request
+            .edits
+            .iter()
+            .filter(|edit| edit.kind == WorkbenchEditKind::Translation)
+            .cloned()
+            .collect::<Vec<_>>();
         let mut overlay = read_overlay_for_rewrite(&context.selection.overlay_file)?;
-        let changes = apply_staged_edits_to_overlay(&mut overlay, &request.edits, &context)?;
-        let validation = validate_modified_overlay(&context, &overlay);
+        let mut modified_base = context.base_deck.clone();
+        let base_file = self.manifest_root.join(&self.manifest.base);
+        let mut source_plan = apply_staged_source_edits(
+            &mut modified_base,
+            &mut overlay,
+            &source_edits,
+            &context,
+            &base_file,
+            &self.manifest_root,
+        )?;
+        let context_after_source =
+            context_with_modified_base_and_overlay(&context, modified_base.clone(), &overlay)?;
+        let mut changes = std::mem::take(&mut source_plan.changed_entries);
+        changes.extend(apply_staged_edits_to_overlay(
+            &mut overlay,
+            &translation_edits,
+            &context_after_source,
+        )?);
+        if changes.is_empty() {
+            return Err("missing staged edits".to_owned());
+        }
+
+        let validation = validate_modified_base_and_overlay(&context, &modified_base, &overlay);
         if mode == ApplyMode::Write && !validation.ok {
             return Err("validation failed; preview before applying".to_owned());
         }
         if mode == ApplyMode::Write {
-            fs::write(
-                &context.selection.overlay_file,
-                canonical_yaml::overlay_to_string(&overlay),
-            )
-            .map_err(|error| {
-                format!(
-                    "failed to write translation overlay {}: {error}",
-                    context.selection.overlay_file.display()
+            write_source_apply_plan(&source_plan, &modified_base, &base_file)?;
+            if source_plan.overlay_changed || !translation_edits.is_empty() {
+                fs::write(
+                    &context.selection.overlay_file,
+                    canonical_yaml::overlay_to_string(&overlay),
                 )
-            })?;
+                .map_err(|error| {
+                    format!(
+                        "failed to write translation overlay {}: {error}",
+                        context.selection.overlay_file.display()
+                    )
+                })?;
+            }
+        }
+
+        let mut affected_files = source_plan.affected_files_json(&self.manifest_root);
+        if source_plan.overlay_changed || !translation_edits.is_empty() {
+            push_unique_affected_file(
+                &mut affected_files,
+                &self.manifest_root,
+                &context.selection.overlay_file,
+                Some(&context.selection.overlay_display_file),
+            );
         }
 
         Ok(json!({
@@ -368,10 +414,7 @@ impl WorkspaceMetadata {
             "target_id": context.selection.target_id,
             "overlay_label": context.selection.overlay_label,
             "overlay_id": context.selection.overlay_id,
-            "affected_files": [{
-                "path": context.selection.overlay_display_file,
-                "absolute_path": context.selection.overlay_file.display().to_string(),
-            }],
+            "affected_files": affected_files,
             "changed_entries": changes,
             "validation": {
                 "ok": validation.ok,
@@ -614,16 +657,33 @@ struct ApplyRequest {
     language: Option<String>,
     target: Option<String>,
     overlay: Option<String>,
-    edits: Vec<StagedTranslationEdit>,
+    edits: Vec<StagedWorkbenchEdit>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-struct StagedTranslationEdit {
+struct StagedWorkbenchEdit {
+    #[serde(default = "default_workbench_edit_kind")]
+    kind: WorkbenchEditKind,
     path: String,
     source: String,
     value: String,
     #[serde(default = "default_edit_mode")]
     mode: EditMode,
+    #[serde(default = "default_source_edit_scope")]
+    scope: SourceEditScope,
+    #[serde(default = "default_source_impact_action")]
+    impact_action: SourceImpactAction,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum WorkbenchEditKind {
+    Translation,
+    Source,
+}
+
+fn default_workbench_edit_kind() -> WorkbenchEditKind {
+    WorkbenchEditKind::Translation
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -636,6 +696,28 @@ enum EditMode {
 
 fn default_edit_mode() -> EditMode {
     EditMode::Direct
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum SourceEditScope {
+    Field,
+    AllOccurrences,
+}
+
+fn default_source_edit_scope() -> SourceEditScope {
+    SourceEditScope::Field
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum SourceImpactAction {
+    StaleRecord,
+    MigrateKey,
+}
+
+fn default_source_impact_action() -> SourceImpactAction {
+    SourceImpactAction::StaleRecord
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -991,6 +1073,7 @@ fn note_pivot_notes_json(
                     "occurrence_count": source_counts.get(&row.source).copied().unwrap_or(1),
                     "structural": row.structural,
                     "editable": !row.structural,
+                    "source_editable": true,
                     "context_path": contextual_path_for_row(row, &context.report.entries),
                     "controls": ["direct", "contextual", "no_change"],
                 })
@@ -1280,6 +1363,501 @@ fn read_overlay_for_rewrite(path: &Path) -> Result<Overlay, String> {
     canonical_yaml::overlay_from_str(&input).map_err(|error| error.to_string())
 }
 
+#[derive(Default)]
+struct SourceApplyPlan {
+    changed_entries: Vec<Value>,
+    overlay_changed: bool,
+    deck_file_changed: bool,
+    deck_yaml_output: Option<String>,
+    include_writes: BTreeMap<PathBuf, String>,
+    affected_files: BTreeMap<PathBuf, String>,
+}
+
+impl SourceApplyPlan {
+    fn affected_files_json(&self, _root: &Path) -> Vec<Value> {
+        self.affected_files
+            .iter()
+            .map(|(absolute_path, display_path)| {
+                json!({
+                    "path": display_path,
+                    "absolute_path": absolute_path.display().to_string(),
+                })
+            })
+            .collect()
+    }
+}
+
+fn apply_staged_source_edits(
+    modified_base: &mut CanonicalDeck,
+    overlay: &mut Overlay,
+    edits: &[StagedWorkbenchEdit],
+    context: &SelectedTranslationContext,
+    base_file: &Path,
+    manifest_root: &Path,
+) -> Result<SourceApplyPlan, String> {
+    let mut plan = SourceApplyPlan::default();
+    if edits.is_empty() {
+        return Ok(plan);
+    }
+
+    let raw_deck_yaml = fs::read_to_string(base_file)
+        .map_err(|error| format!("{}: {error}", base_file.display()))?;
+    let raw_has_includes = raw_deck_yaml.contains("!include");
+    let mut raw_deck_value = if raw_has_includes {
+        Some(
+            serde_yaml::from_str::<serde_yaml::Value>(&raw_deck_yaml).map_err(|error| {
+                format!(
+                    "failed to parse {} while preserving includes: {error}",
+                    base_file.display()
+                )
+            })?,
+        )
+    } else {
+        None
+    };
+
+    let rows = main_field_rows(
+        &context.source_deck,
+        &context.selection,
+        &context.report.entries,
+    );
+    let row_by_path = rows
+        .iter()
+        .map(|row| (row.path.clone(), row.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let mut changed_paths = BTreeSet::new();
+
+    for edit in edits {
+        if !edit.path.starts_with("notes.") || !edit.path.contains(".fields.") {
+            return Err(format!(
+                "invalid source note-field edit path {:?}",
+                edit.path
+            ));
+        }
+        if edit.source.is_empty() {
+            return Err(format!("invalid empty source for {}", edit.path));
+        }
+        let Some(anchor_row) = row_by_path.get(&edit.path) else {
+            return Err(format!(
+                "invalid source edit path {:?}; choose an editable source note field",
+                edit.path
+            ));
+        };
+        if anchor_row.source != edit.source {
+            return Err(format!(
+                "invalid source {:?} for {}; expected {:?}",
+                edit.source, edit.path, anchor_row.source
+            ));
+        }
+        let target_rows = match edit.scope {
+            SourceEditScope::Field => vec![anchor_row.clone()],
+            SourceEditScope::AllOccurrences => rows
+                .iter()
+                .filter(|row| row.source == edit.source)
+                .cloned()
+                .collect::<Vec<_>>(),
+        };
+        let target_path_set = target_rows
+            .iter()
+            .map(|row| row.path.clone())
+            .collect::<BTreeSet<_>>();
+        let old_source_remains = rows
+            .iter()
+            .any(|row| row.source == edit.source && !target_path_set.contains(row.path.as_str()));
+
+        for row in &target_rows {
+            set_deck_note_field(modified_base, &row.path, &edit.source, &edit.value)?;
+            changed_paths.insert(row.path.clone());
+            if let Some(raw_deck_value) = raw_deck_value.as_mut() {
+                match deck_field_include_path(raw_deck_value, &row.path)? {
+                    Some(include_path) => {
+                        let resolved =
+                            resolve_workbench_include_path(manifest_root, &include_path)?;
+                        plan.include_writes.insert(resolved, edit.value.clone());
+                    }
+                    None => {
+                        set_deck_field_yaml_scalar(
+                            raw_deck_value,
+                            &row.path,
+                            &edit.source,
+                            &edit.value,
+                        )?;
+                        plan.deck_file_changed = true;
+                    }
+                }
+            } else {
+                plan.deck_file_changed = true;
+            }
+            plan.changed_entries.push(json!({
+                "mode": "source",
+                "path": row.path,
+                "source": edit.source,
+                "old": edit.source,
+                "new": edit.value,
+                "scope": edit.scope,
+            }));
+        }
+
+        plan.overlay_changed |= apply_source_translation_impact(
+            overlay,
+            edit,
+            &target_rows,
+            old_source_remains,
+            context,
+            &mut plan.changed_entries,
+        )?;
+    }
+
+    if plan.deck_file_changed {
+        plan.affected_files.insert(
+            base_file.to_path_buf(),
+            workspace_path(manifest_root, base_file),
+        );
+    }
+    for path in plan.include_writes.keys() {
+        plan.affected_files
+            .insert(path.clone(), workspace_path(manifest_root, path));
+    }
+    if let Some(raw_deck_value) = raw_deck_value
+        && plan.deck_file_changed
+    {
+        plan.deck_yaml_output = Some(serde_yaml::to_string(&raw_deck_value).map_err(|error| {
+            format!(
+                "failed to serialize {} while preserving includes: {error}",
+                base_file.display()
+            )
+        })?);
+    }
+    Ok(plan)
+}
+
+fn apply_source_translation_impact(
+    overlay: &mut Overlay,
+    edit: &StagedWorkbenchEdit,
+    target_rows: &[MainFieldRow],
+    old_source_remains: bool,
+    context: &SelectedTranslationContext,
+    changed_entries: &mut Vec<Value>,
+) -> Result<bool, String> {
+    let mut changed = false;
+    if target_rows.is_empty() {
+        return Ok(false);
+    }
+    let use_global_impact = edit.scope == SourceEditScope::AllOccurrences
+        && !old_source_remains
+        && target_rows.iter().all(|row| {
+            matches!(
+                row.category,
+                TranslationCoverageCategory::DirectTranslation
+                    | TranslationCoverageCategory::NoChange
+                    | TranslationCoverageCategory::StaleTranslationRecord
+            )
+        })
+        && target_rows.iter().all(|row| {
+            row.category != TranslationCoverageCategory::StaleTranslationRecord
+                || context
+                    .report
+                    .entries
+                    .iter()
+                    .find(|entry| entry.path == row.path && entry.source == row.source)
+                    .and_then(|entry| entry.context.as_deref())
+                    .is_none()
+        })
+        && target_rows
+            .iter()
+            .map(target_text_for_source_impact)
+            .collect::<Option<BTreeSet<_>>>()
+            .is_some_and(|targets| targets.len() <= 1);
+    let impact_rows = if use_global_impact {
+        vec![target_rows[0].clone()]
+    } else {
+        target_rows.to_vec()
+    };
+    let translations = overlay.translations.get_or_insert_with(Default::default);
+    for row in impact_rows {
+        let Some(target) = target_text_for_source_impact(&row) else {
+            continue;
+        };
+        let context_path = if use_global_impact {
+            None
+        } else {
+            Some(contextual_path_for_row(&row, &context.report.entries))
+        };
+        match edit.impact_action {
+            SourceImpactAction::StaleRecord => {
+                if context_path.is_none() {
+                    translations.direct.remove(&edit.source);
+                    translations.no_change.remove(&edit.source);
+                    remove_contextual_source_everywhere(translations, &edit.source);
+                } else {
+                    remove_contextual_source_for_path(translations, &row.path, &edit.source);
+                }
+                upsert_stale_record(
+                    translations,
+                    StaleTranslationRecord {
+                        old_source: edit.source.clone(),
+                        new_source: edit.value.clone(),
+                        target: target.clone(),
+                        context: context_path.clone(),
+                    },
+                );
+                changed_entries.push(json!({
+                    "mode": "stale_record",
+                    "path": row.path,
+                    "old_source": edit.source,
+                    "new_source": edit.value,
+                    "target": target,
+                    "context": context_path,
+                    "impact_action": "stale_record",
+                    "available_impact_actions": ["stale_record", "migrate_key"],
+                }));
+                changed = true;
+            }
+            SourceImpactAction::MigrateKey => {
+                if let Some(context_path) = &context_path {
+                    remove_contextual_source_for_path(translations, &row.path, &edit.source);
+                    translations
+                        .contextual
+                        .entry(context_path.clone())
+                        .or_default()
+                        .insert(edit.value.clone(), target.clone());
+                    remove_stale_records_for_path_source(translations, &row.path, &edit.value);
+                } else {
+                    translations.direct.remove(&edit.source);
+                    translations.no_change.remove(&edit.source);
+                    remove_contextual_source_everywhere(translations, &edit.source);
+                    translations
+                        .direct
+                        .insert(edit.value.clone(), target.clone());
+                    remove_stale_records_for_path_source(translations, &row.path, &edit.value);
+                }
+                changed_entries.push(json!({
+                    "mode": "migrate_key",
+                    "path": row.path,
+                    "old_source": edit.source,
+                    "new_source": edit.value,
+                    "target": target,
+                    "context": context_path,
+                    "impact_action": "migrate_key",
+                    "available_impact_actions": ["stale_record", "migrate_key"],
+                }));
+                changed = true;
+            }
+        }
+    }
+    Ok(changed)
+}
+
+fn target_text_for_source_impact(row: &MainFieldRow) -> Option<String> {
+    match row.category {
+        TranslationCoverageCategory::DirectTranslation
+        | TranslationCoverageCategory::ContextualOverride
+        | TranslationCoverageCategory::NoChange
+        | TranslationCoverageCategory::StaleTranslationRecord => Some(row.translated.clone()),
+        _ => None,
+    }
+}
+
+fn upsert_stale_record(translations: &mut TranslationDictionary, record: StaleTranslationRecord) {
+    translations.stale_records.retain(|existing| {
+        !(existing.old_source == record.old_source
+            && existing.new_source == record.new_source
+            && existing.context == record.context)
+    });
+    translations.stale_records.push(record);
+}
+
+fn remove_contextual_source_everywhere(translations: &mut TranslationDictionary, source: &str) {
+    let contexts = translations
+        .contextual
+        .iter()
+        .filter(|(_, replacements)| replacements.contains_key(source))
+        .map(|(context_path, _)| context_path.clone())
+        .collect::<Vec<_>>();
+    for context_path in contexts {
+        if let Some(replacements) = translations.contextual.get_mut(&context_path) {
+            replacements.remove(source);
+            if replacements.is_empty() {
+                translations.contextual.remove(&context_path);
+            }
+        }
+    }
+}
+
+fn set_deck_note_field(
+    deck: &mut CanonicalDeck,
+    path: &str,
+    expected_source: &str,
+    value: &str,
+) -> Result<(), String> {
+    let (note_id, field_id) = note_field_path(path)?;
+    let note_id = StableId::new(note_id).map_err(|error| error.to_string())?;
+    let field_id = StableId::new(field_id).map_err(|error| error.to_string())?;
+    let note = deck
+        .notes
+        .get_mut(&note_id)
+        .ok_or_else(|| format!("source edit path {path:?} is not in the canonical deck file"))?;
+    let current = note.fields.get(&field_id).cloned().unwrap_or_default();
+    if current != expected_source {
+        return Err(format!(
+            "invalid source {:?} for {}; expected canonical deck value {:?}",
+            expected_source, path, current
+        ));
+    }
+    note.fields.insert(field_id, value.to_owned());
+    Ok(())
+}
+
+fn note_field_path(path: &str) -> Result<(&str, &str), String> {
+    let Some(rest) = path.strip_prefix("notes.") else {
+        return Err(format!("invalid note-field path {path:?}"));
+    };
+    let Some((note_id, field_id)) = rest.split_once(".fields.") else {
+        return Err(format!("invalid note-field path {path:?}"));
+    };
+    if note_id.is_empty() || field_id.is_empty() {
+        return Err(format!("invalid note-field path {path:?}"));
+    }
+    Ok((note_id, field_id))
+}
+
+fn deck_field_include_path(
+    value: &serde_yaml::Value,
+    path: &str,
+) -> Result<Option<String>, String> {
+    let field = deck_field_yaml_value(value, path)?;
+    match field {
+        serde_yaml::Value::Tagged(tagged) if tagged.tag == "include" => match &tagged.value {
+            serde_yaml::Value::String(path) => Ok(Some(path.clone())),
+            _ => Err(format!("invalid !include at {path}: path must be a string")),
+        },
+        _ => Ok(None),
+    }
+}
+
+fn set_deck_field_yaml_scalar(
+    value: &mut serde_yaml::Value,
+    path: &str,
+    expected_source: &str,
+    new_value: &str,
+) -> Result<(), String> {
+    let field = deck_field_yaml_value_mut(value, path)?;
+    match field {
+        serde_yaml::Value::String(current) if current == expected_source => {
+            *current = new_value.to_owned();
+            Ok(())
+        }
+        serde_yaml::Value::String(current) => Err(format!(
+            "invalid source {:?} for {}; expected YAML value {:?}",
+            expected_source, path, current
+        )),
+        serde_yaml::Value::Tagged(tagged) if tagged.tag == "include" => Ok(()),
+        _ => Err(format!(
+            "source edit path {path:?} is not a scalar note field in deck YAML"
+        )),
+    }
+}
+
+fn deck_field_yaml_value<'a>(
+    value: &'a serde_yaml::Value,
+    path: &str,
+) -> Result<&'a serde_yaml::Value, String> {
+    let (note_id, field_id) = note_field_path(path)?;
+    yaml_mapping_get(value, "notes")
+        .and_then(|notes| yaml_mapping_get(notes, note_id))
+        .and_then(|note| yaml_mapping_get(note, "fields"))
+        .and_then(|fields| yaml_mapping_get(fields, field_id))
+        .ok_or_else(|| format!("source edit path {path:?} is not present in deck YAML"))
+}
+
+fn deck_field_yaml_value_mut<'a>(
+    value: &'a mut serde_yaml::Value,
+    path: &str,
+) -> Result<&'a mut serde_yaml::Value, String> {
+    let (note_id, field_id) = note_field_path(path)?;
+    yaml_mapping_get_mut(value, "notes")
+        .and_then(|notes| yaml_mapping_get_mut(notes, note_id))
+        .and_then(|note| yaml_mapping_get_mut(note, "fields"))
+        .and_then(|fields| yaml_mapping_get_mut(fields, field_id))
+        .ok_or_else(|| format!("source edit path {path:?} is not present in deck YAML"))
+}
+
+fn yaml_mapping_get<'a>(value: &'a serde_yaml::Value, key: &str) -> Option<&'a serde_yaml::Value> {
+    let serde_yaml::Value::Mapping(mapping) = value else {
+        return None;
+    };
+    mapping.get(serde_yaml::Value::String(key.to_owned()))
+}
+
+fn yaml_mapping_get_mut<'a>(
+    value: &'a mut serde_yaml::Value,
+    key: &str,
+) -> Option<&'a mut serde_yaml::Value> {
+    let serde_yaml::Value::Mapping(mapping) = value else {
+        return None;
+    };
+    mapping.get_mut(serde_yaml::Value::String(key.to_owned()))
+}
+
+fn resolve_workbench_include_path(root: &Path, include_path: &str) -> Result<PathBuf, String> {
+    let requested = Path::new(include_path);
+    if requested.is_absolute() || include_path.contains("..") {
+        return Err(format!(
+            "source edit include path {include_path:?} is not a safe package-root-relative path"
+        ));
+    }
+    Ok(root.join(requested))
+}
+
+fn write_source_apply_plan(
+    plan: &SourceApplyPlan,
+    modified_base: &CanonicalDeck,
+    base_file: &Path,
+) -> Result<(), String> {
+    if plan.deck_file_changed {
+        let output = match &plan.deck_yaml_output {
+            Some(output) => output.clone(),
+            None => canonical_yaml::to_string(modified_base).map_err(|error| error.to_string())?,
+        };
+        fs::write(base_file, output).map_err(|error| {
+            format!(
+                "failed to write source deck {}: {error}",
+                base_file.display()
+            )
+        })?;
+    }
+    for (path, value) in &plan.include_writes {
+        fs::write(path, value).map_err(|error| {
+            format!(
+                "failed to write included source {}: {error}",
+                path.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn push_unique_affected_file(
+    files: &mut Vec<Value>,
+    root: &Path,
+    absolute_path: &Path,
+    display_path: Option<&str>,
+) {
+    let absolute = absolute_path.display().to_string();
+    if files
+        .iter()
+        .any(|file| file["absolute_path"].as_str() == Some(absolute.as_str()))
+    {
+        return;
+    }
+    files.push(json!({
+        "path": display_path
+            .map(str::to_owned)
+            .unwrap_or_else(|| workspace_path(root, absolute_path)),
+        "absolute_path": absolute,
+    }));
+}
+
 fn editable_sources_by_path(context: &SelectedTranslationContext) -> BTreeMap<String, String> {
     main_field_rows(
         &context.source_deck,
@@ -1294,7 +1872,7 @@ fn editable_sources_by_path(context: &SelectedTranslationContext) -> BTreeMap<St
 
 fn contextual_path_for_edit(
     context: &SelectedTranslationContext,
-    edit: &StagedTranslationEdit,
+    edit: &StagedWorkbenchEdit,
 ) -> Result<String, String> {
     let rows = main_field_rows(
         &context.source_deck,
@@ -1309,7 +1887,7 @@ fn contextual_path_for_edit(
 
 fn apply_staged_edits_to_overlay(
     overlay: &mut Overlay,
-    edits: &[StagedTranslationEdit],
+    edits: &[StagedWorkbenchEdit],
     context: &SelectedTranslationContext,
 ) -> Result<Vec<Value>, String> {
     let editable_sources = editable_sources_by_path(context);
@@ -1425,11 +2003,12 @@ fn remove_contextual_source_for_path(
     }
 }
 
-fn validate_modified_overlay(
+fn validate_modified_base_and_overlay(
     context: &SelectedTranslationContext,
+    modified_base: &CanonicalDeck,
     modified_overlay: &Overlay,
 ) -> ApplyValidation {
-    match compose_with_modified_overlay(context, modified_overlay) {
+    match context_with_modified_base_and_overlay(context, modified_base.clone(), modified_overlay) {
         Ok(_) => ApplyValidation {
             ok: true,
             errors: Vec::new(),
@@ -1441,17 +2020,24 @@ fn validate_modified_overlay(
     }
 }
 
-fn compose_with_modified_overlay(
+fn context_with_modified_base_and_overlay(
     context: &SelectedTranslationContext,
+    modified_base: CanonicalDeck,
     modified_overlay: &Overlay,
-) -> Result<CanonicalDeck, String> {
-    let mut current = context.base_deck.clone();
+) -> Result<SelectedTranslationContext, String> {
+    let mut current = modified_base.clone();
+    let mut selected_source_deck = None;
+    let mut selected_report = None;
     for (planned, overlay) in &context.plan_overlays {
         let active_overlay = if planned.id == context.selection.overlay_id {
             modified_overlay
         } else {
             overlay
         };
+        if planned.id == context.selection.overlay_id {
+            selected_source_deck = Some(current.clone());
+            selected_report = current.translation_coverage(active_overlay);
+        }
         current = if active_overlay.translations.is_some() {
             compose_lenient_translation_overlay(&current, active_overlay)?
         } else {
@@ -1460,7 +2046,26 @@ fn compose_with_modified_overlay(
                 .map_err(|error| format!("failed to compose overlay {}: {error}", planned.id))?
         };
     }
-    Ok(current)
+    let Some(source_deck) = selected_source_deck else {
+        return Err(format!(
+            "target {} does not include translation overlay {}",
+            context.selection.target_id, context.selection.overlay_id
+        ));
+    };
+    let Some(report) = selected_report else {
+        return Err(format!(
+            "overlay {} is not a translation overlay",
+            context.selection.overlay_id
+        ));
+    };
+    Ok(SelectedTranslationContext {
+        selection: context.selection.clone(),
+        base_deck: modified_base,
+        plan_overlays: context.plan_overlays.clone(),
+        source_deck,
+        target_deck: current,
+        report,
+    })
 }
 
 fn compose_lenient_translation_overlay(

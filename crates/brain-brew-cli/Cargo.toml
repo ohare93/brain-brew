@@ -28,6 +28,7 @@ brain-brew-core.workspace = true
 brain-brew-formats.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_yaml = "0.9"
 sha2 = "0.10"
 tar = "0.4"
 tempfile = "3"

@@ -57,6 +57,54 @@ async fn workbench_edits_target_translation_persists_refresh_and_applies_yaml() 
 }
 
 #[tokio::test]
+async fn workbench_edits_source_field_persists_refresh_and_creates_stale_record() -> Result<()> {
+    let artifacts = ArtifactDir::new("source-edit")?;
+    let workspace = TempDir::new().context("create source-edit E2E workspace")?;
+    write_source_edit_workbench_fixture(workspace.path())?;
+
+    let server = RunningWorkbenchServer::spawn(
+        workspace.path().join("brainbrew.yaml"),
+        dev_assets_path(),
+        artifacts.path(),
+    )?;
+    let driver = new_driver().await.context("connect to WebDriver")?;
+
+    let edit_result = run_source_edit_smoke(&driver, &server, workspace.path()).await;
+    if let Err(error) = &edit_result {
+        let _ = artifacts.save_browser_failure(&driver, error).await;
+    }
+    let quit_result = driver.quit().await.context("quit browser session");
+
+    edit_result?;
+    quit_result?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn workbench_mixed_source_and_target_browser_apply_uses_new_source() -> Result<()> {
+    let artifacts = ArtifactDir::new("mixed-source-target")?;
+    let workspace = TempDir::new().context("create mixed source/target E2E workspace")?;
+    write_source_edit_workbench_fixture(workspace.path())?;
+
+    let server = RunningWorkbenchServer::spawn(
+        workspace.path().join("brainbrew.yaml"),
+        dev_assets_path(),
+        artifacts.path(),
+    )?;
+    let driver = new_driver().await.context("connect to WebDriver")?;
+
+    let edit_result = run_mixed_source_target_smoke(&driver, &server, workspace.path()).await;
+    if let Err(error) = &edit_result {
+        let _ = artifacts.save_browser_failure(&driver, error).await;
+    }
+    let quit_result = driver.quit().await.context("quit browser session");
+
+    edit_result?;
+    quit_result?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn workbench_loads_ug_like_repeated_source_smoke_path() -> Result<()> {
     let artifacts = ArtifactDir::new("ug-like")?;
     let workspace = TempDir::new().context("create UG-like E2E workspace")?;
@@ -185,6 +233,131 @@ async fn run_edit_apply_smoke(
         .context("click confirm apply")?;
     wait_for_apply_output(driver, "Applied").await?;
     assert!(fs::read_to_string(workspace.join("da.yaml"))?.contains("Helsinki: Helsingfors"));
+    Ok(())
+}
+
+async fn run_source_edit_smoke(
+    driver: &WebDriver,
+    server: &RunningWorkbenchServer,
+    workspace: &Path,
+) -> Result<()> {
+    driver
+        .goto(server.url("/"))
+        .await
+        .context("open source-edit workbench")?;
+    wait_for_loaded_probe(driver).await?;
+    let source_id = "source-input-notes_note_georgia_country_fields_field_country";
+    let toggle_id = "source-edit-toggle-notes_note_georgia_country_fields_field_country";
+    wait_for_text(driver, "2 occurrence(s)").await?;
+    wait_for_element(driver, &format!("#{toggle_id}"))
+        .await?
+        .click()
+        .await
+        .context("toggle source edit")?;
+    let input = wait_for_element(driver, &format!("#{source_id}")).await?;
+    input.clear().await.context("clear source input")?;
+    input
+        .send_keys("Sakartvelo")
+        .await
+        .context("type source edit")?;
+    wait_for_text(driver, "staged_source").await?;
+    wait_for_text(driver, "Sakartvelo").await?;
+    let source_preview = driver
+        .execute(
+            "return document.querySelector(\".note-card[data-note-id='note.georgia-country'] .preview-grid section:first-child [data-preview-field-id='field.country']\").innerHTML;",
+            Vec::new(),
+        )
+        .await
+        .context("read live source preview")?;
+    assert_eq!(source_preview.json().as_str(), Some("Sakartvelo"));
+
+    driver.refresh().await.context("refresh browser")?;
+    wait_for_loaded_probe(driver).await?;
+    wait_for_element(driver, &format!("#{source_id}"))
+        .await
+        .context("source input returns after refresh")?;
+    assert_eq!(element_value(driver, source_id).await?, "Sakartvelo");
+
+    wait_for_element(driver, "#apply-preview-button")
+        .await?
+        .click()
+        .await
+        .context("click source apply preview")?;
+    wait_for_apply_output(driver, "Apply preview").await?;
+    wait_for_apply_output(driver, "deck.yaml").await?;
+    wait_for_apply_output(driver, "da.yaml").await?;
+    wait_for_apply_output(driver, "Georgia -> Sakartvelo").await?;
+    assert!(!fs::read_to_string(workspace.join("deck.yaml"))?.contains("Sakartvelo"));
+    assert!(!fs::read_to_string(workspace.join("da.yaml"))?.contains("stale_records"));
+
+    wait_for_element(driver, "#apply-confirm-button")
+        .await?
+        .click()
+        .await
+        .context("confirm source apply")?;
+    wait_for_apply_output(driver, "Applied").await?;
+    let deck = fs::read_to_string(workspace.join("deck.yaml"))?;
+    assert!(deck.contains("field.country: Sakartvelo"));
+    assert!(deck.contains("field.country: Georgia"));
+    let overlay = fs::read_to_string(workspace.join("da.yaml"))?;
+    assert!(overlay.contains("stale_records:"));
+    assert!(overlay.contains("old_source: Georgia"));
+    assert!(overlay.contains("new_source: Sakartvelo"));
+    assert!(overlay.contains("context: notes.note.georgia-country"));
+
+    wait_for_element(driver, ".pivot-filters button[data-filter='stale']").await?;
+    driver
+        .execute(
+            "document.querySelector(\".pivot-filters button[data-filter='stale']\").click();",
+            Vec::new(),
+        )
+        .await
+        .context("filter stale source edit result")?;
+    wait_for_text(driver, "Sakartvelo").await?;
+    Ok(())
+}
+
+async fn run_mixed_source_target_smoke(
+    driver: &WebDriver,
+    server: &RunningWorkbenchServer,
+    workspace: &Path,
+) -> Result<()> {
+    driver
+        .goto(server.url("/"))
+        .await
+        .context("open mixed source/target workbench")?;
+    wait_for_loaded_probe(driver).await?;
+    let suffix = "notes_note_georgia_country_fields_field_country";
+    wait_for_element(driver, &format!("#source-edit-toggle-{suffix}"))
+        .await?
+        .click()
+        .await
+        .context("toggle source edit")?;
+    let source = wait_for_element(driver, &format!("#source-input-{suffix}")).await?;
+    source.clear().await.context("clear source input")?;
+    source
+        .send_keys("Sakartvelo")
+        .await
+        .context("type source edit")?;
+    let target = wait_for_element(driver, &format!("#translation-input-{suffix}")).await?;
+    target.clear().await.context("clear target input")?;
+    target
+        .send_keys("Sakartvelo på dansk")
+        .await
+        .context("type target edit after source edit")?;
+
+    wait_for_element(driver, "#apply-confirm-button")
+        .await?
+        .click()
+        .await
+        .context("confirm mixed apply")?;
+    wait_for_apply_output(driver, "Applied").await?;
+    let deck = fs::read_to_string(workspace.join("deck.yaml"))?;
+    assert!(deck.contains("field.country: Sakartvelo"));
+    let overlay = fs::read_to_string(workspace.join("da.yaml"))?;
+    assert!(overlay.contains("Sakartvelo:"));
+    assert!(overlay.contains("Sakartvelo på dansk"));
+    assert!(!overlay.contains("stale_records"));
     Ok(())
 }
 
@@ -405,15 +578,33 @@ fn write_ug_like_workbench_fixture(dir: &Path) -> Result<()> {
     write_translation_overlay_and_manifest(dir)
 }
 
-fn write_translation_overlay_and_manifest(dir: &Path) -> Result<()> {
-    fs::write(
-        dir.join("da.yaml"),
-        r#"id: overlay.translation.da
-kind: translation
-translations:
-  direct:
+fn write_source_edit_workbench_fixture(dir: &Path) -> Result<()> {
+    fs::write(dir.join("deck.yaml"), UG_LIKE_CANONICAL_YAML)?;
+    write_translation_overlay_and_manifest_with_direct_entries(
+        dir,
+        r#"    Georgia: Georgien
     Finland: Finland
 "#,
+    )
+}
+
+fn write_translation_overlay_and_manifest(dir: &Path) -> Result<()> {
+    write_translation_overlay_and_manifest_with_direct_entries(
+        dir,
+        r#"    Finland: Finland
+"#,
+    )
+}
+
+fn write_translation_overlay_and_manifest_with_direct_entries(
+    dir: &Path,
+    direct_entries: &str,
+) -> Result<()> {
+    fs::write(
+        dir.join("da.yaml"),
+        format!(
+            "id: overlay.translation.da\nkind: translation\ntranslations:\n  direct:\n{direct_entries}"
+        ),
     )?;
     fs::write(
         dir.join("brainbrew.yaml"),
