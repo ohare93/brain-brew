@@ -1,7 +1,7 @@
 use std::fs;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, ChildStdout, Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use flate2::Compression;
@@ -32,6 +32,177 @@ fn command_help_includes_focused_examples() {
     assert!(out.contains(
         "brainbrew compose --manifest brainbrew.yaml --target da-standard --out build/da.yaml"
     ));
+}
+
+#[test]
+fn workbench_help_includes_serve_entrypoint() {
+    let top = run(["--help"]);
+    assert!(top.status.success(), "stderr: {}", stderr(&top));
+    assert!(stdout(&top).contains("workbench"));
+
+    let command = run(["workbench", "--help"]);
+    assert!(command.status.success(), "stderr: {}", stderr(&command));
+    let out = stdout(&command);
+    assert!(out.contains("brainbrew workbench serve --manifest brainbrew.yaml"));
+    assert!(out.contains("--port"));
+    assert!(out.contains("--no-open"));
+    assert!(out.contains("--dev-assets"));
+
+    let serve = run(["workbench", "serve", "--help"]);
+    assert!(serve.status.success(), "stderr: {}", stderr(&serve));
+    assert!(stdout(&serve).contains("brainbrew workbench serve --manifest brainbrew.yaml"));
+}
+
+#[test]
+fn workbench_serve_exposes_workspace_metadata_api() {
+    let dir = temp_dir("workbench-api");
+    write_workbench_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let health = get_json(&server.url("/api/health"));
+    assert_eq!(health["status"], "ok");
+    assert_eq!(
+        health["manifest"],
+        dir.join("brainbrew.yaml").display().to_string()
+    );
+
+    let workspace = get_json(&server.url("/api/workspace"));
+    assert_eq!(
+        workspace["manifest"],
+        dir.join("brainbrew.yaml").display().to_string()
+    );
+    assert_eq!(workspace["languages"]["en"]["display_name"], "English");
+    assert_eq!(workspace["languages"]["en"]["source"], true);
+    assert_eq!(
+        workspace["languages"]["da"]["translation_overlays"]["base"],
+        "overlay.translation.da"
+    );
+    assert_eq!(
+        workspace["languages"]["da"]["targets"]["standard"],
+        "da-standard"
+    );
+    assert_eq!(
+        workspace["target_labels"]["da-standard"][0]["language"],
+        "da"
+    );
+    assert_eq!(
+        workspace["target_labels"]["da-standard"][0]["label"],
+        "standard"
+    );
+    assert_eq!(
+        workspace["translation_profile"]["structural_fields"][0],
+        "field.flag"
+    );
+    let fingerprints = workspace["fingerprints"].as_array().unwrap();
+    assert!(
+        fingerprints
+            .iter()
+            .any(|entry| entry["path"] == "brainbrew.yaml")
+    );
+    assert!(
+        fingerprints
+            .iter()
+            .any(|entry| entry["path"] == "deck.yaml")
+    );
+    assert!(fingerprints.iter().any(|entry| entry["path"] == "da.yaml"));
+    assert!(
+        fingerprints
+            .iter()
+            .all(|entry| entry["sha256"].as_str().unwrap().len() == 64)
+    );
+    let original_da_fingerprint = fingerprints
+        .iter()
+        .find(|entry| entry["path"] == "da.yaml")
+        .unwrap()["sha256"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    fs::write(
+        dir.join("da.yaml"),
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Finland: Suomi
+"#,
+    )
+    .unwrap();
+    let updated = get_json(&server.url("/api/workspace"));
+    let updated_da_fingerprint = updated["fingerprints"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == "da.yaml")
+        .unwrap()["sha256"]
+        .as_str()
+        .unwrap();
+    assert_ne!(updated_da_fingerprint, original_da_fingerprint);
+}
+
+#[test]
+fn workbench_serve_uses_available_port_and_embedded_assets_by_default() {
+    let dir = temp_dir("workbench-default-assets");
+    write_workbench_workspace(&dir);
+
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--no-open",
+    ]);
+
+    let response = ureq::get(&server.url("/")).call().expect("GET / succeeds");
+    assert_eq!(response.status(), 200);
+    assert!(
+        response
+            .into_string()
+            .unwrap()
+            .contains("Brain Brew Deck Workbench")
+    );
+}
+
+#[test]
+fn workbench_serve_can_use_dev_asset_directory() {
+    let dir = temp_dir("workbench-dev-assets");
+    write_workbench_workspace(&dir);
+    let assets = dir.join("assets");
+    fs::create_dir_all(&assets).unwrap();
+    fs::write(
+        assets.join("index.html"),
+        "<main>dev workbench shell</main>",
+    )
+    .unwrap();
+
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+        "--dev-assets",
+        assets.to_str().unwrap(),
+    ]);
+
+    let response = ureq::get(&server.url("/")).call().expect("GET / succeeds");
+    assert_eq!(response.status(), 200);
+    assert!(
+        response
+            .into_string()
+            .unwrap()
+            .contains("dev workbench shell")
+    );
 }
 
 #[test]
@@ -2484,6 +2655,52 @@ fn run_with_cache<const N: usize>(args: [&str; N], cache: &Path) -> std::process
         .expect("command runs")
 }
 
+struct RunningWorkbenchServer {
+    child: Child,
+    base_url: String,
+    _stdout: BufReader<ChildStdout>,
+}
+
+impl RunningWorkbenchServer {
+    fn url(&self, path: &str) -> String {
+        format!("{}{}", self.base_url, path)
+    }
+}
+
+impl Drop for RunningWorkbenchServer {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+fn spawn_workbench_server<const N: usize>(args: [&str; N]) -> RunningWorkbenchServer {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_brainbrew"))
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("workbench server spawns");
+    let stdout = child.stdout.take().expect("server stdout is piped");
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    reader.read_line(&mut line).expect("server prints URL");
+    let Some(base_url) = line.strip_prefix("Workbench listening at ") else {
+        panic!("unexpected workbench server line: {line:?}");
+    };
+    RunningWorkbenchServer {
+        child,
+        base_url: base_url.trim().to_owned(),
+        _stdout: reader,
+    }
+}
+
+fn get_json(url: &str) -> serde_json::Value {
+    let response = ureq::get(url).call().expect("GET succeeds");
+    assert_eq!(response.status(), 200);
+    serde_json::from_str(&response.into_string().unwrap()).expect("response is JSON")
+}
+
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -2497,6 +2714,55 @@ fn write_manifest_workspace(dir: &Path) {
     fs::write(dir.join("capital.yaml"), CAPITAL_OVERLAY_YAML).unwrap();
     fs::write(dir.join("noop.yaml"), NOOP_OVERLAY_YAML).unwrap();
     fs::write(dir.join("brainbrew.yaml"), MANIFEST_YAML).unwrap();
+}
+
+fn write_workbench_workspace(dir: &Path) {
+    fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML).unwrap();
+    fs::write(
+        dir.join("da.yaml"),
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Finland: Finland
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.translation.da:
+    file: da.yaml
+    kind: translation
+targets:
+  da-standard:
+    overlays:
+      - overlay.translation.da
+  en-standard:
+    overlays: []
+languages:
+  da:
+    display_name: Danish
+    translation_overlays:
+      base: overlay.translation.da
+    primary_target: standard
+    targets:
+      standard: da-standard
+  en:
+    display_name: English
+    source: true
+    primary_target: standard
+    targets:
+      standard: en-standard
+translation_profile:
+  structural_fields:
+    - field.flag
+  optional_paths:
+    - deck.*
+"#,
+    )
+    .unwrap();
 }
 
 fn write_translation_workspace(dir: &Path) {

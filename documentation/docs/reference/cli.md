@@ -89,6 +89,16 @@ brainbrew translations --manifest brainbrew.yaml --all-targets --summary
 
 Reports translation coverage, shows terminal note/card context, summarizes translation state, or applies reviewed translation stubs back to canonical translation overlay YAML.
 
+## `workbench`
+
+```bash
+brainbrew workbench serve --manifest brainbrew.yaml
+brainbrew workbench serve --manifest brainbrew.yaml --port 0 --no-open
+brainbrew workbench serve --manifest brainbrew.yaml --dev-assets build/workbench
+```
+
+Starts the local Deck Workbench server on `127.0.0.1`, serving the browser UI plus JSON APIs for health and workspace metadata.
+
 ## `verify`
 
 ```bash

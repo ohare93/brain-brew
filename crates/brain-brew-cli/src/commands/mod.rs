@@ -9,3 +9,4 @@ pub(crate) mod targets;
 pub(crate) mod translations;
 pub(crate) mod validate;
 pub(crate) mod verify;
+pub(crate) mod workbench;
