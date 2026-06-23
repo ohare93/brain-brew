@@ -103,6 +103,11 @@ translations:
     - Djibouti
   target_additions:
     notes.note.example.fields.field.country-info: Localized blank text.
+  stale_records:
+    - old_source: Old source text.
+      new_source: New source text.
+      target: Existing target text needing review.
+      context: notes.note.example.fields.field.country-info
   variables:
     label.capital:
       Capital: Hauptstadt
@@ -111,7 +116,7 @@ translations:
       old-guid: new-guid
 ```
 
-Formatter order is deterministic: `require_complete`, `ignore_paths`, `direct`, `contextual`, `no_change`, `target_additions`, `variables`, `adapter_ids`.
+Formatter order is deterministic: `require_complete`, `ignore_paths`, `direct`, `contextual`, `no_change`, `target_additions`, `stale_records`, `variables`, `adapter_ids`.
 
 ## Field additions
 

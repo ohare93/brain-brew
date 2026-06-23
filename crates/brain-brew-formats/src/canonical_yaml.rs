@@ -5,8 +5,8 @@ use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, ChangeIntent,
     DeckChange, ExpectedBase, FieldChange, FieldDefinition, FieldDefinitionChange, InvalidStableId,
     MediaChange, MediaReference, MessageComponent, Note, NoteChange, NoteType, NoteTypeChange,
-    Overlay, OverlayKind, PropertyChange, StableId, StructuredMessage, TagChange,
-    TranslationDictionary, ValidationReport,
+    Overlay, OverlayKind, PropertyChange, StableId, StaleTranslationRecord, StructuredMessage,
+    TagChange, TranslationDictionary, ValidationReport,
 };
 use serde::Deserialize;
 
@@ -591,6 +591,29 @@ fn write_translation_dictionary(out: &mut String, translations: &TranslationDict
         for (path, value) in &translations.target_additions {
             writeln!(out, "    {}: {}", yaml_scalar(path), yaml_scalar(value))
                 .expect("writing to a string cannot fail");
+        }
+    }
+    if !translations.stale_records.is_empty() {
+        writeln!(out, "  stale_records:").expect("writing to a string cannot fail");
+        let mut records = translations.stale_records.clone();
+        records.sort_by(|left, right| {
+            left.context
+                .cmp(&right.context)
+                .then_with(|| left.new_source.cmp(&right.new_source))
+                .then_with(|| left.old_source.cmp(&right.old_source))
+                .then_with(|| left.target.cmp(&right.target))
+        });
+        for record in &records {
+            writeln!(out, "    - old_source: {}", yaml_scalar(&record.old_source))
+                .expect("writing to a string cannot fail");
+            writeln!(out, "      new_source: {}", yaml_scalar(&record.new_source))
+                .expect("writing to a string cannot fail");
+            writeln!(out, "      target: {}", yaml_scalar(&record.target))
+                .expect("writing to a string cannot fail");
+            if let Some(context) = &record.context {
+                writeln!(out, "      context: {}", yaml_scalar(context))
+                    .expect("writing to a string cannot fail");
+            }
         }
     }
     if !translations.variables.is_empty() {
@@ -1300,6 +1323,8 @@ struct TranslationDictionaryYaml {
     #[serde(default)]
     target_additions: BTreeMap<String, String>,
     #[serde(default)]
+    stale_records: Vec<StaleTranslationRecordYaml>,
+    #[serde(default)]
     variables: BTreeMap<String, BTreeMap<String, String>>,
     #[serde(default)]
     adapter_ids: BTreeMap<String, BTreeMap<String, String>>,
@@ -1307,6 +1332,27 @@ struct TranslationDictionaryYaml {
     require_complete: bool,
     #[serde(default)]
     ignore_paths: BTreeSet<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StaleTranslationRecordYaml {
+    old_source: String,
+    new_source: String,
+    target: String,
+    #[serde(default)]
+    context: Option<String>,
+}
+
+impl StaleTranslationRecordYaml {
+    fn into_stale_record(self) -> StaleTranslationRecord {
+        StaleTranslationRecord {
+            old_source: self.old_source,
+            new_source: self.new_source,
+            target: self.target,
+            context: self.context,
+        }
+    }
 }
 
 impl TranslationDictionaryYaml {
@@ -1318,6 +1364,11 @@ impl TranslationDictionaryYaml {
             contextual,
             no_change: self.no_change,
             target_additions: self.target_additions,
+            stale_records: self
+                .stale_records
+                .into_iter()
+                .map(StaleTranslationRecordYaml::into_stale_record)
+                .collect(),
             variables: self.variables,
             adapter_ids: self.adapter_ids,
             require_complete: self.require_complete,

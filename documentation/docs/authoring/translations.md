@@ -14,10 +14,11 @@ Translation dictionaries separate source-keyed translations from target-only tex
 | `contextual` | path-scoped translations for a source string inside a deck context | `context path -> source text: target text` |
 | `no_change` | translator-reviewed text that intentionally stays identical to the source | `[source text]` |
 | `target_additions` | target-language text for fields intentionally blank in the source deck | `stable deck path: target text` |
+| `stale_records` | review debt for source text that changed while reusing the prior target text temporarily | list of `old_source`, `new_source`, `target`, optional `context` |
 
-Contextual translations win over direct translations. When multiple contextual scopes match, the longest matching context path wins. No-change entries cover missing translation checks but never modify composed output.
+Contextual translations win over direct translations. When multiple contextual scopes match, the longest matching context path wins. No-change entries cover missing translation checks but never modify composed output. Stale records apply their `target` text to `new_source` while reporting a stale-review warning until resolved.
 
-The source key in `direct`, `contextual`, and `no_change` is the expected base. If the English/source text changes, composition fails with a stale source-key error instead of silently applying the wrong translation or no-change decision.
+The source key in `direct`, `contextual`, and `no_change` is the expected base. If the English/source text changes, composition fails with a stale source-key error instead of silently applying the wrong translation or no-change decision. Use `stale_records` when a source maintainer intentionally carries the old target text forward as explicit review debt.
 
 ## Direct translations
 
@@ -146,6 +147,23 @@ Island (blå bakgrunn med hvitt kors), Norge (rød bakgrunn med blått kors)
 Strict coverage reports missing and stale entries for each `text` or `ref` component instead of requiring one long key for the whole composite field. The translator context view shows the resolved message plus its components so translators can edit the reusable country names and qualifier fragments separately. If a target language needs a special whole-field wording, add a contextual translation for the full resolved source string at the field or note context; that full override replaces the component-composed output for that target.
 
 Coordinate with deck maintainers before migrating existing large fields: structured messages are best for repeated, composite source text where component reuse clearly reduces duplication.
+
+## Stale translation records
+
+Use `translations.stale_records` when source text changed and the previous target text should keep translated decks usable until a translator reviews it.
+
+```yaml
+translations:
+  stale_records:
+    - old_source: Autonomous community of Spain.
+      new_source: Autonomous region of Spain.
+      target: Selvstyrende region af Spanien.
+      context: notes.note.canary-islands.fields.field.country-info
+```
+
+A stale record with no `context` acts like a direct translation for `new_source`. A contextual stale record applies only at or below its context path, using the same context matching rules as `translations.contextual`. `brainbrew compose`, `brainbrew export crowdanki`, and lenient/default `brainbrew verify` emit stale-record warnings but still apply the target text. A strict translation coverage policy fails while stale records remain.
+
+Resolving a stale record moves it into a normal translation entry for `new_source` (`direct` when contextless, `contextual` when context is present) and removes the stale record.
 
 ## Target-language additions for blank source fields
 

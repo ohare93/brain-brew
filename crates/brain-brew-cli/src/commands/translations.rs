@@ -1506,6 +1506,14 @@ fn print_human_reports(reports: &[ScopedTranslationReport], full: bool) {
         );
         println!(
             "  {}: {}",
+            color_stdout("stale translation records", "33"),
+            all_counts
+                .get("stale_translation_record")
+                .copied()
+                .unwrap_or(0)
+        );
+        println!(
+            "  {}: {}",
             color_stdout("stale/invalid keys", "33"),
             report
                 .report
@@ -1525,10 +1533,16 @@ fn print_human_reports(reports: &[ScopedTranslationReport], full: bool) {
             .collect::<Vec<_>>();
         let shown_problem_limit = 40;
         for entry in problem_entries.iter().take(shown_problem_limit) {
+            let old_source = entry
+                .old_source
+                .as_deref()
+                .map(|old_source| format!(" old_source={}", yaml_scalar(old_source)))
+                .unwrap_or_default();
             println!(
-                "  - {} {} source={} translated={}",
+                "  - {} {}{} source={} translated={}",
                 color_category(entry.category, display_category_name(entry.category)),
                 entry.path,
+                old_source,
                 yaml_scalar(&entry.source),
                 entry
                     .translated
@@ -1609,6 +1623,7 @@ fn is_stale_or_invalid(category: TranslationCoverageCategory) -> bool {
             | TranslationCoverageCategory::StaleTargetAddition
             | TranslationCoverageCategory::StaleVariableKey
             | TranslationCoverageCategory::StaleAdapterIdKey
+            | TranslationCoverageCategory::StaleTranslationRecord
             | TranslationCoverageCategory::InvalidTargetAddition
     )
 }
@@ -1654,6 +1669,7 @@ fn status_filter_is_known(status: &str) -> bool {
             | "stale_target_addition"
             | "stale_variable_key"
             | "stale_adapter_id_key"
+            | "stale_translation_record"
             | "invalid_target_addition"
     )
 }
@@ -1742,6 +1758,7 @@ fn context_unit_json(unit: &TranslationContextUnit) -> serde_json::Value {
         "status": unit.category.as_str(),
         "path": unit.path,
         "source": unit.source,
+        "old_source": unit.old_source,
         "translated": unit.translated,
         "context": unit.context,
         "note_id": unit.note_id.as_ref().map(|id| id.as_str()),
@@ -2320,6 +2337,7 @@ fn entry_json(entry: &TranslationCoverageEntry) -> serde_json::Value {
         "category": entry.category.as_str(),
         "path": entry.path,
         "source": entry.source,
+        "old_source": entry.old_source,
         "translated": entry.translated,
         "context": entry.context,
     })
@@ -2822,6 +2840,7 @@ fn color_category(category: TranslationCoverageCategory, text: &str) -> String {
         TranslationCoverageCategory::UntranslatedFallback => color_stdout(text, "31"),
         TranslationCoverageCategory::StaleDirectKey
         | TranslationCoverageCategory::StaleContextualKey
+        | TranslationCoverageCategory::StaleTranslationRecord
         | TranslationCoverageCategory::StaleNoChangeKey
         | TranslationCoverageCategory::StaleTargetAddition
         | TranslationCoverageCategory::StaleVariableKey

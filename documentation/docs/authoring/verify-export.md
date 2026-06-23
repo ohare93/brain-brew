@@ -28,8 +28,9 @@ Verification checks:
 6. target composition;
 7. Canonical Deck validation;
 8. translation coverage policy, when configured or passed with `--translation-coverage`;
-9. media references and SHA-256 hashes, when `--media-root` is passed;
-10. configured CrowdAnki golden checks.
+9. stale translation records, warning by default and failing under strict translation coverage;
+10. media references and SHA-256 hashes, when `--media-root` is passed;
+11. configured CrowdAnki golden checks.
 
 ## Verify media
 
@@ -47,6 +48,8 @@ brainbrew export crowdanki \
   --target de-standard \
   --out build/crowdanki/de-standard
 ```
+
+If a target contains `translations.stale_records`, export applies the recorded target text and prints a stale-review warning to stderr. Use `translation_coverage: strict` on release targets (or `--translation-coverage strict`) when stale records should block release.
 
 With media copied into the CrowdAnki folder's `media/` subdirectory:
 
@@ -83,7 +86,7 @@ Brain Brew's regression checks are semantic rather than raw text comparisons whe
 
 - Canonical Deck semantic diffs report stable entity paths such as `notes.note.finland.fields.field.capital` and ignore YAML key ordering or formatting noise.
 - Composition/export regression tests exercise one deliberate change at a time: representative note fields, template HTML, CSS/styling, deck descriptions, media references, translation overlays, variants, and extension/field-fill overlays.
-- Translation coverage tests distinguish stale source keys, strict-mode missing translations, path-specific overrides, reviewed no-change text, and target-language additions.
+- Translation coverage tests distinguish stale source keys, persisted stale translation records, strict-mode missing translations, path-specific overrides, reviewed no-change text, and target-language additions.
 - CrowdAnki export tests compare parsed JSON paths so a one-parameter source edit must affect exactly the expected exported location.
 
 For deck workspaces, run the same gate before review:

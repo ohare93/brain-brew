@@ -106,7 +106,7 @@ brainbrew verify --manifest brainbrew.yaml --all-targets
 brainbrew verify --manifest brainbrew.yaml --all-targets --media-root media/
 ```
 
-Runs the workspace verification gate.
+Runs the workspace verification gate. Stale translation records warn by default and fail when the target or command uses strict translation coverage (`translation_coverage: strict` or `--translation-coverage strict`).
 
 ## `lock`
 

@@ -733,6 +733,7 @@ fn translation_coverage_report(
         seen_contextual: BTreeSet::new(),
         seen_no_change: BTreeSet::new(),
         seen_target_additions: BTreeSet::new(),
+        seen_stale_records: BTreeSet::new(),
         seen_variables: BTreeSet::new(),
         seen_adapter_ids: BTreeSet::new(),
     };
@@ -815,6 +816,7 @@ struct TranslationCoverageBuilder<'a> {
     seen_contextual: BTreeSet<(String, String)>,
     seen_no_change: BTreeSet<String>,
     seen_target_additions: BTreeSet<String>,
+    seen_stale_records: BTreeSet<usize>,
     seen_variables: BTreeSet<(String, String)>,
     seen_adapter_ids: BTreeSet<(String, String)>,
 }
@@ -850,6 +852,7 @@ impl TranslationCoverageBuilder<'_> {
                 category: TranslationCoverageCategory::IgnoredSource,
                 path,
                 source: resolved_value.to_owned(),
+                old_source: None,
                 translated: None,
                 context: None,
             });
@@ -915,6 +918,7 @@ impl TranslationCoverageBuilder<'_> {
                 .any(|(context_path, replacements)| {
                     context_matches_path(context_path, path) && replacements.contains_key(value)
                 })
+            || matching_stale_record(self.translations, value, path).is_some()
     }
 
     fn record_string(&mut self, value: &str, path: String, variable_key: Option<&str>) {
@@ -929,6 +933,7 @@ impl TranslationCoverageBuilder<'_> {
                 category,
                 path,
                 source: value.to_owned(),
+                old_source: None,
                 translated: Some(addition.clone()),
                 context: None,
             });
@@ -944,6 +949,7 @@ impl TranslationCoverageBuilder<'_> {
                 category: TranslationCoverageCategory::IgnoredSource,
                 path,
                 source: value.to_owned(),
+                old_source: None,
                 translated: None,
                 context: None,
             });
@@ -960,6 +966,7 @@ impl TranslationCoverageBuilder<'_> {
                 category: TranslationCoverageCategory::VariableTranslation,
                 path,
                 source: value.to_owned(),
+                old_source: None,
                 translated: Some(translated.clone()),
                 context: Some(variable_key.to_owned()),
             });
@@ -995,6 +1002,7 @@ impl TranslationCoverageBuilder<'_> {
                 category: TranslationCoverageCategory::ContextualOverride,
                 path,
                 source,
+                old_source: None,
                 translated: Some(translated.clone()),
                 context: Some(context_path.clone()),
             });
@@ -1003,6 +1011,7 @@ impl TranslationCoverageBuilder<'_> {
                 category: TranslationCoverageCategory::DirectTranslation,
                 path,
                 source,
+                old_source: None,
                 translated: Some(translated.clone()),
                 context: None,
             });
@@ -1012,14 +1021,28 @@ impl TranslationCoverageBuilder<'_> {
                 category: TranslationCoverageCategory::NoChange,
                 path,
                 source: source.clone(),
+                old_source: None,
                 translated: Some(source),
                 context: None,
+            });
+        } else if let Some((index, record)) =
+            matching_stale_record(self.translations, &source, &path)
+        {
+            self.seen_stale_records.insert(index);
+            self.entries.push(TranslationCoverageEntry {
+                category: TranslationCoverageCategory::StaleTranslationRecord,
+                path,
+                source: source.clone(),
+                old_source: Some(record.old_source.clone()),
+                translated: Some(record.target.clone()),
+                context: record.context.clone(),
             });
         } else {
             self.entries.push(TranslationCoverageEntry {
                 category: TranslationCoverageCategory::UntranslatedFallback,
                 path,
                 source: source.clone(),
+                old_source: None,
                 translated: Some(source),
                 context: None,
             });
@@ -1060,6 +1083,7 @@ impl TranslationCoverageBuilder<'_> {
                 category: TranslationCoverageCategory::ContextualOverride,
                 path,
                 source,
+                old_source: None,
                 translated: Some(translated.clone()),
                 context: Some(context_path.clone()),
             });
@@ -1068,6 +1092,7 @@ impl TranslationCoverageBuilder<'_> {
                 category: TranslationCoverageCategory::DirectTranslation,
                 path,
                 source,
+                old_source: None,
                 translated: Some(translated.clone()),
                 context: None,
             });
@@ -1077,8 +1102,21 @@ impl TranslationCoverageBuilder<'_> {
                 category: TranslationCoverageCategory::NoChange,
                 path,
                 source: source.clone(),
+                old_source: None,
                 translated: Some(source),
                 context: None,
+            });
+        } else if let Some((index, record)) =
+            matching_stale_record(self.translations, &source, &path)
+        {
+            self.seen_stale_records.insert(index);
+            self.entries.push(TranslationCoverageEntry {
+                category: TranslationCoverageCategory::StaleTranslationRecord,
+                path,
+                source: source.clone(),
+                old_source: Some(record.old_source.clone()),
+                translated: Some(record.target.clone()),
+                context: record.context.clone(),
             });
         }
     }
@@ -1103,6 +1141,7 @@ impl TranslationCoverageBuilder<'_> {
                 category: TranslationCoverageCategory::AdapterIdTranslation,
                 path: format!("{path_prefix}.{key}"),
                 source: value.to_owned(),
+                old_source: None,
                 translated: Some(translated.clone()),
                 context: Some(key.to_owned()),
             });
@@ -1116,6 +1155,7 @@ impl TranslationCoverageBuilder<'_> {
                     category: TranslationCoverageCategory::StaleDirectKey,
                     path: format!("translations.direct.{source}"),
                     source: source.clone(),
+                    old_source: None,
                     translated: Some(translated.clone()),
                     context: None,
                 });
@@ -1131,6 +1171,7 @@ impl TranslationCoverageBuilder<'_> {
                         category: TranslationCoverageCategory::StaleContextualKey,
                         path: format!("translations.contextual.{context_path}.{source}"),
                         source: source.clone(),
+                        old_source: None,
                         translated: Some(translated.clone()),
                         context: Some(context_path.clone()),
                     });
@@ -1143,6 +1184,7 @@ impl TranslationCoverageBuilder<'_> {
                     category: TranslationCoverageCategory::StaleNoChangeKey,
                     path: format!("translations.no_change.{source}"),
                     source: source.clone(),
+                    old_source: None,
                     translated: Some(source.clone()),
                     context: None,
                 });
@@ -1154,8 +1196,21 @@ impl TranslationCoverageBuilder<'_> {
                     category: TranslationCoverageCategory::StaleTargetAddition,
                     path: format!("translations.target_additions.{path}"),
                     source: String::new(),
+                    old_source: None,
                     translated: Some(translated.clone()),
                     context: Some(path.clone()),
+                });
+            }
+        }
+        for (index, record) in self.translations.stale_records.iter().enumerate() {
+            if !self.seen_stale_records.contains(&index) {
+                self.entries.push(TranslationCoverageEntry {
+                    category: TranslationCoverageCategory::StaleTranslationRecord,
+                    path: format!("translations.stale_records.{index}"),
+                    source: record.new_source.clone(),
+                    old_source: Some(record.old_source.clone()),
+                    translated: Some(record.target.clone()),
+                    context: record.context.clone(),
                 });
             }
         }
@@ -1169,6 +1224,7 @@ impl TranslationCoverageBuilder<'_> {
                         category: TranslationCoverageCategory::StaleVariableKey,
                         path: format!("translations.variables.{variable_key}.{source}"),
                         source: source.clone(),
+                        old_source: None,
                         translated: Some(translated.clone()),
                         context: Some(variable_key.clone()),
                     });
@@ -1185,6 +1241,7 @@ impl TranslationCoverageBuilder<'_> {
                         category: TranslationCoverageCategory::StaleAdapterIdKey,
                         path: format!("translations.adapter_ids.{adapter_key}.{source}"),
                         source: source.clone(),
+                        old_source: None,
                         translated: Some(translated.clone()),
                         context: Some(adapter_key.clone()),
                     });
@@ -1279,6 +1336,7 @@ fn translation_context_unit(
         category: entry.category,
         path: entry.path.clone(),
         source: entry.source.clone(),
+        old_source: entry.old_source.clone(),
         translated: entry.translated.clone(),
         context: entry.context.clone(),
         note_id,
@@ -1847,6 +1905,7 @@ impl TranslationApplyContext<'_, '_> {
                 .any(|(context_path, replacements)| {
                     context_matches_path(context_path, path) && replacements.contains_key(value)
                 })
+            || matching_stale_record(self.translations, value, path).is_some()
     }
 
     fn translate_string(&mut self, value: &mut String, path: String, variable_key: Option<&str>) {
@@ -1951,6 +2010,22 @@ impl TranslationApplyContext<'_, '_> {
             return;
         }
 
+        if let Some((_, record)) = matching_stale_record(self.translations, &source, &path) {
+            if value != &record.target {
+                if !record_change_path(
+                    &path,
+                    self.overlay,
+                    ChangeIntent::Replace,
+                    self.changed_paths,
+                    self.errors,
+                ) {
+                    return;
+                }
+                *value = record.target.clone();
+            }
+            return;
+        }
+
         if self.translations.require_complete {
             self.errors.push(ComposeError::new(
                 ComposeErrorKind::MissingTranslation,
@@ -1995,8 +2070,24 @@ impl TranslationApplyContext<'_, '_> {
         let translated = contextual_translation
             .map(|(_, translated)| translated)
             .or(direct_translation);
-        if let Some(translated) = translated
-            && value != translated
+        if let Some(translated) = translated {
+            if value != translated {
+                if !record_change_path(
+                    &path,
+                    self.overlay,
+                    ChangeIntent::Replace,
+                    self.changed_paths,
+                    self.errors,
+                ) {
+                    return;
+                }
+                *value = translated.clone();
+            }
+            return;
+        }
+
+        if let Some((_, record)) = matching_stale_record(self.translations, &source, &path)
+            && value != &record.target
         {
             if !record_change_path(
                 &path,
@@ -2007,7 +2098,7 @@ impl TranslationApplyContext<'_, '_> {
             ) {
                 return;
             }
-            *value = translated.clone();
+            *value = record.target.clone();
         }
     }
 
@@ -2188,6 +2279,25 @@ fn context_matches_path(context_path: &str, path: &str) -> bool {
         || path
             .strip_prefix(context_path)
             .is_some_and(|suffix| suffix.starts_with('.'))
+}
+
+fn matching_stale_record<'a>(
+    translations: &'a TranslationDictionary,
+    source: &str,
+    path: &str,
+) -> Option<(usize, &'a StaleTranslationRecord)> {
+    translations
+        .stale_records
+        .iter()
+        .enumerate()
+        .filter(|(_, record)| {
+            record.new_source == source
+                && record
+                    .context
+                    .as_deref()
+                    .is_none_or(|context| context_matches_path(context, path))
+        })
+        .max_by_key(|(_, record)| record.context.as_ref().map_or(0, String::len))
 }
 
 fn is_ignored_translation_path(translations: &TranslationDictionary, path: &str) -> bool {
@@ -3863,6 +3973,8 @@ pub struct TranslationDictionary {
     pub no_change: BTreeSet<String>,
     /// Stable deck paths to fill only when the current source value is intentionally blank.
     pub target_additions: BTreeMap<String, String>,
+    /// Persisted source-change review records that apply prior target text while warning.
+    pub stale_records: Vec<StaleTranslationRecord>,
     /// Variable-specific source text to translated text replacements by variable key.
     pub variables: BTreeMap<String, BTreeMap<String, String>>,
     /// Adapter-specific source ID to translated ID replacements by adapter namespace.
@@ -3871,6 +3983,42 @@ pub struct TranslationDictionary {
     pub require_complete: bool,
     /// Glob-style paths ignored by complete-coverage checks.
     pub ignore_paths: BTreeSet<String>,
+}
+
+impl TranslationDictionary {
+    /// Resolve one stale record into a normal direct or contextual translation entry.
+    pub fn resolve_stale_record(
+        &mut self,
+        old_source: &str,
+        new_source: &str,
+        context: Option<&str>,
+    ) -> Option<StaleTranslationRecord> {
+        let position = self.stale_records.iter().position(|record| {
+            record.old_source == old_source
+                && record.new_source == new_source
+                && record.context.as_deref() == context
+        })?;
+        let record = self.stale_records.remove(position);
+        if let Some(context) = &record.context {
+            self.contextual
+                .entry(context.clone())
+                .or_default()
+                .insert(record.new_source.clone(), record.target.clone());
+        } else {
+            self.direct
+                .insert(record.new_source.clone(), record.target.clone());
+        }
+        Some(record)
+    }
+}
+
+/// Persisted translation review debt created when source text changes.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StaleTranslationRecord {
+    pub old_source: String,
+    pub new_source: String,
+    pub target: String,
+    pub context: Option<String>,
 }
 
 /// Non-mutating coverage report for one translation overlay applied to a source deck.
@@ -3900,7 +4048,8 @@ impl TranslationCoverageReport {
         self.entries.iter().any(|entry| {
             matches!(
                 entry.category,
-                TranslationCoverageCategory::StaleDirectKey
+                TranslationCoverageCategory::StaleTranslationRecord
+                    | TranslationCoverageCategory::StaleDirectKey
                     | TranslationCoverageCategory::StaleContextualKey
                     | TranslationCoverageCategory::StaleNoChangeKey
                     | TranslationCoverageCategory::StaleTargetAddition
@@ -3918,6 +4067,7 @@ pub struct TranslationCoverageEntry {
     pub category: TranslationCoverageCategory,
     pub path: String,
     pub source: String,
+    pub old_source: Option<String>,
     pub translated: Option<String>,
     pub context: Option<String>,
 }
@@ -3935,6 +4085,7 @@ pub struct TranslationContextUnit {
     pub category: TranslationCoverageCategory,
     pub path: String,
     pub source: String,
+    pub old_source: Option<String>,
     pub translated: Option<String>,
     pub context: Option<String>,
     pub note_id: Option<StableId>,
@@ -4017,6 +4168,7 @@ pub enum TranslationCoverageCategory {
     VariableTranslation,
     AdapterIdTranslation,
     IgnoredSource,
+    StaleTranslationRecord,
     UntranslatedFallback,
     StaleDirectKey,
     StaleContextualKey,
@@ -4037,6 +4189,7 @@ impl TranslationCoverageCategory {
             Self::VariableTranslation => "variable_translation",
             Self::AdapterIdTranslation => "adapter_id_translation",
             Self::IgnoredSource => "ignored_source",
+            Self::StaleTranslationRecord => "stale_translation_record",
             Self::UntranslatedFallback => "untranslated_fallback",
             Self::StaleDirectKey => "stale_direct_key",
             Self::StaleContextualKey => "stale_contextual_key",
@@ -4052,6 +4205,7 @@ impl TranslationCoverageCategory {
         matches!(
             self,
             Self::UntranslatedFallback
+                | Self::StaleTranslationRecord
                 | Self::StaleDirectKey
                 | Self::StaleContextualKey
                 | Self::StaleNoChangeKey

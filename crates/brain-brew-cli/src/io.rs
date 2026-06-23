@@ -90,17 +90,36 @@ pub(crate) fn read_manifest(path: &Path) -> Result<manifest::FederatedDeckManife
     manifest::from_str(&input).map_err(|error| error.to_string())
 }
 
-pub(crate) fn read_and_compose_deck(
+pub(crate) fn read_deck_and_overlays(
     deck_path: &Path,
     overlay_paths: &[String],
-) -> Result<CanonicalDeck, String> {
+) -> Result<(CanonicalDeck, Vec<(String, Overlay)>), String> {
     let context = source_context_for_path(deck_path)?;
     let deck = read_deck_with_context(deck_path, &context)?;
     let overlays = overlay_paths
         .iter()
-        .map(|path| read_overlay_with_context(Path::new(path), &context))
-        .collect::<Result<Vec<_>, _>>()?;
-    deck.compose(&overlays).map_err(|error| error.to_string())
+        .map(|path| {
+            Ok((
+                path.clone(),
+                read_overlay_with_context(Path::new(path), &context)?,
+            ))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok((deck, overlays))
+}
+
+pub(crate) fn read_and_compose_deck(
+    deck_path: &Path,
+    overlay_paths: &[String],
+) -> Result<CanonicalDeck, String> {
+    let (deck, overlays) = read_deck_and_overlays(deck_path, overlay_paths)?;
+    deck.compose(
+        &overlays
+            .into_iter()
+            .map(|(_, overlay)| overlay)
+            .collect::<Vec<_>>(),
+    )
+    .map_err(|error| error.to_string())
 }
 
 pub(crate) fn read_and_compose_manifest_target_with_packages(

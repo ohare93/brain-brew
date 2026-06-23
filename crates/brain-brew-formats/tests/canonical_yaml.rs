@@ -328,6 +328,60 @@ translations:
 }
 
 #[test]
+fn translation_dictionary_parses_and_formats_stale_records() {
+    let formatted = canonical_yaml::overlay_format_str(
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  stale_records:
+    - old_source: Helsinki
+      new_source: Helsinki City
+      target: Helsingfors
+    - old_source: Capital
+      new_source: Capital city
+      target: Hovedstad
+      context: notes.note.finland
+"#,
+    )
+    .expect("stale records parse and format");
+
+    assert!(formatted.contains("  stale_records:\n"));
+    assert!(formatted.contains("    - old_source: Helsinki\n"));
+    assert!(formatted.contains("      new_source: Helsinki City\n"));
+    assert!(formatted.contains("      target: Helsingfors\n"));
+    assert!(formatted.contains("      context: notes.note.finland\n"));
+
+    let overlay = canonical_yaml::overlay_from_str(&formatted).expect("formatted overlay parses");
+    let translations = overlay.translations.expect("translation dictionary");
+    assert_eq!(translations.stale_records.len(), 2);
+    assert_eq!(translations.stale_records[0].old_source, "Helsinki");
+    assert_eq!(translations.stale_records[0].new_source, "Helsinki City");
+    assert_eq!(translations.stale_records[0].target, "Helsingfors");
+    assert_eq!(
+        translations.stale_records[1].context.as_deref(),
+        Some("notes.note.finland")
+    );
+}
+
+#[test]
+fn translation_dictionary_rejects_unknown_stale_record_fields() {
+    let error = canonical_yaml::overlay_from_str(
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  stale_records:
+    - old_source: Helsinki
+      new_source: Helsinki City
+      target: Helsingfors
+      unexpected: nope
+"#,
+    )
+    .expect_err("unknown stale record fields are rejected");
+
+    assert!(error.to_string().contains("unexpected"));
+}
+
+#[test]
 fn translation_dictionary_parses_no_change_entries() {
     let overlay = canonical_yaml::overlay_from_str(
         r#"id: overlay.translation.da

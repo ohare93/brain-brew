@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use brain_brew_core::{CanonicalDeck, TranslationCoverageCategory};
+use brain_brew_core::{CanonicalDeck, Overlay, TranslationCoverageCategory};
 use brain_brew_formats::{crowdanki, manifest};
 
 use crate::args::parse_verify_args;
@@ -81,34 +81,57 @@ fn verify_translation_coverage_policy(
     plan: &ManifestTargetPlan,
     policy: manifest::TranslationCoveragePolicy,
 ) -> Result<(), String> {
-    if policy == manifest::TranslationCoveragePolicy::Lenient {
-        return Ok(());
-    }
-
     let mut current = plan.base.clone();
     for (planned, overlay) in &plan.overlays {
         if let Some(report) = current.translation_coverage(overlay) {
-            let missing = report
-                .entries
-                .iter()
-                .filter(|entry| entry.category == TranslationCoverageCategory::UntranslatedFallback)
-                .take(10)
-                .map(|entry| format!("{} source {:?}", entry.path, entry.source))
-                .collect::<Vec<_>>();
-            if !missing.is_empty() {
-                return Err(format!(
-                    "translation coverage strict policy failed for target {} overlay {} ({}): {} untranslated fallback(s): {}",
+            if policy == manifest::TranslationCoveragePolicy::Strict {
+                let missing = report
+                    .entries
+                    .iter()
+                    .filter(|entry| {
+                        entry.category == TranslationCoverageCategory::UntranslatedFallback
+                    })
+                    .take(10)
+                    .map(|entry| format!("{} source {:?}", entry.path, entry.source))
+                    .collect::<Vec<_>>();
+                if !missing.is_empty() {
+                    return Err(format!(
+                        "translation coverage strict policy failed for target {} overlay {} ({}): {} untranslated fallback(s): {}",
+                        plan.target,
+                        planned.id,
+                        planned.display_file,
+                        report
+                            .entries
+                            .iter()
+                            .filter(|entry| entry.category
+                                == TranslationCoverageCategory::UntranslatedFallback)
+                            .count(),
+                        missing.join(", ")
+                    ));
+                }
+            }
+
+            let stale_records = stale_record_warning_details(&report.entries);
+            if !stale_records.is_empty() {
+                let message = format!(
+                    "stale translation record warning for target {} overlay {} ({}): {} stale record(s): {}",
                     plan.target,
                     planned.id,
                     planned.display_file,
-                    report
-                        .entries
+                    stale_records.len(),
+                    stale_records
                         .iter()
-                        .filter(|entry| entry.category
-                            == TranslationCoverageCategory::UntranslatedFallback)
-                        .count(),
-                    missing.join(", ")
-                ));
+                        .take(10)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                if policy == manifest::TranslationCoveragePolicy::Strict {
+                    return Err(format!(
+                        "translation stale-record strict policy failed: {message}"
+                    ));
+                }
+                eprintln!("warning: {message}");
             }
         }
         current = current.compose(std::slice::from_ref(overlay)).map_err(|error| {
@@ -119,6 +142,98 @@ fn verify_translation_coverage_policy(
         })?;
     }
     Ok(())
+}
+
+pub(crate) fn emit_stale_record_warnings(plan: &ManifestTargetPlan) -> Result<(), String> {
+    for message in stale_record_warning_messages(plan)? {
+        eprintln!("warning: {message}");
+    }
+    Ok(())
+}
+
+pub(crate) fn emit_stale_record_warnings_for_overlays(
+    target: &str,
+    base: &CanonicalDeck,
+    overlays: &[(String, Overlay)],
+) -> Result<(), String> {
+    for message in stale_record_warning_messages_for_overlays(target, base, overlays)? {
+        eprintln!("warning: {message}");
+    }
+    Ok(())
+}
+
+fn stale_record_warning_messages(plan: &ManifestTargetPlan) -> Result<Vec<String>, String> {
+    let mut messages = Vec::new();
+    let mut current = plan.base.clone();
+    for (planned, overlay) in &plan.overlays {
+        if let Some(report) = current.translation_coverage(overlay) {
+            let stale_records = stale_record_warning_details(&report.entries);
+            if !stale_records.is_empty() {
+                messages.push(format!(
+                    "stale translation record warning for target {} overlay {} ({}): {} stale record(s): {}",
+                    plan.target,
+                    planned.id,
+                    planned.display_file,
+                    stale_records.len(),
+                    stale_records.iter().take(10).cloned().collect::<Vec<_>>().join(", ")
+                ));
+            }
+        }
+        current = current.compose(std::slice::from_ref(overlay)).map_err(|error| {
+            format!(
+                "failed to compose overlay {} for target {} while checking stale translation records: {error}",
+                planned.id, plan.target
+            )
+        })?;
+    }
+    Ok(messages)
+}
+
+fn stale_record_warning_messages_for_overlays(
+    target: &str,
+    base: &CanonicalDeck,
+    overlays: &[(String, Overlay)],
+) -> Result<Vec<String>, String> {
+    let mut messages = Vec::new();
+    let mut current = base.clone();
+    for (display_file, overlay) in overlays {
+        if let Some(report) = current.translation_coverage(overlay) {
+            let stale_records = stale_record_warning_details(&report.entries);
+            if !stale_records.is_empty() {
+                messages.push(format!(
+                    "stale translation record warning for target {target} overlay {} ({}): {} stale record(s): {}",
+                    overlay.id,
+                    display_file,
+                    stale_records.len(),
+                    stale_records.iter().take(10).cloned().collect::<Vec<_>>().join(", ")
+                ));
+            }
+        }
+        current = current.compose(std::slice::from_ref(overlay)).map_err(|error| {
+            format!(
+                "failed to compose overlay {} while checking stale translation records: {error}",
+                overlay.id
+            )
+        })?;
+    }
+    Ok(messages)
+}
+
+fn stale_record_warning_details(
+    entries: &[brain_brew_core::TranslationCoverageEntry],
+) -> Vec<String> {
+    entries
+        .iter()
+        .filter(|entry| entry.category == TranslationCoverageCategory::StaleTranslationRecord)
+        .map(|entry| {
+            format!(
+                "{} old {:?} -> new {:?}",
+                entry.path,
+                entry.old_source.as_deref().unwrap_or(""),
+                entry.source
+            )
+        })
+        .collect()
 }
 
 fn verify_configured_exports(

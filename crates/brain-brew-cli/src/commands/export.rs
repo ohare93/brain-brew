@@ -5,10 +5,11 @@ use brain_brew_core::CanonicalDeck;
 use brain_brew_formats::crowdanki;
 
 use crate::args::{parse_manifest_target_args, parse_overlay_out_media};
+use crate::commands::verify;
 use crate::help;
 use crate::io::{
-    configured_crowdanki_out, manifest_root, read_and_compose_deck,
-    read_and_compose_manifest_target_with_packages, read_manifest, root_relative_path,
+    configured_crowdanki_out, manifest_root, plan_manifest_target_with_packages,
+    read_deck_and_overlays, read_manifest, root_relative_path,
 };
 use crate::media_assets::{copy_media_assets, validate_media_assets};
 use crate::output;
@@ -42,12 +43,14 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                 .join("crowdanki")
                 .join(&manifest_args.target)
         };
-        let deck = read_and_compose_manifest_target_with_packages(
+        let plan = plan_manifest_target_with_packages(
             &manifest_args.manifest_path,
             &manifest_args.target,
             &manifest_args.include_paths,
             &manifest_args.package_roots,
         )?;
+        verify::emit_stale_record_warnings(&plan)?;
+        let deck = plan.compose()?;
         let media_root = manifest_args
             .media_root
             .as_ref()
@@ -67,7 +70,16 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         return Err("missing --out".to_owned());
     };
 
-    let deck = read_and_compose_deck(deck_path, &export_args.overlay_paths)?;
+    let (base, overlays) = read_deck_and_overlays(deck_path, &export_args.overlay_paths)?;
+    verify::emit_stale_record_warnings_for_overlays("ad-hoc", &base, &overlays)?;
+    let deck = base
+        .compose(
+            &overlays
+                .iter()
+                .map(|(_, overlay)| overlay.clone())
+                .collect::<Vec<_>>(),
+        )
+        .map_err(|error| error.to_string())?;
     write_crowdanki_export(&deck, &out_dir, export_args.media_root.as_deref())
 }
 

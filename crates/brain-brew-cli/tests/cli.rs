@@ -2200,6 +2200,162 @@ translations:
 }
 
 #[test]
+fn stale_translation_records_warn_apply_and_fail_strict_verify() {
+    let dir = temp_dir("stale-records-verify");
+    write_translation_workspace(&dir);
+    let overlay_path = dir.join("da.yaml");
+    fs::write(
+        &overlay_path,
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  ignore_paths:
+    - 'deck.*'
+    - 'note_types.*'
+    - 'notes.*.fields.field.flag'
+    - 'notes.*.tags.*'
+  direct:
+    Finland: Finland
+  contextual:
+    notes.note:
+      finland:
+        Helsinki: Helsingfors
+  no_change:
+    - Sweden
+  target_additions:
+    notes.note.finland.fields.field.flag: '<img src="fi-da.png">'
+  stale_records:
+    - old_source: Old Stockholm
+      new_source: Stockholm
+      target: 'Stockholm på dansk'
+"#,
+    )
+    .unwrap();
+
+    let lenient_verify = run([
+        "verify",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+    ]);
+    assert!(
+        lenient_verify.status.success(),
+        "stderr: {}",
+        stderr(&lenient_verify)
+    );
+    assert!(stderr(&lenient_verify).contains("stale translation record warning"));
+    assert!(stderr(&lenient_verify).contains("Old Stockholm"));
+
+    let report_output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--status",
+        "stale",
+    ]);
+    assert!(
+        report_output.status.success(),
+        "stderr: {}",
+        stderr(&report_output)
+    );
+    assert!(stdout(&report_output).contains("stale_translation_record"));
+    assert!(stdout(&report_output).contains("Old Stockholm"));
+    assert!(!stdout(&report_output).contains("missing_translation"));
+
+    let context_output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--context",
+        "--json",
+        "--status",
+        "stale_translation_record",
+    ]);
+    assert!(
+        context_output.status.success(),
+        "stderr: {}",
+        stderr(&context_output)
+    );
+    let context_json: serde_json::Value =
+        serde_json::from_slice(&context_output.stdout).expect("context output is JSON");
+    assert_eq!(
+        context_json["contexts"][0]["units"][0]["status"],
+        "stale_translation_record"
+    );
+    assert_eq!(
+        context_json["contexts"][0]["units"][0]["old_source"],
+        "Old Stockholm"
+    );
+
+    let strict_verify = run([
+        "verify",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-release",
+    ]);
+    assert!(!strict_verify.status.success());
+    assert!(stderr(&strict_verify).contains("translation stale-record strict policy failed"));
+
+    let compose_output = run([
+        "compose",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+    ]);
+    assert!(
+        compose_output.status.success(),
+        "stderr: {}",
+        stderr(&compose_output)
+    );
+    assert!(stdout(&compose_output).contains("Stockholm på dansk"));
+    assert!(stderr(&compose_output).contains("stale translation record warning"));
+
+    let raw_compose_output = run([
+        "compose",
+        dir.join("deck.yaml").to_str().unwrap(),
+        "--overlay",
+        overlay_path.to_str().unwrap(),
+    ]);
+    assert!(
+        raw_compose_output.status.success(),
+        "stderr: {}",
+        stderr(&raw_compose_output)
+    );
+    assert!(stdout(&raw_compose_output).contains("Stockholm på dansk"));
+    assert!(stderr(&raw_compose_output).contains("stale translation record warning"));
+
+    let export_dir = dir.join("crowdanki-out");
+    let export_output = run([
+        "export",
+        "crowdanki",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--out",
+        export_dir.to_str().unwrap(),
+    ]);
+    assert!(
+        export_output.status.success(),
+        "stderr: {}",
+        stderr(&export_output)
+    );
+    assert!(stderr(&export_output).contains("stale translation record warning"));
+    assert!(
+        fs::read_to_string(export_dir.join("deck.json"))
+            .unwrap()
+            .contains("Stockholm på dansk")
+    );
+}
+
+#[test]
 fn export_crowdanki_copies_media_from_media_root_and_checks_hashes() {
     let dir = temp_dir("export-media");
     let deck_path = dir.join("deck.yaml");

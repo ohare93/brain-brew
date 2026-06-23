@@ -1116,6 +1116,7 @@ fn ug_regression_translation_overlay_changes_flow_to_resolved_and_crowdanki_outp
         )]),
         no_change: BTreeSet::new(),
         target_additions: BTreeMap::new(),
+        stale_records: Vec::new(),
         variables: BTreeMap::new(),
         adapter_ids: BTreeMap::new(),
         require_complete: false,

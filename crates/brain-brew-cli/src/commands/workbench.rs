@@ -903,6 +903,7 @@ fn main_progress(
                 TranslationCoverageCategory::DirectTranslation
                     | TranslationCoverageCategory::ContextualOverride
                     | TranslationCoverageCategory::NoChange
+                    | TranslationCoverageCategory::StaleTranslationRecord
             )
         })
         .count();
@@ -1091,6 +1092,7 @@ fn stale_entries_json(entries: &[TranslationCoverageEntry]) -> Value {
             .map(|entry| json!({
                 "path": entry.path,
                 "source": entry.source,
+                "old_source": entry.old_source,
                 "target": entry.translated,
                 "status": entry.category.as_str(),
             }))
@@ -1103,6 +1105,7 @@ fn is_stale_category(category: TranslationCoverageCategory) -> bool {
         category,
         TranslationCoverageCategory::StaleDirectKey
             | TranslationCoverageCategory::StaleContextualKey
+            | TranslationCoverageCategory::StaleTranslationRecord
             | TranslationCoverageCategory::StaleNoChangeKey
             | TranslationCoverageCategory::StaleTargetAddition
             | TranslationCoverageCategory::StaleVariableKey
@@ -1335,6 +1338,7 @@ fn apply_staged_edits_to_overlay(
             EditMode::Direct => {
                 translations.no_change.remove(&edit.source);
                 remove_contextual_source_for_path(translations, &edit.path, &edit.source);
+                remove_stale_records_for_path_source(translations, &edit.path, &edit.source);
                 let old = translations
                     .direct
                     .insert(edit.source.clone(), edit.value.clone());
@@ -1349,6 +1353,7 @@ fn apply_staged_edits_to_overlay(
             EditMode::Contextual => {
                 translations.no_change.remove(&edit.source);
                 let context_path = contextual_path_for_edit(context, edit)?;
+                remove_stale_records_for_path_source(translations, &edit.path, &edit.source);
                 let replacements = translations
                     .contextual
                     .entry(context_path.clone())
@@ -1378,6 +1383,22 @@ fn apply_staged_edits_to_overlay(
         }
     }
     Ok(changed)
+}
+
+fn remove_stale_records_for_path_source(
+    translations: &mut TranslationDictionary,
+    path: &str,
+    source: &str,
+) {
+    translations.stale_records.retain(|record| {
+        !(record.new_source == source
+            && record.context.as_deref().is_none_or(|context| {
+                path == context
+                    || path
+                        .strip_prefix(context)
+                        .is_some_and(|suffix| suffix.starts_with('.'))
+            }))
+    });
 }
 
 fn remove_contextual_source_for_path(
