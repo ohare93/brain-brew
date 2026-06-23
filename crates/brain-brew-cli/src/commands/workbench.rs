@@ -496,64 +496,146 @@ impl WorkspaceMetadata {
             .filter(|edit| edit.kind == WorkbenchEditKind::Source)
             .cloned()
             .collect::<Vec<_>>();
-        let translation_edits = request
+        let mut translation_groups = BTreeMap::<
+            (String, String, String),
+            (SelectedTranslationContext, Vec<StagedWorkbenchEdit>),
+        >::new();
+        for edit in request
             .edits
             .iter()
             .filter(|edit| edit.kind == WorkbenchEditKind::Translation)
-            .cloned()
-            .collect::<Vec<_>>();
-        let mut overlay = read_overlay_for_rewrite(&context.selection.overlay_file)?;
+        {
+            let group_context = self.selected_translation_context(
+                &manifest,
+                edit.language.as_deref().or(request.language.as_deref()),
+                edit.target.as_deref().or(request.target.as_deref()),
+                edit.overlay.as_deref().or(request.overlay.as_deref()),
+            )?;
+            let key = (
+                group_context.selection.language_code.clone(),
+                group_context.selection.target_label.clone(),
+                group_context.selection.overlay_label.clone(),
+            );
+            translation_groups
+                .entry(key)
+                .or_insert_with(|| (group_context, Vec::new()))
+                .1
+                .push(edit.clone());
+        }
+
+        let mut primary_overlay = read_overlay_for_rewrite(&context.selection.overlay_file)?;
         let mut modified_base = context.base_deck.clone();
         let base_file = self.manifest_root.join(&manifest.base);
         let mut source_plan = apply_staged_source_edits(
             &mut modified_base,
-            &mut overlay,
+            &mut primary_overlay,
             &source_edits,
             &context,
             &base_file,
             &self.manifest_root,
         )?;
-        let context_after_source =
-            context_with_modified_base_and_overlay(&context, modified_base.clone(), &overlay)?;
-        let mut changes = std::mem::take(&mut source_plan.changed_entries);
-        changes.extend(apply_staged_edits_to_overlay(
-            &mut overlay,
-            &translation_edits,
-            &context_after_source,
-        )?);
+
+        let mut changes = Vec::new();
+        for change in std::mem::take(&mut source_plan.changed_entries) {
+            let file = if change["mode"] == "source" {
+                workspace_path(&self.manifest_root, &base_file)
+            } else {
+                context.selection.overlay_display_file.clone()
+            };
+            changes.push(annotated_apply_change(
+                change,
+                &file,
+                &context,
+                &modified_base,
+            ));
+        }
+
+        let mut validation_errors =
+            validate_modified_base_and_overlay(&context, &modified_base, &primary_overlay).errors;
+        let mut overlay_writes = BTreeMap::<PathBuf, (String, Overlay, bool)>::new();
+        if source_plan.overlay_changed {
+            overlay_writes.insert(
+                context.selection.overlay_file.clone(),
+                (
+                    context.selection.overlay_display_file.clone(),
+                    primary_overlay.clone(),
+                    true,
+                ),
+            );
+        }
+
+        for (_, (group_context, translation_edits)) in translation_groups {
+            let mut overlay =
+                if group_context.selection.overlay_file == context.selection.overlay_file {
+                    primary_overlay.clone()
+                } else {
+                    read_overlay_for_rewrite(&group_context.selection.overlay_file)?
+                };
+            let context_after_source = context_with_modified_base_and_overlay(
+                &group_context,
+                modified_base.clone(),
+                &overlay,
+            )?;
+            let group_changes = apply_staged_edits_to_overlay(
+                &mut overlay,
+                &translation_edits,
+                &context_after_source,
+            )?;
+            for change in group_changes {
+                changes.push(annotated_apply_change(
+                    change,
+                    &group_context.selection.overlay_display_file,
+                    &group_context,
+                    &modified_base,
+                ));
+            }
+            let validation =
+                validate_modified_base_and_overlay(&group_context, &modified_base, &overlay);
+            validation_errors.extend(validation.errors);
+            overlay_writes.insert(
+                group_context.selection.overlay_file.clone(),
+                (
+                    group_context.selection.overlay_display_file.clone(),
+                    overlay,
+                    !translation_edits.is_empty(),
+                ),
+            );
+        }
+
         if changes.is_empty() {
             return Err("missing staged edits".to_owned());
         }
-
-        let validation = validate_modified_base_and_overlay(&context, &modified_base, &overlay);
-        if mode == ApplyMode::Write && !validation.ok {
+        if mode == ApplyMode::Write && !validation_errors.is_empty() {
             return Err("validation failed; preview before applying".to_owned());
         }
         if mode == ApplyMode::Write {
             write_source_apply_plan(&source_plan, &modified_base, &base_file)?;
-            if source_plan.overlay_changed || !translation_edits.is_empty() {
-                fs::write(
-                    &context.selection.overlay_file,
-                    canonical_yaml::overlay_to_string(&overlay),
-                )
-                .map_err(|error| {
+            for (path, (_display_file, overlay, changed)) in &overlay_writes {
+                if !changed {
+                    continue;
+                }
+                fs::write(path, canonical_yaml::overlay_to_string(overlay)).map_err(|error| {
                     format!(
                         "failed to write translation overlay {}: {error}",
-                        context.selection.overlay_file.display()
+                        path.display()
                     )
                 })?;
             }
         }
 
         let mut affected_files = source_plan.affected_files_json(&self.manifest_root);
-        if source_plan.overlay_changed || !translation_edits.is_empty() {
-            push_unique_affected_file(
-                &mut affected_files,
-                &self.manifest_root,
-                &context.selection.overlay_file,
-                Some(&context.selection.overlay_display_file),
-            );
+        for (path, (display_file, _overlay, changed)) in &overlay_writes {
+            if *changed {
+                push_unique_affected_file(
+                    &mut affected_files,
+                    &self.manifest_root,
+                    path,
+                    Some(display_file),
+                );
+            }
         }
+        let file_groups = apply_file_groups_json(&changes);
+        let validation_ok = validation_errors.is_empty();
 
         Ok(json!({
             "mode": mode.as_str(),
@@ -564,10 +646,11 @@ impl WorkspaceMetadata {
             "overlay_label": context.selection.overlay_label,
             "overlay_id": context.selection.overlay_id,
             "affected_files": affected_files,
+            "file_groups": file_groups,
             "changed_entries": changes,
             "validation": {
-                "ok": validation.ok,
-                "errors": validation.errors,
+                "ok": validation_ok,
+                "errors": validation_errors,
             },
         }))
     }
@@ -793,6 +876,79 @@ impl WorkspaceMetadata {
     }
 }
 
+fn annotated_apply_change(
+    mut change: Value,
+    file: &str,
+    context: &SelectedTranslationContext,
+    deck: &CanonicalDeck,
+) -> Value {
+    let path = change["path"].as_str().unwrap_or("").to_owned();
+    change["file"] = json!(file);
+    change["file_kind"] = json!(if change["mode"] == "source" {
+        "canonical_deck"
+    } else {
+        "translation_overlay"
+    });
+    change["language"] = json!(&context.selection.language_code);
+    change["target_label"] = json!(&context.selection.target_label);
+    change["overlay_label"] = json!(&context.selection.overlay_label);
+    change["content_groups"] = json!(content_groups_for_apply_path(deck, &path));
+    change
+}
+
+fn content_groups_for_apply_path(deck: &CanonicalDeck, path: &str) -> BTreeSet<String> {
+    let mut groups = path
+        .strip_prefix("notes.")
+        .and_then(|suffix| suffix.split_once(".fields."))
+        .and_then(|(note_id, _)| StableId::new(note_id.to_owned()).ok())
+        .map(|note_id| content_group_badges_for_note(deck, &note_id))
+        .unwrap_or_default();
+    if groups.is_empty() {
+        groups.insert("workspace".to_owned());
+    }
+    groups
+}
+
+fn apply_file_groups_json(changes: &[Value]) -> Value {
+    let mut grouped = BTreeMap::<String, (String, BTreeMap<String, usize>)>::new();
+    for change in changes {
+        let file = change["file"].as_str().unwrap_or("unknown").to_owned();
+        let file_kind = change["file_kind"].as_str().unwrap_or("unknown").to_owned();
+        let content_groups = change["content_groups"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|group| group.as_str())
+            .collect::<Vec<_>>();
+        let (_, groups) = grouped
+            .entry(file)
+            .or_insert_with(|| (file_kind, BTreeMap::new()));
+        if content_groups.is_empty() {
+            *groups.entry("workspace".to_owned()).or_insert(0) += 1;
+        } else {
+            for group in content_groups {
+                *groups.entry(group.to_owned()).or_insert(0) += 1;
+            }
+        }
+    }
+    json!(
+        grouped
+            .into_iter()
+            .map(|(file, (kind, groups))| json!({
+                "file": file,
+                "kind": kind,
+                "content_groups": groups
+                    .into_iter()
+                    .map(|(name, change_count)| json!({
+                        "name": name,
+                        "change_count": change_count,
+                    }))
+                    .collect::<Vec<_>>(),
+            }))
+            .collect::<Vec<_>>()
+    )
+}
+
 #[derive(Clone, Debug, Default, Deserialize)]
 struct NotePivotQuery {
     language: Option<String>,
@@ -866,6 +1022,9 @@ struct ApplyRequest {
 struct StagedWorkbenchEdit {
     #[serde(default = "default_workbench_edit_kind")]
     kind: WorkbenchEditKind,
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
     path: String,
     source: String,
     value: String,

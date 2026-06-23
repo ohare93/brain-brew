@@ -472,6 +472,93 @@ fn workbench_note_pivot_exposes_target_translation_data_and_media() {
 }
 
 #[test]
+fn workbench_apply_groups_multi_pane_edits_by_file_and_content_group() {
+    let dir = temp_dir("workbench-multi-pane-apply");
+    write_multi_language_workbench_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let request = serde_json::json!({
+        "language": "da",
+        "target": "standard",
+        "overlay": "base",
+        "edits": [
+            {
+                "kind": "source",
+                "path": "notes.note.finland.fields.field.country",
+                "source": "Finland",
+                "value": "Finland source",
+                "scope": "field",
+                "impact_action": "stale_record"
+            },
+            {
+                "kind": "translation",
+                "language": "da",
+                "target": "standard",
+                "overlay": "base",
+                "path": "notes.note.finland.fields.field.capital",
+                "source": "Helsinki",
+                "value": "Helsingfors multi",
+                "mode": "direct"
+            },
+            {
+                "kind": "translation",
+                "language": "nb",
+                "target": "standard",
+                "overlay": "base",
+                "path": "notes.note.finland.fields.field.capital",
+                "source": "Helsinki",
+                "value": "Helsinki norsk",
+                "mode": "direct"
+            }
+        ]
+    });
+    let preview = post_json(&server.url("/api/workbench/apply-preview"), request.clone());
+    assert_eq!(preview["validation"]["ok"], true);
+    let affected = preview["affected_files"].as_array().unwrap();
+    assert!(affected.iter().any(|file| file["path"] == "deck.yaml"));
+    assert!(affected.iter().any(|file| file["path"] == "da.yaml"));
+    assert!(affected.iter().any(|file| file["path"] == "nb.yaml"));
+    let groups = preview["file_groups"].as_array().unwrap();
+    assert!(groups.iter().any(|group| {
+        group["file"] == "deck.yaml"
+            && group["content_groups"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|content_group| content_group["name"] == "Europe")
+    }));
+    assert!(groups.iter().any(|group| group["file"] == "da.yaml"));
+    assert!(groups.iter().any(|group| group["file"] == "nb.yaml"));
+    assert!(
+        !fs::read_to_string(dir.join("deck.yaml"))
+            .unwrap()
+            .contains("Finland source")
+    );
+
+    let applied = post_json(&server.url("/api/workbench/apply"), request);
+    assert_eq!(applied["validation"]["ok"], true);
+    assert!(
+        fs::read_to_string(dir.join("deck.yaml"))
+            .unwrap()
+            .contains("field.country: Finland source")
+    );
+    let da = fs::read_to_string(dir.join("da.yaml")).unwrap();
+    assert!(da.contains("Helsinki: Helsingfors multi"));
+    assert!(da.contains("old_source: Finland"));
+    assert!(da.contains("new_source: Finland source"));
+    let nb = fs::read_to_string(dir.join("nb.yaml")).unwrap();
+    assert!(nb.contains("Helsinki: Helsinki norsk"));
+}
+
+#[test]
 fn workbench_card_pivot_navigates_previews_and_applies_field_edit() {
     let dir = temp_dir("workbench-card-pivot");
     write_workbench_workspace(&dir);
@@ -3987,6 +4074,76 @@ notes:
       crowdanki:guid: repeated-source-ee-guid
 media: {}
 tombstones: []
+"#,
+    )
+    .unwrap();
+}
+
+fn write_multi_language_workbench_workspace(dir: &Path) {
+    fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML).unwrap();
+    fs::write(
+        dir.join("da.yaml"),
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Finland: Finland
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("nb.yaml"),
+        r#"id: overlay.translation.nb
+kind: translation
+translations: {}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.translation.da:
+    file: da.yaml
+    kind: translation
+  overlay.translation.nb:
+    file: nb.yaml
+    kind: translation
+targets:
+  da-standard:
+    overlays:
+      - overlay.translation.da
+  en-standard:
+    overlays: []
+  nb-standard:
+    overlays:
+      - overlay.translation.nb
+languages:
+  da:
+    display_name: Danish
+    translation_overlays:
+      base: overlay.translation.da
+    primary_target: standard
+    targets:
+      standard: da-standard
+  en:
+    display_name: English
+    source: true
+    primary_target: standard
+    targets:
+      standard: en-standard
+  nb:
+    display_name: Norwegian
+    translation_overlays:
+      base: overlay.translation.nb
+    primary_target: standard
+    targets:
+      standard: nb-standard
+translation_profile:
+  structural_fields:
+    - field.flag
+  optional_paths:
+    - deck.*
 "#,
     )
     .unwrap();

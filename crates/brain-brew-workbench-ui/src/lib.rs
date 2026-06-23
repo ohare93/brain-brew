@@ -321,6 +321,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
     }
     html.push_str("</nav>");
     html.push_str(&filter_buttons_html(pivot));
+    html.push_str(&pane_layout_panel_html(pivot));
     html.push_str(&new_language_panel_html(pivot));
 
     if let Some(notes) = pivot["notes"].as_array() {
@@ -342,6 +343,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
     panel.set_inner_html(&html);
 
     register_control_handlers(pivot);
+    register_pane_layout_handlers(pivot);
     register_new_language_handlers(pivot);
     register_field_handlers(pivot);
     register_apply_handlers(pivot);
@@ -354,6 +356,36 @@ fn publish_note_pivot_panel(pivot: &Value) {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn publish_note_pivot_panel(_pivot: &Value) {}
+
+#[cfg(target_arch = "wasm32")]
+fn pane_layout_panel_html(pivot: &Value) -> String {
+    let mut html = String::new();
+    html.push_str("<section id=\"pane-layout-panel\" class=\"pane-layout-panel\">");
+    html.push_str("<h3>Pane layout preset</h3>");
+    html.push_str("<label><input id=\"source-pane-writable\" type=\"checkbox\"> Source pane writable</label> ");
+    html.push_str("<label><input id=\"target-pane-writable\" type=\"checkbox\" checked> Selected target pane writable</label> ");
+    html.push_str("<label>Additional target <select id=\"secondary-pane-language-select\">");
+    for language in pivot["selection_options"]["languages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let code = language["code"].as_str().unwrap_or("");
+        if language["active"].as_bool().unwrap_or(false) {
+            continue;
+        }
+        let label = language["display_name"].as_str().unwrap_or(code);
+        html.push_str(&format!(
+            "<option value=\"{}\">{}</option>",
+            escape_html(code),
+            escape_html(label)
+        ));
+    }
+    html.push_str("</select></label> <button id=\"load-secondary-pane\" type=\"button\">Load target pane</button>");
+    html.push_str("<div id=\"secondary-target-pane\"></div>");
+    html.push_str("</section>");
+    html
+}
 
 #[cfg(target_arch = "wasm32")]
 fn new_language_panel_html(pivot: &Value) -> String {
@@ -1481,6 +1513,326 @@ fn register_control_handlers(_pivot: &Value) {
 }
 
 #[cfg(target_arch = "wasm32")]
+fn register_pane_layout_handlers(pivot: &Value) {
+    apply_pane_writability(false, true);
+    attach_pane_writable_toggle("source-pane-writable");
+    attach_pane_writable_toggle("target-pane-writable");
+    attach_secondary_pane_loader(pivot);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_pane_writable_toggle(element_id: &str) {
+    let element_id = element_id.to_owned();
+    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+            return;
+        };
+        let source_writable = checkbox_checked(&document, "source-pane-writable");
+        let target_writable = checkbox_checked(&document, "target-pane-writable");
+        apply_pane_writability(source_writable, target_writable);
+    }));
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id(&element_id))
+    {
+        let _ =
+            element.add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
+    }
+    closure.forget();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn checkbox_checked(document: &web_sys::Document, element_id: &str) -> bool {
+    document
+        .get_element_by_id(element_id)
+        .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+        .is_some_and(|input| input.checked())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn apply_pane_writability(source_writable: bool, target_writable: bool) {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    set_controls_disabled(
+        &document,
+        "button[id^='source-edit-toggle-'], input[id^='source-input-'], select[id^='source-scope-'], select[id^='source-impact-'], button[id^='card-source-edit-toggle-'], input[id^='card-source-input-'], select[id^='card-source-scope-'], select[id^='card-source-impact-']",
+        !source_writable,
+    );
+    set_inputs_readonly(
+        &document,
+        "input[id^='source-input-'], input[id^='card-source-input-']",
+        !source_writable,
+    );
+    set_controls_disabled(
+        &document,
+        "input[id^='translation-input-'], select[id^='translation-mode-'], input[id^='card-translation-input-'], select[id^='card-translation-mode-'], input[id^='source-string-direct-input'], button[id^='source-string-direct-stage'], button[id^='source-string-no-change'], input[id^='source-string-contextual-input-'], button[id^='source-string-contextual-stage-']",
+        !target_writable,
+    );
+}
+
+#[cfg(target_arch = "wasm32")]
+fn apply_secondary_pane_writability(writable: bool) {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    set_controls_disabled(
+        &document,
+        "input[id^='secondary-translation-input-']",
+        !writable,
+    );
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_controls_disabled(document: &web_sys::Document, selector: &str, disabled: bool) {
+    if let Ok(nodes) = document.query_selector_all(selector) {
+        for index in 0..nodes.length() {
+            if let Some(node) = nodes.get(index)
+                && let Ok(element) = node.dyn_into::<web_sys::HtmlElement>()
+            {
+                let _ = if disabled {
+                    element.set_attribute("disabled", "")
+                } else {
+                    element.remove_attribute("disabled")
+                };
+            }
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_inputs_readonly(document: &web_sys::Document, selector: &str, readonly: bool) {
+    if let Ok(nodes) = document.query_selector_all(selector) {
+        for index in 0..nodes.length() {
+            if let Some(node) = nodes.get(index)
+                && let Ok(input) = node.dyn_into::<web_sys::HtmlInputElement>()
+            {
+                input.set_read_only(readonly);
+            }
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_secondary_pane_loader(pivot: &Value) {
+    let pivot = pivot.clone();
+    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+            return;
+        };
+        let Some(language) = selected_value(&document, "secondary-pane-language-select") else {
+            return;
+        };
+        let target = pivot["target"]["label"].as_str().map(str::to_owned);
+        wasm_bindgen_futures::spawn_local(async move {
+            match fetch_note_pivot_query(Some(language), target, Some("base".to_owned()), None)
+                .await
+            {
+                Ok(pane) => publish_secondary_target_pane(&pane),
+                Err(error) => render_secondary_pane_error(&error),
+            }
+        });
+    }));
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("load-secondary-pane"))
+    {
+        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+    }
+    closure.forget();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn publish_secondary_target_pane(pane: &Value) {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    let Some(container) = document.get_element_by_id("secondary-target-pane") else {
+        return;
+    };
+    let language = pane["language"]["code"].as_str().unwrap_or("");
+    let target = pane["target"]["label"].as_str().unwrap_or("");
+    let overlay = pane["overlay"]["label"].as_str().unwrap_or("");
+    let prefix = storage_prefix_for_parts(language, target, overlay);
+    let mut html = format!(
+        "<section class=\"workbench-pane secondary-target-pane\" data-storage-prefix=\"{}\" data-language=\"{}\" data-target=\"{}\" data-overlay=\"{}\"><h4>{} target pane</h4><label><input id=\"secondary-pane-writable\" type=\"checkbox\" checked> Pane writable</label>",
+        escape_html(&prefix),
+        escape_html(language),
+        escape_html(target),
+        escape_html(overlay),
+        escape_html(
+            pane["language"]["display_name"]
+                .as_str()
+                .unwrap_or(language)
+        ),
+    );
+    html.push_str("<table><tbody>");
+    for note in pane["notes"].as_array().into_iter().flatten() {
+        for field in note["fields"].as_array().into_iter().flatten() {
+            if !field["editable"].as_bool().unwrap_or(false) {
+                continue;
+            }
+            let path = field["path"].as_str().unwrap_or("");
+            let source = field["source"].as_str().unwrap_or("");
+            let id = format!("{}-{}", language, id_for_path(path));
+            let staged = staged_edit_for_pane(language, target, overlay, path, source);
+            let value = staged
+                .as_ref()
+                .and_then(|edit| edit["value"].as_str())
+                .or_else(|| field["target"].as_str())
+                .unwrap_or(source);
+            html.push_str(&format!(
+                "<tr class=\"secondary-field-row\" data-path=\"{}\" data-source=\"{}\"><td>{}</td><td>{}</td><td><input id=\"secondary-translation-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\"></td></tr>",
+                escape_html(path),
+                escape_html(source),
+                escape_html(field["field_name"].as_str().unwrap_or("field")),
+                escape_html(source),
+                escape_html(&id),
+                escape_html(value),
+                escape_html(path),
+                escape_html(source),
+            ));
+        }
+    }
+    html.push_str("</tbody></table></section>");
+    container.set_inner_html(&html);
+    register_secondary_target_handlers(pane);
+    attach_secondary_writable_handler();
+    let target_writable = checkbox_checked(&document, "target-pane-writable");
+    apply_pane_writability(
+        checkbox_checked(&document, "source-pane-writable"),
+        target_writable,
+    );
+    apply_secondary_pane_writability(checkbox_checked(&document, "secondary-pane-writable"));
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_secondary_writable_handler() {
+    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+            return;
+        };
+        apply_secondary_pane_writability(checkbox_checked(&document, "secondary-pane-writable"));
+    }));
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("secondary-pane-writable"))
+    {
+        let _ =
+            element.add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
+    }
+    closure.forget();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn render_secondary_pane_error(error: &str) {
+    if let Some(container) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("secondary-target-pane"))
+    {
+        container.set_inner_html(&format!(
+            "<p class=\"workbench-error\">{}</p>",
+            escape_html(error)
+        ));
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn register_secondary_target_handlers(pane: &Value) {
+    let language = pane["language"]["code"].as_str().unwrap_or("").to_owned();
+    let target = pane["target"]["label"].as_str().unwrap_or("").to_owned();
+    let overlay = pane["overlay"]["label"].as_str().unwrap_or("").to_owned();
+    for note in pane["notes"].as_array().into_iter().flatten() {
+        for field in note["fields"].as_array().into_iter().flatten() {
+            let path = field["path"].as_str().unwrap_or("").to_owned();
+            let source = field["source"].as_str().unwrap_or("").to_owned();
+            let input_id = format!(
+                "secondary-translation-input-{}-{}",
+                language,
+                id_for_path(&path)
+            );
+            let input_id_for_handler = input_id.clone();
+            let language = language.clone();
+            let target = target.clone();
+            let overlay = overlay.clone();
+            let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+                let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+                    return;
+                };
+                let value = document
+                    .get_element_by_id(&input_id_for_handler)
+                    .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+                    .map(|input| input.value())
+                    .unwrap_or_default();
+                stage_secondary_translation(&language, &target, &overlay, &path, &source, &value);
+            }));
+            if let Some(element) = web_sys::window()
+                .and_then(|window| window.document())
+                .and_then(|document| document.get_element_by_id(&input_id))
+            {
+                let _ = element
+                    .add_event_listener_with_callback("input", closure.as_ref().unchecked_ref());
+            }
+            closure.forget();
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn stage_secondary_translation(
+    language: &str,
+    target: &str,
+    overlay: &str,
+    path: &str,
+    source: &str,
+    value: &str,
+) {
+    let edit = serde_json::json!({
+        "kind": "translation",
+        "language": language,
+        "target": target,
+        "overlay": overlay,
+        "path": path,
+        "source": source,
+        "value": value,
+        "mode": "direct",
+    });
+    if let Some(storage) = local_storage() {
+        let key = format!(
+            "{}translation::{}::{}",
+            storage_prefix_for_parts(language, target, overlay),
+            path,
+            source
+        );
+        let _ = storage.set_item(&key, &edit.to_string());
+    }
+    let prefixes =
+        active_storage_prefixes_for_default(&storage_prefix_for_parts(language, target, overlay));
+    update_staged_count_for_prefixes(&prefixes);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn staged_edit_for_pane(
+    language: &str,
+    target: &str,
+    overlay: &str,
+    path: &str,
+    source: &str,
+) -> Option<Value> {
+    local_storage()
+        .and_then(|storage| {
+            let key = format!(
+                "{}translation::{}::{}",
+                storage_prefix_for_parts(language, target, overlay),
+                path,
+                source
+            );
+            storage.get_item(&key).ok().flatten()
+        })
+        .and_then(|value| serde_json::from_str(&value).ok())
+}
+
+#[cfg(target_arch = "wasm32")]
 fn register_new_language_handlers(_pivot: &Value) {
     attach_new_language_preview_handler();
     attach_new_language_confirm_handler();
@@ -2249,7 +2601,9 @@ async fn render_apply_result(pivot: &Value, write: bool, result: Result<Value, S
             let _ =
                 output.set_attribute("data-validation-ok", &value["validation"]["ok"].to_string());
             if write {
-                clear_staged_edits(&storage_prefix(pivot));
+                for prefix in active_storage_prefixes(pivot) {
+                    clear_staged_edits(&prefix);
+                }
                 if let Ok(updated) = fetch_note_pivot_for_pivot(pivot).await {
                     publish_note_pivot_panel(&updated);
                 }
@@ -2277,6 +2631,24 @@ fn apply_result_text(heading: &str, value: &Value) -> String {
             "- {}",
             file["path"].as_str().unwrap_or("unknown overlay")
         ));
+    }
+    lines.push("Grouped changes:".to_owned());
+    for file_group in value["file_groups"].as_array().into_iter().flatten() {
+        lines.push(format!(
+            "- {}",
+            file_group["file"].as_str().unwrap_or("unknown file")
+        ));
+        for group in file_group["content_groups"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            lines.push(format!(
+                "  - {}: {} change(s)",
+                group["name"].as_str().unwrap_or("workspace"),
+                group["change_count"].as_u64().unwrap_or(0)
+            ));
+        }
     }
     lines.push("Changed entries:".to_owned());
     for entry in value["changed_entries"].as_array().into_iter().flatten() {
@@ -2354,7 +2726,7 @@ fn staged_source_edit_for(pivot: &Value, path: &str, source: &str) -> Option<Val
 
 #[cfg(target_arch = "wasm32")]
 fn collect_staged_edits(pivot: &Value) -> Vec<Value> {
-    let prefix = storage_prefix(pivot);
+    let prefixes = active_storage_prefixes(pivot);
     let Some(storage) = local_storage() else {
         return Vec::new();
     };
@@ -2364,9 +2736,10 @@ fn collect_staged_edits(pivot: &Value) -> Vec<Value> {
         let Some(key) = storage.key(index).ok().flatten() else {
             continue;
         };
-        if !key.starts_with(&format!("{prefix}translation::"))
-            && !key.starts_with(&format!("{prefix}source::"))
-        {
+        if !prefixes.iter().any(|prefix| {
+            key.starts_with(&format!("{prefix}translation::"))
+                || key.starts_with(&format!("{prefix}source::"))
+        }) {
             continue;
         }
         if let Some(value) = storage.get_item(&key).ok().flatten()
@@ -2376,6 +2749,30 @@ fn collect_staged_edits(pivot: &Value) -> Vec<Value> {
         }
     }
     edits
+}
+
+#[cfg(target_arch = "wasm32")]
+fn active_storage_prefixes(pivot: &Value) -> Vec<String> {
+    active_storage_prefixes_for_default(&storage_prefix(pivot))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn active_storage_prefixes_for_default(default_prefix: &str) -> Vec<String> {
+    let mut prefixes = vec![default_prefix.to_owned()];
+    if let Some(document) = web_sys::window().and_then(|window| window.document())
+        && let Ok(nodes) = document.query_selector_all("[data-storage-prefix]")
+    {
+        for index in 0..nodes.length() {
+            if let Some(node) = nodes.get(index)
+                && let Ok(element) = node.dyn_into::<web_sys::Element>()
+                && let Some(prefix) = element.get_attribute("data-storage-prefix")
+                && !prefixes.iter().any(|existing| existing == &prefix)
+            {
+                prefixes.push(prefix);
+            }
+        }
+    }
+    prefixes
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -2394,15 +2791,20 @@ fn clear_staged_edits(prefix: &str) {
 
 #[cfg(target_arch = "wasm32")]
 fn update_staged_count_for_pivot(pivot: &Value) {
-    update_staged_count(&storage_prefix(pivot));
+    update_staged_count_for_prefixes(&active_storage_prefixes(pivot));
 }
 
 #[cfg(target_arch = "wasm32")]
 fn update_staged_count(prefix: &str) {
+    update_staged_count_for_prefixes(&[prefix.to_owned()]);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn update_staged_count_for_prefixes(prefixes: &[String]) {
     let count = local_storage().map_or(0, |storage| {
         (0..storage.length().unwrap_or(0))
             .filter_map(|index| storage.key(index).ok().flatten())
-            .filter(|key| key.starts_with(prefix))
+            .filter(|key| prefixes.iter().any(|prefix| key.starts_with(prefix)))
             .count()
     });
     if let Some(element) = web_sys::window()
@@ -2431,12 +2833,16 @@ fn source_edit_storage_key_from_parts(prefix: &str, path: &str, source: &str) ->
 
 #[cfg(target_arch = "wasm32")]
 fn storage_prefix(pivot: &Value) -> String {
-    format!(
-        "brainbrew.workbench.staged.{}.{}.{}::",
+    storage_prefix_for_parts(
         pivot["language"]["code"].as_str().unwrap_or("language"),
         pivot["target"]["label"].as_str().unwrap_or("target"),
         pivot["overlay"]["label"].as_str().unwrap_or("overlay"),
     )
+}
+
+#[cfg(target_arch = "wasm32")]
+fn storage_prefix_for_parts(language: &str, target: &str, overlay: &str) -> String {
+    format!("brainbrew.workbench.staged.{language}.{target}.{overlay}::")
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -105,6 +105,30 @@ async fn workbench_source_string_pivot_stages_direct_translation() -> Result<()>
 }
 
 #[tokio::test]
+async fn workbench_multi_pane_layout_applies_grouped_changes_across_files() -> Result<()> {
+    let artifacts = ArtifactDir::new("multi-pane")?;
+    let workspace = TempDir::new().context("create multi-pane E2E workspace")?;
+    write_multi_language_workbench_fixture(workspace.path())?;
+
+    let server = RunningWorkbenchServer::spawn(
+        workspace.path().join("brainbrew.yaml"),
+        dev_assets_path(),
+        artifacts.path(),
+    )?;
+    let driver = new_driver().await.context("connect to WebDriver")?;
+
+    let pane_result = run_multi_pane_smoke(&driver, &server, workspace.path()).await;
+    if let Err(error) = &pane_result {
+        let _ = artifacts.save_browser_failure(&driver, error).await;
+    }
+    let quit_result = driver.quit().await.context("quit browser session");
+
+    pane_result?;
+    quit_result?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn workbench_card_pivot_navigates_and_edits_card_field() -> Result<()> {
     let artifacts = ArtifactDir::new("card-pivot")?;
     let workspace = TempDir::new().context("create card-pivot E2E workspace")?;
@@ -440,6 +464,151 @@ async fn run_source_string_direct_smoke(
     Ok(())
 }
 
+async fn run_multi_pane_smoke(
+    driver: &WebDriver,
+    server: &RunningWorkbenchServer,
+    workspace: &Path,
+) -> Result<()> {
+    driver
+        .goto(server.url("/"))
+        .await
+        .context("open multi-pane workbench")?;
+    wait_for_loaded_probe(driver).await?;
+    wait_for_element(driver, "#pane-layout-panel").await?;
+    let source_toggle = "source-edit-toggle-notes_note_finland_fields_field_country";
+    let disabled = driver
+        .execute(
+            &format!("return document.getElementById('{source_toggle}').disabled;"),
+            Vec::new(),
+        )
+        .await
+        .context("read default source pane writability")?;
+    assert_eq!(disabled.json().as_bool(), Some(true));
+    wait_for_element(driver, "#source-pane-writable")
+        .await?
+        .click()
+        .await
+        .context("make source pane writable")?;
+    let disabled = driver
+        .execute(
+            &format!("return document.getElementById('{source_toggle}').disabled;"),
+            Vec::new(),
+        )
+        .await
+        .context("read source pane writable state")?;
+    assert_eq!(disabled.json().as_bool(), Some(false));
+
+    wait_for_element(driver, "#load-secondary-pane")
+        .await?
+        .click()
+        .await
+        .context("load secondary target pane")?;
+    let nb_input_id = "secondary-translation-input-nb-notes_note_finland_fields_field_capital";
+    wait_for_element(driver, &format!("#{nb_input_id}"))
+        .await
+        .context("secondary target pane appears")?;
+    wait_for_element(driver, "#secondary-pane-writable")
+        .await?
+        .click()
+        .await
+        .context("make secondary pane read-only")?;
+    let disabled = driver
+        .execute(
+            &format!("return document.getElementById('{nb_input_id}').disabled;"),
+            Vec::new(),
+        )
+        .await
+        .context("read secondary read-only state")?;
+    assert_eq!(disabled.json().as_bool(), Some(true));
+    wait_for_element(driver, "#secondary-pane-writable")
+        .await?
+        .click()
+        .await
+        .context("make secondary pane writable")?;
+
+    wait_for_element(driver, &format!("#{source_toggle}"))
+        .await?
+        .click()
+        .await
+        .context("toggle source field edit")?;
+    let source_id = "source-input-notes_note_finland_fields_field_country";
+    let source = wait_for_element(driver, &format!("#{source_id}")).await?;
+    source.clear().await.context("clear source field")?;
+    source
+        .send_keys("Finland pane")
+        .await
+        .context("stage source pane edit")?;
+    let da_input_id = "translation-input-notes_note_finland_fields_field_capital";
+    let da_input = wait_for_element(driver, &format!("#{da_input_id}")).await?;
+    da_input.clear().await.context("clear DA pane input")?;
+    da_input
+        .send_keys("Helsingfors pane")
+        .await
+        .context("stage DA target pane edit")?;
+    let nb_input = wait_for_element(driver, &format!("#{nb_input_id}")).await?;
+    nb_input.clear().await.context("clear NB pane input")?;
+    nb_input
+        .send_keys("Helsinki norsk pane")
+        .await
+        .context("stage NB target pane edit")?;
+
+    driver
+        .refresh()
+        .await
+        .context("refresh multi-pane workbench")?;
+    wait_for_loaded_probe(driver).await?;
+    assert_eq!(element_value(driver, source_id).await?, "Finland pane");
+    assert_eq!(
+        element_value(driver, da_input_id).await?,
+        "Helsingfors pane"
+    );
+    wait_for_element(driver, "#load-secondary-pane")
+        .await?
+        .click()
+        .await
+        .context("reload secondary pane after refresh")?;
+    wait_for_element(driver, &format!("#{nb_input_id}"))
+        .await
+        .context("secondary target pane returns after refresh")?;
+    assert_eq!(
+        element_value(driver, nb_input_id).await?,
+        "Helsinki norsk pane"
+    );
+
+    wait_for_element(driver, "#apply-preview-button")
+        .await?
+        .click()
+        .await
+        .context("preview multi-pane apply")?;
+    wait_for_apply_output(driver, "Apply preview").await?;
+    wait_for_apply_output(driver, "Grouped changes").await?;
+    wait_for_apply_output(driver, "deck.yaml").await?;
+    wait_for_apply_output(driver, "da.yaml").await?;
+    wait_for_apply_output(driver, "nb.yaml").await?;
+    wait_for_apply_output(driver, "Europe").await?;
+    assert!(!fs::read_to_string(workspace.join("deck.yaml"))?.contains("Finland pane"));
+    assert!(!fs::read_to_string(workspace.join("da.yaml"))?.contains("Helsingfors pane"));
+    assert!(!fs::read_to_string(workspace.join("nb.yaml"))?.contains("Helsinki norsk pane"));
+
+    wait_for_element(driver, "#apply-confirm-button")
+        .await?
+        .click()
+        .await
+        .context("confirm multi-pane apply")?;
+    wait_for_apply_output(driver, "Applied").await?;
+    assert!(
+        fs::read_to_string(workspace.join("deck.yaml"))?.contains("field.country: Finland pane")
+    );
+    let da = fs::read_to_string(workspace.join("da.yaml"))?;
+    assert!(da.contains("Helsinki: Helsingfors pane"));
+    assert!(da.contains("old_source: Finland"));
+    assert!(da.contains("new_source: Finland pane"));
+    assert!(
+        fs::read_to_string(workspace.join("nb.yaml"))?.contains("Helsinki: Helsinki norsk pane")
+    );
+    Ok(())
+}
+
 async fn run_card_pivot_smoke(
     driver: &WebDriver,
     server: &RunningWorkbenchServer,
@@ -482,6 +651,11 @@ async fn run_card_pivot_smoke(
     assert!(source_card.contains("class=\"flag\""));
     assert!(source_card.contains("/api/media/flags/ge-country.png"));
 
+    wait_for_element(driver, "#source-pane-writable")
+        .await?
+        .click()
+        .await
+        .context("make source pane writable for card pivot")?;
     let source_toggle_id =
         "card-source-edit-toggle-notes_note_georgia_country_fields_field_country";
     wait_for_element(driver, &format!("#{source_toggle_id}"))
@@ -567,6 +741,11 @@ async fn run_source_edit_smoke(
     let source_id = "source-input-notes_note_georgia_country_fields_field_country";
     let toggle_id = "source-edit-toggle-notes_note_georgia_country_fields_field_country";
     wait_for_text(driver, "2 occurrence(s)").await?;
+    wait_for_element(driver, "#source-pane-writable")
+        .await?
+        .click()
+        .await
+        .context("make source pane writable")?;
     wait_for_element(driver, &format!("#{toggle_id}"))
         .await?
         .click()
@@ -646,6 +825,11 @@ async fn run_mixed_source_target_smoke(
         .context("open mixed source/target workbench")?;
     wait_for_loaded_probe(driver).await?;
     let suffix = "notes_note_georgia_country_fields_field_country";
+    wait_for_element(driver, "#source-pane-writable")
+        .await?
+        .click()
+        .await
+        .context("make source pane writable for mixed edit")?;
     wait_for_element(driver, &format!("#source-edit-toggle-{suffix}"))
         .await?
         .click()
@@ -889,6 +1073,74 @@ fn workspace_root() -> PathBuf {
 fn write_small_workbench_fixture(dir: &Path) -> Result<()> {
     fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML)?;
     write_translation_overlay_and_manifest(dir)
+}
+
+fn write_multi_language_workbench_fixture(dir: &Path) -> Result<()> {
+    fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML)?;
+    fs::write(
+        dir.join("da.yaml"),
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Finland: Finland
+"#,
+    )?;
+    fs::write(
+        dir.join("nb.yaml"),
+        r#"id: overlay.translation.nb
+kind: translation
+translations: {}
+"#,
+    )?;
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.translation.da:
+    file: da.yaml
+    kind: translation
+  overlay.translation.nb:
+    file: nb.yaml
+    kind: translation
+targets:
+  da-standard:
+    overlays:
+      - overlay.translation.da
+  en-standard:
+    overlays: []
+  nb-standard:
+    overlays:
+      - overlay.translation.nb
+languages:
+  da:
+    display_name: Danish
+    translation_overlays:
+      base: overlay.translation.da
+    primary_target: standard
+    targets:
+      standard: da-standard
+  en:
+    display_name: English
+    source: true
+    primary_target: standard
+    targets:
+      standard: en-standard
+  nb:
+    display_name: Norwegian
+    translation_overlays:
+      base: overlay.translation.nb
+    primary_target: standard
+    targets:
+      standard: nb-standard
+translation_profile:
+  structural_fields:
+    - field.flag
+  optional_paths:
+    - deck.*
+"#,
+    )?;
+    Ok(())
 }
 
 fn write_ug_like_workbench_fixture(dir: &Path) -> Result<()> {

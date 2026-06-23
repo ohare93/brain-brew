@@ -78,6 +78,17 @@ The Card pivot reviews produced cards one at a time, where a card is a Note rend
 - Field inspectors expose the underlying note-field source and translation rows used by that card. Browser edits can stage target translation edits or source note-field edits and use the shared Apply preview/confirmation APIs.
 - The Card pivot does not introduce card-specific storage; writes still update canonical translation/source YAML through Workbench Apply.
 
+## Flexible pane layouts
+
+Pane layout controls turn read/write status into a workflow preset instead of a product limit:
+
+- The default translator preset keeps the source pane read-only and the selected target pane writable.
+- Maintainers can toggle the source pane writable for existing note-field source edits.
+- Maintainers can load an additional target-language pane and toggle that target pane writable independently.
+- Target panes stage translation-dictionary edits with their own language/target/overlay scope, while source panes stage Canonical Deck File edits.
+- Apply preview collects all visible pane scopes, groups changes by affected file and content group, and can include the Canonical Deck File plus multiple Translation Overlay files in one confirmation.
+- Apply still writes only after explicit confirmation; browser-local staged edits remain in localStorage until applied.
+
 ## New language scaffolding
 
 The Workbench can scaffold a new target language from an existing target-language template:
