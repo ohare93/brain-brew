@@ -68,4 +68,15 @@ The Source String pivot complements the note-first view for reusable translation
 - Structured-message source strings are exposed at component/format paths first; whole-field contextual overrides remain an advanced/manual action.
 - Source String staged edits share the same browser-local localStorage and Apply preview/confirmation workflow as the Note pivot.
 
-New language scaffolding and richer card pivots are later slices.
+## New language scaffolding
+
+The Workbench can scaffold a new target language from an existing target-language template:
+
+- `GET /api/workbench/new-language-preview` derives an editable draft without writing files.
+- `POST /api/workbench/new-language` writes the confirmed manifest changes and new translation overlay files.
+- Defaults follow workspace conventions: `overlay.translation.<code>`, `overlays/languages/<code>.yaml`, target IDs `<code>-<target-label>`, and copied language target labels from the template.
+- Every template `translation_overlays` group is selected in the preview by default; maintainers can deselect groups or edit generated overlay IDs, file paths, and target IDs before creation.
+- New translation overlay files start with an empty `translations: {}` dictionary so progress reports all source strings as missing until reviewed.
+- The server re-reads `brainbrew.yaml` after writes, so `/api/workspace`, language selectors, and Note/Source String pivots can load the new language immediately.
+
+Richer card pivots are later slices.

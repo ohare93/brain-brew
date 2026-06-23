@@ -36,6 +36,24 @@ note_types:
 }
 
 #[test]
+fn empty_translation_dictionary_round_trips_as_translation_overlay() {
+    let formatted = canonical_yaml::overlay_format_str(
+        r#"id: overlay.translation.nb
+kind: translation
+translations: {}
+"#,
+    )
+    .expect("overlay formats");
+
+    assert_eq!(
+        formatted,
+        "id: overlay.translation.nb\nkind: translation\ntranslations: {}\n"
+    );
+    let overlay = canonical_yaml::overlay_from_str(&formatted).expect("formatted overlay parses");
+    assert!(overlay.translations.is_some());
+}
+
+#[test]
 fn parses_sparse_overlay_yaml_with_field_expected_base() {
     let overlay = canonical_yaml::overlay_from_str(
         r#"id: overlay.patch.capital

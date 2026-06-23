@@ -321,6 +321,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
     }
     html.push_str("</nav>");
     html.push_str(&filter_buttons_html(pivot));
+    html.push_str(&new_language_panel_html(pivot));
 
     if let Some(notes) = pivot["notes"].as_array() {
         if notes.is_empty() {
@@ -340,6 +341,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
     panel.set_inner_html(&html);
 
     register_control_handlers(pivot);
+    register_new_language_handlers(pivot);
     register_field_handlers(pivot);
     register_apply_handlers(pivot);
     restore_staged_dom_state(pivot);
@@ -350,6 +352,45 @@ fn publish_note_pivot_panel(pivot: &Value) {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn publish_note_pivot_panel(_pivot: &Value) {}
+
+#[cfg(target_arch = "wasm32")]
+fn new_language_panel_html(pivot: &Value) -> String {
+    let mut html = String::new();
+    html.push_str("<section id=\"new-language-panel\" class=\"new-language-panel\">");
+    html.push_str("<h3>New language scaffold</h3>");
+    html.push_str("<label>Template language <select id=\"new-language-template\">");
+    for language in pivot["selection_options"]["languages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let code = language["code"].as_str().unwrap_or("");
+        let label = language["display_name"].as_str().unwrap_or(code);
+        let selected = if language["active"].as_bool().unwrap_or(false) {
+            " selected"
+        } else {
+            ""
+        };
+        html.push_str(&format!(
+            "<option value=\"{}\"{}>{}</option>",
+            escape_html(code),
+            selected,
+            escape_html(label)
+        ));
+    }
+    html.push_str("</select></label>");
+    html.push_str("<label>Code <input id=\"new-language-code\" placeholder=\"nb\"></label>");
+    html.push_str("<label>Display name <input id=\"new-language-display-name\" placeholder=\"Norwegian Bokmal\"></label>");
+    html.push_str(
+        "<button id=\"new-language-preview-button\" type=\"button\">Preview new language</button> ",
+    );
+    html.push_str(
+        "<button id=\"new-language-confirm-button\" type=\"button\">Create language</button>",
+    );
+    html.push_str("<div id=\"new-language-preview-output\" data-validation-ok=\"false\"></div>");
+    html.push_str("</section>");
+    html
+}
 
 #[cfg(target_arch = "wasm32")]
 fn select_options_html(
@@ -894,6 +935,82 @@ fn register_control_handlers(_pivot: &Value) {
 }
 
 #[cfg(target_arch = "wasm32")]
+fn register_new_language_handlers(_pivot: &Value) {
+    attach_new_language_preview_handler();
+    attach_new_language_confirm_handler();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_new_language_preview_handler() {
+    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+            return;
+        };
+        let template = selected_value(&document, "new-language-template");
+        let code = input_value(&document, "new-language-code");
+        let display_name = input_value(&document, "new-language-display-name");
+        wasm_bindgen_futures::spawn_local(async move {
+            let result = fetch_new_language_preview(template, code, display_name).await;
+            render_new_language_preview(result);
+        });
+    }));
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("new-language-preview-button"))
+    {
+        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+    }
+    closure.forget();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_new_language_confirm_handler() {
+    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+            return;
+        };
+        let Some(request) = collect_new_language_request(&document) else {
+            render_new_language_status("Preview the new language before creating it.", false);
+            return;
+        };
+        let code = request["code"].as_str().unwrap_or("").to_owned();
+        let target = request["primary_target"].as_str().unwrap_or("").to_owned();
+        let overlay = request["groups"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|group| group["selected"].as_bool().unwrap_or(false))
+            .and_then(|group| group["label"].as_str())
+            .unwrap_or("base")
+            .to_owned();
+        wasm_bindgen_futures::spawn_local(async move {
+            match post_json("/api/workbench/new-language", &request).await {
+                Ok(value) => {
+                    render_new_language_status(&new_language_result_text("Created", &value), true);
+                    match fetch_note_pivot_query(Some(code), Some(target), Some(overlay), None)
+                        .await
+                    {
+                        Ok(pivot) => publish_note_pivot_panel(&pivot),
+                        Err(error) => render_new_language_status(&escape_html(&error), false),
+                    }
+                }
+                Err(error) => render_new_language_status(
+                    &escape_html(&format!("Create failed: {error}")),
+                    false,
+                ),
+            }
+        });
+    }));
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("new-language-confirm-button"))
+    {
+        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+    }
+    closure.forget();
+}
+
+#[cfg(target_arch = "wasm32")]
 fn attach_select_reload_handler(element_id: &str, reset_dependent_selection: bool) {
     let element_id = element_id.to_owned();
     let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
@@ -951,6 +1068,180 @@ fn selected_value(document: &web_sys::Document, element_id: &str) -> Option<Stri
         .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
         .map(|select| select.value())
         .filter(|value| !value.is_empty())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn input_value(document: &web_sys::Document, element_id: &str) -> Option<String> {
+    document
+        .get_element_by_id(element_id)
+        .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+        .map(|input| input.value())
+        .filter(|value| !value.is_empty())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn render_new_language_preview(result: Result<Value, String>) {
+    match result {
+        Ok(value) => {
+            let mut html = String::new();
+            html.push_str(&format!(
+                "<div class=\"new-language-preview\" data-code=\"{}\" data-template=\"{}\" data-primary-target=\"{}\">",
+                escape_html(value["language"]["code"].as_str().unwrap_or("")),
+                escape_html(value["language"]["template_language"].as_str().unwrap_or("")),
+                escape_html(value["language"]["primary_target"].as_str().unwrap_or("")),
+            ));
+            html.push_str("<p>Preview ready. Affected files:</p><ul>");
+            for file in value["affected_files"].as_array().into_iter().flatten() {
+                html.push_str(&format!(
+                    "<li>{}</li>",
+                    escape_html(file["path"].as_str().unwrap_or("unknown"))
+                ));
+            }
+            html.push_str("</ul><table><tbody>");
+            for group in value["groups"].as_array().into_iter().flatten() {
+                let label = group["label"].as_str().unwrap_or("");
+                let checked = if group["selected"].as_bool().unwrap_or(false) {
+                    " checked"
+                } else {
+                    ""
+                };
+                html.push_str(&format!(
+                    "<tr class=\"new-language-group-row\" data-label=\"{}\" data-template-overlay-id=\"{}\"><td><label><input class=\"new-language-group-selected\" id=\"new-language-group-{}\" type=\"checkbox\"{}> {}</label></td><td><input class=\"new-language-group-overlay-id\" value=\"{}\"></td><td><input class=\"new-language-group-file\" value=\"{}\"></td></tr>",
+                    escape_html(label),
+                    escape_html(group["template_overlay_id"].as_str().unwrap_or("")),
+                    escape_html(label),
+                    checked,
+                    escape_html(label),
+                    escape_html(group["overlay_id"].as_str().unwrap_or("")),
+                    escape_html(group["file"].as_str().unwrap_or("")),
+                ));
+            }
+            html.push_str("</tbody></table><table><tbody>");
+            for target in value["targets"].as_array().into_iter().flatten() {
+                let label = target["label"].as_str().unwrap_or("");
+                html.push_str(&format!(
+                    "<tr class=\"new-language-target-row\" data-label=\"{}\"><td>{}</td><td><input class=\"new-language-target-id\" value=\"{}\"></td></tr>",
+                    escape_html(label),
+                    escape_html(label),
+                    escape_html(target["target_id"].as_str().unwrap_or("")),
+                ));
+            }
+            html.push_str("</tbody></table><pre>");
+            html.push_str(&escape_html(value["manifest_yaml"].as_str().unwrap_or("")));
+            html.push_str("</pre></div>");
+            render_new_language_status(&html, true);
+        }
+        Err(error) => {
+            render_new_language_status(&escape_html(&format!("Preview failed: {error}")), false)
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn render_new_language_status(html: &str, ok: bool) {
+    if let Some(output) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("new-language-preview-output"))
+    {
+        output.set_inner_html(html);
+        let _ = output.set_attribute("data-validation-ok", if ok { "true" } else { "false" });
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn collect_new_language_request(document: &web_sys::Document) -> Option<Value> {
+    let preview = document
+        .query_selector(".new-language-preview")
+        .ok()
+        .flatten()?;
+    let code = preview.get_attribute("data-code")?;
+    let template_language = preview.get_attribute("data-template")?;
+    let primary_target = preview.get_attribute("data-primary-target")?;
+    let display_name =
+        input_value(document, "new-language-display-name").unwrap_or_else(|| code.clone());
+    let mut groups = Vec::new();
+    let group_rows = document
+        .query_selector_all(".new-language-group-row")
+        .ok()?;
+    for index in 0..group_rows.length() {
+        let Some(row) = group_rows.item(index) else {
+            continue;
+        };
+        let Ok(row) = row.dyn_into::<web_sys::Element>() else {
+            continue;
+        };
+        let selected = row
+            .query_selector(".new-language-group-selected")
+            .ok()
+            .flatten()
+            .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+            .is_some_and(|input| input.checked());
+        let overlay_id = row
+            .query_selector(".new-language-group-overlay-id")
+            .ok()
+            .flatten()
+            .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+            .map(|input| input.value())
+            .unwrap_or_default();
+        let file = row
+            .query_selector(".new-language-group-file")
+            .ok()
+            .flatten()
+            .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+            .map(|input| input.value())
+            .unwrap_or_default();
+        groups.push(serde_json::json!({
+            "label": row.get_attribute("data-label").unwrap_or_default(),
+            "template_overlay_id": row.get_attribute("data-template-overlay-id").unwrap_or_default(),
+            "overlay_id": overlay_id,
+            "file": file,
+            "selected": selected,
+        }));
+    }
+    let mut targets = Vec::new();
+    let target_rows = document
+        .query_selector_all(".new-language-target-row")
+        .ok()?;
+    for index in 0..target_rows.length() {
+        let Some(row) = target_rows.item(index) else {
+            continue;
+        };
+        let Ok(row) = row.dyn_into::<web_sys::Element>() else {
+            continue;
+        };
+        let target_id = row
+            .query_selector(".new-language-target-id")
+            .ok()
+            .flatten()
+            .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+            .map(|input| input.value())
+            .unwrap_or_default();
+        targets.push(serde_json::json!({
+            "label": row.get_attribute("data-label").unwrap_or_default(),
+            "target_id": target_id,
+        }));
+    }
+    Some(serde_json::json!({
+        "code": code,
+        "display_name": display_name,
+        "template_language": template_language,
+        "primary_target": primary_target,
+        "groups": groups,
+        "targets": targets,
+    }))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn new_language_result_text(heading: &str, value: &Value) -> String {
+    let mut lines = vec![heading.to_owned()];
+    lines.push(format!(
+        "Language: {}",
+        value["language"].as_str().unwrap_or("unknown")
+    ));
+    if let Some(files) = value["workspace"]["fingerprints"].as_array() {
+        lines.push(format!("Workspace now tracks {} file(s).", files.len()));
+    }
+    escape_html(&lines.join("\n"))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1663,6 +1954,28 @@ async fn fetch_note_pivot_query(
         params.push(format!("filter={}", encode_query_component(&filter)));
     }
     get_workbench_json("/api/workbench/note-pivot", params).await
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn fetch_new_language_preview(
+    template: Option<String>,
+    code: Option<String>,
+    display_name: Option<String>,
+) -> Result<Value, String> {
+    let mut params = Vec::new();
+    if let Some(template) = template.filter(|value| !value.is_empty()) {
+        params.push(format!("template={}", encode_query_component(&template)));
+    }
+    if let Some(code) = code.filter(|value| !value.is_empty()) {
+        params.push(format!("code={}", encode_query_component(&code)));
+    }
+    if let Some(display_name) = display_name.filter(|value| !value.is_empty()) {
+        params.push(format!(
+            "display_name={}",
+            encode_query_component(&display_name)
+        ));
+    }
+    get_workbench_json("/api/workbench/new-language-preview", params).await
 }
 
 #[cfg(target_arch = "wasm32")]

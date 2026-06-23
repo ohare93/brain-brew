@@ -13,11 +13,15 @@ use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use brain_brew_core::{
-    CanonicalDeck, CardTemplate, Note, NoteType, Overlay, StableId, StaleTranslationRecord,
-    TranslationCoverageCategory, TranslationCoverageEntry, TranslationDictionary,
+    CanonicalDeck, CardTemplate, Note, NoteType, Overlay, OverlayKind, StableId,
+    StaleTranslationRecord, TranslationCoverageCategory, TranslationCoverageEntry,
+    TranslationDictionary,
 };
 use brain_brew_formats::canonical_yaml;
-use brain_brew_formats::manifest::{FederatedDeckManifest, LanguageManifestEntry};
+use brain_brew_formats::manifest::{
+    self, BuildTarget, FederatedDeckManifest, LanguageManifestEntry, OverlayManifestEntry,
+    TargetExports,
+};
 use include_dir::{Dir, include_dir};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -169,6 +173,11 @@ fn app(metadata: Arc<WorkspaceMetadata>, dev_assets: Option<PathBuf>) -> Router 
             "/api/workbench/source-string-pivot",
             get(source_string_pivot),
         )
+        .route(
+            "/api/workbench/new-language-preview",
+            get(new_language_preview),
+        )
+        .route("/api/workbench/new-language", post(create_new_language))
         .route("/api/workbench/apply-preview", post(apply_preview))
         .route("/api/workbench/apply", post(apply_edits))
         .route("/api/media/{*path}", get(media_asset))
@@ -215,6 +224,26 @@ async fn source_string_pivot(
 ) -> Result<Json<Value>, (StatusCode, String)> {
     metadata
         .source_string_pivot_json(&query)
+        .map(Json)
+        .map_err(workbench_api_error)
+}
+
+async fn new_language_preview(
+    State(metadata): State<Arc<WorkspaceMetadata>>,
+    Query(query): Query<NewLanguagePreviewQuery>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    metadata
+        .new_language_preview_json(&query)
+        .map(Json)
+        .map_err(workbench_api_error)
+}
+
+async fn create_new_language(
+    State(metadata): State<Arc<WorkspaceMetadata>>,
+    Json(request): Json<NewLanguageRequest>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    metadata
+        .create_new_language_json(request)
         .map(Json)
         .map_err(workbench_api_error)
 }
@@ -302,66 +331,129 @@ fn embedded_content_type(path: &str) -> &'static str {
 struct WorkspaceMetadata {
     manifest_path: PathBuf,
     manifest_root: PathBuf,
-    manifest: FederatedDeckManifest,
 }
 
 impl WorkspaceMetadata {
-    fn load(manifest_path: &Path, manifest: FederatedDeckManifest) -> Self {
+    fn load(manifest_path: &Path, _manifest: FederatedDeckManifest) -> Self {
         Self {
             manifest_path: manifest_path.to_path_buf(),
             manifest_root: manifest_root(manifest_path),
-            manifest,
         }
     }
 
+    fn current_manifest(&self) -> Result<FederatedDeckManifest, String> {
+        read_manifest(&self.manifest_path)
+    }
+
     fn workspace_json(&self) -> Result<Value, String> {
-        let fingerprints =
-            file_fingerprints(&self.manifest_path, &self.manifest_root, &self.manifest)?;
+        let manifest = self.current_manifest()?;
+        let fingerprints = file_fingerprints(&self.manifest_path, &self.manifest_root, &manifest)?;
         Ok(json!({
             "manifest": self.manifest_path.display().to_string(),
             "manifest_root": self.manifest_root.display().to_string(),
-            "languages": languages_json(&self.manifest),
-            "target_labels": target_labels_json(&self.manifest),
-            "targets": targets_json(&self.manifest),
+            "languages": languages_json(&manifest),
+            "target_labels": target_labels_json(&manifest),
+            "targets": targets_json(&manifest),
             "translation_profile": {
-                "structural_fields": self.manifest.translation_profile.structural_fields,
-                "optional_paths": self.manifest.translation_profile.optional_paths,
+                "structural_fields": manifest.translation_profile.structural_fields,
+                "optional_paths": manifest.translation_profile.optional_paths,
             },
             "fingerprints": fingerprints,
         }))
     }
 
     fn note_pivot_json(&self, query: &NotePivotQuery) -> Result<Value, String> {
+        let manifest = self.current_manifest()?;
         let context = self.selected_translation_context(
+            &manifest,
             query.language.as_deref(),
             query.target.as_deref(),
             query.overlay.as_deref(),
         )?;
         Ok(note_pivot_json_from_context(
             &context,
-            &self.manifest,
+            &manifest,
             query.filter.as_deref(),
             query.note.as_deref(),
         ))
     }
 
     fn source_string_pivot_json(&self, query: &SourceStringPivotQuery) -> Result<Value, String> {
+        let manifest = self.current_manifest()?;
         let context = self.selected_translation_context(
+            &manifest,
             query.language.as_deref(),
             query.target.as_deref(),
             query.overlay.as_deref(),
         )?;
         Ok(source_string_pivot_json_from_context(
             &context,
-            &self.manifest,
+            &manifest,
             query.source.as_deref(),
             query.content_group.as_deref(),
             query.status.as_deref(),
         ))
     }
 
+    fn new_language_preview_json(&self, query: &NewLanguagePreviewQuery) -> Result<Value, String> {
+        let manifest = self.current_manifest()?;
+        let template = if let Some(template) = &query.template {
+            template.clone()
+        } else {
+            default_template_language(&manifest)
+                .ok_or_else(|| "missing template language".to_owned())?
+        };
+        let code = query.code.as_deref().unwrap_or("new");
+        let display_name = query.display_name.as_deref().unwrap_or(code);
+        let request = default_new_language_request(&manifest, code, display_name, &template)?;
+        let (updated, overlay_writes) =
+            apply_new_language_request(&self.manifest_root, &manifest, &request)?;
+        Ok(new_language_preview_response(
+            &updated,
+            &request,
+            &overlay_writes,
+        ))
+    }
+
+    fn create_new_language_json(&self, request: NewLanguageRequest) -> Result<Value, String> {
+        let manifest = self.current_manifest()?;
+        let (updated, overlay_writes) =
+            apply_new_language_request(&self.manifest_root, &manifest, &request)?;
+        let manifest_yaml = manifest::to_string(&updated);
+        manifest::from_str(&manifest_yaml)
+            .map_err(|error| format!("invalid generated manifest: {error}"))?;
+
+        for (relative_path, overlay) in overlay_writes {
+            let path = safe_new_language_relative_path(&relative_path)
+                .map(|relative| self.manifest_root.join(relative))?;
+            if path.exists() {
+                return Err(format!(
+                    "invalid new language overlay file already exists: {}",
+                    path.display()
+                ));
+            }
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
+            }
+            fs::write(&path, canonical_yaml::overlay_to_string(&overlay))
+                .map_err(|error| format!("failed to write {}: {error}", path.display()))?;
+        }
+        fs::write(&self.manifest_path, manifest_yaml).map_err(|error| {
+            format!("failed to write {}: {error}", self.manifest_path.display())
+        })?;
+
+        Ok(json!({
+            "created": true,
+            "language": request.code,
+            "workspace": self.workspace_json()?,
+        }))
+    }
+
     fn apply_request_json(&self, request: ApplyRequest, mode: ApplyMode) -> Result<Value, String> {
+        let manifest = self.current_manifest()?;
         let context = self.selected_translation_context(
+            &manifest,
             request.language.as_deref(),
             request.target.as_deref(),
             request.overlay.as_deref(),
@@ -384,7 +476,7 @@ impl WorkspaceMetadata {
             .collect::<Vec<_>>();
         let mut overlay = read_overlay_for_rewrite(&context.selection.overlay_file)?;
         let mut modified_base = context.base_deck.clone();
-        let base_file = self.manifest_root.join(&self.manifest.base);
+        let base_file = self.manifest_root.join(&manifest.base);
         let mut source_plan = apply_staged_source_edits(
             &mut modified_base,
             &mut overlay,
@@ -475,7 +567,8 @@ impl WorkspaceMetadata {
     }
 
     fn media_path_declared(&self, requested_path: &str) -> Result<bool, String> {
-        for target_id in self.manifest.targets.keys() {
+        let manifest = self.current_manifest()?;
+        for target_id in manifest.targets.keys() {
             let plan =
                 plan_manifest_target_with_packages(&self.manifest_path, target_id, &[], &[])?;
             let mut current = plan.base;
@@ -508,11 +601,13 @@ impl WorkspaceMetadata {
 
     fn selected_translation_context(
         &self,
+        manifest: &FederatedDeckManifest,
         language: Option<&str>,
         target_label: Option<&str>,
         overlay_label: Option<&str>,
     ) -> Result<SelectedTranslationContext, String> {
-        let selection = self.select_translation_target(language, target_label, overlay_label)?;
+        let selection =
+            self.select_translation_target(manifest, language, target_label, overlay_label)?;
         let plan = plan_manifest_target_with_packages(
             &self.manifest_path,
             &selection.target_id,
@@ -569,19 +664,19 @@ impl WorkspaceMetadata {
 
     fn select_translation_target(
         &self,
+        manifest: &FederatedDeckManifest,
         language: Option<&str>,
         target_label: Option<&str>,
         overlay_label: Option<&str>,
     ) -> Result<WorkbenchSelection, String> {
         let (language_code, language_entry) = if let Some(language) = language {
-            let entry = self
-                .manifest
+            let entry = manifest
                 .languages
                 .get(language)
                 .ok_or_else(|| format!("unknown language {language:?}"))?;
             (language.to_owned(), entry)
         } else {
-            self.manifest
+            manifest
                 .languages
                 .iter()
                 .find(|(_, entry)| !entry.source && !entry.translation_overlays.is_empty())
@@ -634,8 +729,7 @@ impl WorkspaceMetadata {
                 format!("language {language_code:?} has no overlay label {overlay_label:?}")
             })?
             .clone();
-        let overlay_file = self
-            .manifest
+        let overlay_file = manifest
             .overlays
             .get(&overlay_id)
             .map(|overlay| self.manifest_root.join(&overlay.file))
@@ -661,8 +755,7 @@ impl WorkspaceMetadata {
             overlay_file,
             overlay_display_file: String::new(),
             overlay_badges,
-            structural_fields: self
-                .manifest
+            structural_fields: manifest
                 .translation_profile
                 .structural_fields
                 .iter()
@@ -689,6 +782,38 @@ struct SourceStringPivotQuery {
     source: Option<String>,
     content_group: Option<String>,
     status: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+struct NewLanguagePreviewQuery {
+    code: Option<String>,
+    display_name: Option<String>,
+    template: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct NewLanguageRequest {
+    code: String,
+    display_name: String,
+    template_language: String,
+    primary_target: String,
+    groups: Vec<NewLanguageGroupRequest>,
+    targets: Vec<NewLanguageTargetRequest>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct NewLanguageGroupRequest {
+    label: String,
+    template_overlay_id: String,
+    overlay_id: String,
+    file: String,
+    selected: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct NewLanguageTargetRequest {
+    label: String,
+    target_id: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -810,6 +935,363 @@ struct SelectedTranslationContext {
 struct ApplyValidation {
     ok: bool,
     errors: Vec<String>,
+}
+
+fn default_template_language(manifest: &FederatedDeckManifest) -> Option<String> {
+    manifest
+        .languages
+        .iter()
+        .find(|(_, language)| !language.source && !language.translation_overlays.is_empty())
+        .map(|(code, _)| code.clone())
+}
+
+fn default_new_language_request(
+    manifest: &FederatedDeckManifest,
+    code: &str,
+    display_name: &str,
+    template_language: &str,
+) -> Result<NewLanguageRequest, String> {
+    let template = manifest
+        .languages
+        .get(template_language)
+        .ok_or_else(|| format!("unknown template language {template_language:?}"))?;
+    if template.source || template.translation_overlays.is_empty() {
+        return Err(format!(
+            "invalid template language {template_language:?}; choose a target language"
+        ));
+    }
+
+    let groups = template
+        .translation_overlays
+        .iter()
+        .map(|(label, template_overlay_id)| {
+            default_new_language_group(code, label, template_overlay_id)
+        })
+        .collect();
+    let targets = template
+        .targets
+        .keys()
+        .map(|label| NewLanguageTargetRequest {
+            label: label.clone(),
+            target_id: format!("{code}-{label}"),
+        })
+        .collect();
+
+    Ok(NewLanguageRequest {
+        code: code.to_owned(),
+        display_name: display_name.to_owned(),
+        template_language: template_language.to_owned(),
+        primary_target: template.primary_target.clone(),
+        groups,
+        targets,
+    })
+}
+
+fn default_new_language_group(
+    code: &str,
+    label: &str,
+    template_overlay_id: &str,
+) -> NewLanguageGroupRequest {
+    let (overlay_id, file) = if label == "base" {
+        (
+            format!("overlay.translation.{code}"),
+            format!("overlays/languages/{code}.yaml"),
+        )
+    } else {
+        (
+            format!("overlay.translation.{label}.{code}"),
+            format!("overlays/languages/{label}/{code}.yaml"),
+        )
+    };
+    NewLanguageGroupRequest {
+        label: label.to_owned(),
+        template_overlay_id: template_overlay_id.to_owned(),
+        overlay_id,
+        file,
+        selected: true,
+    }
+}
+
+fn apply_new_language_request(
+    manifest_root: &Path,
+    manifest: &FederatedDeckManifest,
+    request: &NewLanguageRequest,
+) -> Result<(FederatedDeckManifest, Vec<(String, Overlay)>), String> {
+    validate_new_language_code(&request.code)?;
+    if request.display_name.trim().is_empty() {
+        return Err("invalid new language display name: expected a non-empty value".to_owned());
+    }
+    if manifest.languages.contains_key(&request.code) {
+        return Err(format!(
+            "invalid new language code {:?}: language already exists",
+            request.code
+        ));
+    }
+    let template = manifest
+        .languages
+        .get(&request.template_language)
+        .ok_or_else(|| format!("unknown template language {:?}", request.template_language))?;
+    if template.source || template.translation_overlays.is_empty() {
+        return Err(format!(
+            "invalid template language {:?}; choose a target language",
+            request.template_language
+        ));
+    }
+
+    let template_translation_ids = template
+        .translation_overlays
+        .values()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let selected_groups = selected_new_language_groups(template, request)?;
+    if selected_groups.is_empty() {
+        return Err(
+            "invalid new language scaffold: select at least one translation overlay group"
+                .to_owned(),
+        );
+    }
+    let selected_template_to_new = selected_groups
+        .iter()
+        .map(|group| (group.template_overlay_id.clone(), group.overlay_id.clone()))
+        .collect::<BTreeMap<_, _>>();
+
+    let mut updated = manifest.clone();
+    let mut overlay_writes = Vec::new();
+    for group in &selected_groups {
+        validate_stable_id("overlay id", &group.overlay_id)?;
+        if manifest.overlays.contains_key(&group.overlay_id) {
+            return Err(format!(
+                "invalid new language overlay id {:?}: overlay already exists",
+                group.overlay_id
+            ));
+        }
+        let relative_path = safe_new_language_relative_path(&group.file)?;
+        let absolute_path = manifest_root.join(&relative_path);
+        if absolute_path.exists() {
+            return Err(format!(
+                "invalid new language overlay file already exists: {}",
+                absolute_path.display()
+            ));
+        }
+        let template_overlay = manifest
+            .overlays
+            .get(&group.template_overlay_id)
+            .ok_or_else(|| format!("unknown template overlay {:?}", group.template_overlay_id))?;
+        let depends_on = template_overlay
+            .depends_on
+            .iter()
+            .filter_map(|dependency| {
+                if let Some(replacement) = selected_template_to_new.get(dependency) {
+                    Some(replacement.clone())
+                } else if template_translation_ids.contains(dependency) {
+                    None
+                } else {
+                    Some(dependency.clone())
+                }
+            })
+            .collect();
+        updated.overlays.insert(
+            group.overlay_id.clone(),
+            OverlayManifestEntry {
+                file: group.file.clone(),
+                kind: Some("translation".to_owned()),
+                depends_on,
+            },
+        );
+        overlay_writes.push((
+            group.file.clone(),
+            Overlay {
+                id: StableId::new(group.overlay_id.clone()).expect("validated stable id"),
+                kind: OverlayKind::Translation,
+                translations: Some(TranslationDictionary::default()),
+                deck_change: None,
+                note_changes: BTreeMap::new(),
+                note_type_changes: BTreeMap::new(),
+                media_changes: BTreeMap::new(),
+            },
+        ));
+    }
+
+    let mut language_targets = BTreeMap::new();
+    for target in &request.targets {
+        validate_stable_id("target id", &target.target_id)?;
+        if manifest.targets.contains_key(&target.target_id) {
+            return Err(format!(
+                "invalid new language target id {:?}: target already exists",
+                target.target_id
+            ));
+        }
+        let template_target_id = template.targets.get(&target.label).ok_or_else(|| {
+            format!(
+                "invalid new language target label {:?}: not found on template language",
+                target.label
+            )
+        })?;
+        let template_target = manifest
+            .targets
+            .get(template_target_id)
+            .ok_or_else(|| format!("unknown template target {template_target_id:?}"))?;
+        let overlays = template_target
+            .overlays
+            .iter()
+            .filter_map(|overlay_id| {
+                if let Some(replacement) = selected_template_to_new.get(overlay_id) {
+                    Some(replacement.clone())
+                } else if template_translation_ids.contains(overlay_id) {
+                    None
+                } else {
+                    Some(overlay_id.clone())
+                }
+            })
+            .collect::<Vec<_>>();
+        updated.targets.insert(
+            target.target_id.clone(),
+            BuildTarget {
+                extends: template_target.extends.clone(),
+                overlays,
+                translation_coverage: Default::default(),
+                exports: TargetExports::default(),
+            },
+        );
+        language_targets.insert(target.label.clone(), target.target_id.clone());
+    }
+    if language_targets.is_empty() {
+        return Err("invalid new language scaffold: expected at least one target".to_owned());
+    }
+    if !language_targets.contains_key(&request.primary_target) {
+        return Err(format!(
+            "invalid new language primary target {:?}: not found in target labels",
+            request.primary_target
+        ));
+    }
+
+    let translation_overlays = selected_groups
+        .iter()
+        .map(|group| (group.label.clone(), group.overlay_id.clone()))
+        .collect();
+    updated.languages.insert(
+        request.code.clone(),
+        LanguageManifestEntry {
+            display_name: request.display_name.clone(),
+            source: false,
+            translation_overlays,
+            primary_target: request.primary_target.clone(),
+            targets: language_targets,
+        },
+    );
+
+    let manifest_yaml = manifest::to_string(&updated);
+    manifest::from_str(&manifest_yaml)
+        .map_err(|error| format!("invalid generated manifest: {error}"))?;
+    for target in &request.targets {
+        updated
+            .expand_target(&target.target_id)
+            .map_err(|error| format!("invalid generated target {:?}: {error}", target.target_id))?;
+    }
+
+    Ok((updated, overlay_writes))
+}
+
+fn selected_new_language_groups<'a>(
+    template: &LanguageManifestEntry,
+    request: &'a NewLanguageRequest,
+) -> Result<Vec<&'a NewLanguageGroupRequest>, String> {
+    let mut seen_labels = BTreeSet::new();
+    let mut selected = Vec::new();
+    for group in &request.groups {
+        if !seen_labels.insert(group.label.clone()) {
+            return Err(format!(
+                "invalid new language overlay group {:?}: duplicate label",
+                group.label
+            ));
+        }
+        let Some(template_overlay_id) = template.translation_overlays.get(&group.label) else {
+            return Err(format!(
+                "invalid new language overlay group {:?}: not found on template language",
+                group.label
+            ));
+        };
+        if template_overlay_id != &group.template_overlay_id {
+            return Err(format!(
+                "invalid new language overlay group {:?}: template overlay changed",
+                group.label
+            ));
+        }
+        if group.selected {
+            selected.push(group);
+        }
+    }
+    Ok(selected)
+}
+
+fn new_language_preview_response(
+    manifest: &FederatedDeckManifest,
+    request: &NewLanguageRequest,
+    overlay_writes: &[(String, Overlay)],
+) -> Value {
+    let overlay_files = overlay_writes
+        .iter()
+        .map(|(path, overlay)| {
+            json!({
+                "path": path,
+                "contents": canonical_yaml::overlay_to_string(overlay),
+            })
+        })
+        .collect::<Vec<_>>();
+    let mut affected_files = vec![json!({ "path": "brainbrew.yaml" })];
+    affected_files.extend(
+        overlay_writes
+            .iter()
+            .map(|(path, _)| json!({ "path": path })),
+    );
+    json!({
+        "validation": { "ok": true, "errors": Vec::<String>::new() },
+        "draft": request,
+        "language": {
+            "code": &request.code,
+            "display_name": &request.display_name,
+            "template_language": &request.template_language,
+            "primary_target": &request.primary_target,
+        },
+        "groups": &request.groups,
+        "targets": &request.targets,
+        "affected_files": affected_files,
+        "overlay_files": overlay_files,
+        "manifest_yaml": manifest::to_string(manifest),
+    })
+}
+
+fn validate_new_language_code(code: &str) -> Result<(), String> {
+    if code.is_empty()
+        || !code
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
+    {
+        return Err(format!(
+            "invalid new language code {code:?}: expected letters, numbers, '-' or '_'"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_stable_id(kind: &str, value: &str) -> Result<(), String> {
+    StableId::new(value.to_owned())
+        .map(|_| ())
+        .map_err(|error| format!("invalid new language {kind} {value:?}: {error}"))
+}
+
+fn safe_new_language_relative_path(path: &str) -> Result<PathBuf, String> {
+    let candidate = Path::new(path);
+    if path.is_empty() || path.starts_with('~') || candidate.is_absolute() {
+        return Err(format!("invalid new language file path {path:?}"));
+    }
+    if !candidate
+        .components()
+        .all(|component| matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err(format!("invalid new language file path {path:?}"));
+    }
+    Ok(candidate.to_path_buf())
 }
 
 fn note_pivot_json_from_context(

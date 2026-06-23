@@ -150,6 +150,197 @@ translations:
 }
 
 #[test]
+fn workbench_new_language_scaffold_preview_write_and_initial_edit() {
+    let dir = temp_dir("workbench-new-language");
+    write_workbench_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let preview = get_json(&server.url(
+        "/api/workbench/new-language-preview?template=da&code=nb&display_name=Norwegian%20Bokmal",
+    ));
+    assert_eq!(preview["validation"]["ok"], true);
+    assert_eq!(preview["language"]["code"], "nb");
+    assert_eq!(preview["groups"][0]["label"], "base");
+    assert_eq!(preview["groups"][0]["selected"], true);
+    assert_eq!(preview["groups"][0]["overlay_id"], "overlay.translation.nb");
+    assert_eq!(preview["groups"][0]["file"], "overlays/languages/nb.yaml");
+    assert_eq!(preview["targets"][0]["target_id"], "nb-standard");
+    assert!(
+        !dir.join("overlays/languages/nb.yaml").exists(),
+        "preview must not write overlay files"
+    );
+    assert!(
+        !fs::read_to_string(dir.join("brainbrew.yaml"))
+            .unwrap()
+            .contains("nb-standard")
+    );
+
+    let created = post_json(
+        &server.url("/api/workbench/new-language"),
+        preview["draft"].clone(),
+    );
+    assert_eq!(created["created"], true);
+    let manifest = fs::read_to_string(dir.join("brainbrew.yaml")).unwrap();
+    assert!(manifest.contains("overlay.translation.nb:"));
+    assert!(manifest.contains("file: overlays/languages/nb.yaml"));
+    assert!(manifest.contains("nb-standard:"));
+    assert!(manifest.contains("nb:\n    display_name: Norwegian Bokmal"));
+    let overlay = fs::read_to_string(dir.join("overlays/languages/nb.yaml")).unwrap();
+    assert_eq!(
+        overlay,
+        "id: overlay.translation.nb\nkind: translation\ntranslations: {}\n"
+    );
+
+    let workspace = get_json(&server.url("/api/workspace"));
+    assert_eq!(
+        workspace["languages"]["nb"]["display_name"],
+        "Norwegian Bokmal"
+    );
+    assert_eq!(
+        workspace["languages"]["nb"]["translation_overlays"]["base"],
+        "overlay.translation.nb"
+    );
+    assert!(
+        workspace["fingerprints"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["path"] == "overlays/languages/nb.yaml")
+    );
+
+    let pivot = get_json(&server.url("/api/workbench/note-pivot?language=nb&target=standard"));
+    assert_eq!(pivot["progress"]["total"], 2);
+    assert_eq!(pivot["progress"]["complete"], 0);
+    assert_eq!(pivot["progress"]["missing"], 2);
+
+    let applied = post_json(
+        &server.url("/api/workbench/apply"),
+        serde_json::json!({
+            "language": "nb",
+            "target": "standard",
+            "overlay": "base",
+            "edits": [{
+                "path": "notes.note.finland.fields.field.capital",
+                "source": "Helsinki",
+                "value": "Helsingfors",
+                "mode": "direct"
+            }]
+        }),
+    );
+    assert_eq!(applied["validation"]["ok"], true);
+    let overlay = fs::read_to_string(dir.join("overlays/languages/nb.yaml")).unwrap();
+    assert!(overlay.contains("Helsinki: Helsingfors"));
+}
+
+#[test]
+fn workbench_new_language_scaffold_can_deselect_template_overlay_groups() {
+    let dir = temp_dir("workbench-new-language-groups");
+    fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML).unwrap();
+    fs::write(
+        dir.join("da.yaml"),
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Finland: Finland
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("hardcore-da.yaml"),
+        r#"id: overlay.translation.hardcore.da
+kind: translation
+translations:
+  direct:
+    Helsinki: Helsingfors
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.translation.da:
+    file: da.yaml
+    kind: translation
+  overlay.translation.hardcore.da:
+    file: hardcore-da.yaml
+    kind: translation
+targets:
+  da-standard:
+    overlays:
+      - overlay.translation.da
+      - overlay.translation.hardcore.da
+  en-standard:
+    overlays: []
+languages:
+  da:
+    display_name: Danish
+    translation_overlays:
+      base: overlay.translation.da
+      hardcore: overlay.translation.hardcore.da
+    primary_target: standard
+    targets:
+      standard: da-standard
+  en:
+    display_name: English
+    source: true
+    primary_target: standard
+    targets:
+      standard: en-standard
+translation_profile:
+  structural_fields:
+    - field.flag
+"#,
+    )
+    .unwrap();
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let preview = get_json(
+        &server
+            .url("/api/workbench/new-language-preview?template=da&code=nb&display_name=Norwegian"),
+    );
+    let groups = preview["groups"].as_array().unwrap();
+    assert_eq!(groups.len(), 2);
+    assert!(groups.iter().all(|group| group["selected"] == true));
+    assert_eq!(groups[1]["label"], "hardcore");
+    assert_eq!(groups[1]["overlay_id"], "overlay.translation.hardcore.nb");
+    assert_eq!(groups[1]["file"], "overlays/languages/hardcore/nb.yaml");
+
+    let mut draft = preview["draft"].clone();
+    draft["groups"][1]["selected"] = serde_json::json!(false);
+    let created = post_json(&server.url("/api/workbench/new-language"), draft);
+    assert_eq!(created["created"], true);
+    let manifest = fs::read_to_string(dir.join("brainbrew.yaml")).unwrap();
+    assert!(manifest.contains("overlay.translation.nb:"));
+    assert!(!manifest.contains("overlay.translation.hardcore.nb"));
+    assert!(dir.join("overlays/languages/nb.yaml").exists());
+    assert!(!dir.join("overlays/languages/hardcore/nb.yaml").exists());
+    let workspace = get_json(&server.url("/api/workspace"));
+    assert_eq!(
+        workspace["languages"]["nb"]["translation_overlays"]["base"],
+        "overlay.translation.nb"
+    );
+    assert!(workspace["languages"]["nb"]["translation_overlays"]["hardcore"].is_null());
+}
+
+#[test]
 fn workbench_serve_uses_available_port_and_embedded_assets_by_default() {
     let dir = temp_dir("workbench-default-assets");
     write_workbench_workspace(&dir);

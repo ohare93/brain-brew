@@ -556,6 +556,11 @@ fn write_field_fills(
 }
 
 fn write_translation_dictionary(out: &mut String, translations: &TranslationDictionary) {
+    if translation_dictionary_is_empty(translations) {
+        writeln!(out, "translations: {{}}").expect("writing to a string cannot fail");
+        return;
+    }
+
     writeln!(out, "translations:").expect("writing to a string cannot fail");
     if translations.require_complete {
         writeln!(out, "  require_complete: true").expect("writing to a string cannot fail");
@@ -646,6 +651,18 @@ fn write_translation_dictionary(out: &mut String, translations: &TranslationDict
             }
         }
     }
+}
+
+fn translation_dictionary_is_empty(translations: &TranslationDictionary) -> bool {
+    !translations.require_complete
+        && translations.ignore_paths.is_empty()
+        && translations.direct.is_empty()
+        && translations.contextual.is_empty()
+        && translations.no_change.is_empty()
+        && translations.target_additions.is_empty()
+        && translations.stale_records.is_empty()
+        && translations.variables.is_empty()
+        && translations.adapter_ids.is_empty()
 }
 
 #[derive(Default)]

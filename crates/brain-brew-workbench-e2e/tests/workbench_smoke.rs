@@ -57,6 +57,30 @@ async fn workbench_edits_target_translation_persists_refresh_and_applies_yaml() 
 }
 
 #[tokio::test]
+async fn workbench_new_language_scaffold_creates_editable_language() -> Result<()> {
+    let artifacts = ArtifactDir::new("new-language")?;
+    let workspace = TempDir::new().context("create new-language E2E workspace")?;
+    write_small_workbench_fixture(workspace.path())?;
+
+    let server = RunningWorkbenchServer::spawn(
+        workspace.path().join("brainbrew.yaml"),
+        dev_assets_path(),
+        artifacts.path(),
+    )?;
+    let driver = new_driver().await.context("connect to WebDriver")?;
+
+    let scaffold_result = run_new_language_scaffold_smoke(&driver, &server, workspace.path()).await;
+    if let Err(error) = &scaffold_result {
+        let _ = artifacts.save_browser_failure(&driver, error).await;
+    }
+    let quit_result = driver.quit().await.context("quit browser session");
+
+    scaffold_result?;
+    quit_result?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn workbench_source_string_pivot_stages_direct_translation() -> Result<()> {
     let artifacts = ArtifactDir::new("source-string")?;
     let workspace = TempDir::new().context("create source-string E2E workspace")?;
@@ -257,6 +281,85 @@ async fn run_edit_apply_smoke(
         .context("click confirm apply")?;
     wait_for_apply_output(driver, "Applied").await?;
     assert!(fs::read_to_string(workspace.join("da.yaml"))?.contains("Helsinki: Helsingfors"));
+    Ok(())
+}
+
+async fn run_new_language_scaffold_smoke(
+    driver: &WebDriver,
+    server: &RunningWorkbenchServer,
+    workspace: &Path,
+) -> Result<()> {
+    driver
+        .goto(server.url("/"))
+        .await
+        .context("open new-language workbench")?;
+    wait_for_loaded_probe(driver).await?;
+    wait_for_element(driver, "#new-language-panel").await?;
+
+    let code = wait_for_element(driver, "#new-language-code").await?;
+    code.send_keys("nb").await.context("type language code")?;
+    let display = wait_for_element(driver, "#new-language-display-name").await?;
+    display
+        .send_keys("Norwegian Bokmal")
+        .await
+        .context("type display name")?;
+    wait_for_element(driver, "#new-language-preview-button")
+        .await?
+        .click()
+        .await
+        .context("preview new language")?;
+    wait_for_text(driver, "overlay.translation.nb").await?;
+    wait_for_text(driver, "overlays/languages/nb.yaml").await?;
+    wait_for_text(driver, "nb-standard").await?;
+    let group_checked = driver
+        .execute(
+            "return document.getElementById('new-language-group-base').checked;",
+            Vec::new(),
+        )
+        .await
+        .context("read default group checkbox")?;
+    assert_eq!(group_checked.json().as_bool(), Some(true));
+    assert!(!workspace.join("overlays/languages/nb.yaml").exists());
+
+    wait_for_element(driver, "#new-language-confirm-button")
+        .await?
+        .click()
+        .await
+        .context("create new language")?;
+    wait_for_text(driver, "Progress: 0 / 2 complete").await?;
+    let selected_language = driver
+        .execute(
+            "return document.getElementById('language-select').value;",
+            Vec::new(),
+        )
+        .await
+        .context("read selected language")?;
+    assert_eq!(selected_language.json().as_str(), Some("nb"));
+    let overlay = fs::read_to_string(workspace.join("overlays/languages/nb.yaml"))?;
+    assert_eq!(
+        overlay,
+        "id: overlay.translation.nb\nkind: translation\ntranslations: {}\n"
+    );
+
+    let input_id = "translation-input-notes_note_finland_fields_field_capital";
+    let input = wait_for_element(driver, &format!("#{input_id}")).await?;
+    input
+        .clear()
+        .await
+        .context("clear first new-language target input")?;
+    input
+        .send_keys("Helsingfors nb")
+        .await
+        .context("type first translation in new language")?;
+    wait_for_text(driver, "Progress: 1 / 2 complete").await?;
+    wait_for_element(driver, "#apply-confirm-button")
+        .await?
+        .click()
+        .await
+        .context("apply first new-language translation")?;
+    wait_for_apply_output(driver, "Applied").await?;
+    let overlay = fs::read_to_string(workspace.join("overlays/languages/nb.yaml"))?;
+    assert!(overlay.contains("Helsinki: Helsingfors nb"));
     Ok(())
 }
 
