@@ -335,6 +335,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
         html.push_str("<p>No notes match the active filter.</p>");
     }
 
+    html.push_str("<section id=\"card-pivot-panel\" class=\"card-pivot\"><p>Loading card pivot…</p></section>");
     html.push_str("<section id=\"source-string-pivot-panel\" class=\"source-string-pivot\"><p>Loading source string pivot…</p></section>");
     html.push_str("<section class=\"apply-box\"><button id=\"apply-preview-button\" type=\"button\">Apply preview</button> <button id=\"apply-confirm-button\" type=\"button\">Confirm Apply</button><pre id=\"apply-preview-output\"></pre></section>");
     html.push_str("</article>");
@@ -347,6 +348,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
     restore_staged_dom_state(pivot);
     update_staged_count_for_pivot(pivot);
     refresh_progress_from_dom();
+    load_card_pivot_for_pivot(pivot, None, None, None);
     load_source_string_pivot_for_pivot(pivot, None, None, None);
 }
 
@@ -685,6 +687,550 @@ fn publish_source_string_pivot_panel(pivot: &Value) {
     html.push_str("</tbody></table></section></div>");
     panel.set_inner_html(&html);
     register_source_string_handlers(pivot);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn publish_card_pivot_panel(pivot: &Value) {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    let Some(panel) = document.get_element_by_id("card-pivot-panel") else {
+        return;
+    };
+    let mut html = String::new();
+    html.push_str("<div class=\"card-pivot-view\"><h3>Card pivot</h3>");
+    html.push_str("<label>Content group <select id=\"card-content-group-filter\"><option value=\"all\">All groups</option>");
+    let active_group = pivot["filters"]["content_group"].as_str().unwrap_or("all");
+    for group in pivot["filters"]["content_groups"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let group = group.as_str().unwrap_or("");
+        html.push_str(&format!(
+            "<option value=\"{}\"{}>{}</option>",
+            escape_html(group),
+            selected_attr(active_group, group),
+            escape_html(group)
+        ));
+    }
+    html.push_str("</select></label>");
+    html.push_str("<nav class=\"card-pivot-filters\">");
+    let active_filter = pivot["filters"]["active"].as_str().unwrap_or("all");
+    for (filter, label) in [
+        ("all", "All cards"),
+        ("missing", "Missing"),
+        ("stale", "Stale"),
+        ("needs_work", "Needs work"),
+    ] {
+        let class = if active_filter == filter {
+            " class=\"active\""
+        } else {
+            ""
+        };
+        html.push_str(&format!(
+            "<button type=\"button\" data-filter=\"{}\"{}>{}</button>",
+            filter, class, label
+        ));
+    }
+    html.push_str("</nav><ol class=\"card-list\">");
+    let selected_card_id = pivot["selected_card_id"].as_str().unwrap_or("");
+    for card in pivot["cards"].as_array().into_iter().flatten() {
+        let card_id = card["card_id"].as_str().unwrap_or("");
+        let active = if card_id == selected_card_id {
+            " active"
+        } else {
+            ""
+        };
+        html.push_str(&format!(
+            "<li><button class=\"card-row{}\" type=\"button\" data-card-id=\"{}\">{} · {} · {}</button></li>",
+            active,
+            escape_html(card_id),
+            escape_html(card["title"].as_str().unwrap_or("card")),
+            escape_html(card["template_name"].as_str().unwrap_or("template")),
+            escape_html(card["status"].as_str().unwrap_or("unknown")),
+        ));
+    }
+    html.push_str("</ol>");
+    if let Some(card) = pivot.get("selected_card").filter(|value| !value.is_null()) {
+        html.push_str(&format!(
+            "<section class=\"card-detail\" data-card-id=\"{}\"><h4>{}: {}</h4>",
+            escape_html(card["card_id"].as_str().unwrap_or("")),
+            escape_html(card["title"].as_str().unwrap_or("card")),
+            escape_html(card["template_name"].as_str().unwrap_or("template")),
+        ));
+        html.push_str("<div class=\"preview-grid\"><section><h5>Source card</h5><div class=\"card-source-preview\">");
+        html.push_str(&preview_html(&card["source_preview"]));
+        html.push_str(
+            "</div></section><section><h5>Target card</h5><div class=\"card-target-preview\">",
+        );
+        html.push_str(&preview_html(&card["target_preview"]));
+        html.push_str("</div></section></div>");
+        html.push_str("<table class=\"card-field-editor\"><thead><tr><th>Field</th><th>Source edit</th><th>Target edit</th><th>Status</th><th>Mode</th></tr></thead><tbody>");
+        for field in card["fields"].as_array().into_iter().flatten() {
+            let path = field["path"].as_str().unwrap_or("");
+            let source = field["source"].as_str().unwrap_or("");
+            let id = id_for_path(path);
+            let staged = staged_edit_for(pivot, path, source);
+            let staged_source = staged_source_edit_for(pivot, path, source);
+            let source_value = staged_source
+                .as_ref()
+                .and_then(|edit| edit["value"].as_str())
+                .unwrap_or(source);
+            let value = staged
+                .as_ref()
+                .and_then(|edit| edit["value"].as_str())
+                .or_else(|| field["target"].as_str())
+                .unwrap_or(source);
+            let mode = staged
+                .as_ref()
+                .and_then(|edit| edit["mode"].as_str())
+                .unwrap_or("direct");
+            let source_scope = staged_source
+                .as_ref()
+                .and_then(|edit| edit["scope"].as_str())
+                .unwrap_or("field");
+            let source_impact = staged_source
+                .as_ref()
+                .and_then(|edit| edit["impact_action"].as_str())
+                .unwrap_or("stale_record");
+            let status = staged
+                .as_ref()
+                .and_then(|edit| edit["mode"].as_str())
+                .map(|mode| format!("staged_{mode}"))
+                .or_else(|| staged_source.as_ref().map(|_| "staged_source".to_owned()))
+                .unwrap_or_else(|| field["status"].as_str().unwrap_or("unknown").to_owned());
+            let editable = field["editable"].as_bool().unwrap_or(false);
+            let source_editable = field["source_editable"].as_bool().unwrap_or(false);
+            html.push_str(&format!(
+                "<tr class=\"card-field-row\" data-path=\"{}\" data-source=\"{}\"><td>{}</td><td><span id=\"card-source-text-{}\">{}</span><br><button id=\"card-source-edit-toggle-{}\" type=\"button\"{}>Edit source</button> <input id=\"card-source-input-{}\" value=\"{}\"{}{}><br><select id=\"card-source-scope-{}\"{}><option value=\"field\"{}>This field only</option><option value=\"all_occurrences\"{}>All occurrences</option></select> <select id=\"card-source-impact-{}\"{}><option value=\"stale_record\"{}>Create stale record</option><option value=\"migrate_key\"{}>Migrate key</option></select></td><td><input id=\"card-translation-input-{}\" value=\"{}\"{}><div id=\"card-target-text-{}\">{}</div></td><td id=\"card-status-text-{}\">{}</td><td><select id=\"card-translation-mode-{}\"{}><option value=\"direct\"{}>Direct</option><option value=\"contextual\"{}>Contextual</option><option value=\"no_change\"{}>No change</option></select></td></tr>",
+                escape_html(path),
+                escape_html(source),
+                escape_html(field["field_name"].as_str().unwrap_or("field")),
+                id,
+                escape_html(source_value),
+                id,
+                if source_editable { "" } else { " disabled" },
+                id,
+                escape_html(source_value),
+                if staged_source.is_some() { "" } else { " readonly" },
+                if source_editable { "" } else { " disabled" },
+                id,
+                if source_editable { "" } else { " disabled" },
+                selected_attr(source_scope, "field"),
+                selected_attr(source_scope, "all_occurrences"),
+                id,
+                if source_editable { "" } else { " disabled" },
+                selected_attr(source_impact, "stale_record"),
+                selected_attr(source_impact, "migrate_key"),
+                id,
+                escape_html(value),
+                if editable { "" } else { " readonly" },
+                id,
+                escape_html(value),
+                id,
+                escape_html(&status),
+                id,
+                if editable { "" } else { " disabled" },
+                selected_attr(mode, "direct"),
+                selected_attr(mode, "contextual"),
+                selected_attr(mode, "no_change"),
+            ));
+        }
+        html.push_str("</tbody></table></section>");
+    } else {
+        html.push_str("<p>No cards match the active filters.</p>");
+    }
+    html.push_str("</div>");
+    panel.set_inner_html(&html);
+    register_card_pivot_handlers(pivot);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn register_card_pivot_handlers(pivot: &Value) {
+    attach_card_filter_handlers(pivot);
+    for card in pivot["cards"].as_array().into_iter().flatten() {
+        if let Some(card_id) = card["card_id"].as_str() {
+            attach_card_select_handler(pivot, card_id.to_owned());
+        }
+    }
+    if let Some(card) = pivot.get("selected_card").filter(|value| !value.is_null()) {
+        for field in card["fields"].as_array().into_iter().flatten() {
+            let path = field["path"].as_str().unwrap_or("").to_owned();
+            let source = field["source"].as_str().unwrap_or("").to_owned();
+            let note_id = field["note_id"].as_str().unwrap_or("").to_owned();
+            let field_id = field["field_id"].as_str().unwrap_or("").to_owned();
+            if field["source_editable"].as_bool().unwrap_or(false) {
+                attach_card_source_stage_handler(
+                    pivot,
+                    path.clone(),
+                    source.clone(),
+                    note_id.clone(),
+                    field_id.clone(),
+                );
+            }
+            attach_card_stage_handler(pivot, path, source, note_id, field_id);
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_card_filter_handlers(pivot: &Value) {
+    let pivot_for_group = pivot.clone();
+    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+            return;
+        };
+        load_card_pivot_for_pivot(
+            &pivot_for_group,
+            None,
+            active_card_filter(&document),
+            selected_value(&document, "card-content-group-filter"),
+        );
+    }));
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("card-content-group-filter"))
+    {
+        let _ =
+            element.add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
+    }
+    closure.forget();
+
+    for filter in ["all", "missing", "stale", "needs_work"] {
+        let pivot = pivot.clone();
+        let filter = filter.to_owned();
+        let selector = format!(".card-pivot-filters button[data-filter=\"{filter}\"]");
+        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+            let group = web_sys::window()
+                .and_then(|window| window.document())
+                .and_then(|document| selected_value(&document, "card-content-group-filter"));
+            load_card_pivot_for_pivot(&pivot, None, Some(filter.clone()), group);
+        }));
+        if let Some(element) = web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.query_selector(&selector).ok().flatten())
+        {
+            let _ =
+                element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+        }
+        closure.forget();
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn active_card_filter(document: &web_sys::Document) -> Option<String> {
+    document
+        .query_selector(".card-pivot-filters button.active")
+        .ok()
+        .flatten()
+        .and_then(|element| element.get_attribute("data-filter"))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_card_select_handler(pivot: &Value, card_id: String) {
+    let pivot = pivot.clone();
+    let selector = format!(".card-row[data-card-id=\"{}\"]", css_escape(&card_id));
+    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+        let document = web_sys::window().and_then(|window| window.document());
+        let filter = document.as_ref().and_then(active_card_filter);
+        let group = document
+            .as_ref()
+            .and_then(|document| selected_value(document, "card-content-group-filter"));
+        load_card_pivot_for_pivot(&pivot, Some(card_id.clone()), filter, group);
+    }));
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.query_selector(&selector).ok().flatten())
+    {
+        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+    }
+    closure.forget();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_card_stage_handler(
+    pivot: &Value,
+    path: String,
+    source: String,
+    _note_id: String,
+    field_id: String,
+) {
+    let id = id_for_path(&path);
+    for element_id in [
+        format!("card-translation-input-{id}"),
+        format!("card-translation-mode-{id}"),
+    ] {
+        let pivot = pivot.clone();
+        let path = path.clone();
+        let source = source.clone();
+        let field_id = field_id.clone();
+        let input_id = format!("card-translation-input-{id}");
+        let mode_id = format!("card-translation-mode-{id}");
+        let source_input_id = format!("card-source-input-{id}");
+        let target_id = format!("card-target-text-{id}");
+        let status_id = format!("card-status-text-{id}");
+        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+                return;
+            };
+            let value = document
+                .get_element_by_id(&input_id)
+                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+                .map(|input| input.value())
+                .unwrap_or_default();
+            let mode = document
+                .get_element_by_id(&mode_id)
+                .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
+                .map(|select| select.value())
+                .unwrap_or_else(|| "direct".to_owned());
+            let source_key = source_edit_storage_key(&pivot, &path, &source);
+            let effective_source = local_storage()
+                .and_then(|storage| storage.get_item(&source_key).ok().flatten())
+                .and_then(|stored| serde_json::from_str::<Value>(&stored).ok())
+                .and_then(|edit| edit["value"].as_str().map(str::to_owned))
+                .or_else(|| {
+                    document
+                        .get_element_by_id(&source_input_id)
+                        .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+                        .map(|input| input.value())
+                        .filter(|value| value != &source)
+                })
+                .unwrap_or_else(|| source.clone());
+            stage_card_translation(&pivot, &path, &source, &effective_source, &value, &mode);
+            if let Some(target) = document.get_element_by_id(&target_id) {
+                target.set_text_content(Some(&value));
+            }
+            if let Some(status) = document.get_element_by_id(&status_id) {
+                status.set_text_content(Some(&format!("staged_{mode}")));
+            }
+            update_card_preview_field(&document, "card-target-preview", &field_id, &value);
+        }));
+        if let Some(element) = web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.get_element_by_id(&element_id))
+        {
+            let event = if element_id.starts_with("card-translation-input-") {
+                "input"
+            } else {
+                "change"
+            };
+            let _ =
+                element.add_event_listener_with_callback(event, closure.as_ref().unchecked_ref());
+        }
+        closure.forget();
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_card_source_stage_handler(
+    pivot: &Value,
+    path: String,
+    source: String,
+    _note_id: String,
+    field_id: String,
+) {
+    let id = id_for_path(&path);
+    let input_id = format!("card-source-input-{id}");
+    let toggle_id = format!("card-source-edit-toggle-{id}");
+    let scope_id = format!("card-source-scope-{id}");
+    let impact_id = format!("card-source-impact-{id}");
+    let source_text_id = format!("card-source-text-{id}");
+    let status_id = format!("card-status-text-{id}");
+
+    {
+        let input_id = input_id.clone();
+        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+                return;
+            };
+            if let Some(input) = document
+                .get_element_by_id(&input_id)
+                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+            {
+                input.set_read_only(false);
+                let _ = input.focus();
+            }
+        }));
+        if let Some(element) = web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.get_element_by_id(&toggle_id))
+        {
+            let _ =
+                element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+        }
+        closure.forget();
+    }
+
+    for element_id in [input_id.clone(), scope_id.clone(), impact_id.clone()] {
+        let pivot = pivot.clone();
+        let path = path.clone();
+        let source = source.clone();
+        let field_id = field_id.clone();
+        let input_id = input_id.clone();
+        let scope_id = scope_id.clone();
+        let impact_id = impact_id.clone();
+        let source_text_id = source_text_id.clone();
+        let status_id = status_id.clone();
+        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+                return;
+            };
+            let value = document
+                .get_element_by_id(&input_id)
+                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+                .map(|input| input.value())
+                .unwrap_or_else(|| source.clone());
+            let scope = document
+                .get_element_by_id(&scope_id)
+                .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
+                .map(|select| select.value())
+                .unwrap_or_else(|| "field".to_owned());
+            let impact = document
+                .get_element_by_id(&impact_id)
+                .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
+                .map(|select| select.value())
+                .unwrap_or_else(|| "stale_record".to_owned());
+            stage_card_source_edit(&pivot, &path, &source, &value, &scope, &impact);
+            if let Some(source_text) = document.get_element_by_id(&source_text_id) {
+                source_text.set_text_content(Some(&value));
+            }
+            if let Some(status) = document.get_element_by_id(&status_id) {
+                status.set_text_content(Some("staged_source"));
+            }
+            update_card_preview_field(&document, "card-source-preview", &field_id, &value);
+        }));
+        if let Some(element) = web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.get_element_by_id(&element_id))
+        {
+            let event = if element_id.starts_with("card-source-input-") {
+                "input"
+            } else {
+                "change"
+            };
+            let _ =
+                element.add_event_listener_with_callback(event, closure.as_ref().unchecked_ref());
+        }
+        closure.forget();
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn stage_card_translation(
+    pivot: &Value,
+    path: &str,
+    storage_source: &str,
+    source: &str,
+    value: &str,
+    mode: &str,
+) {
+    let mut edit = serde_json::json!({
+        "kind": "translation",
+        "path": path,
+        "source": source,
+        "value": value,
+        "mode": mode,
+    });
+    if mode == "contextual" {
+        edit["context_path"] = Value::String(path.to_owned());
+    }
+    if let Some(storage) = local_storage() {
+        let _ = storage.set_item(
+            &edit_storage_key(pivot, path, storage_source),
+            &edit.to_string(),
+        );
+    }
+    update_staged_count_for_pivot(pivot);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn stage_card_source_edit(
+    pivot: &Value,
+    path: &str,
+    source: &str,
+    value: &str,
+    scope: &str,
+    impact: &str,
+) {
+    let edit = serde_json::json!({
+        "kind": "source",
+        "path": path,
+        "source": source,
+        "value": value,
+        "scope": scope,
+        "impact_action": impact,
+    });
+    if let Some(storage) = local_storage() {
+        let _ = storage.set_item(
+            &source_edit_storage_key(pivot, path, source),
+            &edit.to_string(),
+        );
+        if let Some(stored_translation) = storage
+            .get_item(&edit_storage_key(pivot, path, source))
+            .ok()
+            .flatten()
+            && let Ok(mut translation_edit) = serde_json::from_str::<Value>(&stored_translation)
+        {
+            translation_edit["source"] = Value::String(value.to_owned());
+            let _ = storage.set_item(
+                &edit_storage_key(pivot, path, source),
+                &translation_edit.to_string(),
+            );
+        }
+    }
+    update_staged_count_for_pivot(pivot);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn update_card_preview_field(
+    document: &web_sys::Document,
+    preview_class: &str,
+    field_id: &str,
+    value: &str,
+) {
+    let selector = format!(
+        "#card-pivot-panel .{} [data-preview-field-id=\"{}\"]",
+        preview_class, field_id
+    );
+    let Ok(nodes) = document.query_selector_all(&selector) else {
+        return;
+    };
+    for index in 0..nodes.length() {
+        if let Some(node) = nodes.get(index)
+            && let Ok(element) = node.dyn_into::<web_sys::Element>()
+        {
+            element.set_inner_html(value);
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn load_card_pivot_for_pivot(
+    pivot: &Value,
+    card: Option<String>,
+    filter: Option<String>,
+    content_group: Option<String>,
+) {
+    let language = pivot["language"]["code"].as_str().map(str::to_owned);
+    let target = pivot["target"]["label"].as_str().map(str::to_owned);
+    let overlay = pivot["overlay"]["label"].as_str().map(str::to_owned);
+    wasm_bindgen_futures::spawn_local(async move {
+        match fetch_card_pivot_query(language, target, overlay, card, filter, content_group).await {
+            Ok(pivot) => publish_card_pivot_panel(&pivot),
+            Err(error) => {
+                if let Some(panel) = web_sys::window()
+                    .and_then(|window| window.document())
+                    .and_then(|document| document.get_element_by_id("card-pivot-panel"))
+                {
+                    panel.set_inner_html(&format!(
+                        "<p class=\"workbench-error\">{}</p>",
+                        escape_html(&error)
+                    ));
+                }
+            }
+        }
+    });
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1954,6 +2500,31 @@ async fn fetch_note_pivot_query(
         params.push(format!("filter={}", encode_query_component(&filter)));
     }
     get_workbench_json("/api/workbench/note-pivot", params).await
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn fetch_card_pivot_query(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    card: Option<String>,
+    filter: Option<String>,
+    content_group: Option<String>,
+) -> Result<Value, String> {
+    let mut params = workbench_selection_params(language, target, overlay);
+    if let Some(card) = card.filter(|value| !value.is_empty()) {
+        params.push(format!("card={}", encode_query_component(&card)));
+    }
+    if let Some(filter) = filter.filter(|value| !value.is_empty() && value != "all") {
+        params.push(format!("filter={}", encode_query_component(&filter)));
+    }
+    if let Some(content_group) = content_group.filter(|value| !value.is_empty() && value != "all") {
+        params.push(format!(
+            "content_group={}",
+            encode_query_component(&content_group)
+        ));
+    }
+    get_workbench_json("/api/workbench/card-pivot", params).await
 }
 
 #[cfg(target_arch = "wasm32")]

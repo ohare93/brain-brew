@@ -68,6 +68,16 @@ The Source String pivot complements the note-first view for reusable translation
 - Structured-message source strings are exposed at component/format paths first; whole-field contextual overrides remain an advanced/manual action.
 - Source String staged edits share the same browser-local localStorage and Apply preview/confirmation workflow as the Note pivot.
 
+## Card pivot
+
+The Card pivot reviews produced cards one at a time, where a card is a Note rendered through one Card Template:
+
+- `GET /api/workbench/card-pivot` iterates produced cards for the selected language/target/overlay.
+- Card rows can be filtered by all/missing/stale/needs-work and content-group badges derived from note type and tags.
+- The selected card returns source and target front/back near-Anki previews using the existing Workbench renderer for fields, source variables, basic conditionals, styling, and declared media paths.
+- Field inspectors expose the underlying note-field source and translation rows used by that card. Browser edits can stage target translation edits or source note-field edits and use the shared Apply preview/confirmation APIs.
+- The Card pivot does not introduce card-specific storage; writes still update canonical translation/source YAML through Workbench Apply.
+
 ## New language scaffolding
 
 The Workbench can scaffold a new target language from an existing target-language template:
@@ -77,6 +87,4 @@ The Workbench can scaffold a new target language from an existing target-languag
 - Defaults follow workspace conventions: `overlay.translation.<code>`, `overlays/languages/<code>.yaml`, target IDs `<code>-<target-label>`, and copied language target labels from the template.
 - Every template `translation_overlays` group is selected in the preview by default; maintainers can deselect groups or edit generated overlay IDs, file paths, and target IDs before creation.
 - New translation overlay files start with an empty `translations: {}` dictionary so progress reports all source strings as missing until reviewed.
-- The server re-reads `brainbrew.yaml` after writes, so `/api/workspace`, language selectors, and Note/Source String pivots can load the new language immediately.
-
-Richer card pivots are later slices.
+- The server re-reads `brainbrew.yaml` after writes, so `/api/workspace`, language selectors, and Note/Source String/Card pivots can load the new language immediately.

@@ -173,6 +173,7 @@ fn app(metadata: Arc<WorkspaceMetadata>, dev_assets: Option<PathBuf>) -> Router 
             "/api/workbench/source-string-pivot",
             get(source_string_pivot),
         )
+        .route("/api/workbench/card-pivot", get(card_pivot))
         .route(
             "/api/workbench/new-language-preview",
             get(new_language_preview),
@@ -224,6 +225,16 @@ async fn source_string_pivot(
 ) -> Result<Json<Value>, (StatusCode, String)> {
     metadata
         .source_string_pivot_json(&query)
+        .map(Json)
+        .map_err(workbench_api_error)
+}
+
+async fn card_pivot(
+    State(metadata): State<Arc<WorkspaceMetadata>>,
+    Query(query): Query<CardPivotQuery>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    metadata
+        .card_pivot_json(&query)
         .map(Json)
         .map_err(workbench_api_error)
 }
@@ -392,6 +403,23 @@ impl WorkspaceMetadata {
             query.source.as_deref(),
             query.content_group.as_deref(),
             query.status.as_deref(),
+        ))
+    }
+
+    fn card_pivot_json(&self, query: &CardPivotQuery) -> Result<Value, String> {
+        let manifest = self.current_manifest()?;
+        let context = self.selected_translation_context(
+            &manifest,
+            query.language.as_deref(),
+            query.target.as_deref(),
+            query.overlay.as_deref(),
+        )?;
+        Ok(card_pivot_json_from_context(
+            &context,
+            &manifest,
+            query.card.as_deref(),
+            query.filter.as_deref(),
+            query.content_group.as_deref(),
         ))
     }
 
@@ -782,6 +810,16 @@ struct SourceStringPivotQuery {
     source: Option<String>,
     content_group: Option<String>,
     status: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+struct CardPivotQuery {
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    card: Option<String>,
+    filter: Option<String>,
+    content_group: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -1436,6 +1474,262 @@ fn source_string_pivot_json_from_context(
         "strings": strings,
         "selected_source": selected_source,
         "occurrences": occurrences,
+    })
+}
+
+fn card_pivot_json_from_context(
+    context: &SelectedTranslationContext,
+    manifest: &FederatedDeckManifest,
+    selected_card: Option<&str>,
+    filter: Option<&str>,
+    content_group_filter: Option<&str>,
+) -> Value {
+    let content_group_filter = content_group_filter.filter(|filter| *filter != "all");
+    let rows = main_field_rows(
+        &context.source_deck,
+        &context.selection,
+        &context.report.entries,
+    );
+    let cards = produced_card_rows(context, &rows)
+        .into_iter()
+        .filter(|card| card_matches_filter(card, filter))
+        .filter(|card| {
+            content_group_filter.is_none_or(|filter| {
+                card.content_group_badges
+                    .iter()
+                    .any(|badge| badge == filter)
+            })
+        })
+        .collect::<Vec<_>>();
+    let selected_card_id = selected_card
+        .filter(|card_id| cards.iter().any(|card| card.card_id == *card_id))
+        .map(str::to_owned)
+        .or_else(|| cards.first().map(|card| card.card_id.clone()));
+    let selected = selected_card_id
+        .as_deref()
+        .and_then(|card_id| cards.iter().find(|card| card.card_id == card_id))
+        .map(|card| card_detail_json(context, card));
+    let content_groups = cards
+        .iter()
+        .flat_map(|card| card.content_group_badges.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    let total = cards.len();
+    let missing = cards.iter().filter(|card| card.status == "missing").count();
+    let stale = cards.iter().filter(|card| card.status == "stale").count();
+    let complete = total.saturating_sub(missing + stale);
+
+    json!({
+        "language": {
+            "code": context.selection.language_code,
+            "display_name": context.selection.language_display_name,
+        },
+        "target": {
+            "label": context.selection.target_label,
+            "id": context.selection.target_id,
+        },
+        "overlay": {
+            "label": context.selection.overlay_label,
+            "id": context.selection.overlay_id,
+            "file": context.selection.overlay_display_file,
+        },
+        "selection_options": selection_options_json(context, manifest),
+        "filters": {
+            "active": filter.unwrap_or("all"),
+            "available": ["all", "missing", "stale", "needs_work"],
+            "content_group": content_group_filter.unwrap_or("all"),
+            "content_groups": content_groups,
+        },
+        "progress": {
+            "total": total,
+            "complete": complete,
+            "missing": missing,
+            "stale": stale,
+        },
+        "cards": cards.iter().map(card_summary_json).collect::<Vec<_>>(),
+        "selected_card_id": selected_card_id,
+        "selected_card": selected,
+    })
+}
+
+#[derive(Clone, Debug)]
+struct ProducedCardRow {
+    card_id: String,
+    note_id: StableId,
+    note_type_id: StableId,
+    template_id: StableId,
+    template_name: String,
+    title: String,
+    status: String,
+    field_rows: Vec<MainFieldRow>,
+    content_group_badges: BTreeSet<String>,
+}
+
+fn produced_card_rows(
+    context: &SelectedTranslationContext,
+    rows: &[MainFieldRow],
+) -> Vec<ProducedCardRow> {
+    let rows_by_note_field = rows
+        .iter()
+        .map(|row| ((row.note_id.clone(), row.field_id.clone()), row.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let mut cards = Vec::new();
+    for (note_id, note) in &context.source_deck.notes {
+        let Some(note_type) = context.source_deck.note_types.get(&note.note_type_id) else {
+            continue;
+        };
+        for template in &note_type.card_templates {
+            let used_fields = card_used_field_ids(note_type, template);
+            let field_rows = used_fields
+                .iter()
+                .filter_map(|field_id| {
+                    rows_by_note_field
+                        .get(&(note_id.clone(), field_id.clone()))
+                        .cloned()
+                })
+                .collect::<Vec<_>>();
+            let status = card_status(&field_rows);
+            let card_id = format!("{note_id}::{}", template.id);
+            cards.push(ProducedCardRow {
+                card_id,
+                note_id: note_id.clone(),
+                note_type_id: note.note_type_id.clone(),
+                template_id: template.id.clone(),
+                template_name: template.name.clone(),
+                title: note_title(Some(note)),
+                status: status.to_owned(),
+                field_rows,
+                content_group_badges: content_group_badges_for_note(&context.source_deck, note_id),
+            });
+        }
+    }
+    cards
+}
+
+fn card_used_field_ids(note_type: &NoteType, template: &CardTemplate) -> BTreeSet<StableId> {
+    let template_text = format!("{}\n{}", template.question_format, template.answer_format);
+    let mut fields = BTreeSet::new();
+    for field in &note_type.fields {
+        let name = &field.name;
+        let markers = [
+            format!("{{{{{name}}}}}"),
+            format!("{{{{#{name}}}}}"),
+            format!("{{{{^{name}}}}}"),
+            format!("{{{{type:{name}}}}}"),
+        ];
+        if markers.iter().any(|marker| template_text.contains(marker)) {
+            fields.insert(field.id.clone());
+        }
+    }
+    if fields.is_empty() {
+        fields.extend(note_type.fields.iter().map(|field| field.id.clone()));
+    }
+    fields
+}
+
+fn card_status(rows: &[MainFieldRow]) -> &'static str {
+    if rows.iter().any(|row| {
+        !row.structural && row.category == TranslationCoverageCategory::UntranslatedFallback
+    }) {
+        "missing"
+    } else if rows.iter().any(|row| is_stale_category(row.category)) {
+        "stale"
+    } else {
+        "complete"
+    }
+}
+
+fn card_matches_filter(card: &ProducedCardRow, filter: Option<&str>) -> bool {
+    match filter.unwrap_or("all") {
+        "missing" => card.status == "missing",
+        "stale" => card.status == "stale",
+        "needs_work" | "needs-work" => matches!(card.status.as_str(), "missing" | "stale"),
+        _ => true,
+    }
+}
+
+fn card_summary_json(card: &ProducedCardRow) -> Value {
+    json!({
+        "card_id": card.card_id,
+        "note_id": card.note_id.to_string(),
+        "note_type_id": card.note_type_id.to_string(),
+        "template_id": card.template_id.to_string(),
+        "template_name": card.template_name,
+        "title": card.title,
+        "status": card.status,
+        "field_count": card.field_rows.len(),
+        "content_group_badges": card.content_group_badges,
+    })
+}
+
+fn card_detail_json(context: &SelectedTranslationContext, card: &ProducedCardRow) -> Value {
+    let source_note = context.source_deck.notes.get(&card.note_id);
+    let target_note = context.target_deck.notes.get(&card.note_id).or(source_note);
+    let source_note_type = context.source_deck.note_types.get(&card.note_type_id);
+    let target_note_type = target_note
+        .and_then(|note| context.target_deck.note_types.get(&note.note_type_id))
+        .or(source_note_type);
+    let target_fields = target_note.map(|note| &note.fields);
+    let fields = card
+        .field_rows
+        .iter()
+        .map(|row| {
+            let target = target_fields
+                .and_then(|fields| fields.get(&row.field_id))
+                .cloned()
+                .unwrap_or_else(|| row.translated.clone());
+            json!({
+                "path": row.path,
+                "note_id": row.note_id.to_string(),
+                "note_type_id": row.note_type_id.to_string(),
+                "field_id": row.field_id.to_string(),
+                "field_name": row.field_name,
+                "source": row.source,
+                "target": target,
+                "status": row.category.as_str(),
+                "structural": row.structural,
+                "editable": !row.structural,
+                "source_editable": true,
+                "context_path": contextual_path_for_row(row, &context.report.entries),
+                "controls": ["direct", "contextual", "no_change"],
+            })
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "card_id": card.card_id,
+        "note_id": card.note_id.to_string(),
+        "note_type_id": card.note_type_id.to_string(),
+        "template_id": card.template_id.to_string(),
+        "template_name": card.template_name,
+        "title": card.title,
+        "status": card.status,
+        "content_group_badges": card.content_group_badges,
+        "fields": fields,
+        "source_preview": source_note.and_then(|note| source_note_type.map(|note_type| render_single_note_card(&context.source_deck, note, note_type, &card.template_id))),
+        "target_preview": target_note.and_then(|note| target_note_type.map(|note_type| render_single_note_card(&context.target_deck, note, note_type, &card.template_id))),
+    })
+}
+
+fn render_single_note_card(
+    deck: &CanonicalDeck,
+    note: &Note,
+    note_type: &NoteType,
+    template_id: &StableId,
+) -> Value {
+    let rendered_deck = deck.render_variables().unwrap_or_else(|_| deck.clone());
+    let rendered_note = rendered_deck.notes.get(&note.id).unwrap_or(note);
+    let rendered_note_type = rendered_deck
+        .note_types
+        .get(&note_type.id)
+        .unwrap_or(note_type);
+    let cards = rendered_note_type
+        .card_templates
+        .iter()
+        .filter(|template| &template.id == template_id)
+        .map(|template| render_card(rendered_note, rendered_note_type, template))
+        .collect::<Vec<_>>();
+    json!({
+        "styling": rendered_note_type.styling,
+        "cards": cards,
     })
 }
 

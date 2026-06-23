@@ -105,6 +105,33 @@ async fn workbench_source_string_pivot_stages_direct_translation() -> Result<()>
 }
 
 #[tokio::test]
+async fn workbench_card_pivot_navigates_and_edits_card_field() -> Result<()> {
+    let artifacts = ArtifactDir::new("card-pivot")?;
+    let workspace = TempDir::new().context("create card-pivot E2E workspace")?;
+    write_source_edit_workbench_fixture(workspace.path())?;
+    fs::create_dir_all(workspace.path().join("media/flags"))?;
+    fs::write(workspace.path().join("media/flags/ge-country.png"), b"png")?;
+    fs::write(workspace.path().join("media/flags/ge-state.png"), b"png")?;
+
+    let server = RunningWorkbenchServer::spawn(
+        workspace.path().join("brainbrew.yaml"),
+        dev_assets_path(),
+        artifacts.path(),
+    )?;
+    let driver = new_driver().await.context("connect to WebDriver")?;
+
+    let card_result = run_card_pivot_smoke(&driver, &server, workspace.path()).await;
+    if let Err(error) = &card_result {
+        let _ = artifacts.save_browser_failure(&driver, error).await;
+    }
+    let quit_result = driver.quit().await.context("quit browser session");
+
+    card_result?;
+    quit_result?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn workbench_edits_source_field_persists_refresh_and_creates_stale_record() -> Result<()> {
     let artifacts = ArtifactDir::new("source-edit")?;
     let workspace = TempDir::new().context("create source-edit E2E workspace")?;
@@ -410,6 +437,120 @@ async fn run_source_string_direct_smoke(
     wait_for_apply_output(driver, "Applied").await?;
     let overlay = fs::read_to_string(workspace.join("da.yaml"))?;
     assert!(overlay.contains("Helsinki: Helsingfors via strings"));
+    Ok(())
+}
+
+async fn run_card_pivot_smoke(
+    driver: &WebDriver,
+    server: &RunningWorkbenchServer,
+    workspace: &Path,
+) -> Result<()> {
+    driver
+        .goto(server.url("/"))
+        .await
+        .context("open card-pivot workbench")?;
+    wait_for_loaded_probe(driver).await?;
+    wait_for_element(driver, "#card-pivot-panel").await?;
+    wait_for_text(driver, "Card pivot").await?;
+    wait_for_text(driver, "Country - Capital").await?;
+
+    driver
+        .execute(
+            "document.querySelector(\".card-row[data-card-id='note.georgia-state::template.country-capital']\").click();",
+            Vec::new(),
+        )
+        .await
+        .context("navigate to second produced card")?;
+    wait_for_text(driver, "Atlanta").await?;
+    driver
+        .execute(
+            "document.querySelector(\".card-row[data-card-id='note.georgia-country::template.country-capital']\").click();",
+            Vec::new(),
+        )
+        .await
+        .context("navigate back to first produced card")?;
+    wait_for_text(driver, "Tbilisi").await?;
+
+    let source_card = driver
+        .execute(
+            "return document.querySelector('#card-pivot-panel .preview-grid section:first-child').innerHTML;",
+            Vec::new(),
+        )
+        .await
+        .context("read card source preview")?;
+    let source_card = source_card.json().as_str().unwrap_or_default();
+    assert!(source_card.contains("class=\"flag\""));
+    assert!(source_card.contains("/api/media/flags/ge-country.png"));
+
+    let source_toggle_id =
+        "card-source-edit-toggle-notes_note_georgia_country_fields_field_country";
+    wait_for_element(driver, &format!("#{source_toggle_id}"))
+        .await?
+        .click()
+        .await
+        .context("toggle card source edit")?;
+    let source_id = "card-source-input-notes_note_georgia_country_fields_field_country";
+    let source = wait_for_element(driver, &format!("#{source_id}")).await?;
+    source.clear().await.context("clear card source input")?;
+    source
+        .send_keys("Sakartvelo card")
+        .await
+        .context("type card source edit")?;
+    wait_for_text(driver, "staged_source").await?;
+    let source_preview = driver
+        .execute(
+            "return document.querySelector('#card-pivot-panel .card-source-preview [data-preview-field-id=\"field.country\"]').innerHTML;",
+            Vec::new(),
+        )
+        .await
+        .context("read live card source preview")?;
+    assert_eq!(source_preview.json().as_str(), Some("Sakartvelo card"));
+
+    let input_id = "card-translation-input-notes_note_georgia_country_fields_field_capital";
+    let input = wait_for_element(driver, &format!("#{input_id}")).await?;
+    input.clear().await.context("clear card target input")?;
+    input
+        .send_keys("Tbilisi kort")
+        .await
+        .context("type card target translation")?;
+    wait_for_text(driver, "staged_direct").await?;
+    let target_preview = driver
+        .execute(
+            "return document.querySelector('#card-pivot-panel .card-target-preview [data-preview-field-id=\"field.capital\"]').innerHTML;",
+            Vec::new(),
+        )
+        .await
+        .context("read live card target preview")?;
+    assert_eq!(target_preview.json().as_str(), Some("Tbilisi kort"));
+
+    driver.refresh().await.context("refresh card pivot")?;
+    wait_for_loaded_probe(driver).await?;
+    wait_for_element(driver, &format!("#{input_id}"))
+        .await
+        .context("card target input returns after refresh")?;
+    assert_eq!(element_value(driver, input_id).await?, "Tbilisi kort");
+    assert_eq!(element_value(driver, source_id).await?, "Sakartvelo card");
+
+    wait_for_element(driver, "#apply-preview-button")
+        .await?
+        .click()
+        .await
+        .context("preview card pivot edit")?;
+    wait_for_apply_output(driver, "Apply preview").await?;
+    wait_for_apply_output(driver, "Sakartvelo card").await?;
+    wait_for_apply_output(driver, "Tbilisi -> Tbilisi kort").await?;
+    wait_for_element(driver, "#apply-confirm-button")
+        .await?
+        .click()
+        .await
+        .context("apply card pivot edit")?;
+    wait_for_apply_output(driver, "Applied").await?;
+    let deck = fs::read_to_string(workspace.join("deck.yaml"))?;
+    assert!(deck.contains("field.country: Sakartvelo card"));
+    let overlay = fs::read_to_string(workspace.join("da.yaml"))?;
+    assert!(overlay.contains("Tbilisi: Tbilisi kort"));
+    assert!(overlay.contains("old_source: Georgia"));
+    assert!(overlay.contains("new_source: Sakartvelo card"));
     Ok(())
 }
 

@@ -472,6 +472,84 @@ fn workbench_note_pivot_exposes_target_translation_data_and_media() {
 }
 
 #[test]
+fn workbench_card_pivot_navigates_previews_and_applies_field_edit() {
+    let dir = temp_dir("workbench-card-pivot");
+    write_workbench_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let pivot = get_json(&server.url("/api/workbench/card-pivot?language=da&target=standard"));
+    assert_eq!(pivot["progress"]["total"], 1);
+    assert_eq!(pivot["progress"]["missing"], 1);
+    assert_eq!(
+        pivot["cards"][0]["card_id"],
+        "note.finland::template.country-capital"
+    );
+    assert_eq!(pivot["cards"][0]["status"], "missing");
+    assert_eq!(
+        pivot["selected_card"]["template_id"],
+        "template.country-capital"
+    );
+    assert!(
+        pivot["selected_card"]["source_preview"]["cards"][0]["question_html"]
+            .as_str()
+            .unwrap()
+            .contains("Finland")
+    );
+    assert!(
+        pivot["selected_card"]["target_preview"]["cards"][0]["answer_html"]
+            .as_str()
+            .unwrap()
+            .contains("Helsinki")
+    );
+    let capital = pivot["selected_card"]["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["field_id"] == "field.capital")
+        .unwrap();
+    assert_eq!(capital["status"], "untranslated_fallback");
+    assert_eq!(capital["editable"], true);
+
+    let filtered = get_json(&server.url(
+        "/api/workbench/card-pivot?language=da&target=standard&filter=missing&content_group=Europe",
+    ));
+    assert_eq!(filtered["cards"].as_array().unwrap().len(), 1);
+    let no_match = get_json(
+        &server.url("/api/workbench/card-pivot?language=da&target=standard&content_group=Asia"),
+    );
+    assert_eq!(no_match["cards"].as_array().unwrap().len(), 0);
+
+    let applied = post_json(
+        &server.url("/api/workbench/apply"),
+        serde_json::json!({
+            "language": "da",
+            "target": "standard",
+            "overlay": "base",
+            "edits": [{
+                "path": "notes.note.finland.fields.field.capital",
+                "source": "Helsinki",
+                "value": "Helsingfors card",
+                "mode": "direct"
+            }]
+        }),
+    );
+    assert_eq!(applied["validation"]["ok"], true);
+    assert!(
+        fs::read_to_string(dir.join("da.yaml"))
+            .unwrap()
+            .contains("Helsinki: Helsingfors card")
+    );
+}
+
+#[test]
 fn workbench_source_string_pivot_supports_direct_contextual_and_no_change_edits() {
     let dir = temp_dir("workbench-source-string");
     write_workbench_repeated_source_workspace(&dir);
