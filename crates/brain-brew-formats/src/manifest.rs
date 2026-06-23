@@ -11,6 +11,8 @@ pub struct FederatedDeckManifest {
     pub include_roots: Vec<String>,
     pub overlays: BTreeMap<String, OverlayManifestEntry>,
     pub targets: BTreeMap<String, BuildTarget>,
+    pub languages: BTreeMap<String, LanguageManifestEntry>,
+    pub translation_profile: TranslationProfile,
 }
 
 impl FederatedDeckManifest {
@@ -34,6 +36,51 @@ impl FederatedDeckManifest {
             extends: target_entry.extends.clone(),
             overlays,
         })
+    }
+
+    fn validate_language_catalog(&self) -> Result<(), ManifestError> {
+        for (code, language) in &self.languages {
+            if language.source && !language.translation_overlays.is_empty() {
+                return Err(ManifestError::SourceLanguageHasTranslationOverlays(
+                    code.clone(),
+                ));
+            }
+            if !language.targets.contains_key(&language.primary_target) {
+                return Err(ManifestError::MissingLanguagePrimaryTargetLabel {
+                    language: code.clone(),
+                    primary_target: language.primary_target.clone(),
+                });
+            }
+            for (label, target) in &language.targets {
+                if !self.targets.contains_key(target) {
+                    return Err(ManifestError::MissingLanguageTarget {
+                        language: code.clone(),
+                        label: label.clone(),
+                        target: target.clone(),
+                    });
+                }
+            }
+            for (label, overlay) in &language.translation_overlays {
+                let Some(entry) = self.overlays.get(overlay) else {
+                    return Err(ManifestError::MissingLanguageTranslationOverlay {
+                        language: code.clone(),
+                        label: label.clone(),
+                        overlay: overlay.clone(),
+                    });
+                };
+                if let Some(kind) = &entry.kind
+                    && kind != "translation"
+                {
+                    return Err(ManifestError::LanguageTranslationOverlayHasWrongKind {
+                        language: code.clone(),
+                        label: label.clone(),
+                        overlay: overlay.clone(),
+                        kind: kind.clone(),
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 
     fn visit_overlay(
@@ -105,6 +152,29 @@ pub struct BuildTarget {
     pub overlays: Vec<String>,
     pub translation_coverage: TranslationCoveragePolicy,
     pub exports: TargetExports,
+}
+
+/// One source or target language available in a Federated Deck workspace.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LanguageManifestEntry {
+    pub display_name: String,
+    pub source: bool,
+    pub translation_overlays: BTreeMap<String, String>,
+    pub primary_target: String,
+    pub targets: BTreeMap<String, String>,
+}
+
+/// Workspace-wide translation classification used by language-first tooling.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TranslationProfile {
+    pub structural_fields: Vec<String>,
+    pub optional_paths: Vec<String>,
+}
+
+impl TranslationProfile {
+    fn is_empty(&self) -> bool {
+        self.structural_fields.is_empty() && self.optional_paths.is_empty()
+    }
 }
 
 /// Optional reproducibility checks and default outputs for one target.
@@ -245,6 +315,54 @@ pub fn to_string(manifest: &FederatedDeckManifest) -> String {
             }
         }
     }
+
+    if !manifest.languages.is_empty() {
+        out.push_str("languages:\n");
+        for (code, language) in &manifest.languages {
+            out.push_str(&format!("  {code}:\n"));
+            out.push_str(&format!(
+                "    display_name: {}\n",
+                yaml_scalar(&language.display_name)
+            ));
+            if language.source {
+                out.push_str("    source: true\n");
+            }
+            if !language.translation_overlays.is_empty() {
+                out.push_str("    translation_overlays:\n");
+                for (label, overlay) in &language.translation_overlays {
+                    out.push_str(&format!("      {label}: {}\n", yaml_scalar(overlay)));
+                }
+            }
+            out.push_str(&format!(
+                "    primary_target: {}\n",
+                yaml_scalar(&language.primary_target)
+            ));
+            if language.targets.is_empty() {
+                out.push_str("    targets: {}\n");
+            } else {
+                out.push_str("    targets:\n");
+                for (label, target) in &language.targets {
+                    out.push_str(&format!("      {label}: {}\n", yaml_scalar(target)));
+                }
+            }
+        }
+    }
+
+    if !manifest.translation_profile.is_empty() {
+        out.push_str("translation_profile:\n");
+        if !manifest.translation_profile.structural_fields.is_empty() {
+            out.push_str("  structural_fields:\n");
+            for field in &manifest.translation_profile.structural_fields {
+                out.push_str(&format!("    - {}\n", yaml_scalar(field)));
+            }
+        }
+        if !manifest.translation_profile.optional_paths.is_empty() {
+            out.push_str("  optional_paths:\n");
+            for path in &manifest.translation_profile.optional_paths {
+                out.push_str(&format!("    - {}\n", yaml_scalar(path)));
+            }
+        }
+    }
     out
 }
 
@@ -295,6 +413,27 @@ pub enum ManifestError {
     MissingOverlay(String),
     DependencyCycle(Vec<String>),
     InvalidTranslationCoveragePolicy(String),
+    SourceLanguageHasTranslationOverlays(String),
+    MissingLanguagePrimaryTargetLabel {
+        language: String,
+        primary_target: String,
+    },
+    MissingLanguageTarget {
+        language: String,
+        label: String,
+        target: String,
+    },
+    MissingLanguageTranslationOverlay {
+        language: String,
+        label: String,
+        overlay: String,
+    },
+    LanguageTranslationOverlayHasWrongKind {
+        language: String,
+        label: String,
+        overlay: String,
+        kind: String,
+    },
 }
 
 impl fmt::Display for ManifestError {
@@ -316,6 +455,42 @@ impl fmt::Display for ManifestError {
                 f,
                 "invalid translation coverage policy {policy:?}; expected lenient or strict"
             ),
+            Self::SourceLanguageHasTranslationOverlays(language) => write!(
+                f,
+                "manifest source language {language:?} must not declare translation_overlays"
+            ),
+            Self::MissingLanguagePrimaryTargetLabel {
+                language,
+                primary_target,
+            } => write!(
+                f,
+                "manifest language {language:?} primary_target {primary_target:?} is not present in its targets map"
+            ),
+            Self::MissingLanguageTarget {
+                language,
+                label,
+                target,
+            } => write!(
+                f,
+                "manifest language {language:?} target {label:?} references missing build target {target:?}"
+            ),
+            Self::MissingLanguageTranslationOverlay {
+                language,
+                label,
+                overlay,
+            } => write!(
+                f,
+                "manifest language {language:?} translation overlay {label:?} references missing overlay {overlay:?}"
+            ),
+            Self::LanguageTranslationOverlayHasWrongKind {
+                language,
+                label,
+                overlay,
+                kind,
+            } => write!(
+                f,
+                "manifest language {language:?} translation overlay {label:?} references overlay {overlay:?} with kind {kind:?}; expected translation"
+            ),
         }
     }
 }
@@ -334,11 +509,15 @@ struct ManifestYaml {
     overlays: BTreeMap<String, OverlayManifestEntryYaml>,
     #[serde(default)]
     targets: BTreeMap<String, BuildTargetYaml>,
+    #[serde(default)]
+    languages: BTreeMap<String, LanguageManifestEntryYaml>,
+    #[serde(default)]
+    translation_profile: TranslationProfileYaml,
 }
 
 impl ManifestYaml {
     fn into_manifest(self) -> Result<FederatedDeckManifest, ManifestError> {
-        Ok(FederatedDeckManifest {
+        let manifest = FederatedDeckManifest {
             package: self.package.map(PackageMetadataYaml::into_metadata),
             base: self.base,
             include_roots: self.include_roots,
@@ -352,7 +531,15 @@ impl ManifestYaml {
                 .into_iter()
                 .map(|(id, target)| Ok((id, target.into_target()?)))
                 .collect::<Result<_, ManifestError>>()?,
-        })
+            languages: self
+                .languages
+                .into_iter()
+                .map(|(code, language)| (code, language.into_entry()))
+                .collect(),
+            translation_profile: self.translation_profile.into_profile(),
+        };
+        manifest.validate_language_catalog()?;
+        Ok(manifest)
     }
 }
 
@@ -425,6 +612,49 @@ impl BuildTargetYaml {
             translation_coverage,
             exports: self.exports.into_exports(),
         })
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LanguageManifestEntryYaml {
+    display_name: String,
+    #[serde(default)]
+    source: bool,
+    #[serde(default)]
+    translation_overlays: BTreeMap<String, String>,
+    primary_target: String,
+    #[serde(default)]
+    targets: BTreeMap<String, String>,
+}
+
+impl LanguageManifestEntryYaml {
+    fn into_entry(self) -> LanguageManifestEntry {
+        LanguageManifestEntry {
+            display_name: self.display_name,
+            source: self.source,
+            translation_overlays: self.translation_overlays,
+            primary_target: self.primary_target,
+            targets: self.targets,
+        }
+    }
+}
+
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TranslationProfileYaml {
+    #[serde(default)]
+    structural_fields: Vec<String>,
+    #[serde(default)]
+    optional_paths: Vec<String>,
+}
+
+impl TranslationProfileYaml {
+    fn into_profile(self) -> TranslationProfile {
+        TranslationProfile {
+            structural_fields: self.structural_fields,
+            optional_paths: self.optional_paths,
+        }
     }
 }
 

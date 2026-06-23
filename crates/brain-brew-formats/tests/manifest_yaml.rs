@@ -167,6 +167,267 @@ targets:
 }
 
 #[test]
+fn parses_and_formats_language_catalog_and_translation_profile() {
+    let formatted = manifest::format_str(
+        r#"
+translation_profile:
+  optional_paths: [note_types.*, deck.*, notes.*.tags.*]
+  structural_fields: [field.map, field.flag]
+languages:
+  da:
+    targets:
+      extended: da-extended
+      standard: da-standard
+    primary_target: standard
+    translation_overlays:
+      hardcore: overlay.translation.hardcore.da
+      base: overlay.translation.da
+    display_name: Danish
+  en:
+    targets:
+      extended: en-extended
+      standard: en-standard
+    primary_target: standard
+    source: true
+    display_name: English
+base: deck.yaml
+overlays:
+  overlay.translation.hardcore.da:
+    file: overlays/languages/hardcore/da.yaml
+    kind: translation
+  overlay.translation.da:
+    file: overlays/languages/da.yaml
+    kind: translation
+targets:
+  en-standard:
+    overlays: []
+  en-extended:
+    overlays: []
+  da-standard:
+    overlays: [overlay.translation.da]
+  da-extended:
+    overlays: [overlay.translation.da, overlay.translation.hardcore.da]
+"#,
+    )
+    .expect("manifest formats");
+
+    assert_eq!(
+        formatted,
+        r#"base: deck.yaml
+overlays:
+  overlay.translation.da:
+    file: overlays/languages/da.yaml
+    kind: translation
+  overlay.translation.hardcore.da:
+    file: overlays/languages/hardcore/da.yaml
+    kind: translation
+targets:
+  da-extended:
+    overlays:
+      - overlay.translation.da
+      - overlay.translation.hardcore.da
+  da-standard:
+    overlays:
+      - overlay.translation.da
+  en-extended:
+    overlays: []
+  en-standard:
+    overlays: []
+languages:
+  da:
+    display_name: Danish
+    translation_overlays:
+      base: overlay.translation.da
+      hardcore: overlay.translation.hardcore.da
+    primary_target: standard
+    targets:
+      extended: da-extended
+      standard: da-standard
+  en:
+    display_name: English
+    source: true
+    primary_target: standard
+    targets:
+      extended: en-extended
+      standard: en-standard
+translation_profile:
+  structural_fields:
+    - field.map
+    - field.flag
+  optional_paths:
+    - 'note_types.*'
+    - 'deck.*'
+    - 'notes.*.tags.*'
+"#
+    );
+
+    let manifest = manifest::from_str(&formatted).expect("manifest parses");
+    let english = &manifest.languages["en"];
+    assert_eq!(english.display_name, "English");
+    assert!(english.source);
+    assert!(english.translation_overlays.is_empty());
+    assert_eq!(english.primary_target, "standard");
+    assert_eq!(english.targets["extended"], "en-extended");
+
+    let danish = &manifest.languages["da"];
+    assert_eq!(danish.display_name, "Danish");
+    assert!(!danish.source);
+    assert_eq!(
+        danish.translation_overlays["base"],
+        "overlay.translation.da"
+    );
+    assert_eq!(
+        danish.translation_overlays["hardcore"],
+        "overlay.translation.hardcore.da"
+    );
+    assert_eq!(danish.primary_target, "standard");
+    assert_eq!(danish.targets["standard"], "da-standard");
+
+    assert_eq!(
+        manifest.translation_profile.structural_fields,
+        vec!["field.map", "field.flag"]
+    );
+    assert_eq!(
+        manifest.translation_profile.optional_paths,
+        vec!["note_types.*", "deck.*", "notes.*.tags.*"]
+    );
+}
+
+#[test]
+fn language_catalog_reports_missing_target_references() {
+    let error = manifest::from_str(
+        r#"
+base: deck.yaml
+targets: {}
+languages:
+  da:
+    display_name: Danish
+    primary_target: standard
+    targets:
+      standard: da-standard
+"#,
+    )
+    .expect_err("missing language target reference is reported");
+
+    assert_eq!(
+        error.to_string(),
+        "manifest language \"da\" target \"standard\" references missing build target \"da-standard\""
+    );
+}
+
+#[test]
+fn language_catalog_reports_missing_translation_overlay_references() {
+    let error = manifest::from_str(
+        r#"
+base: deck.yaml
+targets:
+  da-standard:
+    overlays: []
+languages:
+  da:
+    display_name: Danish
+    translation_overlays:
+      base: overlay.translation.da
+    primary_target: standard
+    targets:
+      standard: da-standard
+"#,
+    )
+    .expect_err("missing language overlay reference is reported");
+
+    assert_eq!(
+        error.to_string(),
+        "manifest language \"da\" translation overlay \"base\" references missing overlay \"overlay.translation.da\""
+    );
+}
+
+#[test]
+fn language_catalog_reports_non_translation_overlay_kind() {
+    let error = manifest::from_str(
+        r#"
+base: deck.yaml
+overlays:
+  overlay.extension.hardcore:
+    file: overlays/variants/hardcore.yaml
+    kind: extension
+targets:
+  da-standard:
+    overlays:
+      - overlay.extension.hardcore
+languages:
+  da:
+    display_name: Danish
+    translation_overlays:
+      hardcore: overlay.extension.hardcore
+    primary_target: standard
+    targets:
+      standard: da-standard
+"#,
+    )
+    .expect_err("translation overlay kind is validated when present");
+
+    assert_eq!(
+        error.to_string(),
+        "manifest language \"da\" translation overlay \"hardcore\" references overlay \"overlay.extension.hardcore\" with kind \"extension\"; expected translation"
+    );
+}
+
+#[test]
+fn source_languages_reject_translation_overlays() {
+    let error = manifest::from_str(
+        r#"
+base: deck.yaml
+overlays:
+  overlay.translation.en:
+    file: overlays/languages/en.yaml
+    kind: translation
+targets:
+  en-standard:
+    overlays: []
+languages:
+  en:
+    display_name: English
+    source: true
+    translation_overlays:
+      base: overlay.translation.en
+    primary_target: standard
+    targets:
+      standard: en-standard
+"#,
+    )
+    .expect_err("source language translation overlays are rejected");
+
+    assert_eq!(
+        error.to_string(),
+        "manifest source language \"en\" must not declare translation_overlays"
+    );
+}
+
+#[test]
+fn language_catalog_reports_missing_primary_target_label() {
+    let error = manifest::from_str(
+        r#"
+base: deck.yaml
+targets:
+  da-standard:
+    overlays: []
+languages:
+  da:
+    display_name: Danish
+    primary_target: extended
+    targets:
+      standard: da-standard
+"#,
+    )
+    .expect_err("missing primary target label is reported");
+
+    assert_eq!(
+        error.to_string(),
+        "manifest language \"da\" primary_target \"extended\" is not present in its targets map"
+    );
+}
+
+#[test]
 fn parses_and_formats_translation_coverage_policy() {
     let formatted = manifest::format_str(
         r#"

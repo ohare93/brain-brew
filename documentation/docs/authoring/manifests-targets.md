@@ -87,6 +87,49 @@ targets:
 
 Users and CI select targets instead of memorizing overlay paths.
 
+## Language catalog
+
+A manifest can declare source and target languages explicitly so language-first tools such as the Deck Workbench do not infer meaning from target names.
+
+```yaml
+languages:
+  en:
+    display_name: English
+    source: true
+    primary_target: standard
+    targets:
+      standard: en-standard
+      extended: en-extended
+  da:
+    display_name: Danish
+    translation_overlays:
+      base: overlay.translation.da
+      hardcore: overlay.translation.hardcore.da
+    primary_target: standard
+    targets:
+      standard: da-standard
+      extended: da-extended
+```
+
+`languages` is keyed by language code. A source language sets `source: true` and omits `translation_overlays`. A target language uses labeled `translation_overlays` so one language can translate base content plus extension-specific content, and its `targets` map connects friendly labels such as `standard` or `extended` to concrete build target IDs.
+
+## Translation profile
+
+`translation_profile` classifies progress for language-first review. Main completion focuses on non-structural note field text; optional metadata belongs in a separate checklist.
+
+```yaml
+translation_profile:
+  structural_fields:
+    - field.flag
+    - field.map
+  optional_paths:
+    - deck.*
+    - note_types.*
+    - notes.*.tags.*
+```
+
+`structural_fields` excludes source fields such as flags or maps from main text completion. `optional_paths` marks deck metadata, note type/template metadata, tags, or other paths as optional review work instead of main translation completion.
+
 ## Translation coverage policy
 
 Translated targets can choose how strictly `brainbrew verify` treats untranslated fallbacks:
