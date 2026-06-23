@@ -94,10 +94,10 @@ Reports translation coverage, shows terminal note/card context, summarizes trans
 ```bash
 brainbrew workbench serve --manifest brainbrew.yaml
 brainbrew workbench serve --manifest brainbrew.yaml --port 0 --no-open
-brainbrew workbench serve --manifest brainbrew.yaml --dev-assets build/workbench
+brainbrew workbench serve --manifest brainbrew.yaml --dev-assets target/workbench-ui
 ```
 
-Starts the local Deck Workbench server on `127.0.0.1`, serving the browser UI plus JSON APIs for health and workspace metadata.
+Starts the local Deck Workbench server on `127.0.0.1`, serving the browser UI plus JSON APIs for health and workspace metadata. Release builds serve embedded Iced/WASM assets from the `brainbrew` binary; during UI development run `devenv shell workbench-ui-watch` and pass `--dev-assets target/workbench-ui`. Use `devenv shell workbench-ui-build` for a one-shot development WASM asset build, or `devenv shell workbench-ui-embed` to refresh the release assets checked into the CLI crate.
 
 ## `verify`
 

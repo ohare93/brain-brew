@@ -8,10 +8,14 @@ in
 {
   packages = [
     pkgs.cargo
+    pkgs.binaryen
     pkgs.clippy
+    pkgs.lld
     pkgs.nodejs_22
     pkgs.rustc
     pkgs.rustfmt
+    pkgs.trunk
+    pkgs.wasm-bindgen-cli
     releasePkgs.cargo-dist
   ];
 
@@ -27,6 +31,21 @@ in
   scripts.check.exec = "cargo check --workspace --all-targets";
   scripts.test.exec = "cargo test --workspace --all-targets";
   scripts.clippy.exec = "cargo clippy --workspace --all-targets -- -D warnings";
+  scripts."workbench-ui-build".exec = ''
+    set -euo pipefail
+    cd crates/brain-brew-workbench-ui
+    trunk build --dist ../../target/workbench-ui --public-url /
+  '';
+  scripts."workbench-ui-watch".exec = ''
+    set -euo pipefail
+    cd crates/brain-brew-workbench-ui
+    trunk watch --dist ../../target/workbench-ui --public-url /
+  '';
+  scripts."workbench-ui-embed".exec = ''
+    set -euo pipefail
+    cd crates/brain-brew-workbench-ui
+    trunk build --release --dist ../brain-brew-cli/assets/workbench --public-url /
+  '';
 
   scripts."docs:install".exec = "npm --prefix documentation install";
   scripts."docs:start".exec = "npm --prefix documentation run start";

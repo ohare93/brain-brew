@@ -3,6 +3,7 @@ members = [
     "crates/brain-brew-core",
     "crates/brain-brew-formats",
     "crates/brain-brew-cli",
+    "crates/brain-brew-workbench-ui",
 ]
 resolver = "3"
 

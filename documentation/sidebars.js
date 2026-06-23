@@ -51,6 +51,7 @@ const sidebars = {
         'reference/glossary',
         'reference/yaml',
         'reference/cli',
+        'reference/workbench',
         'reference/lockfile',
         'reference/release-oracle',
         'reference/releasing',

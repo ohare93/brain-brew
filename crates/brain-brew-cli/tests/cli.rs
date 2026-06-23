@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdout, Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -47,6 +47,7 @@ fn workbench_help_includes_serve_entrypoint() {
     assert!(out.contains("--port"));
     assert!(out.contains("--no-open"));
     assert!(out.contains("--dev-assets"));
+    assert!(out.contains("target/workbench-ui"));
 
     let serve = run(["workbench", "serve", "--help"]);
     assert!(serve.status.success(), "stderr: {}", stderr(&serve));
@@ -165,10 +166,42 @@ fn workbench_serve_uses_available_port_and_embedded_assets_by_default() {
     assert_eq!(response.status(), 200);
     assert!(
         response
-            .into_string()
-            .unwrap()
-            .contains("Brain Brew Deck Workbench")
+            .header("content-type")
+            .unwrap_or_default()
+            .starts_with("text/html")
     );
+    let index = response.into_string().unwrap();
+    assert!(index.contains("Brain Brew Deck Workbench"));
+    assert!(index.contains("TrunkApplicationStarted"));
+
+    let js_path = quoted_path_containing(&index, ".js");
+    let js_response = ureq::get(&server.url(&js_path))
+        .call()
+        .expect("GET embedded JS succeeds");
+    assert_eq!(js_response.status(), 200);
+    assert!(
+        js_response
+            .header("content-type")
+            .unwrap_or_default()
+            .contains("javascript")
+    );
+    assert!(js_response.into_string().unwrap().contains("wasm_bindgen"));
+
+    let wasm_path = quoted_path_containing(&index, ".wasm");
+    let wasm_response = ureq::get(&server.url(&wasm_path))
+        .call()
+        .expect("GET embedded WASM succeeds");
+    assert_eq!(wasm_response.status(), 200);
+    assert_eq!(
+        wasm_response.header("content-type").unwrap_or_default(),
+        "application/wasm"
+    );
+    let mut wasm_bytes = Vec::new();
+    wasm_response
+        .into_reader()
+        .read_to_end(&mut wasm_bytes)
+        .unwrap();
+    assert!(wasm_bytes.starts_with(b"\0asm"));
 }
 
 #[test]
@@ -2699,6 +2732,21 @@ fn get_json(url: &str) -> serde_json::Value {
     let response = ureq::get(url).call().expect("GET succeeds");
     assert_eq!(response.status(), 200);
     serde_json::from_str(&response.into_string().unwrap()).expect("response is JSON")
+}
+
+fn quoted_path_containing(html: &str, needle: &str) -> String {
+    let needle_position = html
+        .find(needle)
+        .unwrap_or_else(|| panic!("{needle:?} appears in HTML"));
+    let path_start = html[..needle_position]
+        .rfind('"')
+        .expect("asset path starts with a quote")
+        + 1;
+    let path_end = needle_position
+        + html[needle_position..]
+            .find('"')
+            .expect("asset path ends with a quote");
+    html[path_start..path_end].to_owned()
 }
 
 fn workspace_root() -> PathBuf {

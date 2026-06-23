@@ -22,6 +22,7 @@ axum = "0.8"
 base64 = "0.22"
 crossterm = "0.28"
 flate2 = "1"
+include_dir = "0.7"
 nix-nar = "0.4"
 brain-brew-core.workspace = true
 brain-brew-formats.workspace = true

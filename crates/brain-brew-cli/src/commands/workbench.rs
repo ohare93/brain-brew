@@ -6,12 +6,14 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
+use axum::body::Body;
 use axum::extract::State;
-use axum::http::StatusCode;
-use axum::response::Html;
+use axum::http::{StatusCode, Uri, header};
+use axum::response::Response;
 use axum::routing::get;
 use axum::{Json, Router};
 use brain_brew_formats::manifest::{FederatedDeckManifest, LanguageManifestEntry};
+use include_dir::{Dir, include_dir};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tokio::net::TcpListener;
@@ -20,21 +22,8 @@ use tower_http::services::{ServeDir, ServeFile};
 use crate::help;
 use crate::io::{manifest_root, read_manifest};
 
-const EMBEDDED_WORKBENCH_INDEX: &str = r#"<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Brain Brew Deck Workbench</title>
-  </head>
-  <body>
-    <main id="brainbrew-workbench">
-      <h1>Brain Brew Deck Workbench</h1>
-      <p>The embedded workbench shell is installed. Build the WASM UI or use --dev-assets for a development shell.</p>
-    </main>
-  </body>
-</html>
-"#;
+static EMBEDDED_WORKBENCH_ASSETS: Dir<'static> =
+    include_dir!("$CARGO_MANIFEST_DIR/assets/workbench");
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -176,9 +165,7 @@ fn app(metadata: Arc<WorkspaceMetadata>, dev_assets: Option<PathBuf>) -> Router 
             ServeDir::new(&assets).not_found_service(ServeFile::new(assets.join("index.html"))),
         )
     } else {
-        router
-            .route("/", get(embedded_index))
-            .fallback(get(embedded_index))
+        router.fallback(get(embedded_asset))
     }
 }
 
@@ -198,8 +185,43 @@ async fn workspace(
         .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))
 }
 
-async fn embedded_index() -> Html<&'static str> {
-    Html(EMBEDDED_WORKBENCH_INDEX)
+async fn embedded_asset(uri: Uri) -> Response {
+    let requested_path = uri.path().trim_start_matches('/');
+    let asset_path = if requested_path.is_empty() {
+        "index.html"
+    } else {
+        requested_path
+    };
+
+    if let Some(file) = EMBEDDED_WORKBENCH_ASSETS.get_file(asset_path) {
+        return embedded_file_response(asset_path, file.contents());
+    }
+
+    let index = EMBEDDED_WORKBENCH_ASSETS
+        .get_file("index.html")
+        .expect("embedded workbench index.html exists");
+    embedded_file_response("index.html", index.contents())
+}
+
+fn embedded_file_response(path: &str, contents: &'static [u8]) -> Response {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, embedded_content_type(path))
+        .body(Body::from(contents))
+        .expect("embedded asset response is valid")
+}
+
+fn embedded_content_type(path: &str) -> &'static str {
+    match Path::new(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+    {
+        Some("css") => "text/css; charset=utf-8",
+        Some("html") => "text/html; charset=utf-8",
+        Some("js") => "text/javascript; charset=utf-8",
+        Some("wasm") => "application/wasm",
+        _ => "application/octet-stream",
+    }
 }
 
 #[derive(Debug)]

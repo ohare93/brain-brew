@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Brain Brew Deck Workbench</title>
+    <base href="/" />
+    <link rel="stylesheet" href="/workbench-dc5d231e5bc3af58.css" integrity="sha384-5e4ZCQTXBzi97/rbiEfMzg0KNNeBNTFikcimrwq4qBRqFHmL6WdFK0J4orl0l/pf"/>
+  <link rel="modulepreload" href="/brain_brew_workbench_ui-9575fc3c29e6b0e6.js" crossorigin="anonymous" integrity="sha384-cdUyIA6zmZvWwXdtm11li/ALwARrFDIP6TsIFknBKt1V0JKbm408TJdCDnzb4+jC"><link rel="preload" href="/brain_brew_workbench_ui-9575fc3c29e6b0e6_bg.wasm" crossorigin="anonymous" integrity="sha384-M/0XavmfF6aGp1/tcU2SNWab43GtNY+HyFrUtX4dCMP6tScCeLiE5DGQyvYw29h9" as="fetch" type="application/wasm"></head>
+  <body>
+    
+<script type="module">
+import init, * as bindings from '/brain_brew_workbench_ui-9575fc3c29e6b0e6.js';
+const wasm = await init({ module_or_path: '/brain_brew_workbench_ui-9575fc3c29e6b0e6_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+  </body>
+</html>

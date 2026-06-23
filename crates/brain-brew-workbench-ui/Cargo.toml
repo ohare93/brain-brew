@@ -1,0 +1,27 @@
+[package]
+name = "brain-brew-workbench-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Iced/WASM frontend for the Brain Brew Deck Workbench"
+publish = false
+
+[[bin]]
+name = "brain_brew_workbench_ui"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-net = { version = "0.6", features = ["http"] }
+iced = { version = "0.14", default-features = false, features = ["fira-sans", "tiny-skia", "web-colors", "webgl"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+iced = "0.14"
+
+[lints]
+workspace = true
