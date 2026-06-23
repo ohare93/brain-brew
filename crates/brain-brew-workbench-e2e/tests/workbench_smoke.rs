@@ -57,6 +57,30 @@ async fn workbench_edits_target_translation_persists_refresh_and_applies_yaml() 
 }
 
 #[tokio::test]
+async fn workbench_source_string_pivot_stages_direct_translation() -> Result<()> {
+    let artifacts = ArtifactDir::new("source-string")?;
+    let workspace = TempDir::new().context("create source-string E2E workspace")?;
+    write_small_workbench_fixture(workspace.path())?;
+
+    let server = RunningWorkbenchServer::spawn(
+        workspace.path().join("brainbrew.yaml"),
+        dev_assets_path(),
+        artifacts.path(),
+    )?;
+    let driver = new_driver().await.context("connect to WebDriver")?;
+
+    let edit_result = run_source_string_direct_smoke(&driver, &server, workspace.path()).await;
+    if let Err(error) = &edit_result {
+        let _ = artifacts.save_browser_failure(&driver, error).await;
+    }
+    let quit_result = driver.quit().await.context("quit browser session");
+
+    edit_result?;
+    quit_result?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn workbench_edits_source_field_persists_refresh_and_creates_stale_record() -> Result<()> {
     let artifacts = ArtifactDir::new("source-edit")?;
     let workspace = TempDir::new().context("create source-edit E2E workspace")?;
@@ -233,6 +257,56 @@ async fn run_edit_apply_smoke(
         .context("click confirm apply")?;
     wait_for_apply_output(driver, "Applied").await?;
     assert!(fs::read_to_string(workspace.join("da.yaml"))?.contains("Helsinki: Helsingfors"));
+    Ok(())
+}
+
+async fn run_source_string_direct_smoke(
+    driver: &WebDriver,
+    server: &RunningWorkbenchServer,
+    workspace: &Path,
+) -> Result<()> {
+    driver
+        .goto(server.url("/"))
+        .await
+        .context("open source-string workbench")?;
+    wait_for_loaded_probe(driver).await?;
+    wait_for_element(driver, "#source-string-pivot-panel").await?;
+    driver
+        .execute(
+            "document.querySelector(\".source-string-row[data-source='Helsinki']\").click();",
+            Vec::new(),
+        )
+        .await
+        .context("select Helsinki source string")?;
+    wait_for_text(driver, "Stage direct translation for 1 occurrence(s)").await?;
+    let input = wait_for_element(driver, "#source-string-direct-input").await?;
+    input
+        .clear()
+        .await
+        .context("clear source string direct input")?;
+    input
+        .send_keys("Helsingfors via strings")
+        .await
+        .context("type source string direct translation")?;
+    wait_for_text(driver, "Helsingfors via strings").await?;
+
+    wait_for_element(driver, "#apply-preview-button")
+        .await?
+        .click()
+        .await
+        .context("preview source string edit")?;
+    wait_for_apply_output(driver, "Apply preview").await?;
+    wait_for_apply_output(driver, "Helsinki -> Helsingfors via strings").await?;
+    assert!(!fs::read_to_string(workspace.join("da.yaml"))?.contains("via strings"));
+
+    wait_for_element(driver, "#apply-confirm-button")
+        .await?
+        .click()
+        .await
+        .context("apply source string edit")?;
+    wait_for_apply_output(driver, "Applied").await?;
+    let overlay = fs::read_to_string(workspace.join("da.yaml"))?;
+    assert!(overlay.contains("Helsinki: Helsingfors via strings"));
     Ok(())
 }
 

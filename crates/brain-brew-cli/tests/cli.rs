@@ -281,6 +281,199 @@ fn workbench_note_pivot_exposes_target_translation_data_and_media() {
 }
 
 #[test]
+fn workbench_source_string_pivot_supports_direct_contextual_and_no_change_edits() {
+    let dir = temp_dir("workbench-source-string");
+    write_workbench_repeated_source_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let pivot = get_json(&server.url(
+        "/api/workbench/source-string-pivot?language=da&target=standard&source=Shared%20capital",
+    ));
+    let shared = pivot["strings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|source| source["source"] == "Shared capital")
+        .unwrap();
+    assert_eq!(shared["occurrence_count"], 2);
+    assert_eq!(shared["direct_applies_to"], 2);
+    assert_eq!(shared["status"], "complete");
+    assert_eq!(pivot["occurrences"].as_array().unwrap().len(), 2);
+    assert!(
+        pivot["occurrences"][0]["friendly_context"]
+            .as_str()
+            .unwrap()
+            .contains("Capital")
+    );
+    assert!(
+        pivot["filters"]["content_groups"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|group| group == "Europe")
+    );
+
+    let preview = post_json(
+        &server.url("/api/workbench/apply-preview"),
+        serde_json::json!({
+            "language": "da",
+            "target": "standard",
+            "overlay": "base",
+            "edits": [{
+                "kind": "translation",
+                "path": "notes.note.finland.fields.field.capital",
+                "source": "Shared capital",
+                "value": "Fælles hovedstad opdateret",
+                "mode": "direct"
+            }]
+        }),
+    );
+    assert_eq!(preview["validation"]["ok"], true);
+    assert_eq!(preview["changed_entries"][0]["mode"], "direct");
+    assert!(
+        !fs::read_to_string(dir.join("da.yaml"))
+            .unwrap()
+            .contains("opdateret")
+    );
+
+    let applied = post_json(
+        &server.url("/api/workbench/apply"),
+        serde_json::json!({
+            "language": "da",
+            "target": "standard",
+            "overlay": "base",
+            "edits": [
+                {
+                    "kind": "translation",
+                    "path": "notes.note.finland.fields.field.capital",
+                    "source": "Shared capital",
+                    "value": "Finsk særskilt",
+                    "mode": "contextual",
+                    "context_path": "notes.note.finland.fields.field.capital"
+                },
+                {
+                    "kind": "translation",
+                    "path": "notes.note.estonia.fields.field.country",
+                    "source": "Estonia",
+                    "value": "Estonia",
+                    "mode": "contextual",
+                    "context_path": "notes.note.estonia.fields.field.country"
+                },
+                {
+                    "kind": "translation",
+                    "path": "notes.note.finland.fields.field.country",
+                    "source": "Finland",
+                    "value": "Finland",
+                    "mode": "no_change"
+                }
+            ]
+        }),
+    );
+    assert_eq!(applied["validation"]["ok"], true);
+    let overlay = fs::read_to_string(dir.join("da.yaml")).unwrap();
+    assert!(overlay.contains("no_change:"));
+    assert!(overlay.contains("- Finland"));
+    assert!(overlay.contains("finland.fields.field.capital"));
+    assert!(overlay.contains("Shared capital:"));
+    assert!(overlay.contains("Finsk særskilt"));
+    assert!(overlay.contains("estonia.fields.field.country"));
+    assert!(overlay.contains("Estonia: Estonia"));
+}
+
+#[test]
+fn workbench_source_string_pivot_exposes_structured_message_components() {
+    let dir = temp_dir("workbench-source-string-structured");
+    write_structured_message_translation_workspace(&dir);
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.translation.nb:
+    file: nb.yaml
+    kind: translation
+targets:
+  nb-standard:
+    overlays:
+      - overlay.translation.nb
+  en-standard:
+    overlays: []
+languages:
+  nb:
+    display_name: Norwegian Bokmål
+    translation_overlays:
+      base: overlay.translation.nb
+    primary_target: standard
+    targets:
+      standard: nb-standard
+  en:
+    display_name: English
+    source: true
+    primary_target: standard
+    targets:
+      standard: en-standard
+translation_profile:
+  structural_fields:
+    - field.flag
+  optional_paths:
+    - deck.*
+"#,
+    )
+    .unwrap();
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let pivot = get_json(&server.url(
+        "/api/workbench/source-string-pivot?language=nb&target=standard&source=blue%20background%20with%20a%20white%20cross",
+    ));
+    assert_eq!(
+        pivot["selected_source"],
+        "blue background with a white cross"
+    );
+    assert_eq!(pivot["occurrences"].as_array().unwrap().len(), 1);
+    let occurrence = &pivot["occurrences"][0];
+    assert_eq!(
+        occurrence["path"],
+        "notes.note.finland.fields.field.flag-similarity.message.2"
+    );
+    assert_eq!(occurrence["target"], "blå bakgrunn med hvitt kors");
+
+    let applied = post_json(
+        &server.url("/api/workbench/apply"),
+        serde_json::json!({
+            "language": "nb",
+            "target": "standard",
+            "overlay": "base",
+            "edits": [{
+                "kind": "translation",
+                "path": "notes.note.finland.fields.field.flag-similarity.message.2",
+                "source": "blue background with a white cross",
+                "value": "blå bakgrunn med kvitt kors",
+                "mode": "direct"
+            }]
+        }),
+    );
+    assert_eq!(applied["validation"]["ok"], true);
+    let overlay = fs::read_to_string(dir.join("nb.yaml")).unwrap();
+    assert!(overlay.contains("blue background with a white cross:"));
+    assert!(overlay.contains("blå bakgrunn med kvitt kors"));
+}
+
+#[test]
 fn workbench_apply_preview_and_apply_write_translation_overlay() {
     let dir = temp_dir("workbench-apply");
     write_workbench_workspace(&dir);

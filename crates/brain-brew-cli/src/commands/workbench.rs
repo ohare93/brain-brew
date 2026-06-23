@@ -165,6 +165,10 @@ fn app(metadata: Arc<WorkspaceMetadata>, dev_assets: Option<PathBuf>) -> Router 
         .route("/api/health", get(health))
         .route("/api/workspace", get(workspace))
         .route("/api/workbench/note-pivot", get(note_pivot))
+        .route(
+            "/api/workbench/source-string-pivot",
+            get(source_string_pivot),
+        )
         .route("/api/workbench/apply-preview", post(apply_preview))
         .route("/api/workbench/apply", post(apply_edits))
         .route("/api/media/{*path}", get(media_asset))
@@ -201,6 +205,16 @@ async fn note_pivot(
 ) -> Result<Json<Value>, (StatusCode, String)> {
     metadata
         .note_pivot_json(&query)
+        .map(Json)
+        .map_err(workbench_api_error)
+}
+
+async fn source_string_pivot(
+    State(metadata): State<Arc<WorkspaceMetadata>>,
+    Query(query): Query<SourceStringPivotQuery>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    metadata
+        .source_string_pivot_json(&query)
         .map(Json)
         .map_err(workbench_api_error)
 }
@@ -328,6 +342,21 @@ impl WorkspaceMetadata {
             &self.manifest,
             query.filter.as_deref(),
             query.note.as_deref(),
+        ))
+    }
+
+    fn source_string_pivot_json(&self, query: &SourceStringPivotQuery) -> Result<Value, String> {
+        let context = self.selected_translation_context(
+            query.language.as_deref(),
+            query.target.as_deref(),
+            query.overlay.as_deref(),
+        )?;
+        Ok(source_string_pivot_json_from_context(
+            &context,
+            &self.manifest,
+            query.source.as_deref(),
+            query.content_group.as_deref(),
+            query.status.as_deref(),
         ))
     }
 
@@ -652,6 +681,16 @@ struct NotePivotQuery {
     note: Option<String>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize)]
+struct SourceStringPivotQuery {
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    source: Option<String>,
+    content_group: Option<String>,
+    status: Option<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct ApplyRequest {
     language: Option<String>,
@@ -669,6 +708,7 @@ struct StagedWorkbenchEdit {
     value: String,
     #[serde(default = "default_edit_mode")]
     mode: EditMode,
+    context_path: Option<String>,
     #[serde(default = "default_source_edit_scope")]
     scope: SourceEditScope,
     #[serde(default = "default_source_impact_action")]
@@ -820,6 +860,259 @@ fn note_pivot_json_from_context(
         "notes": notes,
         "stale_entries": stale_entries_json(&context.report.entries),
     })
+}
+
+fn source_string_pivot_json_from_context(
+    context: &SelectedTranslationContext,
+    manifest: &FederatedDeckManifest,
+    selected_source: Option<&str>,
+    content_group_filter: Option<&str>,
+    status_filter: Option<&str>,
+) -> Value {
+    let content_group_filter = content_group_filter.filter(|filter| *filter != "all");
+    let status_filter = status_filter.filter(|filter| *filter != "all");
+    let rows = source_string_rows(context)
+        .into_iter()
+        .filter(|row| !row.structural && !row.source.is_empty())
+        .filter(|row| {
+            content_group_filter.is_none_or(|filter| {
+                content_group_badges_for_note(&context.source_deck, &row.note_id)
+                    .iter()
+                    .any(|badge| badge == filter)
+            })
+        })
+        .collect::<Vec<_>>();
+    let source_counts = rows
+        .iter()
+        .fold(BTreeMap::<String, usize>::new(), |mut counts, row| {
+            *counts.entry(row.source.clone()).or_insert(0) += 1;
+            counts
+        });
+    let grouped = source_string_groups(&context.source_deck, &rows);
+    let filtered_groups = grouped
+        .into_iter()
+        .filter(|group| status_filter.is_none_or(|filter| filter == group.status))
+        .collect::<Vec<_>>();
+    let selected_source = selected_source
+        .filter(|source| filtered_groups.iter().any(|group| group.source == *source))
+        .map(str::to_owned)
+        .or_else(|| filtered_groups.first().map(|group| group.source.clone()));
+    let strings = filtered_groups
+        .iter()
+        .map(|group| {
+            json!({
+                "source": group.source,
+                "status": group.status,
+                "main_completion_status": group.status,
+                "occurrence_count": group.occurrence_count,
+                "complete_count": group.complete_count,
+                "missing_count": group.missing_count,
+                "stale_count": group.stale_count,
+                "target_preview": group.target_preview,
+                "content_group_badges": group.content_group_badges,
+                "direct_recommended": true,
+                "direct_applies_to": source_counts.get(&group.source).copied().unwrap_or(group.occurrence_count),
+                "selected": selected_source.as_deref() == Some(group.source.as_str()),
+            })
+        })
+        .collect::<Vec<_>>();
+    let occurrences = selected_source
+        .as_deref()
+        .map(|source| {
+            rows.iter()
+                .filter(|row| row.source == source)
+                .map(|row| source_string_occurrence_json(context, row))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let content_groups = rows
+        .iter()
+        .flat_map(|row| content_group_badges_for_note(&context.source_deck, &row.note_id))
+        .collect::<BTreeSet<_>>();
+
+    json!({
+        "language": {
+            "code": context.selection.language_code,
+            "display_name": context.selection.language_display_name,
+        },
+        "target": {
+            "label": context.selection.target_label,
+            "id": context.selection.target_id,
+        },
+        "overlay": {
+            "label": context.selection.overlay_label,
+            "id": context.selection.overlay_id,
+            "file": context.selection.overlay_display_file,
+        },
+        "selection_options": selection_options_json(context, manifest),
+        "filters": {
+            "content_group": content_group_filter.unwrap_or("all"),
+            "content_groups": content_groups,
+            "status": status_filter.unwrap_or("all"),
+            "statuses": ["all", "missing", "stale", "complete"],
+        },
+        "strings": strings,
+        "selected_source": selected_source,
+        "occurrences": occurrences,
+    })
+}
+
+fn source_string_rows(context: &SelectedTranslationContext) -> Vec<MainFieldRow> {
+    let structural_fields = structural_field_set(&context.selection, &context.source_deck);
+    context
+        .source_deck
+        .translation_context(&context.report)
+        .units
+        .into_iter()
+        .filter_map(|unit| {
+            let note_id = unit.note_id?;
+            let note_type_id = unit.note_type_id?;
+            let field_id = unit.field_id?;
+            let field_name = unit.field_name.unwrap_or_else(|| field_id.to_string());
+            Some(MainFieldRow {
+                note_id,
+                note_type_id,
+                structural: structural_fields.contains(field_id.as_str()),
+                field_id,
+                field_name,
+                path: unit.path,
+                source: unit.source.clone(),
+                category: unit.category,
+                translated: unit.translated.unwrap_or(unit.source),
+            })
+        })
+        .collect()
+}
+
+#[derive(Clone, Debug)]
+struct SourceStringGroup {
+    source: String,
+    status: String,
+    occurrence_count: usize,
+    complete_count: usize,
+    missing_count: usize,
+    stale_count: usize,
+    target_preview: Option<String>,
+    content_group_badges: BTreeSet<String>,
+}
+
+fn source_string_groups(
+    source_deck: &CanonicalDeck,
+    rows: &[MainFieldRow],
+) -> Vec<SourceStringGroup> {
+    let mut groups = BTreeMap::<String, Vec<&MainFieldRow>>::new();
+    for row in rows {
+        groups.entry(row.source.clone()).or_default().push(row);
+    }
+    groups
+        .into_iter()
+        .map(|(source, rows)| {
+            let occurrence_count = rows.len();
+            let complete_count = rows
+                .iter()
+                .filter(|row| is_complete_translation_category(row.category))
+                .count();
+            let missing_count = rows
+                .iter()
+                .filter(|row| row.category == TranslationCoverageCategory::UntranslatedFallback)
+                .count();
+            let stale_count = rows
+                .iter()
+                .filter(|row| is_stale_category(row.category))
+                .count();
+            let status = if missing_count > 0 {
+                "missing"
+            } else if stale_count > 0 {
+                "stale"
+            } else {
+                "complete"
+            }
+            .to_owned();
+            let target_preview = rows
+                .iter()
+                .copied()
+                .find(|row| row.translated != row.source)
+                .or_else(|| rows.first().copied())
+                .map(|row| row.translated.clone());
+            let content_group_badges = rows
+                .iter()
+                .flat_map(|row| content_group_badges_for_note(source_deck, &row.note_id))
+                .collect::<BTreeSet<_>>();
+            SourceStringGroup {
+                source,
+                status,
+                occurrence_count,
+                complete_count,
+                missing_count,
+                stale_count,
+                target_preview,
+                content_group_badges,
+            }
+        })
+        .collect()
+}
+
+fn source_string_occurrence_json(
+    context: &SelectedTranslationContext,
+    row: &MainFieldRow,
+) -> Value {
+    let note = context.source_deck.notes.get(&row.note_id);
+    let target_note = context.target_deck.notes.get(&row.note_id).or(note);
+    let source_note_type = context.source_deck.note_types.get(&row.note_type_id);
+    let target_note_type = target_note
+        .and_then(|note| context.target_deck.note_types.get(&note.note_type_id))
+        .or(source_note_type);
+    json!({
+        "path": row.path,
+        "source": row.source,
+        "target": if row.path.contains(".message.") {
+            row.translated.clone()
+        } else {
+            target_note
+                .and_then(|note| note.fields.get(&row.field_id))
+                .cloned()
+                .unwrap_or_else(|| row.translated.clone())
+        },
+        "status": row.category.as_str(),
+        "note_id": row.note_id.to_string(),
+        "note_title": note_title(note),
+        "field_id": row.field_id.to_string(),
+        "field_name": row.field_name,
+        "friendly_context": format!("{} · {}", note_title(note), row.field_name),
+        "context_path": contextual_path_for_row(row, &context.report.entries),
+        "content_group_badges": content_group_badges_for_note(&context.source_deck, &row.note_id),
+        "direct_recommended": true,
+        "controls": ["direct", "contextual", "no_change"],
+        "source_preview": note.and_then(|note| source_note_type.map(|note_type| render_note_cards(&context.source_deck, note, note_type))),
+        "target_preview": target_note.and_then(|note| target_note_type.map(|note_type| render_note_cards(&context.target_deck, note, note_type))),
+    })
+}
+
+fn note_title(note: Option<&Note>) -> String {
+    note.and_then(|note| note.fields.values().next().cloned())
+        .unwrap_or_else(|| "unknown note".to_owned())
+}
+
+fn content_group_badges_for_note(
+    source_deck: &CanonicalDeck,
+    note_id: &StableId,
+) -> BTreeSet<String> {
+    let mut badges = BTreeSet::new();
+    if let Some(note) = source_deck.notes.get(note_id) {
+        badges.insert(note.note_type_id.to_string());
+        badges.extend(note.tags.iter().cloned());
+    }
+    badges
+}
+
+fn is_complete_translation_category(category: TranslationCoverageCategory) -> bool {
+    matches!(
+        category,
+        TranslationCoverageCategory::DirectTranslation
+            | TranslationCoverageCategory::ContextualOverride
+            | TranslationCoverageCategory::NoChange
+            | TranslationCoverageCategory::StaleTranslationRecord
+    )
 }
 
 fn overlay_badges_json(context: &SelectedTranslationContext) -> Value {
@@ -1859,7 +2152,7 @@ fn push_unique_affected_file(
 }
 
 fn editable_sources_by_path(context: &SelectedTranslationContext) -> BTreeMap<String, String> {
-    main_field_rows(
+    let mut sources = main_field_rows(
         &context.source_deck,
         &context.selection,
         &context.report.entries,
@@ -1867,7 +2160,14 @@ fn editable_sources_by_path(context: &SelectedTranslationContext) -> BTreeMap<St
     .into_iter()
     .filter(|row| !row.structural)
     .map(|row| (row.path, row.source))
-    .collect()
+    .collect::<BTreeMap<_, _>>();
+    for row in source_string_rows(context)
+        .into_iter()
+        .filter(|row| !row.structural)
+    {
+        sources.entry(row.path).or_insert(row.source);
+    }
+    sources
 }
 
 fn contextual_path_for_edit(
@@ -1879,10 +2179,33 @@ fn contextual_path_for_edit(
         &context.selection,
         &context.report.entries,
     );
-    rows.iter()
+    let source_rows = if rows
+        .iter()
+        .any(|row| row.path == edit.path && row.source == edit.source && !row.structural)
+    {
+        rows
+    } else {
+        source_string_rows(context)
+    };
+    let row = source_rows
+        .iter()
         .find(|row| row.path == edit.path && row.source == edit.source && !row.structural)
-        .map(|row| contextual_path_for_row(row, &context.report.entries))
-        .ok_or_else(|| format!("invalid contextual edit path {:?}", edit.path))
+        .ok_or_else(|| format!("invalid contextual edit path {:?}", edit.path))?;
+    if let Some(context_path) = &edit.context_path {
+        if context_path == &row.path
+            || row
+                .path
+                .strip_prefix(context_path)
+                .is_some_and(|suffix| suffix.starts_with('.'))
+        {
+            return Ok(context_path.clone());
+        }
+        return Err(format!(
+            "invalid contextual edit context {:?} for {}",
+            context_path, edit.path
+        ));
+    }
+    Ok(contextual_path_for_row(row, &context.report.entries))
 }
 
 fn apply_staged_edits_to_overlay(

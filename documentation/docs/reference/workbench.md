@@ -56,4 +56,16 @@ The current note pivot supports target-translation edits and constrained source 
 - Source edits default affected translations to Stale Translation Records. Maintainers can instead migrate the existing translation key to the new source while preserving target text.
 - Browser-local staged edits are stored in localStorage until Apply, so refresh keeps unsaved source and target edits while canonical YAML remains unchanged.
 
-New language scaffolding and richer card/source-string pivots are later slices.
+## Source String pivot
+
+The Source String pivot complements the note-first view for reusable translation work:
+
+- `GET /api/workbench/source-string-pivot` groups translatable note-field and structured-message component text by source string.
+- Each source string reports status, occurrence count, completion counts, content-group badges, and how many occurrences a direct reusable translation will affect.
+- Selecting a source string shows every note/field occurrence with friendly context, field-level paths, content-group badges, and source/target previews.
+- Direct reusable translations are the default. Global no-change is staged as `translations.no_change`; unchanged exceptions are staged as normal contextual overrides whose target equals the source text.
+- Contextual override controls use the selected occurrence's field-level path by default.
+- Structured-message source strings are exposed at component/format paths first; whole-field contextual overrides remain an advanced/manual action.
+- Source String staged edits share the same browser-local localStorage and Apply preview/confirmation workflow as the Note pivot.
+
+New language scaffolding and richer card pivots are later slices.

@@ -725,7 +725,7 @@ fn translation_dictionary_reports_missing_direct_translation_when_complete() {
 }
 
 #[test]
-fn translation_dictionary_contextual_reports_unnecessary_specificity() {
+fn translation_dictionary_allows_field_level_contextual_override() {
     let base = ug_style_deck();
     let overlay = Overlay {
         id: sid("overlay.translation.da"),
@@ -750,15 +750,19 @@ fn translation_dictionary_contextual_reports_unnecessary_specificity() {
         media_changes: BTreeMap::new(),
     };
 
-    let report = base
+    let deck = base
         .compose(&[overlay])
-        .expect_err("contextual translation should use the shortest safe context");
+        .expect("field-level contextual overrides are allowed for workbench source-string edits");
 
-    assert!(report.has_kind(ComposeErrorKind::ValidationFailed));
-    assert!(report.errors.iter().any(|error| {
-        error.path == "translations.contextual.notes.note.finland.fields.field.capital.Helsinki"
-            && error.message.contains("use context \"notes.note.finland\"")
-    }));
+    assert_eq!(
+        deck.notes
+            .get(&sid("note.finland"))
+            .unwrap()
+            .fields
+            .get(&sid("field.capital"))
+            .map(String::as_str),
+        Some("Helsingfors")
+    );
 }
 
 #[test]

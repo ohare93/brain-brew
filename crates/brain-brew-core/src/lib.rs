@@ -2150,6 +2150,9 @@ fn shortest_safe_context(
     source: &str,
     translated: &str,
 ) -> Option<String> {
+    if is_note_field_context(context_path) {
+        return None;
+    }
     context_parent_candidates(context_path)
         .into_iter()
         .filter(|candidate| {
@@ -2162,6 +2165,10 @@ fn shortest_safe_context(
             )
         })
         .min_by_key(|candidate| candidate.len())
+}
+
+fn is_note_field_context(context_path: &str) -> bool {
+    context_path.starts_with("notes.") && context_path.contains(".fields.")
 }
 
 fn contextual_replacement_is_safe(

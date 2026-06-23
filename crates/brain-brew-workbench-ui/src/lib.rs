@@ -334,6 +334,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
         html.push_str("<p>No notes match the active filter.</p>");
     }
 
+    html.push_str("<section id=\"source-string-pivot-panel\" class=\"source-string-pivot\"><p>Loading source string pivot…</p></section>");
     html.push_str("<section class=\"apply-box\"><button id=\"apply-preview-button\" type=\"button\">Apply preview</button> <button id=\"apply-confirm-button\" type=\"button\">Confirm Apply</button><pre id=\"apply-preview-output\"></pre></section>");
     html.push_str("</article>");
     panel.set_inner_html(&html);
@@ -344,6 +345,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
     restore_staged_dom_state(pivot);
     update_staged_count_for_pivot(pivot);
     refresh_progress_from_dom();
+    load_source_string_pivot_for_pivot(pivot, None, None, None);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -545,6 +547,340 @@ fn preview_html(preview: &Value) -> String {
         html.push_str("</div>");
     }
     html
+}
+
+#[cfg(target_arch = "wasm32")]
+fn publish_source_string_pivot_panel(pivot: &Value) {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    let Some(panel) = document.get_element_by_id("source-string-pivot-panel") else {
+        return;
+    };
+    let mut html = String::new();
+    html.push_str("<h3>Source String pivot</h3>");
+    html.push_str("<div class=\"source-string-filters\"><label>Content group <select id=\"source-string-content-group-filter\">");
+    let active_group = pivot["filters"]["content_group"].as_str().unwrap_or("all");
+    html.push_str(&format!(
+        "<option value=\"all\"{}>All groups</option>",
+        selected_attr(active_group, "all")
+    ));
+    for group in pivot["filters"]["content_groups"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let group = group.as_str().unwrap_or("");
+        html.push_str(&format!(
+            "<option value=\"{}\"{}>{}</option>",
+            escape_html(group),
+            selected_attr(active_group, group),
+            escape_html(group)
+        ));
+    }
+    html.push_str("</select></label></div>");
+    html.push_str("<div class=\"source-string-grid\"><ol class=\"source-string-list\">");
+    for string in pivot["strings"].as_array().into_iter().flatten() {
+        let source = string["source"].as_str().unwrap_or("");
+        let selected = if string["selected"].as_bool().unwrap_or(false) {
+            " active"
+        } else {
+            ""
+        };
+        html.push_str(&format!(
+            "<li><button type=\"button\" class=\"source-string-row{}\" data-source=\"{}\"><strong>{}</strong><br>{} occurrence(s), {}</button></li>",
+            selected,
+            escape_html(source),
+            escape_html(source),
+            string["occurrence_count"].as_u64().unwrap_or(0),
+            escape_html(string["status"].as_str().unwrap_or("unknown"))
+        ));
+    }
+    html.push_str("</ol><section class=\"source-string-detail\">");
+    let selected_source = pivot["selected_source"].as_str().unwrap_or("");
+    html.push_str(&format!("<h4>{}</h4>", escape_html(selected_source)));
+    if let Some(first_occurrence) = pivot["occurrences"]
+        .as_array()
+        .and_then(|items| items.first())
+    {
+        let direct_value = staged_edit_for(
+            pivot,
+            first_occurrence["path"].as_str().unwrap_or(""),
+            selected_source,
+        )
+        .and_then(|edit| edit["value"].as_str().map(str::to_owned))
+        .or_else(|| first_occurrence["target"].as_str().map(str::to_owned))
+        .unwrap_or_else(|| selected_source.to_owned());
+        html.push_str(&format!(
+            "<div class=\"source-string-global-edit\"><label>Reusable translation <input id=\"source-string-direct-input\" value=\"{}\" /></label> <button id=\"source-string-direct-stage\" type=\"button\">Stage direct translation for {} occurrence(s)</button> <button id=\"source-string-no-change\" type=\"button\">Stage global no-change</button></div>",
+            escape_html(&direct_value),
+            pivot["occurrences"].as_array().map_or(0, Vec::len),
+        ));
+    }
+    html.push_str("<table class=\"source-string-occurrences\"><thead><tr><th>Context</th><th>Source</th><th>Target / contextual override</th><th>Status</th></tr></thead><tbody>");
+    for occurrence in pivot["occurrences"].as_array().into_iter().flatten() {
+        let path = occurrence["path"].as_str().unwrap_or("");
+        let id = id_for_path(path);
+        let target = staged_edit_for(pivot, path, selected_source)
+            .and_then(|edit| edit["value"].as_str().map(str::to_owned))
+            .or_else(|| occurrence["target"].as_str().map(str::to_owned))
+            .unwrap_or_else(|| selected_source.to_owned());
+        html.push_str(&format!(
+            "<tr class=\"source-string-occurrence\" data-source=\"{}\" data-path=\"{}\"><td>{}<br><small>{}</small></td><td>{}</td><td><input id=\"source-string-contextual-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\" /> <button id=\"source-string-contextual-stage-{}\" type=\"button\">Contextual override</button><div class=\"source-string-target-text\">{}</div></td><td>{}</td></tr>",
+            escape_html(selected_source),
+            escape_html(path),
+            escape_html(occurrence["friendly_context"].as_str().unwrap_or(path)),
+            escape_html(path),
+            escape_html(selected_source),
+            id,
+            escape_html(&target),
+            escape_html(path),
+            escape_html(selected_source),
+            id,
+            escape_html(&target),
+            escape_html(occurrence["status"].as_str().unwrap_or("unknown"))
+        ));
+    }
+    html.push_str("</tbody></table></section></div>");
+    panel.set_inner_html(&html);
+    register_source_string_handlers(pivot);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn register_source_string_handlers(pivot: &Value) {
+    attach_source_string_filter_handler(pivot);
+    for string in pivot["strings"].as_array().into_iter().flatten() {
+        let source = string["source"].as_str().unwrap_or("").to_owned();
+        attach_source_string_select_handler(pivot, source);
+    }
+    attach_source_string_direct_handlers(pivot);
+    for occurrence in pivot["occurrences"].as_array().into_iter().flatten() {
+        let path = occurrence["path"].as_str().unwrap_or("").to_owned();
+        let source = occurrence["source"].as_str().unwrap_or("").to_owned();
+        attach_source_string_contextual_handler(pivot, path, source);
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_source_string_filter_handler(pivot: &Value) {
+    let pivot = pivot.clone();
+    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+            return;
+        };
+        let content_group = selected_value(&document, "source-string-content-group-filter");
+        load_source_string_pivot_for_pivot(&pivot, None, content_group, None);
+    }));
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("source-string-content-group-filter"))
+    {
+        let _ =
+            element.add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
+    }
+    closure.forget();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_source_string_select_handler(pivot: &Value, source: String) {
+    let pivot = pivot.clone();
+    let selector = format!(
+        ".source-string-row[data-source=\"{}\"]",
+        css_escape(&source)
+    );
+    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+        load_source_string_pivot_for_pivot(&pivot, Some(source.clone()), None, None);
+    }));
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.query_selector(&selector).ok().flatten())
+    {
+        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+    }
+    closure.forget();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_source_string_direct_handlers(pivot: &Value) {
+    let Some(first_occurrence) = pivot["occurrences"]
+        .as_array()
+        .and_then(|items| items.first())
+    else {
+        return;
+    };
+    let path = first_occurrence["path"].as_str().unwrap_or("").to_owned();
+    let source = first_occurrence["source"].as_str().unwrap_or("").to_owned();
+    for (element_id, mode) in [
+        ("source-string-direct-input", "direct"),
+        ("source-string-direct-stage", "direct"),
+        ("source-string-no-change", "no_change"),
+    ] {
+        let pivot = pivot.clone();
+        let path = path.clone();
+        let source = source.clone();
+        let mode = mode.to_owned();
+        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+                return;
+            };
+            let value = if mode == "no_change" {
+                source.clone()
+            } else {
+                document
+                    .get_element_by_id("source-string-direct-input")
+                    .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+                    .map(|input| input.value())
+                    .unwrap_or_else(|| source.clone())
+            };
+            stage_source_string_translation(&pivot, &path, &source, &value, &mode);
+            update_source_string_targets(&document, &source, &value);
+        }));
+        if let Some(element) = web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.get_element_by_id(element_id))
+        {
+            let event = if element_id == "source-string-direct-input" {
+                "input"
+            } else {
+                "click"
+            };
+            let _ =
+                element.add_event_listener_with_callback(event, closure.as_ref().unchecked_ref());
+        }
+        closure.forget();
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_source_string_contextual_handler(pivot: &Value, path: String, source: String) {
+    let id = id_for_path(&path);
+    for element_id in [
+        format!("source-string-contextual-input-{id}"),
+        format!("source-string-contextual-stage-{id}"),
+    ] {
+        let pivot = pivot.clone();
+        let path = path.clone();
+        let source = source.clone();
+        let input_id = format!("source-string-contextual-input-{id}");
+        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+                return;
+            };
+            let value = document
+                .get_element_by_id(&input_id)
+                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+                .map(|input| input.value())
+                .unwrap_or_else(|| source.clone());
+            stage_source_string_translation(&pivot, &path, &source, &value, "contextual");
+            update_source_string_contextual_target(&document, &path, &value);
+        }));
+        if let Some(element) = web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.get_element_by_id(&element_id))
+        {
+            let event = if element_id.starts_with("source-string-contextual-input-") {
+                "input"
+            } else {
+                "click"
+            };
+            let _ =
+                element.add_event_listener_with_callback(event, closure.as_ref().unchecked_ref());
+        }
+        closure.forget();
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn stage_source_string_translation(
+    pivot: &Value,
+    path: &str,
+    source: &str,
+    value: &str,
+    mode: &str,
+) {
+    let mut edit = serde_json::json!({
+        "kind": "translation",
+        "path": path,
+        "source": source,
+        "value": value,
+        "mode": mode,
+    });
+    if mode == "contextual" {
+        edit["context_path"] = Value::String(path.to_owned());
+    }
+    if let Some(storage) = local_storage() {
+        let _ = storage.set_item(&edit_storage_key(pivot, path, source), &edit.to_string());
+    }
+    update_staged_count_for_pivot(pivot);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn update_source_string_targets(document: &web_sys::Document, source: &str, value: &str) {
+    let selector = format!(
+        ".source-string-occurrence[data-source=\"{}\"] .source-string-target-text",
+        css_escape(source)
+    );
+    if let Ok(nodes) = document.query_selector_all(&selector) {
+        for index in 0..nodes.length() {
+            if let Some(node) = nodes.get(index)
+                && let Ok(element) = node.dyn_into::<web_sys::Element>()
+            {
+                element.set_text_content(Some(value));
+            }
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn update_source_string_contextual_target(document: &web_sys::Document, path: &str, value: &str) {
+    let selector = format!(
+        ".source-string-occurrence[data-path=\"{}\"] .source-string-target-text",
+        css_escape(path)
+    );
+    if let Some(element) = document.query_selector(&selector).ok().flatten() {
+        element.set_text_content(Some(value));
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn load_source_string_pivot_for_pivot(
+    pivot: &Value,
+    source: Option<String>,
+    content_group: Option<String>,
+    status: Option<String>,
+) {
+    let language = pivot["language"]["code"].as_str().map(str::to_owned);
+    let target = pivot["target"]["label"].as_str().map(str::to_owned);
+    let overlay = pivot["overlay"]["label"].as_str().map(str::to_owned);
+    wasm_bindgen_futures::spawn_local(async move {
+        match fetch_source_string_pivot_query(
+            language,
+            target,
+            overlay,
+            source,
+            content_group,
+            status,
+        )
+        .await
+        {
+            Ok(source_pivot) => publish_source_string_pivot_panel(&source_pivot),
+            Err(error) => {
+                if let Some(document) = web_sys::window().and_then(|window| window.document())
+                    && let Some(panel) = document.get_element_by_id("source-string-pivot-panel")
+                {
+                    panel.set_inner_html(&format!(
+                        "<p class=\"workbench-error\">{}</p>",
+                        escape_html(&error)
+                    ));
+                }
+            }
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn css_escape(input: &str) -> String {
+    input.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1322,6 +1658,44 @@ async fn fetch_note_pivot_query(
     overlay: Option<String>,
     filter: Option<String>,
 ) -> Result<Value, String> {
+    let mut params = workbench_selection_params(language, target, overlay);
+    if let Some(filter) = filter.filter(|value| !value.is_empty() && value != "all") {
+        params.push(format!("filter={}", encode_query_component(&filter)));
+    }
+    get_workbench_json("/api/workbench/note-pivot", params).await
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn fetch_source_string_pivot_query(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    source: Option<String>,
+    content_group: Option<String>,
+    status: Option<String>,
+) -> Result<Value, String> {
+    let mut params = workbench_selection_params(language, target, overlay);
+    if let Some(source) = source.filter(|value| !value.is_empty()) {
+        params.push(format!("source={}", encode_query_component(&source)));
+    }
+    if let Some(content_group) = content_group.filter(|value| !value.is_empty() && value != "all") {
+        params.push(format!(
+            "content_group={}",
+            encode_query_component(&content_group)
+        ));
+    }
+    if let Some(status) = status.filter(|value| !value.is_empty() && value != "all") {
+        params.push(format!("status={}", encode_query_component(&status)));
+    }
+    get_workbench_json("/api/workbench/source-string-pivot", params).await
+}
+
+#[cfg(target_arch = "wasm32")]
+fn workbench_selection_params(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+) -> Vec<String> {
     let mut params = Vec::new();
     if let Some(language) = language.filter(|value| !value.is_empty()) {
         params.push(format!("language={}", encode_query_component(&language)));
@@ -1332,13 +1706,15 @@ async fn fetch_note_pivot_query(
     if let Some(overlay) = overlay.filter(|value| !value.is_empty()) {
         params.push(format!("overlay={}", encode_query_component(&overlay)));
     }
-    if let Some(filter) = filter.filter(|value| !value.is_empty() && value != "all") {
-        params.push(format!("filter={}", encode_query_component(&filter)));
-    }
+    params
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn get_workbench_json(base_url: &str, params: Vec<String>) -> Result<Value, String> {
     let url = if params.is_empty() {
-        "/api/workbench/note-pivot".to_owned()
+        base_url.to_owned()
     } else {
-        format!("/api/workbench/note-pivot?{}", params.join("&"))
+        format!("{}?{}", base_url, params.join("&"))
     };
     gloo_net::http::Request::get(&url)
         .send()
