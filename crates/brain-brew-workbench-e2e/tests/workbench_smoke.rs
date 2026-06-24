@@ -8,6 +8,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use tempfile::TempDir;
 use thirtyfour::LoggingPrefsLogLevel;
 use thirtyfour::common::capabilities::chromium::ChromiumLikeCapabilities;
+use thirtyfour::components::SelectElement;
 use thirtyfour::prelude::*;
 
 const WORKBENCH_NAVIGATION_ROW_BUDGET: u64 = 50;
@@ -410,20 +411,20 @@ async fn run_language_freshness_smoke(
     wait_for_loaded_probe(driver).await?;
     wait_for_element(driver, "#language-select").await?;
 
-    driver
-        .execute(
-            r#"
-            const select = document.getElementById('language-select');
-            select.value = 'en';
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            select.value = 'da';
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            return true;
-            "#,
-            Vec::new(),
-        )
-        .await
-        .context("rapidly switch language selection")?;
+    select_value(
+        driver,
+        "#language-select",
+        "en",
+        "switch to delayed English language",
+    )
+    .await?;
+    select_value(
+        driver,
+        "#language-select",
+        "da",
+        "switch back to Danish language",
+    )
+    .await?;
 
     wait_for_js_bool(
         driver,
@@ -619,13 +620,12 @@ async fn run_source_string_direct_smoke(
     wait_for_element(driver, ".source-string-row[data-source='Tbilisi']")
         .await
         .context("source-string rows loaded")?;
-    driver
-        .execute(
-            "document.querySelector(\".source-string-row[data-source='Tbilisi']\").click();",
-            Vec::new(),
-        )
-        .await
-        .context("select Tbilisi source string")?;
+    click_css(
+        driver,
+        ".source-string-row[data-source='Tbilisi']",
+        "select Tbilisi source string",
+    )
+    .await?;
     wait_for_text(driver, "Stage direct translation for 1 occurrence(s)").await?;
     let input = wait_for_element(driver, "#source-string-direct-input").await?;
     input
@@ -638,13 +638,12 @@ async fn run_source_string_direct_smoke(
         .context("type source string direct translation")?;
     wait_for_text(driver, "Tbilisi via strings").await?;
 
-    driver
-        .execute(
-            "document.querySelector(\".source-string-row[data-source='Georgia']\").click();",
-            Vec::new(),
-        )
-        .await
-        .context("navigate to repeated source string")?;
+    click_css(
+        driver,
+        ".source-string-row[data-source='Georgia']",
+        "navigate to repeated source string",
+    )
+    .await?;
     wait_for_text(driver, "Stage direct translation for 2 occurrence(s)").await?;
     let contextual_id =
         "source-string-contextual-input-notes_note_georgia_country_fields_field_country";
@@ -659,26 +658,24 @@ async fn run_source_string_direct_smoke(
         .context("type contextual source string override")?;
     wait_for_text(driver, "Georgia contextual").await?;
 
-    driver
-        .execute(
-            "document.querySelector(\".source-string-row[data-source='Atlanta']\").click();",
-            Vec::new(),
-        )
-        .await
-        .context("navigate to no-change source string")?;
+    click_css(
+        driver,
+        ".source-string-row[data-source='Atlanta']",
+        "navigate to no-change source string",
+    )
+    .await?;
     wait_for_text(driver, "Stage global no-change").await?;
     wait_for_element(driver, "#source-string-no-change")
         .await?
         .click()
         .await
         .context("stage no-change source string edit")?;
-    driver
-        .execute(
-            "document.querySelector(\".source-string-row[data-source='Tbilisi']\").click();",
-            Vec::new(),
-        )
-        .await
-        .context("return to staged source string")?;
+    click_css(
+        driver,
+        ".source-string-row[data-source='Tbilisi']",
+        "return to staged source string",
+    )
+    .await?;
     wait_for_element(driver, "#source-string-direct-input")
         .await
         .context("source string detail returns")?;
@@ -819,13 +816,13 @@ async fn run_ultimate_geography_manifest_smoke(
         .await
         .context("secondary pivots are lazy on initial UG load")?;
 
-    driver
-        .execute(
-            "const select = document.getElementById('language-select'); select.value = 'de'; select.dispatchEvent(new Event('change', { bubbles: true }));",
-            Vec::new(),
-        )
-        .await
-        .context("switch Ultimate Geography language to German")?;
+    select_value(
+        driver,
+        "#language-select",
+        "de",
+        "switch Ultimate Geography language to German",
+    )
+    .await?;
     wait_for_element(driver, ".workbench-panel[data-language='de']")
         .await
         .context("German note pivot rendered")?;
@@ -908,13 +905,12 @@ async fn run_multi_pane_smoke(
         .context("open multi-pane workbench")?;
     wait_for_loaded_probe(driver).await?;
     wait_for_element(driver, "#pane-layout-panel").await?;
-    driver
-        .execute(
-            "document.querySelector(\".note-navigation-row[data-note-id='note.finland']\").click();",
-            Vec::new(),
-        )
-        .await
-        .context("select Finland note for multi-pane source edit")?;
+    click_css(
+        driver,
+        ".note-navigation-row[data-note-id='note.finland']",
+        "select Finland note for multi-pane source edit",
+    )
+    .await?;
     let source_toggle = "source-edit-toggle-notes_note_finland_fields_field_country";
     wait_for_element(driver, &format!("#{source_toggle}"))
         .await
@@ -1003,13 +999,12 @@ async fn run_multi_pane_smoke(
         .await
         .context("refresh multi-pane workbench")?;
     wait_for_loaded_probe(driver).await?;
-    driver
-        .execute(
-            "document.querySelector(\".note-navigation-row[data-note-id='note.finland']\").click();",
-            Vec::new(),
-        )
-        .await
-        .context("return to Finland note after refresh")?;
+    click_css(
+        driver,
+        ".note-navigation-row[data-note-id='note.finland']",
+        "return to Finland note after refresh",
+    )
+    .await?;
     wait_for_element(driver, &format!("#{source_id}"))
         .await
         .context("Finland detail returns after refresh")?;
@@ -1080,21 +1075,19 @@ async fn run_card_pivot_smoke(
     wait_for_text(driver, "Card pivot").await?;
     wait_for_text(driver, "Country - Capital").await?;
 
-    driver
-        .execute(
-            "document.querySelector(\".card-row[data-card-id='note.georgia-state::template.country-capital']\").click();",
-            Vec::new(),
-        )
-        .await
-        .context("navigate to second produced card")?;
+    click_css(
+        driver,
+        ".card-row[data-card-id='note.georgia-state::template.country-capital']",
+        "navigate to second produced card",
+    )
+    .await?;
     wait_for_text(driver, "Atlanta").await?;
-    driver
-        .execute(
-            "document.querySelector(\".card-row[data-card-id='note.georgia-country::template.country-capital']\").click();",
-            Vec::new(),
-        )
-        .await
-        .context("navigate back to first produced card")?;
+    click_css(
+        driver,
+        ".card-row[data-card-id='note.georgia-country::template.country-capital']",
+        "navigate back to first produced card",
+    )
+    .await?;
     wait_for_text(driver, "Tbilisi").await?;
 
     let source_card = driver
@@ -1166,13 +1159,12 @@ async fn run_card_pivot_smoke(
         .await
         .context("card inline edit uses real keyboard entry for final value")?;
 
-    driver
-        .execute(
-            "document.querySelector(\".card-row[data-card-id='note.georgia-state::template.country-capital']\").click();",
-            Vec::new(),
-        )
-        .await
-        .context("navigate away from staged card")?;
+    click_css(
+        driver,
+        ".card-row[data-card-id='note.georgia-state::template.country-capital']",
+        "navigate away from staged card",
+    )
+    .await?;
     wait_for_text(driver, "Atlanta").await?;
     let previous_card_unmounted = driver
         .execute(
@@ -1182,13 +1174,12 @@ async fn run_card_pivot_smoke(
         .await
         .context("only selected card detail remains in DOM")?;
     assert_eq!(previous_card_unmounted.json().as_bool(), Some(true));
-    driver
-        .execute(
-            "document.querySelector(\".card-row[data-card-id='note.georgia-country::template.country-capital']\").click();",
-            Vec::new(),
-        )
-        .await
-        .context("return to staged card")?;
+    click_css(
+        driver,
+        ".card-row[data-card-id='note.georgia-country::template.country-capital']",
+        "return to staged card",
+    )
+    .await?;
     wait_for_element(driver, &format!("#{input_id}"))
         .await
         .context("staged card detail returns")?;
@@ -1303,14 +1294,12 @@ async fn run_source_edit_smoke(
     assert!(overlay.contains("new_source: Sakartvelo"));
     assert!(overlay.contains("context: notes.note.georgia-country"));
 
-    wait_for_element(driver, ".pivot-filters button[data-filter='stale']").await?;
-    driver
-        .execute(
-            "document.querySelector(\".pivot-filters button[data-filter='stale']\").click();",
-            Vec::new(),
-        )
-        .await
-        .context("filter stale source edit result")?;
+    click_css(
+        driver,
+        ".pivot-filters button[data-filter='stale']",
+        "filter stale source edit result",
+    )
+    .await?;
     wait_for_text(driver, "Sakartvelo").await?;
     Ok(())
 }
@@ -1350,13 +1339,12 @@ async fn run_mixed_source_target_smoke(
         .await
         .context("type target edit after source edit")?;
 
-    driver
-        .execute(
-            "document.querySelector(\".note-navigation-row[data-note-id='note.georgia-state']\").click();",
-            Vec::new(),
-        )
-        .await
-        .context("select a different note from navigation list")?;
+    click_css(
+        driver,
+        ".note-navigation-row[data-note-id='note.georgia-state']",
+        "select a different note from navigation list",
+    )
+    .await?;
     wait_for_element(
         driver,
         "#translation-input-notes_note_georgia_state_fields_field_country",
@@ -1371,13 +1359,12 @@ async fn run_mixed_source_target_smoke(
         .await
         .context("only selected note fields remain in DOM")?;
     assert_eq!(previous_note_unmounted.json().as_bool(), Some(true));
-    driver
-        .execute(
-            "document.querySelector(\".note-navigation-row[data-note-id='note.georgia-country']\").click();",
-            Vec::new(),
-        )
-        .await
-        .context("return to staged note")?;
+    click_css(
+        driver,
+        ".note-navigation-row[data-note-id='note.georgia-country']",
+        "return to staged note",
+    )
+    .await?;
     wait_for_element(driver, &format!("#translation-input-{suffix}"))
         .await
         .context("staged note detail returns")?;
@@ -1854,6 +1841,24 @@ async fn wait_for_element(driver: &WebDriver, css: &str) -> Result<WebElement> {
             Err(error) => return Err(error).with_context(|| format!("wait for element {css}")),
         }
     }
+}
+
+async fn click_css(driver: &WebDriver, css: &str, description: &str) -> Result<()> {
+    wait_for_element(driver, css)
+        .await?
+        .click()
+        .await
+        .with_context(|| format!("{description} via {css}"))
+}
+
+async fn select_value(driver: &WebDriver, css: &str, value: &str, description: &str) -> Result<()> {
+    let element = wait_for_element(driver, css).await?;
+    SelectElement::new(&element)
+        .await
+        .with_context(|| format!("create select wrapper for {css}"))?
+        .select_by_value(value)
+        .await
+        .with_context(|| format!("{description} via {css}={value:?}"))
 }
 
 async fn wait_for_text(driver: &WebDriver, expected: &str) -> Result<()> {
