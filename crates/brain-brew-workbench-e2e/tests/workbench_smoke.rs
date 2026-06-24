@@ -289,6 +289,34 @@ async fn workbench_ultimate_geography_manifest_loads_without_wasm_errors() -> Re
 }
 
 #[tokio::test]
+async fn workbench_ultimate_geography_media_loads_from_sd_command_path() -> Result<()> {
+    let artifacts = ArtifactDir::new("ug-real-media")?;
+    let manifest = workspace_root().join("fixtures/ultimate-geography/brainbrew.yaml");
+    let media_root = TempDir::new().context("create deterministic UG media root")?;
+    write_ultimate_geography_media_fixture(media_root.path())?;
+    // Mirrors `.sd/tasks.yaml`'s `workbench/ug` path: real UG manifest,
+    // dev assets, and the same optional media-root hook used by
+    // `BRAINBREW_UG_MEDIA_ROOT`.
+    let server = RunningWorkbenchServer::spawn_with_media_root(
+        manifest,
+        dev_assets_path(),
+        artifacts.path(),
+        Some(media_root.path().to_path_buf()),
+    )?;
+    let driver = new_driver().await.context("connect to WebDriver")?;
+
+    let result = run_ultimate_geography_media_smoke(&driver, &server).await;
+    if let Err(error) = &result {
+        let _ = artifacts.save_browser_failure(&driver, error).await;
+    }
+    let quit_result = driver.quit().await.context("quit browser session");
+
+    result?;
+    quit_result?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn workbench_loads_ug_like_repeated_source_smoke_path() -> Result<()> {
     let artifacts = ArtifactDir::new("ug-like")?;
     let workspace = TempDir::new().context("create UG-like E2E workspace")?;
@@ -1358,6 +1386,43 @@ async fn run_mixed_source_target_smoke(
     Ok(())
 }
 
+async fn run_ultimate_geography_media_smoke(
+    driver: &WebDriver,
+    server: &RunningWorkbenchServer,
+) -> Result<()> {
+    driver
+        .goto(server.url("/").as_str())
+        .await
+        .context("open Ultimate Geography workbench with deterministic media root")?;
+    wait_for_loaded_probe(driver).await?;
+    wait_for_element(driver, ".note-card[data-note-id='note.abkhazia']")
+        .await
+        .context("default Abkhazia note detail appears")?;
+    assert_visible_workbench_media(
+        driver,
+        &["ug-flag-abkhazia.svg", "ug-map-abkhazia.png"],
+        "Abkhazia note detail",
+    )
+    .await?;
+
+    select_note_detail(driver, "note.afghanistan", "Afghanistan").await?;
+    assert_visible_workbench_media(
+        driver,
+        &["ug-flag-afghanistan.svg", "ug-map-afghanistan.png"],
+        "Afghanistan note detail",
+    )
+    .await?;
+
+    select_note_detail(driver, "note.albania", "Albania").await?;
+    assert_visible_workbench_media(
+        driver,
+        &["ug-flag-albania.svg", "ug-map-albania.png"],
+        "Albania note detail",
+    )
+    .await?;
+    Ok(())
+}
+
 async fn run_ug_like_smoke(driver: &WebDriver, server: &RunningWorkbenchServer) -> Result<()> {
     driver
         .goto(server.url("/"))
@@ -1386,6 +1451,117 @@ async fn open_workbench_view(driver: &WebDriver, view: &str) -> Result<()> {
     wait_for_element(driver, &format!("#view-panel-{view}:not([hidden])"))
         .await
         .with_context(|| format!("Workbench {view} view is visible"))?;
+    Ok(())
+}
+
+async fn select_note_detail(driver: &WebDriver, note_id: &str, expected_title: &str) -> Result<()> {
+    let row_selector = format!(".note-navigation-row[data-note-id='{note_id}']");
+    wait_for_element(driver, &row_selector)
+        .await?
+        .click()
+        .await
+        .with_context(|| format!("select note {note_id}"))?;
+    wait_for_element(driver, &format!(".note-card[data-note-id='{note_id}']"))
+        .await
+        .with_context(|| format!("note detail {note_id} is visible"))?;
+    wait_for_text(driver, expected_title).await
+}
+
+async fn assert_visible_workbench_media(
+    driver: &WebDriver,
+    expected_paths: &[&str],
+    context_label: &str,
+) -> Result<()> {
+    let result = driver
+        .execute_async(
+            r#"
+            const done = arguments[0];
+            (async () => {
+                const images = Array.from(document.querySelectorAll('#workbench-dom-panel img'))
+                    .filter((img) => img.getClientRects().length > 0);
+                const unique = [];
+                const seen = new Set();
+                for (const img of images) {
+                    const src = img.currentSrc || img.src || img.getAttribute('src') || '';
+                    if (!src || seen.has(src)) continue;
+                    seen.add(src);
+                    const response = await fetch(src, { cache: 'no-store' });
+                    const bytes = await response.arrayBuffer();
+                    const prefix = new TextDecoder('utf-8').decode(new Uint8Array(bytes.slice(0, 512)));
+                    unique.push({
+                        src,
+                        ok: response.ok,
+                        status: response.status,
+                        contentType: response.headers.get('content-type') || '',
+                        byteLength: bytes.byteLength,
+                        placeholder: prefix.includes('Missing media asset'),
+                        complete: img.complete,
+                        naturalWidth: img.naturalWidth,
+                        naturalHeight: img.naturalHeight
+                    });
+                }
+                done({ ok: true, probes: unique });
+            })().catch((error) => done({ ok: false, error: String(error) }));
+            "#,
+            Vec::new(),
+        )
+        .await
+        .with_context(|| format!("probe visible media for {context_label}"))?;
+    let json = result.json();
+    assert_eq!(
+        json["ok"].as_bool(),
+        Some(true),
+        "media probe failed for {context_label}: {json:?}"
+    );
+    let probes = json["probes"].as_array().ok_or_else(|| {
+        anyhow!("media probe did not return an array for {context_label}: {json:?}")
+    })?;
+    for expected_path in expected_paths {
+        let Some(probe) = probes.iter().find(|probe| {
+            probe["src"]
+                .as_str()
+                .is_some_and(|src| src.contains(expected_path))
+        }) else {
+            bail!(
+                "missing visible media path {expected_path:?} for {context_label}; probes: {probes:?}"
+            );
+        };
+        assert_eq!(
+            probe["ok"].as_bool(),
+            Some(true),
+            "media URL did not return HTTP success for {expected_path} in {context_label}: {probe:?}"
+        );
+        assert_eq!(
+            probe["status"].as_u64(),
+            Some(200),
+            "media URL did not return HTTP 200 for {expected_path} in {context_label}: {probe:?}"
+        );
+        assert!(
+            probe["contentType"]
+                .as_str()
+                .is_some_and(|content_type| content_type.starts_with("image/")),
+            "media URL did not return an image content type for {expected_path} in {context_label}: {probe:?}"
+        );
+        assert!(
+            probe["byteLength"].as_u64().unwrap_or_default() > 32,
+            "media body was unexpectedly small for {expected_path} in {context_label}: {probe:?}"
+        );
+        assert_eq!(
+            probe["placeholder"].as_bool(),
+            Some(false),
+            "media URL returned the missing-media placeholder for {expected_path} in {context_label}: {probe:?}"
+        );
+        assert_eq!(
+            probe["complete"].as_bool(),
+            Some(true),
+            "browser image did not finish loading for {expected_path} in {context_label}: {probe:?}"
+        );
+        assert!(
+            probe["naturalWidth"].as_u64().unwrap_or_default() > 0
+                && probe["naturalHeight"].as_u64().unwrap_or_default() > 0,
+            "browser image dimensions were empty for {expected_path} in {context_label}: {probe:?}"
+        );
+    }
     Ok(())
 }
 
@@ -1823,6 +1999,15 @@ struct RunningWorkbenchServer {
 
 impl RunningWorkbenchServer {
     fn spawn(manifest: PathBuf, dev_assets: Option<PathBuf>, artifact_dir: &Path) -> Result<Self> {
+        Self::spawn_with_media_root(manifest, dev_assets, artifact_dir, None)
+    }
+
+    fn spawn_with_media_root(
+        manifest: PathBuf,
+        dev_assets: Option<PathBuf>,
+        artifact_dir: &Path,
+        media_root: Option<PathBuf>,
+    ) -> Result<Self> {
         let brainbrew = std::env::var_os("BRAINBREW_E2E_BIN")
             .map(PathBuf::from)
             .unwrap_or_else(|| workspace_root().join("target/debug/brainbrew"));
@@ -1849,6 +2034,9 @@ impl RunningWorkbenchServer {
         ]);
         if let Some(dev_assets) = dev_assets {
             command.arg("--dev-assets").arg(dev_assets);
+        }
+        if let Some(media_root) = media_root {
+            command.arg("--media-root").arg(media_root);
         }
         let mut child = command
             .stdout(Stdio::piped())
@@ -2069,6 +2257,32 @@ translation_profile:
 fn write_ug_like_workbench_fixture(dir: &Path) -> Result<()> {
     fs::write(dir.join("deck.yaml"), UG_LIKE_CANONICAL_YAML)?;
     write_translation_overlay_and_manifest(dir)
+}
+
+fn write_ultimate_geography_media_fixture(media_root: &Path) -> Result<()> {
+    for path in [
+        "ug-flag-abkhazia.svg",
+        "ug-flag-afghanistan.svg",
+        "ug-flag-albania.svg",
+    ] {
+        fs::write(media_root.join(path), tiny_svg(path))
+            .with_context(|| format!("write deterministic UG SVG media {path}"))?;
+    }
+    for path in [
+        "ug-map-abkhazia.png",
+        "ug-map-afghanistan.png",
+        "ug-map-albania.png",
+    ] {
+        fs::write(media_root.join(path), tiny_png_bytes())
+            .with_context(|| format!("write deterministic UG PNG media {path}"))?;
+    }
+    Ok(())
+}
+
+fn tiny_svg(label: &str) -> String {
+    format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="16" viewBox="0 0 24 16"><title>{label}</title><rect width="24" height="16" fill="#2563eb"/><circle cx="12" cy="8" r="5" fill="#f8fafc"/></svg>"##
+    )
 }
 
 fn write_source_edit_workbench_fixture(dir: &Path) -> Result<()> {
