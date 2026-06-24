@@ -396,6 +396,135 @@ fn workbench_serve_uses_available_port_and_embedded_assets_by_default() {
 }
 
 #[test]
+fn workbench_navigation_lists_are_paginated_and_compact() {
+    let dir = temp_dir("workbench-navigation-lists");
+    write_workbench_repeated_source_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let notes = get_json(
+        &server.url("/api/workbench/note-list?language=da&target=standard&limit=1&offset=0"),
+    );
+    assert_eq!(notes["language"]["code"], "da");
+    assert_eq!(notes["target"]["label"], "standard");
+    assert_eq!(notes["total"], 2);
+    assert_eq!(notes["limit"], 1);
+    assert_eq!(notes["offset"], 0);
+    assert_eq!(notes["has_more"], true);
+    assert_eq!(notes["progress"]["total"], 4);
+    assert_eq!(notes["rows"].as_array().unwrap().len(), 1);
+    assert!(
+        notes["rows"][0]["note_id"]
+            .as_str()
+            .unwrap()
+            .starts_with("note.")
+    );
+    assert!(notes["rows"][0].get("fields").is_none());
+    assert!(notes["rows"][0].get("source_preview").is_none());
+
+    let notes_page_2 = get_json(
+        &server.url("/api/workbench/note-list?language=da&target=standard&limit=1&offset=1"),
+    );
+    assert_eq!(notes_page_2["total"], 2);
+    assert_eq!(notes_page_2["rows"].as_array().unwrap().len(), 1);
+    assert_eq!(notes_page_2["has_more"], false);
+    assert_ne!(
+        notes["rows"][0]["note_id"],
+        notes_page_2["rows"][0]["note_id"]
+    );
+
+    let cards = get_json(
+        &server.url("/api/workbench/card-list?language=da&target=standard&limit=1&offset=0"),
+    );
+    assert_eq!(cards["total"], 2);
+    assert_eq!(cards["progress"]["total"], 2);
+    assert_eq!(cards["rows"].as_array().unwrap().len(), 1);
+    assert!(cards["rows"][0]["card_id"].as_str().unwrap().contains("::"));
+    assert!(cards["rows"][0].get("fields").is_none());
+    assert!(cards["rows"][0].get("source_preview").is_none());
+
+    let strings = get_json(
+        &server
+            .url("/api/workbench/source-string-list?language=da&target=standard&limit=1&offset=0"),
+    );
+    assert_eq!(strings["total"], 3);
+    assert_eq!(strings["progress"]["total"], 3);
+    assert_eq!(strings["rows"].as_array().unwrap().len(), 1);
+    assert!(!strings["rows"][0]["source"].as_str().unwrap().is_empty());
+    assert!(strings["rows"][0].get("occurrences").is_none());
+
+    let full_pivot = get_json(&server.url("/api/workbench/card-pivot?language=da&target=standard"));
+    assert_eq!(full_pivot["cards"].as_array().unwrap().len(), 2);
+    assert!(full_pivot["selected_card"].get("fields").is_some());
+}
+
+#[test]
+fn workbench_optional_metadata_list_is_paginated_and_keeps_full_totals() {
+    let dir = temp_dir("workbench-optional-metadata-list");
+    write_workbench_optional_metadata_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let optional =
+        get_json(&server.url("/api/workbench/optional-metadata-list?language=da&limit=1&offset=0"));
+    assert_eq!(optional["language"]["code"], "da");
+    assert_eq!(optional["limit"], 1);
+    assert_eq!(optional["offset"], 0);
+    assert!(optional["total"].as_u64().unwrap() > 1);
+    assert_eq!(optional["has_more"], true);
+    assert_eq!(optional["rows"].as_array().unwrap().len(), 1);
+    assert_eq!(optional["main_progress"]["total"], 2);
+    assert_eq!(optional["optional_progress"]["total"], optional["total"]);
+    assert!(optional["rows"][0]["path"].as_str().unwrap().contains('.'));
+    assert!(optional["rows"][0].get("target").is_none());
+}
+
+#[test]
+fn workbench_navigation_lists_reject_invalid_pagination() {
+    let dir = temp_dir("workbench-navigation-list-errors");
+    write_workbench_repeated_source_workspace(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    assert_get_status_contains(
+        &server.url("/api/workbench/note-list?limit=0"),
+        400,
+        "invalid pagination limit",
+    );
+    assert_get_status_contains(
+        &server.url("/api/workbench/source-string-list?offset=-1"),
+        400,
+        "invalid pagination offset",
+    );
+    assert_get_status_contains(
+        &server.url("/api/workbench/card-list?limit=9999"),
+        400,
+        "invalid pagination limit",
+    );
+}
+
+#[test]
 fn workbench_note_pivot_exposes_target_translation_data_and_media() {
     let dir = temp_dir("workbench-note-pivot");
     write_workbench_workspace(&dir);
@@ -4091,6 +4220,22 @@ fn get_json(url: &str) -> serde_json::Value {
     let response = ureq::get(url).call().expect("GET succeeds");
     assert_eq!(response.status(), 200);
     serde_json::from_str(&response.into_string().unwrap()).expect("response is JSON")
+}
+
+fn assert_get_status_contains(url: &str, expected_status: u16, expected_body: &str) {
+    let error = ureq::get(url)
+        .call()
+        .expect_err("GET should fail with expected status");
+    match error {
+        ureq::Error::Status(status, response) => {
+            assert_eq!(status, expected_status);
+            assert!(
+                response.into_string().unwrap().contains(expected_body),
+                "error body should contain {expected_body:?}"
+            );
+        }
+        other => panic!("unexpected GET error: {other}"),
+    }
 }
 
 fn post_json(url: &str, body: serde_json::Value) -> serde_json::Value {

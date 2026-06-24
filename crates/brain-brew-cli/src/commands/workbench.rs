@@ -189,6 +189,13 @@ fn app(metadata: Arc<WorkspaceMetadata>, dev_assets: Option<PathBuf>) -> Router 
     let router = Router::new()
         .route("/api/health", get(health))
         .route("/api/workspace", get(workspace))
+        .route("/api/workbench/note-list", get(note_list))
+        .route("/api/workbench/card-list", get(card_list))
+        .route("/api/workbench/source-string-list", get(source_string_list))
+        .route(
+            "/api/workbench/optional-metadata-list",
+            get(optional_metadata_list),
+        )
         .route("/api/workbench/note-pivot", get(note_pivot))
         .route(
             "/api/workbench/source-string-pivot",
@@ -231,6 +238,46 @@ async fn workspace(
         .workspace_json()
         .map(Json)
         .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))
+}
+
+async fn note_list(
+    State(metadata): State<Arc<WorkspaceMetadata>>,
+    Query(query): Query<NoteListQuery>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    metadata
+        .note_list_json(&query)
+        .map(Json)
+        .map_err(workbench_api_error)
+}
+
+async fn card_list(
+    State(metadata): State<Arc<WorkspaceMetadata>>,
+    Query(query): Query<CardListQuery>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    metadata
+        .card_list_json(&query)
+        .map(Json)
+        .map_err(workbench_api_error)
+}
+
+async fn source_string_list(
+    State(metadata): State<Arc<WorkspaceMetadata>>,
+    Query(query): Query<SourceStringListQuery>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    metadata
+        .source_string_list_json(&query)
+        .map(Json)
+        .map_err(workbench_api_error)
+}
+
+async fn optional_metadata_list(
+    State(metadata): State<Arc<WorkspaceMetadata>>,
+    Query(query): Query<OptionalMetadataListQuery>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    metadata
+        .optional_metadata_list_json(&query)
+        .map(Json)
+        .map_err(workbench_api_error)
 }
 
 async fn note_pivot(
@@ -428,6 +475,76 @@ impl WorkspaceMetadata {
             },
             "fingerprints": fingerprints,
         }))
+    }
+
+    fn note_list_json(&self, query: &NoteListQuery) -> Result<Value, String> {
+        let manifest = self.current_manifest()?;
+        let pagination = parse_pagination(query.limit.as_deref(), query.offset.as_deref())?;
+        let context = self.selected_translation_context(
+            &manifest,
+            query.language.as_deref(),
+            query.target.as_deref(),
+            query.overlay.as_deref(),
+        )?;
+        Ok(note_list_json_from_context(
+            &context,
+            &manifest,
+            query.filter.as_deref(),
+            pagination,
+        ))
+    }
+
+    fn card_list_json(&self, query: &CardListQuery) -> Result<Value, String> {
+        let manifest = self.current_manifest()?;
+        let pagination = parse_pagination(query.limit.as_deref(), query.offset.as_deref())?;
+        let context = self.selected_translation_context(
+            &manifest,
+            query.language.as_deref(),
+            query.target.as_deref(),
+            query.overlay.as_deref(),
+        )?;
+        Ok(card_list_json_from_context(
+            &context,
+            &manifest,
+            query.filter.as_deref(),
+            query.content_group.as_deref(),
+            pagination,
+        ))
+    }
+
+    fn source_string_list_json(&self, query: &SourceStringListQuery) -> Result<Value, String> {
+        let manifest = self.current_manifest()?;
+        let pagination = parse_pagination(query.limit.as_deref(), query.offset.as_deref())?;
+        let context = self.selected_translation_context(
+            &manifest,
+            query.language.as_deref(),
+            query.target.as_deref(),
+            query.overlay.as_deref(),
+        )?;
+        Ok(source_string_list_json_from_context(
+            &context,
+            &manifest,
+            query.content_group.as_deref(),
+            query.status.as_deref(),
+            pagination,
+        ))
+    }
+
+    fn optional_metadata_list_json(
+        &self,
+        query: &OptionalMetadataListQuery,
+    ) -> Result<Value, String> {
+        let manifest = self.current_manifest()?;
+        let pagination = parse_pagination(query.limit.as_deref(), query.offset.as_deref())?;
+        let context = self.selected_translation_context(
+            &manifest,
+            query.language.as_deref(),
+            query.target.as_deref(),
+            query.overlay.as_deref(),
+        )?;
+        Ok(optional_metadata_list_json_from_context(
+            &context, &manifest, pagination,
+        ))
     }
 
     fn note_pivot_json(&self, query: &NotePivotQuery) -> Result<Value, String> {
@@ -1071,6 +1188,47 @@ fn apply_file_groups_json(changes: &[Value]) -> Value {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
+struct NoteListQuery {
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    filter: Option<String>,
+    limit: Option<String>,
+    offset: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+struct CardListQuery {
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    filter: Option<String>,
+    content_group: Option<String>,
+    limit: Option<String>,
+    offset: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+struct SourceStringListQuery {
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    content_group: Option<String>,
+    status: Option<String>,
+    limit: Option<String>,
+    offset: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+struct OptionalMetadataListQuery {
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    limit: Option<String>,
+    offset: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
 struct NotePivotQuery {
     language: Option<String>,
     target: Option<String>,
@@ -1121,6 +1279,50 @@ struct NewLanguagePreviewQuery {
     code: Option<String>,
     display_name: Option<String>,
     template: Option<String>,
+}
+
+const DEFAULT_LIST_LIMIT: usize = 50;
+const MAX_LIST_LIMIT: usize = 200;
+
+#[derive(Clone, Copy, Debug)]
+struct Pagination {
+    limit: usize,
+    offset: usize,
+}
+
+fn parse_pagination(limit: Option<&str>, offset: Option<&str>) -> Result<Pagination, String> {
+    let limit = match limit {
+        Some(raw) => raw.parse::<usize>().map_err(|_| {
+            format!(
+                "invalid pagination limit {raw:?}: expected an integer from 1 to {MAX_LIST_LIMIT}"
+            )
+        })?,
+        None => DEFAULT_LIST_LIMIT,
+    };
+    if limit == 0 || limit > MAX_LIST_LIMIT {
+        return Err(format!(
+            "invalid pagination limit {limit}: expected a value from 1 to {MAX_LIST_LIMIT}"
+        ));
+    }
+    let offset = match offset {
+        Some(raw) => raw.parse::<usize>().map_err(|_| {
+            format!("invalid pagination offset {raw:?}: expected a non-negative integer")
+        })?,
+        None => 0,
+    };
+    Ok(Pagination { limit, offset })
+}
+
+fn paginate<T: Clone>(items: &[T], pagination: Pagination) -> (Vec<T>, bool) {
+    let total = items.len();
+    let page = items
+        .iter()
+        .skip(pagination.offset)
+        .take(pagination.limit)
+        .cloned()
+        .collect::<Vec<_>>();
+    let has_more = pagination.offset.saturating_add(pagination.limit) < total;
+    (page, has_more)
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -1627,6 +1829,267 @@ fn safe_new_language_relative_path(path: &str) -> Result<PathBuf, String> {
         return Err(format!("invalid new language file path {path:?}"));
     }
     Ok(candidate.to_path_buf())
+}
+
+fn note_list_json_from_context(
+    context: &SelectedTranslationContext,
+    manifest: &FederatedDeckManifest,
+    filter: Option<&str>,
+    pagination: Pagination,
+) -> Value {
+    let entries_by_path = context
+        .report
+        .entries
+        .iter()
+        .map(|entry| (entry.path.as_str(), entry))
+        .collect::<BTreeMap<_, _>>();
+    let progress = main_progress(&context.source_deck, context, &entries_by_path);
+    let rows = note_navigation_rows(context, filter);
+    let total = rows.len();
+    let (page, has_more) = paginate(&rows, pagination);
+    json!({
+        "language": {
+            "code": context.selection.language_code,
+            "display_name": context.selection.language_display_name,
+        },
+        "target": {
+            "label": context.selection.target_label,
+            "id": context.selection.target_id,
+        },
+        "overlay": {
+            "label": context.selection.overlay_label,
+            "id": context.selection.overlay_id,
+            "file": context.selection.overlay_display_file,
+        },
+        "selection_options": selection_options_json(context, manifest),
+        "filters": {
+            "active": filter.unwrap_or("all"),
+            "available": ["all", "missing", "stale", "needs_work"],
+        },
+        "progress": progress,
+        "total": total,
+        "limit": pagination.limit,
+        "offset": pagination.offset,
+        "has_more": has_more,
+        "rows": page,
+    })
+}
+
+fn card_list_json_from_context(
+    context: &SelectedTranslationContext,
+    manifest: &FederatedDeckManifest,
+    filter: Option<&str>,
+    content_group_filter: Option<&str>,
+    pagination: Pagination,
+) -> Value {
+    let content_group_filter = content_group_filter.filter(|filter| *filter != "all");
+    let rows = main_field_rows(
+        &context.source_deck,
+        &context.selection,
+        &context.report.entries,
+    );
+    let all_cards = produced_card_rows(context, &rows);
+    let progress_total = all_cards.len();
+    let progress_missing = all_cards
+        .iter()
+        .filter(|card| card.status == "missing")
+        .count();
+    let progress_stale = all_cards
+        .iter()
+        .filter(|card| card.status == "stale")
+        .count();
+    let progress_complete = progress_total.saturating_sub(progress_missing + progress_stale);
+    let content_groups = all_cards
+        .iter()
+        .flat_map(|card| card.content_group_badges.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    let cards = all_cards
+        .into_iter()
+        .filter(|card| card_matches_filter(card, filter))
+        .filter(|card| {
+            content_group_filter.is_none_or(|filter| {
+                card.content_group_badges
+                    .iter()
+                    .any(|badge| badge == filter)
+            })
+        })
+        .collect::<Vec<_>>();
+    let total = cards.len();
+    let summaries = cards.iter().map(card_summary_json).collect::<Vec<_>>();
+    let (page, has_more) = paginate(&summaries, pagination);
+    json!({
+        "language": {
+            "code": context.selection.language_code,
+            "display_name": context.selection.language_display_name,
+        },
+        "target": {
+            "label": context.selection.target_label,
+            "id": context.selection.target_id,
+        },
+        "overlay": {
+            "label": context.selection.overlay_label,
+            "id": context.selection.overlay_id,
+            "file": context.selection.overlay_display_file,
+        },
+        "selection_options": selection_options_json(context, manifest),
+        "filters": {
+            "active": filter.unwrap_or("all"),
+            "available": ["all", "missing", "stale", "needs_work"],
+            "content_group": content_group_filter.unwrap_or("all"),
+            "content_groups": content_groups,
+        },
+        "progress": {
+            "total": progress_total,
+            "complete": progress_complete,
+            "missing": progress_missing,
+            "stale": progress_stale,
+            "needs_work": progress_missing + progress_stale,
+            "percent": progress_percent(progress_complete, progress_total),
+        },
+        "total": total,
+        "limit": pagination.limit,
+        "offset": pagination.offset,
+        "has_more": has_more,
+        "rows": page,
+    })
+}
+
+fn source_string_list_json_from_context(
+    context: &SelectedTranslationContext,
+    manifest: &FederatedDeckManifest,
+    content_group_filter: Option<&str>,
+    status_filter: Option<&str>,
+    pagination: Pagination,
+) -> Value {
+    let content_group_filter = content_group_filter.filter(|filter| *filter != "all");
+    let status_filter = status_filter.filter(|filter| *filter != "all");
+    let all_rows = source_string_rows(context)
+        .into_iter()
+        .filter(|row| !row.structural && !row.source.is_empty())
+        .collect::<Vec<_>>();
+    let all_groups = source_string_groups(&context.source_deck, &all_rows);
+    let progress_total = all_groups.len();
+    let progress_missing = all_groups
+        .iter()
+        .filter(|group| group.status == "missing")
+        .count();
+    let progress_stale = all_groups
+        .iter()
+        .filter(|group| group.status == "stale")
+        .count();
+    let progress_complete = all_groups
+        .iter()
+        .filter(|group| group.status == "complete")
+        .count();
+    let content_groups = all_rows
+        .iter()
+        .flat_map(|row| content_group_badges_for_note(&context.source_deck, &row.note_id))
+        .collect::<BTreeSet<_>>();
+    let rows = all_rows
+        .into_iter()
+        .filter(|row| {
+            content_group_filter.is_none_or(|filter| {
+                content_group_badges_for_note(&context.source_deck, &row.note_id)
+                    .iter()
+                    .any(|badge| badge == filter)
+            })
+        })
+        .collect::<Vec<_>>();
+    let source_counts = rows
+        .iter()
+        .fold(BTreeMap::<String, usize>::new(), |mut counts, row| {
+            *counts.entry(row.source.clone()).or_insert(0) += 1;
+            counts
+        });
+    let grouped = source_string_groups(&context.source_deck, &rows)
+        .into_iter()
+        .filter(|group| status_filter.is_none_or(|filter| filter == group.status))
+        .collect::<Vec<_>>();
+    let total = grouped.len();
+    let summaries = grouped
+        .iter()
+        .map(|group| source_string_summary_json(group, &source_counts))
+        .collect::<Vec<_>>();
+    let (page, has_more) = paginate(&summaries, pagination);
+    json!({
+        "language": {
+            "code": context.selection.language_code,
+            "display_name": context.selection.language_display_name,
+        },
+        "target": {
+            "label": context.selection.target_label,
+            "id": context.selection.target_id,
+        },
+        "overlay": {
+            "label": context.selection.overlay_label,
+            "id": context.selection.overlay_id,
+            "file": context.selection.overlay_display_file,
+        },
+        "selection_options": selection_options_json(context, manifest),
+        "filters": {
+            "content_group": content_group_filter.unwrap_or("all"),
+            "content_groups": content_groups,
+            "status": status_filter.unwrap_or("all"),
+            "statuses": ["all", "missing", "stale", "complete"],
+        },
+        "progress": {
+            "total": progress_total,
+            "complete": progress_complete,
+            "missing": progress_missing,
+            "stale": progress_stale,
+            "needs_work": progress_missing + progress_stale,
+            "percent": progress_percent(progress_complete, progress_total),
+        },
+        "total": total,
+        "limit": pagination.limit,
+        "offset": pagination.offset,
+        "has_more": has_more,
+        "rows": page,
+    })
+}
+
+fn optional_metadata_list_json_from_context(
+    context: &SelectedTranslationContext,
+    manifest: &FederatedDeckManifest,
+    pagination: Pagination,
+) -> Value {
+    let entries_by_path = context
+        .report
+        .entries
+        .iter()
+        .map(|entry| (entry.path.as_str(), entry))
+        .collect::<BTreeMap<_, _>>();
+    let items = optional_metadata_rows(context, manifest);
+    let total = items.len();
+    let summaries = items
+        .iter()
+        .map(optional_metadata_summary_json)
+        .collect::<Vec<_>>();
+    let (page, has_more) = paginate(&summaries, pagination);
+    json!({
+        "language": {
+            "code": context.selection.language_code,
+            "display_name": context.selection.language_display_name,
+        },
+        "target": {
+            "label": context.selection.target_label,
+            "id": context.selection.target_id,
+        },
+        "overlay": {
+            "label": context.selection.overlay_label,
+            "id": context.selection.overlay_id,
+            "file": context.selection.overlay_display_file,
+        },
+        "selection_options": selection_options_json(context, manifest),
+        "main_progress": main_progress(&context.source_deck, context, &entries_by_path),
+        "optional_progress": optional_metadata_progress(&items),
+        "total": total,
+        "limit": pagination.limit,
+        "offset": pagination.offset,
+        "has_more": has_more,
+        "rows": page,
+        "profile_optional_paths": manifest.translation_profile.optional_paths,
+    })
 }
 
 fn note_pivot_json_from_context(
@@ -2398,10 +2861,7 @@ fn main_progress(
         .iter()
         .filter(|row| is_stale_category(row.category))
         .count();
-    let percent = complete
-        .checked_mul(100)
-        .and_then(|value| value.checked_div(total))
-        .unwrap_or(100);
+    let percent = progress_percent(complete, total);
     json!({
         "complete": complete,
         "total": total,
@@ -2410,6 +2870,13 @@ fn main_progress(
         "needs_work": missing + stale,
         "percent": percent,
     })
+}
+
+fn progress_percent(complete: usize, total: usize) -> usize {
+    complete
+        .checked_mul(100)
+        .and_then(|value| value.checked_div(total))
+        .unwrap_or(100)
 }
 
 #[derive(Clone, Debug)]
@@ -2559,6 +3026,103 @@ fn path_matches_pattern(pattern: &str, path: &str) -> bool {
         .iter()
         .zip(path_parts.iter())
         .all(|(pattern, part)| *pattern == "*" || *pattern == *part)
+}
+
+fn note_navigation_rows(context: &SelectedTranslationContext, filter: Option<&str>) -> Vec<Value> {
+    let rows = main_field_rows(
+        &context.source_deck,
+        &context.selection,
+        &context.report.entries,
+    );
+    let rows_by_note = rows.into_iter().fold(
+        BTreeMap::<StableId, Vec<MainFieldRow>>::new(),
+        |mut rows_by_note, row| {
+            rows_by_note
+                .entry(row.note_id.clone())
+                .or_default()
+                .push(row);
+            rows_by_note
+        },
+    );
+    let mut notes = Vec::new();
+    for (index, (note_id, note)) in context.source_deck.notes.iter().enumerate() {
+        let field_rows = rows_by_note.get(note_id).cloned().unwrap_or_default();
+        let note_entries = context
+            .report
+            .entries
+            .iter()
+            .filter(|entry| entry.path.starts_with(&format!("notes.{note_id}.")))
+            .cloned()
+            .collect::<Vec<_>>();
+        if !note_matches_filter(&field_rows, &note_entries, filter) {
+            continue;
+        }
+        let title = note
+            .fields
+            .values()
+            .next()
+            .cloned()
+            .unwrap_or_else(|| note_id.to_string());
+        let field_count = field_rows.len();
+        let translatable_field_count = field_rows.iter().filter(|row| !row.structural).count();
+        let missing_count = field_rows
+            .iter()
+            .filter(|row| {
+                !row.structural && row.category == TranslationCoverageCategory::UntranslatedFallback
+            })
+            .count();
+        let stale_count = note_entries
+            .iter()
+            .filter(|entry| is_stale_category(entry.category))
+            .count();
+        let complete_count = translatable_field_count.saturating_sub(missing_count + stale_count);
+        notes.push(json!({
+            "index": index,
+            "note_id": note_id.to_string(),
+            "note_type_id": note.note_type_id.to_string(),
+            "title": title,
+            "status": note_status(&field_rows, &note_entries),
+            "field_count": field_count,
+            "translatable_field_count": translatable_field_count,
+            "complete_count": complete_count,
+            "missing_count": missing_count,
+            "stale_count": stale_count,
+            "content_group_badges": content_group_badges_for_note(&context.source_deck, note_id),
+        }));
+    }
+    notes
+}
+
+fn source_string_summary_json(
+    group: &SourceStringGroup,
+    source_counts: &BTreeMap<String, usize>,
+) -> Value {
+    json!({
+        "source": group.source,
+        "status": group.status,
+        "main_completion_status": group.status,
+        "occurrence_count": group.occurrence_count,
+        "complete_count": group.complete_count,
+        "missing_count": group.missing_count,
+        "stale_count": group.stale_count,
+        "target_preview": group.target_preview,
+        "content_group_badges": group.content_group_badges,
+        "direct_recommended": true,
+        "direct_applies_to": source_counts.get(&group.source).copied().unwrap_or(group.occurrence_count),
+    })
+}
+
+fn optional_metadata_summary_json(row: &OptionalMetadataRow) -> Value {
+    json!({
+        "path": row.path,
+        "source": row.source,
+        "status": optional_row_status(row),
+        "coverage_category": format!("{:?}", row.category),
+        "metadata_category": row.metadata_category,
+        "profile_optional": row.profile_optional,
+        "warning": row.warning,
+        "editable": true,
+    })
 }
 
 fn note_pivot_notes_json(
