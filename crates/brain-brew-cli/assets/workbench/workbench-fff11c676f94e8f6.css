@@ -61,6 +61,42 @@ body > *:not(#brainbrew-workbench-e2e):not(#workbench-dom-panel):not(script) {
   color: #fffaf0;
 }
 
+.note-navigation {
+  border: 1px solid #eadfc9;
+  border-radius: 0.75rem;
+  margin: 1rem 0;
+  padding: 1rem;
+}
+
+.note-navigation-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+}
+
+.note-navigation-row {
+  width: 100%;
+  height: 100%;
+  border: 1px solid #d5c7aa;
+  border-radius: 0.5rem;
+  background: #fffdf7;
+  color: #2f2618;
+  cursor: pointer;
+  padding: 0.6rem;
+  text-align: left;
+}
+
+.note-navigation-row.active {
+  border-color: #58452a;
+  box-shadow: 0 0 0 2px rgba(88, 69, 42, 0.18);
+}
+
+.note-detail-panel {
+  margin: 1rem 0;
+}
+
 .field-editor {
   width: 100%;
   border-collapse: collapse;

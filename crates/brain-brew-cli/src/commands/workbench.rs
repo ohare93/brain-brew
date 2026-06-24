@@ -190,6 +190,7 @@ fn app(metadata: Arc<WorkspaceMetadata>, dev_assets: Option<PathBuf>) -> Router 
         .route("/api/health", get(health))
         .route("/api/workspace", get(workspace))
         .route("/api/workbench/note-list", get(note_list))
+        .route("/api/workbench/note-detail", get(note_detail))
         .route("/api/workbench/card-list", get(card_list))
         .route("/api/workbench/source-string-list", get(source_string_list))
         .route(
@@ -246,6 +247,16 @@ async fn note_list(
 ) -> Result<Json<Value>, (StatusCode, String)> {
     metadata
         .note_list_json(&query)
+        .map(Json)
+        .map_err(workbench_api_error)
+}
+
+async fn note_detail(
+    State(metadata): State<Arc<WorkspaceMetadata>>,
+    Query(query): Query<NoteDetailQuery>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    metadata
+        .note_detail_json(&query)
         .map(Json)
         .map_err(workbench_api_error)
 }
@@ -492,6 +503,25 @@ impl WorkspaceMetadata {
             query.filter.as_deref(),
             pagination,
         ))
+    }
+
+    fn note_detail_json(&self, query: &NoteDetailQuery) -> Result<Value, String> {
+        let manifest = self.current_manifest()?;
+        let note = query
+            .note
+            .as_deref()
+            .ok_or_else(|| "invalid note detail request: missing note".to_owned())?;
+        let context = self.selected_translation_context(
+            &manifest,
+            query.language.as_deref(),
+            query.target.as_deref(),
+            query.overlay.as_deref(),
+        )?;
+        let detail = note_pivot_json_from_context(&context, &manifest, None, Some(note));
+        if detail["notes"].as_array().is_none_or(Vec::is_empty) {
+            return Err(format!("unknown note {note:?}"));
+        }
+        Ok(detail)
     }
 
     fn card_list_json(&self, query: &CardListQuery) -> Result<Value, String> {
@@ -1198,6 +1228,14 @@ struct NoteListQuery {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
+struct NoteDetailQuery {
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    note: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
 struct CardListQuery {
     language: Option<String>,
     target: Option<String>,
@@ -1844,6 +1882,7 @@ fn note_list_json_from_context(
         .map(|entry| (entry.path.as_str(), entry))
         .collect::<BTreeMap<_, _>>();
     let progress = main_progress(&context.source_deck, context, &entries_by_path);
+    let optional_progress = optional_metadata_progress(&optional_metadata_rows(context, manifest));
     let rows = note_navigation_rows(context, filter);
     let total = rows.len();
     let (page, has_more) = paginate(&rows, pagination);
@@ -1867,6 +1906,7 @@ fn note_list_json_from_context(
             "available": ["all", "missing", "stale", "needs_work"],
         },
         "progress": progress,
+        "optional_progress": optional_progress,
         "total": total,
         "limit": pagination.limit,
         "offset": pagination.offset,

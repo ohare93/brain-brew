@@ -429,6 +429,14 @@ fn workbench_navigation_lists_are_paginated_and_compact() {
     assert!(notes["rows"][0].get("fields").is_none());
     assert!(notes["rows"][0].get("source_preview").is_none());
 
+    let detail = get_json(&server.url(&format!(
+        "/api/workbench/note-detail?language=da&target=standard&note={}",
+        notes["rows"][0]["note_id"].as_str().unwrap()
+    )));
+    assert_eq!(detail["notes"].as_array().unwrap().len(), 1);
+    assert_eq!(detail["notes"][0]["note_id"], notes["rows"][0]["note_id"]);
+    assert!(detail["notes"][0]["fields"].as_array().unwrap().len() >= 2);
+
     let notes_page_2 = get_json(
         &server.url("/api/workbench/note-list?language=da&target=standard&limit=1&offset=1"),
     );

@@ -600,14 +600,12 @@ async fn run_ultimate_geography_manifest_smoke(
         .await
         .context("check legacy app shell visibility")?;
     assert_eq!(legacy_shell_visible.json().as_bool(), Some(false));
-    let loaded_image = driver
-        .execute(
-            "return Array.from(document.querySelectorAll('.anki-card-preview img')).some((img) => img.complete && img.naturalWidth > 0);",
-            Vec::new(),
-        )
-        .await
-        .context("check media preview image dimensions")?;
-    assert_eq!(loaded_image.json().as_bool(), Some(true));
+    wait_for_js_bool(
+        driver,
+        "return Array.from(document.querySelectorAll('.anki-card-preview img')).some((img) => img.complete && img.naturalWidth > 0);",
+        "media preview image dimensions",
+    )
+    .await?;
     assert_no_secondary_pivot_fetches(driver)
         .await
         .context("secondary pivots are lazy on initial UG load")?;
@@ -640,7 +638,17 @@ async fn run_multi_pane_smoke(
         .context("open multi-pane workbench")?;
     wait_for_loaded_probe(driver).await?;
     wait_for_element(driver, "#pane-layout-panel").await?;
+    driver
+        .execute(
+            "document.querySelector(\".note-navigation-row[data-note-id='note.finland']\").click();",
+            Vec::new(),
+        )
+        .await
+        .context("select Finland note for multi-pane source edit")?;
     let source_toggle = "source-edit-toggle-notes_note_finland_fields_field_country";
+    wait_for_element(driver, &format!("#{source_toggle}"))
+        .await
+        .context("initial note detail source toggle appears")?;
     let disabled = driver
         .execute(
             &format!("return document.getElementById('{source_toggle}').disabled;"),
@@ -724,6 +732,16 @@ async fn run_multi_pane_smoke(
         .await
         .context("refresh multi-pane workbench")?;
     wait_for_loaded_probe(driver).await?;
+    driver
+        .execute(
+            "document.querySelector(\".note-navigation-row[data-note-id='note.finland']\").click();",
+            Vec::new(),
+        )
+        .await
+        .context("return to Finland note after refresh")?;
+    wait_for_element(driver, &format!("#{source_id}"))
+        .await
+        .context("Finland detail returns after refresh")?;
     assert_eq!(element_value(driver, source_id).await?, "Finland pane");
     assert_eq!(
         element_value(driver, da_input_id).await?,
@@ -1026,6 +1044,42 @@ async fn run_mixed_source_target_smoke(
         .await
         .context("type target edit after source edit")?;
 
+    driver
+        .execute(
+            "document.querySelector(\".note-navigation-row[data-note-id='note.georgia-state']\").click();",
+            Vec::new(),
+        )
+        .await
+        .context("select a different note from navigation list")?;
+    wait_for_element(
+        driver,
+        "#translation-input-notes_note_georgia_state_fields_field_country",
+    )
+    .await
+    .context("different selected note detail appears")?;
+    let previous_note_unmounted = driver
+        .execute(
+            "return document.getElementById('translation-input-notes_note_georgia_country_fields_field_country') === null && document.querySelectorAll('.note-card').length === 1;",
+            Vec::new(),
+        )
+        .await
+        .context("only selected note fields remain in DOM")?;
+    assert_eq!(previous_note_unmounted.json().as_bool(), Some(true));
+    driver
+        .execute(
+            "document.querySelector(\".note-navigation-row[data-note-id='note.georgia-country']\").click();",
+            Vec::new(),
+        )
+        .await
+        .context("return to staged note")?;
+    wait_for_element(driver, &format!("#translation-input-{suffix}"))
+        .await
+        .context("staged note detail returns")?;
+    assert_eq!(
+        element_value(driver, &format!("translation-input-{suffix}")).await?,
+        "Sakartvelo på dansk"
+    );
+
     wait_for_element(driver, "#apply-confirm-button")
         .await?
         .click()
@@ -1083,6 +1137,23 @@ async fn wait_for_text(driver: &WebDriver, expected: &str) -> Result<()> {
         }
         if Instant::now() >= deadline {
             bail!("timed out waiting for text {expected:?}; body was {text:?}");
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
+async fn wait_for_js_bool(driver: &WebDriver, script: &str, description: &str) -> Result<()> {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let value = driver
+            .execute(script, Vec::new())
+            .await
+            .with_context(|| format!("evaluate {description}"))?;
+        if value.json().as_bool() == Some(true) {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            bail!("timed out waiting for {description}");
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
     }

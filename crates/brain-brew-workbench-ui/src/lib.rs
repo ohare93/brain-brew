@@ -341,16 +341,11 @@ fn publish_note_pivot_panel(pivot: &Value) {
     html.push_str(&pane_layout_panel_html(pivot));
     html.push_str(&new_language_panel_html(pivot));
 
-    if let Some(notes) = pivot["notes"].as_array() {
-        if notes.is_empty() {
-            html.push_str("<p>No notes match the active filter.</p>");
-        } else {
-            for note in notes {
-                html.push_str(&note_html(pivot, note));
-            }
-        }
+    html.push_str(&note_navigation_html(pivot));
+    if first_note_id(pivot).is_some() {
+        html.push_str("<section id=\"note-detail-panel\" class=\"note-detail-panel\" aria-live=\"polite\"><p>Loading selected note…</p></section>");
     } else {
-        html.push_str("<p>No notes match the active filter.</p>");
+        html.push_str("<section id=\"note-detail-panel\" class=\"note-detail-panel\"><p>No notes match the active filter.</p></section>");
     }
 
     html.push_str(&lazy_secondary_pivot_panels_html());
@@ -361,12 +356,14 @@ fn publish_note_pivot_panel(pivot: &Value) {
     register_control_handlers(pivot);
     register_pane_layout_handlers(pivot);
     register_new_language_handlers(pivot);
-    register_field_handlers(pivot);
+    register_note_navigation_handlers(pivot);
     register_lazy_pivot_load_handlers(pivot);
     register_apply_handlers(pivot);
-    restore_staged_dom_state(pivot);
     update_staged_count_for_pivot(pivot);
-    refresh_progress_from_dom();
+    if let Some(note_id) = first_note_id(pivot) {
+        let (language, target, overlay) = pivot_selection_parts(pivot);
+        load_note_detail_for_parts(language, target, overlay, note_id);
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -556,6 +553,55 @@ fn filter_buttons_html(pivot: &Value) -> String {
     }
     html.push_str("</nav>");
     html
+}
+
+#[cfg(target_arch = "wasm32")]
+fn note_navigation_html(pivot: &Value) -> String {
+    let mut html = String::new();
+    html.push_str(&format!(
+        "<section class=\"note-navigation\" data-total=\"{}\" data-limit=\"{}\" data-offset=\"{}\"><h3>Notes</h3>",
+        pivot["total"].as_u64().unwrap_or(0),
+        pivot["limit"].as_u64().unwrap_or(0),
+        pivot["offset"].as_u64().unwrap_or(0),
+    ));
+    if let Some(rows) = pivot["rows"].as_array() {
+        if rows.is_empty() {
+            html.push_str("<p>No notes match the active filter.</p>");
+        } else {
+            html.push_str("<ol class=\"note-navigation-list\">");
+            for (index, row) in rows.iter().enumerate() {
+                let note_id = row["note_id"].as_str().unwrap_or("");
+                let active = if index == 0 { " active" } else { "" };
+                html.push_str(&format!(
+                    "<li><button type=\"button\" class=\"note-navigation-row{}\" data-note-id=\"{}\"><strong>{}</strong><br><span>{}</span> · {} field(s), {} missing, {} stale</button></li>",
+                    active,
+                    escape_html(note_id),
+                    escape_html(row["title"].as_str().unwrap_or(note_id)),
+                    escape_html(row["status"].as_str().unwrap_or("unknown")),
+                    row["translatable_field_count"].as_u64().unwrap_or(0),
+                    row["missing_count"].as_u64().unwrap_or(0),
+                    row["stale_count"].as_u64().unwrap_or(0),
+                ));
+            }
+            html.push_str("</ol>");
+            if pivot["has_more"].as_bool().unwrap_or(false) {
+                html.push_str("<p class=\"note-navigation-more\">More notes are available; pagination controls will load additional pages in the next slice.</p>");
+            }
+        }
+    } else {
+        html.push_str("<p>No notes match the active filter.</p>");
+    }
+    html.push_str("</section>");
+    html
+}
+
+#[cfg(target_arch = "wasm32")]
+fn first_note_id(pivot: &Value) -> Option<String> {
+    pivot["rows"]
+        .as_array()
+        .and_then(|rows| rows.first())
+        .and_then(|row| row["note_id"].as_str())
+        .map(str::to_owned)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1689,6 +1735,138 @@ fn publish_optional_metadata_panel(optional: &Value) {
 #[cfg(target_arch = "wasm32")]
 fn css_escape(input: &str) -> String {
     input.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+#[cfg(target_arch = "wasm32")]
+fn register_note_navigation_handlers(pivot: &Value) {
+    let (language, target, overlay) = pivot_selection_parts(pivot);
+    for row in pivot["rows"].as_array().into_iter().flatten() {
+        let Some(note_id) = row["note_id"].as_str() else {
+            continue;
+        };
+        attach_note_select_handler(
+            language.clone(),
+            target.clone(),
+            overlay.clone(),
+            note_id.to_owned(),
+        );
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_note_select_handler(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    note_id: String,
+) {
+    let selector = format!(
+        ".note-navigation-row[data-note-id=\"{}\"]",
+        css_escape(&note_id)
+    );
+    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+        mark_active_note_row(&note_id);
+        set_panel_loading("note-detail-panel", "Loading selected note…");
+        load_note_detail_for_parts(
+            language.clone(),
+            target.clone(),
+            overlay.clone(),
+            note_id.clone(),
+        );
+    }));
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.query_selector(&selector).ok().flatten())
+    {
+        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+    }
+    closure.forget();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn mark_active_note_row(note_id: &str) {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    if let Ok(nodes) = document.query_selector_all(".note-navigation-row.active") {
+        for index in 0..nodes.length() {
+            if let Some(node) = nodes.get(index)
+                && let Ok(element) = node.dyn_into::<web_sys::Element>()
+            {
+                let class_name = element.get_attribute("class").unwrap_or_default();
+                let class_name = class_name
+                    .split_whitespace()
+                    .filter(|class| *class != "active")
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let _ = element.set_attribute("class", &class_name);
+            }
+        }
+    }
+    let selector = format!(
+        ".note-navigation-row[data-note-id=\"{}\"]",
+        css_escape(note_id)
+    );
+    if let Some(element) = document.query_selector(&selector).ok().flatten() {
+        let class_name = element.get_attribute("class").unwrap_or_default();
+        if !class_name.split_whitespace().any(|class| class == "active") {
+            let class_name = if class_name.is_empty() {
+                "active".to_owned()
+            } else {
+                format!("{class_name} active")
+            };
+            let _ = element.set_attribute("class", &class_name);
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn load_note_detail_for_parts(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    note_id: String,
+) {
+    wasm_bindgen_futures::spawn_local(async move {
+        match fetch_note_detail_query(language, target, overlay, note_id).await {
+            Ok(detail) => publish_note_detail_panel(&detail),
+            Err(error) => {
+                if let Some(panel) = web_sys::window()
+                    .and_then(|window| window.document())
+                    .and_then(|document| document.get_element_by_id("note-detail-panel"))
+                {
+                    panel.set_inner_html(&format!(
+                        "<p class=\"workbench-error\">{}</p>",
+                        escape_html(&error)
+                    ));
+                }
+            }
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn publish_note_detail_panel(detail: &Value) {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    let Some(panel) = document.get_element_by_id("note-detail-panel") else {
+        return;
+    };
+    let Some(note) = detail["notes"].as_array().and_then(|notes| notes.first()) else {
+        panel.set_inner_html("<p>No note detail is available.</p>");
+        return;
+    };
+    panel.set_inner_html(&note_html(detail, note));
+    mark_panel_loaded(&panel);
+    register_field_handlers(detail);
+    restore_staged_dom_state(detail);
+    update_staged_count_for_pivot(detail);
+    apply_pane_writability(
+        checkbox_checked(&document, "source-pane-writable"),
+        checkbox_checked(&document, "target-pane-writable"),
+    );
+    refresh_progress_from_dom();
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -3299,7 +3477,19 @@ async fn fetch_note_pivot_query(
     if let Some(filter) = filter.filter(|value| !value.is_empty() && value != "all") {
         params.push(format!("filter={}", encode_query_component(&filter)));
     }
-    get_workbench_json("/api/workbench/note-pivot", params).await
+    get_workbench_json("/api/workbench/note-list", params).await
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn fetch_note_detail_query(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    note_id: String,
+) -> Result<Value, String> {
+    let mut params = workbench_selection_params(language, target, overlay);
+    params.push(format!("note={}", encode_query_component(&note_id)));
+    get_workbench_json("/api/workbench/note-detail", params).await
 }
 
 #[cfg(target_arch = "wasm32")]
