@@ -472,6 +472,58 @@ fn workbench_note_pivot_exposes_target_translation_data_and_media() {
 }
 
 #[test]
+fn workbench_media_can_load_from_media_root_or_placeholder() {
+    let dir = temp_dir("workbench-media-root");
+    write_workbench_workspace(&dir);
+    let external_media = dir.join("external-media");
+    fs::create_dir_all(external_media.join("flags")).unwrap();
+    fs::write(external_media.join("flags/fi.png"), b"png").unwrap();
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--media-root",
+        external_media.to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let media = ureq::get(&server.url("/api/media/flags/fi.png"))
+        .call()
+        .expect("GET declared media from media root succeeds");
+    assert_eq!(media.status(), 200);
+    assert_eq!(
+        media.header("content-type").unwrap_or_default(),
+        "image/png"
+    );
+
+    let missing_dir = temp_dir("workbench-missing-media-placeholder");
+    write_workbench_workspace(&missing_dir);
+    let missing_server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        missing_dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+    let placeholder = ureq::get(&missing_server.url("/api/media/flags/fi.png"))
+        .call()
+        .expect("GET declared missing media returns visible placeholder");
+    assert_eq!(placeholder.status(), 200);
+    assert_eq!(
+        placeholder.header("content-type").unwrap_or_default(),
+        "image/svg+xml"
+    );
+    let body = placeholder.into_string().unwrap();
+    assert!(body.contains("Missing media asset"));
+    assert!(body.contains("flags/fi.png"));
+}
+
+#[test]
 fn workbench_optional_metadata_progress_and_apply_are_separate_from_main_fields() {
     let dir = temp_dir("workbench-optional-metadata");
     write_workbench_optional_metadata_workspace(&dir);

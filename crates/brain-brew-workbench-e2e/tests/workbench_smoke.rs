@@ -6,6 +6,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow, bail};
 use tempfile::TempDir;
+use thirtyfour::LoggingPrefsLogLevel;
+use thirtyfour::common::capabilities::chromium::ChromiumLikeCapabilities;
 use thirtyfour::prelude::*;
 
 #[tokio::test]
@@ -223,6 +225,24 @@ async fn workbench_mixed_source_and_target_browser_apply_uses_new_source() -> Re
     let quit_result = driver.quit().await.context("quit browser session");
 
     edit_result?;
+    quit_result?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn workbench_ultimate_geography_manifest_loads_without_wasm_errors() -> Result<()> {
+    let artifacts = ArtifactDir::new("ug-real-manifest")?;
+    let manifest = workspace_root().join("fixtures/ultimate-geography/brainbrew.yaml");
+    let server = RunningWorkbenchServer::spawn(manifest, dev_assets_path(), artifacts.path())?;
+    let driver = new_driver().await.context("connect to WebDriver")?;
+
+    let result = run_ultimate_geography_manifest_smoke(&driver, &server).await;
+    if let Err(error) = &result {
+        let _ = artifacts.save_browser_failure(&driver, error).await;
+    }
+    let quit_result = driver.quit().await.context("quit browser session");
+
+    result?;
     quit_result?;
     Ok(())
 }
@@ -529,6 +549,52 @@ async fn run_optional_metadata_smoke(
     wait_for_apply_output(driver, "Applied").await?;
     assert!(fs::read_to_string(workspace.join("da.yaml"))?.contains("Arbejdsbord Røgtest"));
     assert!(fs::read_to_string(workspace.join("deck.yaml"))?.contains("name: Workbench Smoke"));
+    Ok(())
+}
+
+async fn run_ultimate_geography_manifest_smoke(
+    driver: &WebDriver,
+    server: &RunningWorkbenchServer,
+) -> Result<()> {
+    driver
+        .goto(server.url("/").as_str())
+        .await
+        .context("open Ultimate Geography workbench")?;
+    wait_for_loaded_probe(driver).await?;
+    wait_for_text(driver, "loaded 15 language(s)").await?;
+    wait_for_text(driver, "Main note-field progress").await?;
+    wait_for_element(driver, ".anki-card-preview img")
+        .await
+        .context("media preview image appears")?;
+    let panel_top = driver
+        .execute(
+            "return document.getElementById('workbench-dom-panel').getBoundingClientRect().top;",
+            Vec::new(),
+        )
+        .await
+        .context("measure Workbench panel top")?;
+    let panel_top = panel_top.json().as_f64().unwrap_or(999.0);
+    assert!(
+        panel_top < 96.0,
+        "Workbench panel should start near the top, got top={panel_top}"
+    );
+    let legacy_shell_visible = driver
+        .execute(
+            "return document.body.innerText.includes('Language dashboard');",
+            Vec::new(),
+        )
+        .await
+        .context("check legacy app shell visibility")?;
+    assert_eq!(legacy_shell_visible.json().as_bool(), Some(false));
+    let loaded_image = driver
+        .execute(
+            "return Array.from(document.querySelectorAll('.anki-card-preview img')).some((img) => img.complete && img.naturalWidth > 0);",
+            Vec::new(),
+        )
+        .await
+        .context("check media preview image dimensions")?;
+    assert_eq!(loaded_image.json().as_bool(), Some(true));
+    assert_no_severe_browser_logs(driver).await?;
     Ok(())
 }
 
@@ -1005,6 +1071,23 @@ async fn element_value(driver: &WebDriver, id: &str) -> Result<String> {
     Ok(value.json().as_str().unwrap_or_default().to_owned())
 }
 
+async fn assert_no_severe_browser_logs(driver: &WebDriver) -> Result<()> {
+    let severe = driver
+        .browser_log()
+        .await
+        .context("read browser logs")?
+        .into_iter()
+        .filter(|entry| entry.level == "SEVERE")
+        .map(|entry| entry.message)
+        .filter(|message| !message.contains("/favicon.ico"))
+        .collect::<Vec<_>>();
+    assert!(
+        severe.is_empty(),
+        "unexpected severe browser logs: {severe:#?}"
+    );
+    Ok(())
+}
+
 async fn new_driver() -> Result<WebDriver> {
     let webdriver_url =
         std::env::var("WEBDRIVER_URL").unwrap_or_else(|_| "http://127.0.0.1:9515".to_owned());
@@ -1014,6 +1097,7 @@ async fn new_driver() -> Result<WebDriver> {
     caps.add_arg("--disable-dev-shm-usage")?;
     caps.add_arg("--disable-gpu")?;
     caps.add_arg("--window-size=1280,900")?;
+    caps.set_browser_log_level(LoggingPrefsLogLevel::All)?;
     if let Ok(binary) = std::env::var("BRAINBREW_CHROME_BINARY") {
         caps.set_binary(binary.as_str())?;
     }

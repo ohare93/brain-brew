@@ -95,9 +95,10 @@ Reports translation coverage, shows terminal note/card context, summarizes trans
 brainbrew workbench serve --manifest brainbrew.yaml
 brainbrew workbench serve --manifest brainbrew.yaml --port 0 --no-open
 brainbrew workbench serve --manifest brainbrew.yaml --dev-assets target/workbench-ui
+brainbrew workbench serve --manifest brainbrew.yaml --media-root media/
 ```
 
-Starts the local Deck Workbench server on `127.0.0.1`, serving the browser UI plus JSON APIs for health and workspace metadata. Release builds serve embedded Iced/WASM assets from the `brainbrew` binary; during UI development run `devenv shell workbench-ui-watch` and pass `--dev-assets target/workbench-ui`. Use `devenv shell workbench-ui-build` for a one-shot development WASM asset build, or `devenv shell workbench-ui-embed` to refresh the release assets checked into the CLI crate.
+Starts the local Deck Workbench server on `127.0.0.1`, serving the browser UI plus JSON APIs for health and workspace metadata. Release builds serve embedded Iced/WASM assets from the `brainbrew` binary; during UI development run `devenv shell workbench-ui-watch` and pass `--dev-assets target/workbench-ui`. Use `devenv shell workbench-ui-build` for a one-shot development WASM asset build, or `devenv shell workbench-ui-embed` to refresh the release assets checked into the CLI crate. Use `--media-root` when declared media files live outside the manifest root.
 
 ## `verify`
 

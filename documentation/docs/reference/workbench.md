@@ -16,6 +16,8 @@ The server binds `127.0.0.1` on an available port by default and serves JSON API
 devenv shell workbench-ui-build
 devenv shell workbench-ui-watch
 brainbrew workbench serve --manifest brainbrew.yaml --dev-assets target/workbench-ui --no-open
+# Optional when media files live outside the manifest root:
+brainbrew workbench serve --manifest brainbrew.yaml --media-root media/
 ```
 
 Refresh release-embedded assets after frontend changes:

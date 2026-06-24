@@ -922,13 +922,18 @@ fn register_card_pivot_handlers(pivot: &Value) {
 
 #[cfg(target_arch = "wasm32")]
 fn attach_card_filter_handlers(pivot: &Value) {
-    let pivot_for_group = pivot.clone();
+    let (language, target, overlay) = pivot_selection_parts(pivot);
+    let group_language = language.clone();
+    let group_target = target.clone();
+    let group_overlay = overlay.clone();
     let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
         let Some(document) = web_sys::window().and_then(|window| window.document()) else {
             return;
         };
-        load_card_pivot_for_pivot(
-            &pivot_for_group,
+        load_card_pivot_for_parts(
+            group_language.clone(),
+            group_target.clone(),
+            group_overlay.clone(),
             None,
             active_card_filter(&document),
             selected_value(&document, "card-content-group-filter"),
@@ -944,14 +949,23 @@ fn attach_card_filter_handlers(pivot: &Value) {
     closure.forget();
 
     for filter in ["all", "missing", "stale", "needs_work"] {
-        let pivot = pivot.clone();
+        let language = language.clone();
+        let target = target.clone();
+        let overlay = overlay.clone();
         let filter = filter.to_owned();
         let selector = format!(".card-pivot-filters button[data-filter=\"{filter}\"]");
         let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
             let group = web_sys::window()
                 .and_then(|window| window.document())
                 .and_then(|document| selected_value(&document, "card-content-group-filter"));
-            load_card_pivot_for_pivot(&pivot, None, Some(filter.clone()), group);
+            load_card_pivot_for_parts(
+                language.clone(),
+                target.clone(),
+                overlay.clone(),
+                None,
+                Some(filter.clone()),
+                group,
+            );
         }));
         if let Some(element) = web_sys::window()
             .and_then(|window| window.document())
@@ -975,7 +989,7 @@ fn active_card_filter(document: &web_sys::Document) -> Option<String> {
 
 #[cfg(target_arch = "wasm32")]
 fn attach_card_select_handler(pivot: &Value, card_id: String) {
-    let pivot = pivot.clone();
+    let (language, target, overlay) = pivot_selection_parts(pivot);
     let selector = format!(".card-row[data-card-id=\"{}\"]", css_escape(&card_id));
     let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
         let document = web_sys::window().and_then(|window| window.document());
@@ -983,7 +997,14 @@ fn attach_card_select_handler(pivot: &Value, card_id: String) {
         let group = document
             .as_ref()
             .and_then(|document| selected_value(document, "card-content-group-filter"));
-        load_card_pivot_for_pivot(&pivot, Some(card_id.clone()), filter, group);
+        load_card_pivot_for_parts(
+            language.clone(),
+            target.clone(),
+            overlay.clone(),
+            Some(card_id.clone()),
+            filter,
+            group,
+        );
     }));
     if let Some(element) = web_sys::window()
         .and_then(|window| window.document())
@@ -1258,9 +1279,19 @@ fn load_card_pivot_for_pivot(
     filter: Option<String>,
     content_group: Option<String>,
 ) {
-    let language = pivot["language"]["code"].as_str().map(str::to_owned);
-    let target = pivot["target"]["label"].as_str().map(str::to_owned);
-    let overlay = pivot["overlay"]["label"].as_str().map(str::to_owned);
+    let (language, target, overlay) = pivot_selection_parts(pivot);
+    load_card_pivot_for_parts(language, target, overlay, card, filter, content_group);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn load_card_pivot_for_parts(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    card: Option<String>,
+    filter: Option<String>,
+    content_group: Option<String>,
+) {
     wasm_bindgen_futures::spawn_local(async move {
         match fetch_card_pivot_query(language, target, overlay, card, filter, content_group).await {
             Ok(pivot) => publish_card_pivot_panel(&pivot),
@@ -1296,13 +1327,20 @@ fn register_source_string_handlers(pivot: &Value) {
 
 #[cfg(target_arch = "wasm32")]
 fn attach_source_string_filter_handler(pivot: &Value) {
-    let pivot = pivot.clone();
+    let (language, target, overlay) = pivot_selection_parts(pivot);
     let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
         let Some(document) = web_sys::window().and_then(|window| window.document()) else {
             return;
         };
         let content_group = selected_value(&document, "source-string-content-group-filter");
-        load_source_string_pivot_for_pivot(&pivot, None, content_group, None);
+        load_source_string_pivot_for_parts(
+            language.clone(),
+            target.clone(),
+            overlay.clone(),
+            None,
+            content_group,
+            None,
+        );
     }));
     if let Some(element) = web_sys::window()
         .and_then(|window| window.document())
@@ -1316,13 +1354,20 @@ fn attach_source_string_filter_handler(pivot: &Value) {
 
 #[cfg(target_arch = "wasm32")]
 fn attach_source_string_select_handler(pivot: &Value, source: String) {
-    let pivot = pivot.clone();
+    let (language, target, overlay) = pivot_selection_parts(pivot);
     let selector = format!(
         ".source-string-row[data-source=\"{}\"]",
         css_escape(&source)
     );
     let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        load_source_string_pivot_for_pivot(&pivot, Some(source.clone()), None, None);
+        load_source_string_pivot_for_parts(
+            language.clone(),
+            target.clone(),
+            overlay.clone(),
+            Some(source.clone()),
+            None,
+            None,
+        );
     }));
     if let Some(element) = web_sys::window()
         .and_then(|window| window.document())
@@ -1482,9 +1527,19 @@ fn load_source_string_pivot_for_pivot(
     content_group: Option<String>,
     status: Option<String>,
 ) {
-    let language = pivot["language"]["code"].as_str().map(str::to_owned);
-    let target = pivot["target"]["label"].as_str().map(str::to_owned);
-    let overlay = pivot["overlay"]["label"].as_str().map(str::to_owned);
+    let (language, target, overlay) = pivot_selection_parts(pivot);
+    load_source_string_pivot_for_parts(language, target, overlay, source, content_group, status);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn load_source_string_pivot_for_parts(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    source: Option<String>,
+    content_group: Option<String>,
+    status: Option<String>,
+) {
     wasm_bindgen_futures::spawn_local(async move {
         match fetch_source_string_pivot_query(
             language,
@@ -3050,6 +3105,15 @@ fn storage_prefix(pivot: &Value) -> String {
         pivot["language"]["code"].as_str().unwrap_or("language"),
         pivot["target"]["label"].as_str().unwrap_or("target"),
         pivot["overlay"]["label"].as_str().unwrap_or("overlay"),
+    )
+}
+
+#[cfg(target_arch = "wasm32")]
+fn pivot_selection_parts(pivot: &Value) -> (Option<String>, Option<String>, Option<String>) {
+    (
+        pivot["language"]["code"].as_str().map(str::to_owned),
+        pivot["target"]["label"].as_str().map(str::to_owned),
+        pivot["overlay"]["label"].as_str().map(str::to_owned),
     )
 }
 

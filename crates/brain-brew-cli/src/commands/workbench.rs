@@ -80,6 +80,7 @@ struct ServeArgs {
     port: u16,
     open_browser: bool,
     dev_assets: Option<PathBuf>,
+    media_root: Option<PathBuf>,
 }
 
 fn parse_serve_args(args: &[String]) -> Result<ServeArgs, String> {
@@ -88,6 +89,7 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, String> {
         port: 0,
         open_browser: true,
         dev_assets: None,
+        media_root: None,
     };
     let mut index = 0;
     while index < args.len() {
@@ -119,6 +121,13 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, String> {
                 parsed.dev_assets = Some(PathBuf::from(path));
                 index += 2;
             }
+            "--media-root" => {
+                let Some(path) = args.get(index + 1) else {
+                    return Err("--media-root requires a directory".to_owned());
+                };
+                parsed.media_root = Some(PathBuf::from(path));
+                index += 2;
+            }
             other => return Err(format!("unexpected workbench serve argument {other:?}")),
         }
     }
@@ -127,6 +136,14 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, String> {
     {
         return Err(format!(
             "--dev-assets directory {} does not exist",
+            path.display()
+        ));
+    }
+    if let Some(path) = &parsed.media_root
+        && !path.is_dir()
+    {
+        return Err(format!(
+            "--media-root directory {} does not exist",
             path.display()
         ));
     }
@@ -141,7 +158,11 @@ fn serve_sync(args: ServeArgs) -> Result<(), String> {
 
 async fn serve(args: ServeArgs) -> Result<(), String> {
     let manifest = read_manifest(&args.manifest_path)?;
-    let metadata = Arc::new(WorkspaceMetadata::load(&args.manifest_path, manifest));
+    let metadata = Arc::new(WorkspaceMetadata::load(
+        &args.manifest_path,
+        manifest,
+        args.media_root.clone(),
+    ));
     let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), args.port))
         .await
         .map_err(|error| format!("failed to bind workbench server: {error}"))?;
@@ -184,6 +205,7 @@ fn app(metadata: Arc<WorkspaceMetadata>, dev_assets: Option<PathBuf>) -> Router 
         .route("/api/workbench/apply-preview", post(apply_preview))
         .route("/api/workbench/apply", post(apply_edits))
         .route("/api/media/{*path}", get(media_asset))
+        .route("/favicon.ico", get(favicon))
         .with_state(metadata);
 
     if let Some(assets) = dev_assets {
@@ -308,6 +330,13 @@ async fn media_asset(
     metadata.media_response(&path).map_err(workbench_api_error)
 }
 
+async fn favicon() -> Response {
+    Response::builder()
+        .status(StatusCode::NO_CONTENT)
+        .body(Body::empty())
+        .unwrap_or_else(|_| Response::new(Body::empty()))
+}
+
 fn workbench_api_error(error: String) -> (StatusCode, String) {
     let status = if error.starts_with("invalid ")
         || error.starts_with("missing ")
@@ -364,13 +393,19 @@ fn embedded_content_type(path: &str) -> &'static str {
 struct WorkspaceMetadata {
     manifest_path: PathBuf,
     manifest_root: PathBuf,
+    media_root: Option<PathBuf>,
 }
 
 impl WorkspaceMetadata {
-    fn load(manifest_path: &Path, _manifest: FederatedDeckManifest) -> Self {
+    fn load(
+        manifest_path: &Path,
+        _manifest: FederatedDeckManifest,
+        media_root: Option<PathBuf>,
+    ) -> Self {
         Self {
             manifest_path: manifest_path.to_path_buf(),
             manifest_root: manifest_root(manifest_path),
+            media_root,
         }
     }
 
@@ -738,20 +773,29 @@ impl WorkspaceMetadata {
             return Err(format!("unknown media asset {requested_path:?}"));
         }
 
-        let candidates = [
+        let mut candidates = vec![
             self.manifest_root.join(&requested_path),
             self.manifest_root.join("media").join(&requested_path),
         ];
-        let path = candidates
-            .iter()
-            .find(|path| path.is_file())
-            .ok_or_else(|| format!("missing media asset {requested_path:?}"))?;
-        let bytes = fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
+        if let Some(media_root) = &self.media_root {
+            candidates.push(media_root.join(&requested_path));
+            candidates.push(media_root.join("media").join(&requested_path));
+        }
+        if let Some(path) = candidates.iter().find(|path| path.is_file()) {
+            let bytes = fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
+            return Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, media_content_type(&requested_path))
+                .body(Body::from(bytes))
+                .map_err(|error| format!("failed to build media response: {error}"));
+        }
+
+        let placeholder = missing_media_placeholder_svg(&requested_path);
         Response::builder()
             .status(StatusCode::OK)
-            .header(header::CONTENT_TYPE, media_content_type(&requested_path))
-            .body(Body::from(bytes))
-            .map_err(|error| format!("failed to build media response: {error}"))
+            .header(header::CONTENT_TYPE, "image/svg+xml")
+            .body(Body::from(placeholder))
+            .map_err(|error| format!("failed to build missing media placeholder: {error}"))
     }
 
     fn media_path_declared(&self, requested_path: &str) -> Result<bool, String> {
@@ -2846,6 +2890,13 @@ fn safe_media_relative_path(path: &str) -> Result<String, String> {
         return Err(format!("invalid media path {path:?}"));
     }
     Ok(path.to_owned())
+}
+
+fn missing_media_placeholder_svg(path: &str) -> String {
+    let label = html_attribute_escape(path);
+    format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 360 120\" role=\"img\" aria-label=\"missing media {label}\"><rect width=\"360\" height=\"120\" fill=\"#f8efe0\" stroke=\"#c9b892\"/><text x=\"20\" y=\"52\" fill=\"#58452a\" font-family=\"sans-serif\" font-size=\"18\">Missing media asset</text><text x=\"20\" y=\"82\" fill=\"#7a6240\" font-family=\"monospace\" font-size=\"14\">{label}</text></svg>"
+    )
 }
 
 fn media_content_type(path: &str) -> &'static str {

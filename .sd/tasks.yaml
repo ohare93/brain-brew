@@ -53,7 +53,11 @@ tasks:
         shift
       fi
       devenv shell workbench-ui-build
-      devenv shell brainbrew workbench serve --manifest fixtures/ultimate-geography/brainbrew.yaml --dev-assets target/workbench-ui "$@"
+      media_args=()
+      if [ -n "${BRAINBREW_UG_MEDIA_ROOT:-}" ]; then
+        media_args=(--media-root "$BRAINBREW_UG_MEDIA_ROOT")
+      fi
+      devenv shell brainbrew workbench serve --manifest fixtures/ultimate-geography/brainbrew.yaml --dev-assets target/workbench-ui "${media_args[@]}" "$@"
 
 passthrough:
   cargo:
