@@ -49,6 +49,9 @@ tasks:
     desc: Build Workbench dev assets and serve the Ultimate Geography manifest; pass -- --no-open or -- --port <port> as needed
     run: |
       set -euo pipefail
+      if [ "${1:-}" = "--" ]; then
+        shift
+      fi
       devenv shell workbench-ui-build
       devenv shell brainbrew workbench serve --manifest fixtures/ultimate-geography/brainbrew.yaml --dev-assets target/workbench-ui "$@"
 
