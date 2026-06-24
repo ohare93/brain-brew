@@ -772,27 +772,20 @@ async fn run_ultimate_geography_manifest_smoke(
     wait_for_element(driver, ".anki-card-preview img")
         .await
         .context("media preview image appears")?;
-    wait_for_element(driver, "#workbench-view-switch")
+    assert_top_level_view_switch_contract(driver, "notes")
         .await
         .context("top-level Workbench view switch appears")?;
-    wait_for_js_bool(
-        driver,
-        r#"
-        const titles = Array.from(document.querySelectorAll('.note-navigation-row strong')).map((el) => el.textContent.trim());
-        return titles.length > 0 && titles.every(Boolean) && titles[0] === 'Abkhazia' && !titles.includes('Sukhumi');
-        "#,
-        "human note titles are visible in navigation",
-    )
-    .await?;
-    wait_for_js_bool(
-        driver,
-        r#"
-        const labels = Array.from(document.querySelectorAll('.note-card .anki-card-preview')).map((el) => el.textContent.trim());
-        return labels.some((label) => label.includes('Country - Capital') || label.includes('country-capital')) && labels.some((label) => label.includes('Capital - Country') || label.includes('capital-country'));
-        "#,
-        "note card previews are labeled by template",
-    )
-    .await?;
+    assert_note_navigation_human_titles(driver, "Abkhazia", &["Sukhumi", "Kabul", "Tirana"])
+        .await
+        .context("human note titles are visible in navigation")?;
+    assert_card_preview_template_headers(driver, ".note-card", 8)
+        .await
+        .context("note card previews are labeled by template")?;
+    assert_advanced_editors_collapsed_and_inline_fields_focusable(driver, "#view-panel-notes")
+        .await
+        .context(
+            "note detail keeps advanced editors collapsed while inline fields are focusable",
+        )?;
     assert_workbench_dom_row_budget(driver)
         .await
         .context("UG initial Workbench DOM stays within row budget")?;
@@ -836,6 +829,9 @@ async fn run_ultimate_geography_manifest_smoke(
     wait_for_element(driver, ".workbench-panel[data-language='de']")
         .await
         .context("German note pivot rendered")?;
+    assert_top_level_view_switch_contract(driver, "notes")
+        .await
+        .context("language switch returns to top-level notes view")?;
     assert_workbench_dom_row_budget(driver)
         .await
         .context("UG language-switch Workbench DOM stays within row budget")?;
@@ -846,6 +842,9 @@ async fn run_ultimate_geography_manifest_smoke(
     open_workbench_view(driver, "cards")
         .await
         .context("load UG card list from top-level view switch")?;
+    assert_top_level_view_switch_contract(driver, "cards")
+        .await
+        .context("cards view is the only visible Workbench view")?;
     wait_for_element(driver, "#card-pivot-panel .card-row")
         .await
         .context("UG card navigation rows loaded")?;
@@ -863,10 +862,16 @@ async fn run_ultimate_geography_manifest_smoke(
         "selected-card scoped media previews",
     )
     .await?;
+    assert_card_preview_template_headers(driver, "#card-pivot-panel .card-detail", 2)
+        .await
+        .context("selected card previews are labeled by template")?;
 
     open_workbench_view(driver, "source-strings")
         .await
         .context("load UG source-string list from top-level view switch")?;
+    assert_top_level_view_switch_contract(driver, "source-strings")
+        .await
+        .context("source strings view is the only visible Workbench view")?;
     wait_for_element(driver, "#source-string-pivot-panel .source-string-row")
         .await
         .context("UG source-string navigation rows loaded")?;
@@ -878,6 +883,16 @@ async fn run_ultimate_geography_manifest_smoke(
         .await
         .context("count UG source-string rows")?;
     assert!(source_rows.json().as_u64().unwrap_or(999) <= WORKBENCH_NAVIGATION_ROW_BUDGET);
+
+    open_workbench_view(driver, "optional-metadata")
+        .await
+        .context("load UG optional metadata list from top-level view switch")?;
+    assert_top_level_view_switch_contract(driver, "optional-metadata")
+        .await
+        .context("optional metadata view is the only visible Workbench view")?;
+    wait_for_element(driver, "#optional-metadata-checklist")
+        .await
+        .context("UG optional metadata panel loaded")?;
     assert_no_severe_browser_logs(driver).await?;
     Ok(())
 }
@@ -1562,6 +1577,256 @@ async fn assert_visible_workbench_media(
             "browser image dimensions were empty for {expected_path} in {context_label}: {probe:?}"
         );
     }
+    Ok(())
+}
+
+async fn assert_note_navigation_human_titles(
+    driver: &WebDriver,
+    expected_first_title: &str,
+    forbidden_titles: &[&str],
+) -> Result<()> {
+    let titles = driver
+        .execute(
+            "return Array.from(document.querySelectorAll('.note-navigation-row strong')).map((el) => el.textContent.trim());",
+            Vec::new(),
+        )
+        .await
+        .context("read note navigation titles")?;
+    let titles = titles.json().as_array().ok_or_else(|| {
+        anyhow!(
+            "note navigation titles were not an array: {:?}",
+            titles.json()
+        )
+    })?;
+    assert!(
+        !titles.is_empty(),
+        "note navigation should render at least one row"
+    );
+    assert!(
+        titles
+            .iter()
+            .all(|title| title.as_str().is_some_and(|title| !title.trim().is_empty())),
+        "note navigation contains blank titles: {titles:?}"
+    );
+    assert_eq!(
+        titles.first().and_then(|title| title.as_str()),
+        Some(expected_first_title),
+        "note navigation first title should follow note-type field order: {titles:?}"
+    );
+    for forbidden in forbidden_titles {
+        assert!(
+            !titles
+                .iter()
+                .any(|title| title.as_str() == Some(*forbidden)),
+            "note navigation exposed a wrong field as a title ({forbidden:?}): {titles:?}"
+        );
+    }
+    Ok(())
+}
+
+async fn assert_card_preview_template_headers(
+    driver: &WebDriver,
+    root_selector: &str,
+    expected_min_previews: u64,
+) -> Result<()> {
+    let script = format!(
+        r#"
+        const root = document.querySelector({root_selector:?});
+        if (!root) return {{ root: false }};
+        const previews = Array.from(root.querySelectorAll('.anki-card-preview'));
+        return {{
+            root: true,
+            count: previews.length,
+            missingHeaders: previews
+                .filter((preview) => !preview.querySelector('.card-template-header'))
+                .map((preview) => preview.textContent.trim().slice(0, 80)),
+            emptyHeaders: previews
+                .map((preview) => preview.querySelector('.card-template-header'))
+                .filter(Boolean)
+                .filter((header) => !header.textContent.trim())
+                .length,
+            labels: previews
+                .map((preview) => preview.querySelector('.card-template-header'))
+                .filter(Boolean)
+                .map((header) => header.textContent.trim())
+        }};
+        "#,
+    );
+    let result = driver
+        .execute(script.as_str(), Vec::new())
+        .await
+        .with_context(|| format!("inspect card preview template headers in {root_selector}"))?;
+    let json = result.json();
+    assert_eq!(
+        json["root"].as_bool(),
+        Some(true),
+        "preview root {root_selector} was missing: {json:?}"
+    );
+    assert!(
+        json["count"].as_u64().unwrap_or_default() >= expected_min_previews,
+        "expected at least {expected_min_previews} card previews in {root_selector}: {json:?}"
+    );
+    assert_eq!(
+        json["missingHeaders"].as_array().map(Vec::len),
+        Some(0),
+        "some card previews in {root_selector} are missing template headers: {json:?}"
+    );
+    assert_eq!(
+        json["emptyHeaders"].as_u64(),
+        Some(0),
+        "some card previews in {root_selector} have empty template headers: {json:?}"
+    );
+    Ok(())
+}
+
+async fn assert_top_level_view_switch_contract(
+    driver: &WebDriver,
+    active_view: &str,
+) -> Result<()> {
+    let script = format!(
+        r#"
+        const expectedViews = ['notes', 'cards', 'source-strings', 'optional-metadata'];
+        const activeView = {active_view:?};
+        const switcher = document.querySelector('#workbench-view-switch');
+        const nestedSwitcher = document.querySelector('.workbench-view #workbench-view-switch');
+        const buttons = expectedViews.map((view) => {{
+            const button = document.getElementById(`view-${{view}}`);
+            return {{
+                view,
+                exists: Boolean(button),
+                text: button ? button.textContent.trim() : '',
+                dataView: button ? button.getAttribute('data-view') : null,
+                active: button ? button.classList.contains('active') : false,
+                ariaCurrent: button ? button.getAttribute('aria-current') : null
+            }};
+        }});
+        const panels = expectedViews.map((view) => {{
+            const panel = document.getElementById(`view-panel-${{view}}`);
+            return {{
+                view,
+                exists: Boolean(panel),
+                hidden: panel ? panel.hidden : null,
+                active: panel ? panel.classList.contains('active') : false
+            }};
+        }});
+        return {{
+            switcher: Boolean(switcher),
+            nestedSwitcher: Boolean(nestedSwitcher),
+            buttons,
+            panels,
+            visiblePanels: panels.filter((panel) => panel.exists && !panel.hidden && panel.active).map((panel) => panel.view),
+            activeButtons: buttons.filter((button) => button.active || button.ariaCurrent === 'page').map((button) => button.view)
+        }};
+        "#,
+    );
+    let result = driver
+        .execute(script.as_str(), Vec::new())
+        .await
+        .with_context(|| format!("inspect top-level view switch for {active_view}"))?;
+    let json = result.json();
+    assert_eq!(
+        json["switcher"].as_bool(),
+        Some(true),
+        "missing Workbench view switch: {json:?}"
+    );
+    assert_eq!(
+        json["nestedSwitcher"].as_bool(),
+        Some(false),
+        "Workbench view switch is nested inside a view panel: {json:?}"
+    );
+    assert!(
+        json["buttons"]
+            .as_array()
+            .is_some_and(|buttons| buttons.iter().all(|button| {
+                button["exists"].as_bool() == Some(true)
+                    && button["dataView"].as_str() == button["view"].as_str()
+                    && !button["text"].as_str().unwrap_or_default().is_empty()
+            })),
+        "Workbench view switch buttons are incomplete: {json:?}"
+    );
+    assert_eq!(
+        json["visiblePanels"].as_array().map(|panels| {
+            panels
+                .iter()
+                .filter_map(|panel| panel.as_str())
+                .collect::<Vec<_>>()
+        }),
+        Some(vec![active_view]),
+        "exactly one active Workbench view should be visible: {json:?}"
+    );
+    assert_eq!(
+        json["activeButtons"].as_array().map(|buttons| {
+            buttons
+                .iter()
+                .filter_map(|button| button.as_str())
+                .collect::<Vec<_>>()
+        }),
+        Some(vec![active_view]),
+        "exactly one Workbench view button should be active: {json:?}"
+    );
+    Ok(())
+}
+
+async fn assert_advanced_editors_collapsed_and_inline_fields_focusable(
+    driver: &WebDriver,
+    root_selector: &str,
+) -> Result<()> {
+    let script = format!(
+        r#"
+        const root = document.querySelector({root_selector:?});
+        if (!root) return {{ root: false }};
+        const details = Array.from(root.querySelectorAll('details.field-editor-details'));
+        const inlineFields = Array.from(root.querySelectorAll('.inline-target-field, .card-inline-target-field'));
+        if (inlineFields[0]) inlineFields[0].focus();
+        return {{
+            root: true,
+            detailsCount: details.length,
+            openDetails: details.filter((detail) => detail.open).length,
+            inlineCount: inlineFields.length,
+            inlineFocusable: inlineFields.every((field) =>
+                field.getAttribute('contenteditable') === 'true'
+                    && field.getAttribute('tabindex') === '0'
+                    && field.getAttribute('role') === 'textbox'
+            ),
+            firstInlineFocused: inlineFields.length > 0 ? document.activeElement === inlineFields[0] : false
+        }};
+        "#,
+    );
+    let result = driver
+        .execute(script.as_str(), Vec::new())
+        .await
+        .with_context(|| {
+            format!("inspect collapsed editors and inline fields in {root_selector}")
+        })?;
+    let json = result.json();
+    assert_eq!(
+        json["root"].as_bool(),
+        Some(true),
+        "editor root {root_selector} was missing: {json:?}"
+    );
+    assert!(
+        json["detailsCount"].as_u64().unwrap_or_default() > 0,
+        "advanced field editor details should exist in {root_selector}: {json:?}"
+    );
+    assert_eq!(
+        json["openDetails"].as_u64(),
+        Some(0),
+        "advanced field editor details should be collapsed by default in {root_selector}: {json:?}"
+    );
+    assert!(
+        json["inlineCount"].as_u64().unwrap_or_default() > 0,
+        "inline editable preview fields should be discoverable in {root_selector}: {json:?}"
+    );
+    assert_eq!(
+        json["inlineFocusable"].as_bool(),
+        Some(true),
+        "inline editable preview fields should expose textbox/focus attributes in {root_selector}: {json:?}"
+    );
+    assert_eq!(
+        json["firstInlineFocused"].as_bool(),
+        Some(true),
+        "inline editable preview field should be focusable in {root_selector}: {json:?}"
+    );
     Ok(())
 }
 
