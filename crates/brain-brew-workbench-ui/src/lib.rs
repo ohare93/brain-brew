@@ -3,9 +3,28 @@ use iced::{Element, Length, Task, Theme};
 use serde_json::Value;
 
 #[cfg(target_arch = "wasm32")]
+use std::cell::Cell;
+
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::closure::Closure;
+
+#[cfg(target_arch = "wasm32")]
+const STALE_WORKBENCH_REQUEST: &str = "__brainbrew_stale_workbench_request__";
+
+#[cfg(not(target_arch = "wasm32"))]
+fn is_stale_workbench_request(_error: &str) -> bool {
+    false
+}
+
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static WORKBENCH_SELECTION_GENERATION: Cell<u64> = const { Cell::new(0) };
+    static NOTE_DETAIL_GENERATION: Cell<u64> = const { Cell::new(0) };
+    static CARD_DETAIL_GENERATION: Cell<u64> = const { Cell::new(0) };
+    static SOURCE_STRING_DETAIL_GENERATION: Cell<u64> = const { Cell::new(0) };
+}
 
 pub fn run() -> iced::Result {
     iced::application(WorkbenchApp::new, WorkbenchApp::update, WorkbenchApp::view)
@@ -96,6 +115,9 @@ impl WorkbenchApp {
                 self.status = "Note pivot loaded from /api/workbench/note-pivot.".to_owned();
                 publish_note_pivot_panel(&pivot);
                 self.note_pivot = Some(pivot);
+                Task::none()
+            }
+            Message::NotePivotLoaded(Err(error)) if is_stale_workbench_request(&error) => {
                 Task::none()
             }
             Message::NotePivotLoaded(Err(error)) => {
@@ -1860,6 +1882,7 @@ fn load_card_list_for_parts(
     filter: Option<String>,
     content_group: Option<String>,
 ) {
+    let selection_generation = current_selection_generation();
     wasm_bindgen_futures::spawn_local(async move {
         match fetch_card_list_query(
             language.clone(),
@@ -1870,8 +1893,14 @@ fn load_card_list_for_parts(
         )
         .await
         {
-            Ok(list) => publish_card_list_panel(&list),
-            Err(error) => render_panel_error("card-pivot-panel", &error),
+            Ok(list) if is_current_selection_generation(selection_generation) => {
+                publish_card_list_panel(&list);
+            }
+            Ok(_) => {}
+            Err(error) if is_current_selection_generation(selection_generation) => {
+                render_panel_error("card-pivot-panel", &error);
+            }
+            Err(_) => {}
         }
     });
 }
@@ -1885,12 +1914,26 @@ fn load_card_detail_for_parts(
     filter: Option<String>,
     content_group: Option<String>,
 ) {
+    let selection_generation = current_selection_generation();
+    let detail_generation = begin_card_detail_request();
     wasm_bindgen_futures::spawn_local(async move {
         match fetch_card_pivot_query(language, target, overlay, Some(card), filter, content_group)
             .await
         {
-            Ok(pivot) => publish_card_detail_panel(&pivot),
-            Err(error) => render_panel_error("card-detail-panel", &error),
+            Ok(pivot)
+                if is_current_selection_generation(selection_generation)
+                    && is_current_card_detail_generation(detail_generation) =>
+            {
+                publish_card_detail_panel(&pivot);
+            }
+            Ok(_) => {}
+            Err(error)
+                if is_current_selection_generation(selection_generation)
+                    && is_current_card_detail_generation(detail_generation) =>
+            {
+                render_panel_error("card-detail-panel", &error);
+            }
+            Err(_) => {}
         }
     });
 }
@@ -2246,6 +2289,7 @@ fn load_source_string_list_for_parts(
     content_group: Option<String>,
     status: Option<String>,
 ) {
+    let selection_generation = current_selection_generation();
     wasm_bindgen_futures::spawn_local(async move {
         match fetch_source_string_list_query(
             language.clone(),
@@ -2256,8 +2300,14 @@ fn load_source_string_list_for_parts(
         )
         .await
         {
-            Ok(list) => publish_source_string_list_panel(&list),
-            Err(error) => render_panel_error("source-string-pivot-panel", &error),
+            Ok(list) if is_current_selection_generation(selection_generation) => {
+                publish_source_string_list_panel(&list);
+            }
+            Ok(_) => {}
+            Err(error) if is_current_selection_generation(selection_generation) => {
+                render_panel_error("source-string-pivot-panel", &error);
+            }
+            Err(_) => {}
         }
     });
 }
@@ -2271,6 +2321,8 @@ fn load_source_string_detail_for_parts(
     content_group: Option<String>,
     status: Option<String>,
 ) {
+    let selection_generation = current_selection_generation();
+    let detail_generation = begin_source_string_detail_request();
     wasm_bindgen_futures::spawn_local(async move {
         match fetch_source_string_pivot_query(
             language,
@@ -2282,8 +2334,20 @@ fn load_source_string_detail_for_parts(
         )
         .await
         {
-            Ok(source_pivot) => publish_source_string_detail_panel(&source_pivot),
-            Err(error) => render_panel_error("source-string-detail-panel", &error),
+            Ok(source_pivot)
+                if is_current_selection_generation(selection_generation)
+                    && is_current_source_string_detail_generation(detail_generation) =>
+            {
+                publish_source_string_detail_panel(&source_pivot);
+            }
+            Ok(_) => {}
+            Err(error)
+                if is_current_selection_generation(selection_generation)
+                    && is_current_source_string_detail_generation(detail_generation) =>
+            {
+                render_panel_error("source-string-detail-panel", &error);
+            }
+            Err(_) => {}
         }
     });
 }
@@ -2321,10 +2385,14 @@ fn load_optional_metadata_for_parts(
     target: Option<String>,
     overlay: Option<String>,
 ) {
+    let selection_generation = current_selection_generation();
     wasm_bindgen_futures::spawn_local(async move {
         match fetch_optional_metadata_query(language, target, overlay).await {
-            Ok(optional) => publish_optional_metadata_panel(&optional),
-            Err(error) => {
+            Ok(optional) if is_current_selection_generation(selection_generation) => {
+                publish_optional_metadata_panel(&optional);
+            }
+            Ok(_) => {}
+            Err(error) if is_current_selection_generation(selection_generation) => {
                 if let Some(document) = web_sys::window().and_then(|window| window.document())
                     && let Some(panel) = document.get_element_by_id("optional-metadata-panel")
                 {
@@ -2334,6 +2402,7 @@ fn load_optional_metadata_for_parts(
                     ));
                 }
             }
+            Err(_) => {}
         }
     });
 }
@@ -2498,10 +2567,21 @@ fn load_note_detail_for_parts(
     overlay: Option<String>,
     note_id: String,
 ) {
+    let selection_generation = current_selection_generation();
+    let detail_generation = begin_note_detail_request();
     wasm_bindgen_futures::spawn_local(async move {
         match fetch_note_detail_query(language, target, overlay, note_id).await {
-            Ok(detail) => publish_note_detail_panel(&detail),
-            Err(error) => {
+            Ok(detail)
+                if is_current_selection_generation(selection_generation)
+                    && is_current_note_detail_generation(detail_generation) =>
+            {
+                publish_note_detail_panel(&detail);
+            }
+            Ok(_) => {}
+            Err(error)
+                if is_current_selection_generation(selection_generation)
+                    && is_current_note_detail_generation(detail_generation) =>
+            {
                 if let Some(panel) = web_sys::window()
                     .and_then(|window| window.document())
                     .and_then(|document| document.get_element_by_id("note-detail-panel"))
@@ -2512,6 +2592,7 @@ fn load_note_detail_for_parts(
                     ));
                 }
             }
+            Err(_) => {}
         }
     });
 }
@@ -2757,11 +2838,18 @@ fn attach_secondary_pane_loader(pivot: &Value) {
             return;
         };
         let target = pivot["target"]["label"].as_str().map(str::to_owned);
+        let selection_generation = current_selection_generation();
         wasm_bindgen_futures::spawn_local(async move {
             match fetch_comparison_pane_query(Some(language), target, Some("base".to_owned())).await
             {
-                Ok(pane) => publish_secondary_target_pane(&pane),
-                Err(error) => render_secondary_pane_error(&error),
+                Ok(pane) if is_current_selection_generation(selection_generation) => {
+                    publish_secondary_target_pane(&pane);
+                }
+                Ok(_) => {}
+                Err(error) if is_current_selection_generation(selection_generation) => {
+                    render_secondary_pane_error(&error);
+                }
+                Err(_) => {}
             }
         });
     }));
@@ -3050,11 +3138,18 @@ fn attach_new_language_confirm_handler() {
             match post_json("/api/workbench/new-language", &request).await {
                 Ok(value) => {
                     render_new_language_status(&new_language_result_text("Created", &value), true);
+                    let generation = begin_selection_request();
                     match fetch_note_pivot_query(Some(code), Some(target), Some(overlay), None)
                         .await
                     {
-                        Ok(pivot) => publish_note_pivot_panel(&pivot),
-                        Err(error) => render_new_language_status(&escape_html(&error), false),
+                        Ok(pivot) if is_current_selection_generation(generation) => {
+                            publish_note_pivot_panel(&pivot);
+                        }
+                        Ok(_) => {}
+                        Err(error) if is_current_selection_generation(generation) => {
+                            render_new_language_status(&escape_html(&error), false);
+                        }
+                        Err(_) => {}
                     }
                 }
                 Err(error) => render_new_language_status(
@@ -3122,6 +3217,70 @@ fn attach_filter_reload_handler(filter: &str) {
         let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
     }
     closure.forget();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn next_generation(cell: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
+    cell.with(|generation| {
+        let next = generation.get().saturating_add(1);
+        generation.set(next);
+        next
+    })
+}
+
+#[cfg(target_arch = "wasm32")]
+fn current_generation(cell: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
+    cell.with(Cell::get)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn begin_selection_request() -> u64 {
+    next_generation(&WORKBENCH_SELECTION_GENERATION)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn current_selection_generation() -> u64 {
+    current_generation(&WORKBENCH_SELECTION_GENERATION)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn is_current_selection_generation(generation: u64) -> bool {
+    current_selection_generation() == generation
+}
+
+#[cfg(target_arch = "wasm32")]
+fn begin_note_detail_request() -> u64 {
+    next_generation(&NOTE_DETAIL_GENERATION)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn is_current_note_detail_generation(generation: u64) -> bool {
+    current_generation(&NOTE_DETAIL_GENERATION) == generation
+}
+
+#[cfg(target_arch = "wasm32")]
+fn begin_card_detail_request() -> u64 {
+    next_generation(&CARD_DETAIL_GENERATION)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn is_current_card_detail_generation(generation: u64) -> bool {
+    current_generation(&CARD_DETAIL_GENERATION) == generation
+}
+
+#[cfg(target_arch = "wasm32")]
+fn begin_source_string_detail_request() -> u64 {
+    next_generation(&SOURCE_STRING_DETAIL_GENERATION)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn is_current_source_string_detail_generation(generation: u64) -> bool {
+    current_generation(&SOURCE_STRING_DETAIL_GENERATION) == generation
+}
+
+#[cfg(target_arch = "wasm32")]
+fn is_stale_workbench_request(error: &str) -> bool {
+    error == STALE_WORKBENCH_REQUEST
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -3323,10 +3482,17 @@ fn reload_note_pivot(
     overlay: Option<String>,
     filter: Option<String>,
 ) {
+    let generation = begin_selection_request();
     wasm_bindgen_futures::spawn_local(async move {
         match fetch_note_pivot_query(language, target, overlay, filter).await {
-            Ok(pivot) => publish_note_pivot_panel(&pivot),
-            Err(error) => publish_note_pivot_error(&error),
+            Ok(pivot) if is_current_selection_generation(generation) => {
+                publish_note_pivot_panel(&pivot)
+            }
+            Ok(_) => {}
+            Err(error) if is_current_selection_generation(generation) => {
+                publish_note_pivot_error(&error)
+            }
+            Err(_) => {}
         }
     });
 }
@@ -4135,18 +4301,32 @@ async fn fetch_workspace() -> Result<WorkspaceSummary, String> {
 
 #[cfg(target_arch = "wasm32")]
 async fn fetch_note_pivot() -> Result<Value, String> {
-    fetch_note_pivot_query(None, None, None, None).await
+    let generation = begin_selection_request();
+    let pivot = fetch_note_pivot_query(None, None, None, None).await?;
+    if is_current_selection_generation(generation) {
+        Ok(pivot)
+    } else {
+        Err(STALE_WORKBENCH_REQUEST.to_owned())
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 async fn fetch_note_pivot_for_pivot(pivot: &Value) -> Result<Value, String> {
-    fetch_note_pivot_query(
+    // Post-apply refreshes should not start a new user selection; they only publish
+    // if the user has not switched language/target/overlay while the refresh ran.
+    let generation = current_selection_generation();
+    let pivot = fetch_note_pivot_query(
         pivot["language"]["code"].as_str().map(str::to_owned),
         pivot["target"]["label"].as_str().map(str::to_owned),
         pivot["overlay"]["label"].as_str().map(str::to_owned),
         pivot["filters"]["active"].as_str().map(str::to_owned),
     )
-    .await
+    .await?;
+    if is_current_selection_generation(generation) {
+        Ok(pivot)
+    } else {
+        Err(STALE_WORKBENCH_REQUEST.to_owned())
+    }
 }
 
 #[cfg(target_arch = "wasm32")]

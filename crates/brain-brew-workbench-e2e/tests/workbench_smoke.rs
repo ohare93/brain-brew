@@ -10,6 +10,9 @@ use thirtyfour::LoggingPrefsLogLevel;
 use thirtyfour::common::capabilities::chromium::ChromiumLikeCapabilities;
 use thirtyfour::prelude::*;
 
+const WORKBENCH_NAVIGATION_ROW_BUDGET: u64 = 50;
+const WORKBENCH_DETAIL_ROW_BUDGET: u64 = 32;
+
 #[tokio::test]
 async fn workbench_app_shell_loads_workspace_metadata() -> Result<()> {
     let artifacts = ArtifactDir::new("app-shell")?;
@@ -30,6 +33,30 @@ async fn workbench_app_shell_loads_workspace_metadata() -> Result<()> {
     let quit_result = driver.quit().await.context("quit browser session");
 
     smoke_result?;
+    quit_result?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn workbench_ignores_stale_language_reload_responses() -> Result<()> {
+    let artifacts = ArtifactDir::new("language-freshness")?;
+    let workspace = TempDir::new().context("create freshness E2E workspace")?;
+    write_small_workbench_fixture(workspace.path())?;
+
+    let server = RunningWorkbenchServer::spawn(
+        workspace.path().join("brainbrew.yaml"),
+        dev_assets_path(),
+        artifacts.path(),
+    )?;
+    let driver = new_driver().await.context("connect to WebDriver")?;
+
+    let freshness_result = run_language_freshness_smoke(&driver, &server).await;
+    if let Err(error) = &freshness_result {
+        let _ = artifacts.save_browser_failure(&driver, error).await;
+    }
+    let quit_result = driver.quit().await.context("quit browser session");
+
+    freshness_result?;
     quit_result?;
     Ok(())
 }
@@ -325,6 +352,60 @@ async fn run_app_shell_smoke(driver: &WebDriver, server: &RunningWorkbenchServer
     )
     .await
     .context("note pivot field input returns after filter reset")?;
+    Ok(())
+}
+
+async fn run_language_freshness_smoke(
+    driver: &WebDriver,
+    server: &RunningWorkbenchServer,
+) -> Result<()> {
+    install_delayed_note_list_fetch(driver, "en", 800).await?;
+    install_fetch_recorder(driver).await?;
+    driver
+        .goto(server.url("/"))
+        .await
+        .context("open freshness workbench")?;
+    wait_for_loaded_probe(driver).await?;
+    wait_for_element(driver, "#language-select").await?;
+
+    driver
+        .execute(
+            r#"
+            const select = document.getElementById('language-select');
+            select.value = 'en';
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            select.value = 'da';
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+            "#,
+            Vec::new(),
+        )
+        .await
+        .context("rapidly switch language selection")?;
+
+    wait_for_js_bool(
+        driver,
+        r#"
+        const select = document.getElementById('language-select');
+        const active = document.querySelector('#workbench-dom-panel [data-language="da"]');
+        const stale = document.querySelector('#workbench-dom-panel [data-language="en"]');
+        return select && select.value === 'da' && active !== null && stale === null;
+        "#,
+        "latest language remains visible after delayed stale response",
+    )
+    .await?;
+    tokio::time::sleep(Duration::from_millis(950)).await;
+    let final_language = driver
+        .execute(
+            "return document.getElementById('language-select').value;",
+            Vec::new(),
+        )
+        .await
+        .context("read final language selection")?;
+    assert_eq!(final_language.json().as_str(), Some("da"));
+    assert_no_secondary_pivot_fetches(driver)
+        .await
+        .context("rapid language switching keeps secondary pivots lazy")?;
     Ok(())
 }
 
@@ -634,6 +715,9 @@ async fn run_ultimate_geography_manifest_smoke(
     wait_for_element(driver, ".anki-card-preview img")
         .await
         .context("media preview image appears")?;
+    assert_workbench_dom_row_budget(driver)
+        .await
+        .context("UG initial Workbench DOM stays within row budget")?;
     let panel_top = driver
         .execute(
             "return document.getElementById('workbench-dom-panel').getBoundingClientRect().top;",
@@ -674,6 +758,9 @@ async fn run_ultimate_geography_manifest_smoke(
     wait_for_element(driver, ".workbench-panel[data-language='de']")
         .await
         .context("German note pivot rendered")?;
+    assert_workbench_dom_row_budget(driver)
+        .await
+        .context("UG language-switch Workbench DOM stays within row budget")?;
     assert_no_secondary_pivot_fetches(driver)
         .await
         .context("secondary pivots are lazy after UG language switch")?;
@@ -693,7 +780,7 @@ async fn run_ultimate_geography_manifest_smoke(
         )
         .await
         .context("count UG card navigation rows")?;
-    assert!(card_rows.json().as_u64().unwrap_or(999) <= 50);
+    assert!(card_rows.json().as_u64().unwrap_or(999) <= WORKBENCH_NAVIGATION_ROW_BUDGET);
     wait_for_js_bool(
         driver,
         "return document.querySelectorAll('#card-pivot-panel .card-detail').length === 1 && document.querySelectorAll('#card-pivot-panel .anki-card-preview img').length <= 4 && Array.from(document.querySelectorAll('#card-pivot-panel .anki-card-preview img')).every((img) => img.getAttribute('src').startsWith('/api/media/'));",
@@ -716,7 +803,7 @@ async fn run_ultimate_geography_manifest_smoke(
         )
         .await
         .context("count UG source-string rows")?;
-    assert!(source_rows.json().as_u64().unwrap_or(999) <= 50);
+    assert!(source_rows.json().as_u64().unwrap_or(999) <= WORKBENCH_NAVIGATION_ROW_BUDGET);
     assert_no_severe_browser_logs(driver).await?;
     Ok(())
 }
@@ -1305,6 +1392,43 @@ async fn element_value(driver: &WebDriver, id: &str) -> Result<String> {
     Ok(value.json().as_str().unwrap_or_default().to_owned())
 }
 
+async fn install_delayed_note_list_fetch(
+    driver: &WebDriver,
+    delayed_language: &str,
+    delay_ms: u64,
+) -> Result<()> {
+    let script = format!(
+        r#"
+        (() => {{
+            const originalFetch = window.fetch.bind(window);
+            const delayedLanguage = {delayed_language:?};
+            const delayMs = {delay_ms};
+            window.fetch = (...args) => {{
+                const request = args[0];
+                const url = typeof request === 'string'
+                    ? request
+                    : (request && request.url) ? request.url : String(request);
+                const parsed = new URL(url, window.location.href);
+                const shouldDelay = parsed.pathname === '/api/workbench/note-list'
+                    && parsed.searchParams.get('language') === delayedLanguage;
+                if (!shouldDelay) {{
+                    return originalFetch(...args);
+                }}
+                return new Promise((resolve) => setTimeout(resolve, delayMs))
+                    .then(() => originalFetch(...args));
+            }};
+        }})();
+        "#
+    );
+    driver
+        .cdp()
+        .page()
+        .add_script_to_evaluate_on_new_document(script)
+        .await
+        .context("install delayed note-list fetch hook")?;
+    Ok(())
+}
+
 async fn install_fetch_recorder(driver: &WebDriver) -> Result<()> {
     driver
         .cdp()
@@ -1330,6 +1454,46 @@ async fn install_fetch_recorder(driver: &WebDriver) -> Result<()> {
     Ok(())
 }
 
+async fn assert_workbench_dom_row_budget(driver: &WebDriver) -> Result<()> {
+    let counts = driver
+        .execute(
+            r#"
+            return {
+                noteRows: document.querySelectorAll('.note-navigation-row').length,
+                noteDetails: document.querySelectorAll('.note-card').length,
+                detailRows: document.querySelectorAll('#note-detail-panel .field-editor tbody tr').length,
+                cardRows: document.querySelectorAll('#card-pivot-panel .card-row').length,
+                sourceStringRows: document.querySelectorAll('#source-string-pivot-panel .source-string-row').length
+            };
+            "#,
+            Vec::new(),
+        )
+        .await
+        .context("read Workbench DOM row counts")?;
+    let counts = counts.json();
+    assert!(
+        counts["noteRows"].as_u64().unwrap_or(999) <= WORKBENCH_NAVIGATION_ROW_BUDGET,
+        "note navigation rows exceeded budget: {counts:?}"
+    );
+    assert!(
+        counts["noteDetails"].as_u64().unwrap_or(999) <= 1,
+        "more than one note detail rendered: {counts:?}"
+    );
+    assert!(
+        counts["detailRows"].as_u64().unwrap_or(999) <= WORKBENCH_DETAIL_ROW_BUDGET,
+        "note detail rows exceeded budget: {counts:?}"
+    );
+    assert!(
+        counts["cardRows"].as_u64().unwrap_or(999) <= WORKBENCH_NAVIGATION_ROW_BUDGET,
+        "card navigation rows exceeded budget: {counts:?}"
+    );
+    assert!(
+        counts["sourceStringRows"].as_u64().unwrap_or(999) <= WORKBENCH_NAVIGATION_ROW_BUDGET,
+        "source string rows exceeded budget: {counts:?}"
+    );
+    Ok(())
+}
+
 async fn assert_no_secondary_pivot_fetches(driver: &WebDriver) -> Result<()> {
     let recorded = driver
         .execute("return window.__brainbrewFetchUrls;", Vec::new())
@@ -1344,8 +1508,11 @@ async fn assert_no_secondary_pivot_fetches(driver: &WebDriver) -> Result<()> {
         .filter_map(|url| url.as_str())
         .filter(|url| {
             url.contains("/api/workbench/card-pivot")
+                || url.contains("/api/workbench/card-list")
                 || url.contains("/api/workbench/source-string-pivot")
+                || url.contains("/api/workbench/source-string-list")
                 || url.contains("/api/workbench/optional-metadata")
+                || url.contains("/api/workbench/optional-metadata-list")
         })
         .map(str::to_owned)
         .collect::<Vec<_>>();
