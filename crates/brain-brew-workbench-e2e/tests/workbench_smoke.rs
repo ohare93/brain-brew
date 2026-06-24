@@ -2376,8 +2376,105 @@ impl ArtifactDir {
         if let Ok(source) = driver.source().await {
             fs::write(self.path.join("page.html"), source)?;
         }
+        if let Ok(debug) = driver
+            .execute_async(browser_debug_dump_script(), Vec::new())
+            .await
+        {
+            let contents = debug
+                .json()
+                .as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| debug.json().to_string());
+            fs::write(self.path.join("debug.json"), contents)?;
+        }
         Ok(())
     }
+}
+
+fn browser_debug_dump_script() -> &'static str {
+    r#"
+    const done = arguments[0];
+    (async () => {
+        const visible = (selector) => Array.from(document.querySelectorAll(selector))
+            .filter((element) => element.getClientRects().length > 0);
+        const activeElement = document.activeElement;
+        const selection = window.getSelection();
+        const contenteditable = activeElement && activeElement.matches && activeElement.matches('[contenteditable="true"], [contenteditable="false"]')
+            ? activeElement
+            : null;
+        let caret = null;
+        if (contenteditable && selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            if (contenteditable.contains(range.endContainer)) {
+                const probe = range.cloneRange();
+                probe.selectNodeContents(contenteditable);
+                probe.setEnd(range.endContainer, range.endOffset);
+                caret = {
+                    collapsed: range.collapsed,
+                    offset: probe.toString().length,
+                    textLength: contenteditable.textContent.length,
+                    selectedText: selection.toString()
+                };
+            }
+        }
+        const images = await Promise.all(visible('#workbench-dom-panel img').map(async (img) => {
+            const src = img.currentSrc || img.src || img.getAttribute('src') || '';
+            const probe = {
+                src,
+                complete: img.complete,
+                naturalWidth: img.naturalWidth,
+                naturalHeight: img.naturalHeight,
+                renderedWidth: img.getBoundingClientRect().width,
+                renderedHeight: img.getBoundingClientRect().height,
+                status: null,
+                contentType: null,
+                placeholder: null,
+                error: null
+            };
+            if (!src) return probe;
+            try {
+                const response = await fetch(src, { cache: 'no-store' });
+                const bytes = await response.arrayBuffer();
+                const prefix = new TextDecoder('utf-8').decode(new Uint8Array(bytes.slice(0, 512)));
+                probe.status = response.status;
+                probe.contentType = response.headers.get('content-type') || '';
+                probe.byteLength = bytes.byteLength;
+                probe.placeholder = prefix.includes('Missing media asset');
+            } catch (error) {
+                probe.error = String(error);
+            }
+            return probe;
+        }));
+        return {
+            url: window.location.href,
+            title: document.title,
+            activeView: Array.from(document.querySelectorAll('.workbench-view.active:not([hidden])')).map((panel) => panel.getAttribute('data-view')),
+            activeButtons: Array.from(document.querySelectorAll('.workbench-view-button.active, .workbench-view-button[aria-current="page"]')).map((button) => button.getAttribute('data-view')),
+            counts: {
+                noteRows: document.querySelectorAll('.note-navigation-row').length,
+                noteCards: document.querySelectorAll('.note-card').length,
+                cardRows: document.querySelectorAll('#card-pivot-panel .card-row').length,
+                cardDetails: document.querySelectorAll('#card-pivot-panel .card-detail').length,
+                sourceStringRows: document.querySelectorAll('#source-string-pivot-panel .source-string-row').length,
+                optionalMetadataRows: document.querySelectorAll('.optional-metadata-row').length,
+                visibleImages: images.length
+            },
+            activeElement: activeElement ? {
+                tag: activeElement.tagName,
+                id: activeElement.id || null,
+                classes: activeElement.className || null,
+                role: activeElement.getAttribute('role'),
+                contenteditable: activeElement.getAttribute('contenteditable'),
+                dataPreviewFieldId: activeElement.getAttribute('data-preview-field-id'),
+                text: (activeElement.textContent || '').slice(0, 200)
+            } : null,
+            caret,
+            images
+        };
+    })()
+        .then((debug) => done(JSON.stringify(debug, null, 2)))
+        .catch((error) => done(JSON.stringify({ error: String(error) }, null, 2)));
+    "#
 }
 
 fn workspace_root() -> PathBuf {
