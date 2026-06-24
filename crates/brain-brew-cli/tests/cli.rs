@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -714,6 +715,49 @@ fn workbench_media_auto_discovers_external_deck_media() {
         media.header("content-type").unwrap_or_default(),
         "image/png"
     );
+}
+
+#[test]
+fn workbench_ug_detail_media_urls_serve_declared_bytes_from_media_root() {
+    let media_root = temp_dir("workbench-ug-media-diagnostics-root");
+    write_ug_media_diagnostics_root(&media_root);
+    let manifest = workspace_root().join("fixtures/ultimate-geography/brainbrew.yaml");
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--media-root",
+        media_root.to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let note_detail = get_json(
+        &server.url("/api/workbench/note-detail?language=de&target=standard&note=note.abkhazia"),
+    );
+    let card_pivot = get_json(&server.url(
+        "/api/workbench/card-pivot?language=de&target=standard&card=note.abkhazia%3A%3Atemplate.flag-country",
+    ));
+    let mut media_paths = BTreeSet::new();
+    collect_api_media_paths(&note_detail, &mut media_paths);
+    collect_api_media_paths(&card_pivot, &mut media_paths);
+
+    for expected in ["ug-flag-abkhazia.svg", "ug-map-abkhazia.png"] {
+        assert!(
+            media_paths.contains(expected),
+            "detail APIs did not expose expected media path {expected:?}; extracted paths: {media_paths:?}"
+        );
+    }
+    assert!(
+        media_paths.len() >= 2,
+        "expected several unique UG media paths from detail APIs; extracted paths: {media_paths:?}"
+    );
+
+    for media_path in &media_paths {
+        assert_media_response_serves_declared_bytes(&server, &media_root, media_path);
+    }
 }
 
 #[test]
@@ -4302,6 +4346,105 @@ fn assert_get_status_contains(url: &str, expected_status: u16, expected_body: &s
     }
 }
 
+fn collect_api_media_paths(value: &serde_json::Value, paths: &mut BTreeSet<String>) {
+    match value {
+        serde_json::Value::String(text) => collect_api_media_paths_from_text(text, paths),
+        serde_json::Value::Array(items) => {
+            for item in items {
+                collect_api_media_paths(item, paths);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for item in map.values() {
+                collect_api_media_paths(item, paths);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_api_media_paths_from_text(text: &str, paths: &mut BTreeSet<String>) {
+    let marker = "/api/media/";
+    let mut rest = text;
+    while let Some(start) = rest.find(marker) {
+        let after_marker = &rest[start + marker.len()..];
+        let path_end = after_marker
+            .find(|character: char| {
+                matches!(
+                    character,
+                    '"' | '\'' | '<' | '>' | ')' | '(' | ' ' | '\n' | '\r' | '\t'
+                )
+            })
+            .unwrap_or(after_marker.len());
+        let path = &after_marker[..path_end];
+        if !path.is_empty() {
+            paths.insert(path.to_owned());
+        }
+        rest = &after_marker[path_end..];
+    }
+}
+
+fn assert_media_response_serves_declared_bytes(
+    server: &RunningWorkbenchServer,
+    media_root: &Path,
+    media_path: &str,
+) {
+    let url = server.url(&format!("/api/media/{media_path}"));
+    let candidate = media_root.join(media_path);
+    let response = match ureq::get(&url).call() {
+        Ok(response) => response,
+        Err(ureq::Error::Status(status, response)) => {
+            let body = response.into_string().unwrap_or_default();
+            panic!(
+                "media path {media_path:?} served from candidate {} via {url} returned HTTP {status}: {body}",
+                candidate.display()
+            );
+        }
+        Err(error) => panic!(
+            "media path {media_path:?} served from candidate {} via {url} failed: {error}",
+            candidate.display()
+        ),
+    };
+    assert_eq!(
+        response.status(),
+        200,
+        "media path {media_path:?} served from candidate {} via {url} returned unexpected status",
+        candidate.display()
+    );
+    assert_eq!(
+        response.header("content-type").unwrap_or_default(),
+        expected_media_content_type(media_path),
+        "media path {media_path:?} served from candidate {} via {url} returned wrong content type",
+        candidate.display()
+    );
+    let mut bytes = Vec::new();
+    response
+        .into_reader()
+        .read_to_end(&mut bytes)
+        .expect("read media response body");
+    assert!(
+        !bytes.is_empty(),
+        "media path {media_path:?} served from candidate {} via {url} returned an empty body",
+        candidate.display()
+    );
+    let body = String::from_utf8_lossy(&bytes);
+    assert!(
+        !body.contains("Missing media asset"),
+        "media path {media_path:?} served from candidate {} via {url} returned the missing-media placeholder: {body}",
+        candidate.display()
+    );
+}
+
+fn expected_media_content_type(media_path: &str) -> &'static str {
+    if media_path.ends_with(".svg") {
+        "image/svg+xml"
+    } else if media_path.ends_with(".png") {
+        "image/png"
+    } else {
+        "application/octet-stream"
+    }
+}
+
 fn post_json(url: &str, body: serde_json::Value) -> serde_json::Value {
     let response = ureq::post(url)
         .set("content-type", "application/json")
@@ -4352,6 +4495,19 @@ translations:
     Finland: Finland
 "#,
     );
+}
+
+fn write_ug_media_diagnostics_root(media_root: &Path) {
+    fs::write(
+        media_root.join("ug-flag-abkhazia.svg"),
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="16"><rect width="24" height="16" fill="#2563eb"/></svg>"##,
+    )
+    .unwrap();
+    fs::write(
+        media_root.join("ug-map-abkhazia.png"),
+        b"deterministic png bytes for UG map media diagnostics",
+    )
+    .unwrap();
 }
 
 fn write_workbench_repeated_source_workspace(dir: &Path) {
