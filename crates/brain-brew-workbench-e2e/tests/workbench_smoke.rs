@@ -469,6 +469,14 @@ async fn run_source_string_direct_smoke(
         .context("open source-string workbench")?;
     wait_for_loaded_probe(driver).await?;
     wait_for_element(driver, "#source-string-pivot-panel").await?;
+    wait_for_element(driver, "#load-source-string-pivot-button")
+        .await?
+        .click()
+        .await
+        .context("load source-string pivot on demand")?;
+    wait_for_element(driver, ".source-string-row[data-source='Helsinki']")
+        .await
+        .context("source-string rows loaded")?;
     driver
         .execute(
             "document.querySelector(\".source-string-row[data-source='Helsinki']\").click();",
@@ -519,6 +527,11 @@ async fn run_optional_metadata_smoke(
         .context("open Workbench")?;
     wait_for_text(driver, "Main note-field progress: 2 / 2 complete").await?;
     wait_for_text(driver, "Optional metadata").await?;
+    wait_for_element(driver, "#load-optional-metadata-button")
+        .await?
+        .click()
+        .await
+        .context("load optional metadata on demand")?;
     wait_for_text(driver, "Old Workbench").await?;
 
     let input = wait_for_element(driver, "#optional-translation-input-deck_name")
@@ -556,6 +569,7 @@ async fn run_ultimate_geography_manifest_smoke(
     driver: &WebDriver,
     server: &RunningWorkbenchServer,
 ) -> Result<()> {
+    install_fetch_recorder(driver).await?;
     driver
         .goto(server.url("/").as_str())
         .await
@@ -594,6 +608,23 @@ async fn run_ultimate_geography_manifest_smoke(
         .await
         .context("check media preview image dimensions")?;
     assert_eq!(loaded_image.json().as_bool(), Some(true));
+    assert_no_secondary_pivot_fetches(driver)
+        .await
+        .context("secondary pivots are lazy on initial UG load")?;
+
+    driver
+        .execute(
+            "const select = document.getElementById('language-select'); select.value = 'de'; select.dispatchEvent(new Event('change', { bubbles: true }));",
+            Vec::new(),
+        )
+        .await
+        .context("switch Ultimate Geography language to German")?;
+    wait_for_element(driver, ".workbench-panel[data-language='de']")
+        .await
+        .context("German note pivot rendered")?;
+    assert_no_secondary_pivot_fetches(driver)
+        .await
+        .context("secondary pivots are lazy after UG language switch")?;
     assert_no_severe_browser_logs(driver).await?;
     Ok(())
 }
@@ -758,6 +789,11 @@ async fn run_card_pivot_smoke(
     wait_for_loaded_probe(driver).await?;
     wait_for_element(driver, "#card-pivot-panel").await?;
     wait_for_text(driver, "Card pivot").await?;
+    wait_for_element(driver, "#load-card-pivot-button")
+        .await?
+        .click()
+        .await
+        .context("load card pivot on demand")?;
     wait_for_text(driver, "Country - Capital").await?;
 
     driver
@@ -836,6 +872,11 @@ async fn run_card_pivot_smoke(
 
     driver.refresh().await.context("refresh card pivot")?;
     wait_for_loaded_probe(driver).await?;
+    wait_for_element(driver, "#load-card-pivot-button")
+        .await?
+        .click()
+        .await
+        .context("reload card pivot after refresh")?;
     wait_for_element(driver, &format!("#{input_id}"))
         .await
         .context("card target input returns after refresh")?;
@@ -1069,6 +1110,57 @@ async fn element_value(driver: &WebDriver, id: &str) -> Result<String> {
         .await
         .context("read element value")?;
     Ok(value.json().as_str().unwrap_or_default().to_owned())
+}
+
+async fn install_fetch_recorder(driver: &WebDriver) -> Result<()> {
+    driver
+        .cdp()
+        .page()
+        .add_script_to_evaluate_on_new_document(
+            r#"
+            (() => {
+                const originalFetch = window.fetch.bind(window);
+                window.__brainbrewFetchUrls = [];
+                window.fetch = (...args) => {
+                    const request = args[0];
+                    const url = typeof request === 'string'
+                        ? request
+                        : (request && request.url) ? request.url : String(request);
+                    window.__brainbrewFetchUrls.push(url);
+                    return originalFetch(...args);
+                };
+            })();
+            "#,
+        )
+        .await
+        .context("install browser fetch recorder")?;
+    Ok(())
+}
+
+async fn assert_no_secondary_pivot_fetches(driver: &WebDriver) -> Result<()> {
+    let recorded = driver
+        .execute("return window.__brainbrewFetchUrls;", Vec::new())
+        .await
+        .context("read recorded fetch URLs")?;
+    let urls = recorded
+        .json()
+        .as_array()
+        .ok_or_else(|| anyhow!("fetch recorder did not expose a URL array"))?;
+    let unexpected = urls
+        .iter()
+        .filter_map(|url| url.as_str())
+        .filter(|url| {
+            url.contains("/api/workbench/card-pivot")
+                || url.contains("/api/workbench/source-string-pivot")
+                || url.contains("/api/workbench/optional-metadata")
+        })
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    assert!(
+        unexpected.is_empty(),
+        "secondary pivot endpoints should be lazy, recorded {unexpected:#?}"
+    );
+    Ok(())
 }
 
 async fn assert_no_severe_browser_logs(driver: &WebDriver) -> Result<()> {

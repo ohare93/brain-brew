@@ -86,6 +86,36 @@ body > *:not(#brainbrew-workbench-e2e):not(#workbench-dom-panel):not(script) {
   padding: 0.5rem;
 }
 
+.lazy-pivot-panel {
+  border: 1px dashed #c9b892;
+  border-radius: 0.75rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  background: #fff8ea;
+}
+
+.lazy-pivot-panel[data-lazy-state="loading"] {
+  opacity: 0.82;
+}
+
+.lazy-pivot-panel[data-lazy-state="loaded"] {
+  border-style: solid;
+  background: #fffdf7;
+}
+
+.lazy-pivot-load-button {
+  display: block;
+  width: 100%;
+  max-width: 28rem;
+  border: 1px solid #58452a;
+  border-radius: 0.75rem;
+  background: #58452a;
+  color: #fffaf0;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.7rem 1rem;
+}
+
 img {
   max-width: 100%;
   height: auto;

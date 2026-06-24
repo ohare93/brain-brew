@@ -267,7 +267,12 @@ fn publish_note_pivot_panel(pivot: &Value) {
     let overlay = pivot["overlay"]["label"].as_str().unwrap_or("");
     let progress = &pivot["progress"];
     let mut html = String::new();
-    html.push_str("<article class=\"workbench-panel\">");
+    html.push_str(&format!(
+        "<article class=\"workbench-panel\" data-language=\"{}\" data-target=\"{}\" data-overlay=\"{}\">",
+        escape_html(language),
+        escape_html(target),
+        escape_html(overlay),
+    ));
     html.push_str("<header class=\"workbench-panel__header\">");
     html.push_str("<h2>Deck Workbench Note pivot</h2>");
     html.push_str(&select_options_html(
@@ -348,9 +353,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
         html.push_str("<p>No notes match the active filter.</p>");
     }
 
-    html.push_str("<section id=\"card-pivot-panel\" class=\"card-pivot\"><p>Loading card pivot…</p></section>");
-    html.push_str("<section id=\"source-string-pivot-panel\" class=\"source-string-pivot\"><p>Loading source string pivot…</p></section>");
-    html.push_str("<section id=\"optional-metadata-panel\" class=\"optional-metadata\"><p>Loading optional metadata…</p></section>");
+    html.push_str(&lazy_secondary_pivot_panels_html());
     html.push_str("<section class=\"apply-box\"><button id=\"apply-preview-button\" type=\"button\">Apply preview</button> <button id=\"apply-confirm-button\" type=\"button\">Confirm Apply</button><pre id=\"apply-preview-output\"></pre></section>");
     html.push_str("</article>");
     panel.set_inner_html(&html);
@@ -359,17 +362,66 @@ fn publish_note_pivot_panel(pivot: &Value) {
     register_pane_layout_handlers(pivot);
     register_new_language_handlers(pivot);
     register_field_handlers(pivot);
+    register_lazy_pivot_load_handlers(pivot);
     register_apply_handlers(pivot);
     restore_staged_dom_state(pivot);
     update_staged_count_for_pivot(pivot);
     refresh_progress_from_dom();
-    load_card_pivot_for_pivot(pivot, None, None, None);
-    load_source_string_pivot_for_pivot(pivot, None, None, None);
-    load_optional_metadata_for_pivot(pivot);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn publish_note_pivot_panel(_pivot: &Value) {}
+
+#[cfg(target_arch = "wasm32")]
+fn lazy_secondary_pivot_panels_html() -> String {
+    [
+        lazy_secondary_pivot_panel_html(
+            "card-pivot-panel",
+            "card-pivot",
+            "Card pivot",
+            "Cards are loaded on demand so language changes stay responsive.",
+            "load-card-pivot-button",
+            "Load cards",
+        ),
+        lazy_secondary_pivot_panel_html(
+            "source-string-pivot-panel",
+            "source-string-pivot",
+            "Source String pivot",
+            "Reusable source strings are loaded only when you need that workflow.",
+            "load-source-string-pivot-button",
+            "Load source strings",
+        ),
+        lazy_secondary_pivot_panel_html(
+            "optional-metadata-panel",
+            "optional-metadata",
+            "Optional metadata checklist",
+            "Optional metadata rows are loaded only when you open the checklist.",
+            "load-optional-metadata-button",
+            "Load optional metadata",
+        ),
+    ]
+    .join("")
+}
+
+#[cfg(target_arch = "wasm32")]
+fn lazy_secondary_pivot_panel_html(
+    panel_id: &str,
+    class_name: &str,
+    title: &str,
+    description: &str,
+    button_id: &str,
+    button_label: &str,
+) -> String {
+    format!(
+        "<section id=\"{}\" class=\"{} lazy-pivot-panel\" data-lazy-state=\"unloaded\" aria-live=\"polite\" aria-busy=\"false\"><h3>{}</h3><p>{}</p><button id=\"{}\" class=\"lazy-pivot-load-button\" type=\"button\">{}</button></section>",
+        escape_html(panel_id),
+        escape_html(class_name),
+        escape_html(title),
+        escape_html(description),
+        escape_html(button_id),
+        escape_html(button_label),
+    )
+}
 
 #[cfg(target_arch = "wasm32")]
 fn pane_layout_panel_html(pivot: &Value) -> String {
@@ -732,6 +784,7 @@ fn publish_source_string_pivot_panel(pivot: &Value) {
     }
     html.push_str("</tbody></table></section></div>");
     panel.set_inner_html(&html);
+    mark_panel_loaded(&panel);
     register_source_string_handlers(pivot);
 }
 
@@ -889,6 +942,7 @@ fn publish_card_pivot_panel(pivot: &Value) {
     }
     html.push_str("</div>");
     panel.set_inner_html(&html);
+    mark_panel_loaded(&panel);
     register_card_pivot_handlers(pivot);
 }
 
@@ -1273,17 +1327,6 @@ fn update_card_preview_field(
 }
 
 #[cfg(target_arch = "wasm32")]
-fn load_card_pivot_for_pivot(
-    pivot: &Value,
-    card: Option<String>,
-    filter: Option<String>,
-    content_group: Option<String>,
-) {
-    let (language, target, overlay) = pivot_selection_parts(pivot);
-    load_card_pivot_for_parts(language, target, overlay, card, filter, content_group);
-}
-
-#[cfg(target_arch = "wasm32")]
 fn load_card_pivot_for_parts(
     language: Option<String>,
     target: Option<String>,
@@ -1521,17 +1564,6 @@ fn update_source_string_contextual_target(document: &web_sys::Document, path: &s
 }
 
 #[cfg(target_arch = "wasm32")]
-fn load_source_string_pivot_for_pivot(
-    pivot: &Value,
-    source: Option<String>,
-    content_group: Option<String>,
-    status: Option<String>,
-) {
-    let (language, target, overlay) = pivot_selection_parts(pivot);
-    load_source_string_pivot_for_parts(language, target, overlay, source, content_group, status);
-}
-
-#[cfg(target_arch = "wasm32")]
 fn load_source_string_pivot_for_parts(
     language: Option<String>,
     target: Option<String>,
@@ -1567,10 +1599,11 @@ fn load_source_string_pivot_for_parts(
 }
 
 #[cfg(target_arch = "wasm32")]
-fn load_optional_metadata_for_pivot(pivot: &Value) {
-    let language = pivot["language"]["code"].as_str().map(str::to_owned);
-    let target = pivot["target"]["label"].as_str().map(str::to_owned);
-    let overlay = pivot["overlay"]["label"].as_str().map(str::to_owned);
+fn load_optional_metadata_for_parts(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+) {
     wasm_bindgen_futures::spawn_local(async move {
         match fetch_optional_metadata_query(language, target, overlay).await {
             Ok(optional) => publish_optional_metadata_panel(&optional),
@@ -1643,6 +1676,7 @@ fn publish_optional_metadata_panel(optional: &Value) {
     }
     html.push_str("</tbody></table></section>");
     panel.set_inner_html(&html);
+    mark_panel_loaded(&panel);
     register_optional_metadata_handlers(optional);
     let target_writable = checkbox_checked(&document, "target-pane-writable");
     apply_pane_writability(
@@ -1665,6 +1699,89 @@ fn register_control_handlers(_pivot: &Value) {
     for filter in ["all", "missing", "stale", "needs_work"] {
         attach_filter_reload_handler(filter);
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn register_lazy_pivot_load_handlers(pivot: &Value) {
+    attach_card_pivot_load_handler(pivot);
+    attach_source_string_pivot_load_handler(pivot);
+    attach_optional_metadata_load_handler(pivot);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_card_pivot_load_handler(pivot: &Value) {
+    let (language, target, overlay) = pivot_selection_parts(pivot);
+    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+        set_panel_loading("card-pivot-panel", "Loading card pivot…");
+        load_card_pivot_for_parts(
+            language.clone(),
+            target.clone(),
+            overlay.clone(),
+            None,
+            None,
+            None,
+        );
+    }));
+    attach_click_handler("load-card-pivot-button", closure);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_source_string_pivot_load_handler(pivot: &Value) {
+    let (language, target, overlay) = pivot_selection_parts(pivot);
+    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+        set_panel_loading("source-string-pivot-panel", "Loading source string pivot…");
+        load_source_string_pivot_for_parts(
+            language.clone(),
+            target.clone(),
+            overlay.clone(),
+            None,
+            None,
+            None,
+        );
+    }));
+    attach_click_handler("load-source-string-pivot-button", closure);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_optional_metadata_load_handler(pivot: &Value) {
+    let (language, target, overlay) = pivot_selection_parts(pivot);
+    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
+        set_panel_loading("optional-metadata-panel", "Loading optional metadata…");
+        load_optional_metadata_for_parts(language.clone(), target.clone(), overlay.clone());
+    }));
+    attach_click_handler("load-optional-metadata-button", closure);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn attach_click_handler(element_id: &str, closure: Closure<dyn FnMut(web_sys::Event)>) {
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id(element_id))
+    {
+        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+    }
+    closure.forget();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_panel_loading(panel_id: &str, message: &str) {
+    if let Some(panel) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id(panel_id))
+    {
+        let _ = panel.set_attribute("data-lazy-state", "loading");
+        let _ = panel.set_attribute("aria-busy", "true");
+        panel.set_inner_html(&format!(
+            "<p class=\"workbench-loading\">{}</p>",
+            escape_html(message)
+        ));
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn mark_panel_loaded(panel: &web_sys::Element) {
+    let _ = panel.set_attribute("data-lazy-state", "loaded");
+    let _ = panel.set_attribute("aria-busy", "false");
 }
 
 #[cfg(target_arch = "wasm32")]
