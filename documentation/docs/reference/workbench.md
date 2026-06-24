@@ -28,6 +28,8 @@ devenv shell workbench-ui-embed
 
 The Iced/WASM source lives in `crates/brain-brew-workbench-ui`. It builds with Trunk for `wasm32-unknown-unknown`, renders the initial sidebar/canvas/inspector app shell, and fetches workspace metadata from `/api/workspace`.
 
+The target Workbench interaction model is documented in [ADR-015: Use Lazy Single-Work-Item Workbench Editing](decisions/0015-use-lazy-single-work-item-workbench-editing.md). In short: pivots should be compact paginated navigation lists, editing should happen in one selected item detail pane at a time, multilingual context should be lazy and selected-item scoped, and browser-local staged edits remain unapplied until explicit Apply.
+
 Validation commands for this scaffold:
 
 ```bash

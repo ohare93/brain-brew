@@ -22,6 +22,7 @@ The ADRs are written in hindsight around the decisions that still shape the Rust
 | [0012](0012-add-manifest-language-catalog-and-translation-profile.md) | Add Manifest Language Catalog and Translation Profile | Accepted | 2026-06-23 |
 | [0013](0013-use-stale-translation-records-for-source-text-changes.md) | Use Stale Translation Records for Source Text Changes | Accepted | 2026-06-23 |
 | [0014](0014-require-workbench-api-and-browser-e2e-tests.md) | Require Workbench API and Browser E2E Tests | Accepted | 2026-06-23 |
+| [0015](0015-use-lazy-single-work-item-workbench-editing.md) | Use Lazy Single-Work-Item Workbench Editing | Accepted | 2026-06-24 |
 
 ## Process
 
