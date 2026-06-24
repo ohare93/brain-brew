@@ -86,7 +86,7 @@ async fn workbench_new_language_scaffold_creates_editable_language() -> Result<(
 async fn workbench_source_string_pivot_stages_direct_translation() -> Result<()> {
     let artifacts = ArtifactDir::new("source-string")?;
     let workspace = TempDir::new().context("create source-string E2E workspace")?;
-    write_small_workbench_fixture(workspace.path())?;
+    write_ug_like_workbench_fixture(workspace.path())?;
 
     let server = RunningWorkbenchServer::spawn(
         workspace.path().join("brainbrew.yaml"),
@@ -474,16 +474,16 @@ async fn run_source_string_direct_smoke(
         .click()
         .await
         .context("load source-string pivot on demand")?;
-    wait_for_element(driver, ".source-string-row[data-source='Helsinki']")
+    wait_for_element(driver, ".source-string-row[data-source='Tbilisi']")
         .await
         .context("source-string rows loaded")?;
     driver
         .execute(
-            "document.querySelector(\".source-string-row[data-source='Helsinki']\").click();",
+            "document.querySelector(\".source-string-row[data-source='Tbilisi']\").click();",
             Vec::new(),
         )
         .await
-        .context("select Helsinki source string")?;
+        .context("select Tbilisi source string")?;
     wait_for_text(driver, "Stage direct translation for 1 occurrence(s)").await?;
     let input = wait_for_element(driver, "#source-string-direct-input").await?;
     input
@@ -491,10 +491,59 @@ async fn run_source_string_direct_smoke(
         .await
         .context("clear source string direct input")?;
     input
-        .send_keys("Helsingfors via strings")
+        .send_keys("Tbilisi via strings")
         .await
         .context("type source string direct translation")?;
-    wait_for_text(driver, "Helsingfors via strings").await?;
+    wait_for_text(driver, "Tbilisi via strings").await?;
+
+    driver
+        .execute(
+            "document.querySelector(\".source-string-row[data-source='Georgia']\").click();",
+            Vec::new(),
+        )
+        .await
+        .context("navigate to repeated source string")?;
+    wait_for_text(driver, "Stage direct translation for 2 occurrence(s)").await?;
+    let contextual_id =
+        "source-string-contextual-input-notes_note_georgia_country_fields_field_country";
+    let contextual = wait_for_element(driver, &format!("#{contextual_id}")).await?;
+    contextual
+        .clear()
+        .await
+        .context("clear contextual source string input")?;
+    contextual
+        .send_keys("Georgia contextual")
+        .await
+        .context("type contextual source string override")?;
+    wait_for_text(driver, "Georgia contextual").await?;
+
+    driver
+        .execute(
+            "document.querySelector(\".source-string-row[data-source='Atlanta']\").click();",
+            Vec::new(),
+        )
+        .await
+        .context("navigate to no-change source string")?;
+    wait_for_text(driver, "Stage global no-change").await?;
+    wait_for_element(driver, "#source-string-no-change")
+        .await?
+        .click()
+        .await
+        .context("stage no-change source string edit")?;
+    driver
+        .execute(
+            "document.querySelector(\".source-string-row[data-source='Tbilisi']\").click();",
+            Vec::new(),
+        )
+        .await
+        .context("return to staged source string")?;
+    wait_for_element(driver, "#source-string-direct-input")
+        .await
+        .context("source string detail returns")?;
+    assert_eq!(
+        element_value(driver, "source-string-direct-input").await?,
+        "Tbilisi via strings"
+    );
 
     wait_for_element(driver, "#apply-preview-button")
         .await?
@@ -502,7 +551,8 @@ async fn run_source_string_direct_smoke(
         .await
         .context("preview source string edit")?;
     wait_for_apply_output(driver, "Apply preview").await?;
-    wait_for_apply_output(driver, "Helsinki -> Helsingfors via strings").await?;
+    wait_for_apply_output(driver, "Tbilisi -> Tbilisi via strings").await?;
+    wait_for_apply_output(driver, "Georgia -> Georgia contextual").await?;
     assert!(!fs::read_to_string(workspace.join("da.yaml"))?.contains("via strings"));
 
     wait_for_element(driver, "#apply-confirm-button")
@@ -512,7 +562,11 @@ async fn run_source_string_direct_smoke(
         .context("apply source string edit")?;
     wait_for_apply_output(driver, "Applied").await?;
     let overlay = fs::read_to_string(workspace.join("da.yaml"))?;
-    assert!(overlay.contains("Helsinki: Helsingfors via strings"));
+    assert!(overlay.contains("Tbilisi: Tbilisi via strings"));
+    assert!(overlay.contains("Georgia contextual"));
+    assert!(overlay.contains("contextual:"));
+    assert!(overlay.contains("no_change:"));
+    assert!(overlay.contains("- Atlanta"));
     Ok(())
 }
 
@@ -623,6 +677,46 @@ async fn run_ultimate_geography_manifest_smoke(
     assert_no_secondary_pivot_fetches(driver)
         .await
         .context("secondary pivots are lazy after UG language switch")?;
+
+    wait_for_element(driver, "#load-card-pivot-button")
+        .await?
+        .click()
+        .await
+        .context("load UG card list on demand")?;
+    wait_for_element(driver, "#card-pivot-panel .card-row")
+        .await
+        .context("UG card navigation rows loaded")?;
+    let card_rows = driver
+        .execute(
+            "return document.querySelectorAll('#card-pivot-panel .card-row').length;",
+            Vec::new(),
+        )
+        .await
+        .context("count UG card navigation rows")?;
+    assert!(card_rows.json().as_u64().unwrap_or(999) <= 50);
+    wait_for_js_bool(
+        driver,
+        "return document.querySelectorAll('#card-pivot-panel .card-detail').length === 1 && document.querySelectorAll('#card-pivot-panel .anki-card-preview img').length <= 4 && Array.from(document.querySelectorAll('#card-pivot-panel .anki-card-preview img')).every((img) => img.getAttribute('src').startsWith('/api/media/'));",
+        "selected-card scoped media previews",
+    )
+    .await?;
+
+    wait_for_element(driver, "#load-source-string-pivot-button")
+        .await?
+        .click()
+        .await
+        .context("load UG source-string list on demand")?;
+    wait_for_element(driver, "#source-string-pivot-panel .source-string-row")
+        .await
+        .context("UG source-string navigation rows loaded")?;
+    let source_rows = driver
+        .execute(
+            "return document.querySelectorAll('#source-string-pivot-panel .source-string-row').length;",
+            Vec::new(),
+        )
+        .await
+        .context("count UG source-string rows")?;
+    assert!(source_rows.json().as_u64().unwrap_or(999) <= 50);
     assert_no_severe_browser_logs(driver).await?;
     Ok(())
 }
@@ -887,6 +981,34 @@ async fn run_card_pivot_smoke(
         .await
         .context("read live card target preview")?;
     assert_eq!(target_preview.json().as_str(), Some("Tbilisi kort"));
+
+    driver
+        .execute(
+            "document.querySelector(\".card-row[data-card-id='note.georgia-state::template.country-capital']\").click();",
+            Vec::new(),
+        )
+        .await
+        .context("navigate away from staged card")?;
+    wait_for_text(driver, "Atlanta").await?;
+    let previous_card_unmounted = driver
+        .execute(
+            "return document.getElementById('card-translation-input-notes_note_georgia_country_fields_field_capital') === null && document.querySelectorAll('#card-pivot-panel .card-detail').length === 1;",
+            Vec::new(),
+        )
+        .await
+        .context("only selected card detail remains in DOM")?;
+    assert_eq!(previous_card_unmounted.json().as_bool(), Some(true));
+    driver
+        .execute(
+            "document.querySelector(\".card-row[data-card-id='note.georgia-country::template.country-capital']\").click();",
+            Vec::new(),
+        )
+        .await
+        .context("return to staged card")?;
+    wait_for_element(driver, &format!("#{input_id}"))
+        .await
+        .context("staged card detail returns")?;
+    assert_eq!(element_value(driver, input_id).await?, "Tbilisi kort");
 
     driver.refresh().await.context("refresh card pivot")?;
     wait_for_loaded_probe(driver).await?;

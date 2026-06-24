@@ -97,6 +97,88 @@ body > *:not(#brainbrew-workbench-e2e):not(#workbench-dom-panel):not(script) {
   margin: 1rem 0;
 }
 
+.card-grid,
+.source-string-grid {
+  display: grid;
+  grid-template-columns: minmax(14rem, 22rem) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.card-list,
+.source-string-list {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 42rem;
+  overflow: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.card-row,
+.source-string-row {
+  width: 100%;
+  border: 1px solid #d5c7aa;
+  border-radius: 0.5rem;
+  background: #fffdf7;
+  color: #2f2618;
+  cursor: pointer;
+  padding: 0.6rem;
+  text-align: left;
+}
+
+.card-row.active,
+.source-string-row.active {
+  border-color: #58452a;
+  box-shadow: 0 0 0 2px rgba(88, 69, 42, 0.18);
+}
+
+.card-detail-panel,
+.source-string-detail {
+  min-width: 0;
+}
+
+.card-detail {
+  border: 1px solid #eadfc9;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+}
+
+.navigation-page-summary {
+  color: #6d5b3f;
+  margin: 0.35rem 0 0.75rem;
+}
+
+.source-string-filters,
+.card-pivot-filters,
+.card-filters,
+.source-string-global-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.source-string-occurrences {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.source-string-occurrences th,
+.source-string-occurrences td {
+  border-top: 1px solid #eadfc9;
+  padding: 0.35rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.source-string-occurrences input,
+.source-string-global-edit input {
+  box-sizing: border-box;
+  min-width: 16rem;
+}
+
 .field-editor {
   width: 100%;
   border-collapse: collapse;
