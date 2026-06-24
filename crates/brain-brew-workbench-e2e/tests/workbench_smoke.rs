@@ -13,6 +13,14 @@ use thirtyfour::prelude::*;
 const WORKBENCH_NAVIGATION_ROW_BUDGET: u64 = 50;
 const WORKBENCH_DETAIL_ROW_BUDGET: u64 = 32;
 
+fn tiny_png_bytes() -> &'static [u8] {
+    &[
+        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6,
+        0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 248, 255, 255, 63, 0,
+        5, 254, 2, 254, 220, 204, 89, 231, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+    ]
+}
+
 #[tokio::test]
 async fn workbench_app_shell_loads_workspace_metadata() -> Result<()> {
     let artifacts = ArtifactDir::new("app-shell")?;
@@ -187,8 +195,14 @@ async fn workbench_card_pivot_navigates_and_edits_card_field() -> Result<()> {
     let workspace = TempDir::new().context("create card-pivot E2E workspace")?;
     write_source_edit_workbench_fixture(workspace.path())?;
     fs::create_dir_all(workspace.path().join("media/flags"))?;
-    fs::write(workspace.path().join("media/flags/ge-country.png"), b"png")?;
-    fs::write(workspace.path().join("media/flags/ge-state.png"), b"png")?;
+    fs::write(
+        workspace.path().join("media/flags/ge-country.png"),
+        tiny_png_bytes(),
+    )?;
+    fs::write(
+        workspace.path().join("media/flags/ge-state.png"),
+        tiny_png_bytes(),
+    )?;
 
     let server = RunningWorkbenchServer::spawn(
         workspace.path().join("brainbrew.yaml"),
@@ -416,16 +430,30 @@ async fn run_edit_apply_smoke(
 ) -> Result<()> {
     run_app_shell_smoke(driver, server).await?;
     let input_id = "translation-input-notes_note_finland_fields_field_capital";
-    let input = wait_for_element(driver, &format!("#{input_id}")).await?;
-    input
-        .clear()
+    wait_for_js_bool(
+        driver,
+        r#"
+        const inline = document.querySelector(".note-card[data-note-id='note.finland'] .target-preview [data-preview-field-id='field.capital']");
+        return inline && inline.getAttribute('contenteditable') === 'true' && inline.classList.contains('inline-target-field');
+        "#,
+        "target preview field is directly editable",
+    )
+    .await?;
+    driver
+        .execute(
+            r#"
+            const inline = document.querySelector(".note-card[data-note-id='note.finland'] .target-preview [data-preview-field-id='field.capital']");
+            inline.focus();
+            inline.textContent = 'Helsingfors';
+            inline.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Helsingfors' }));
+            return inline.getAttribute('data-staged');
+            "#,
+            Vec::new(),
+        )
         .await
-        .context("clear target translation input")?;
-    input
-        .send_keys("Helsingfors")
-        .await
-        .context("type target translation")?;
+        .context("edit target translation inline from card preview")?;
     wait_for_text(driver, "Helsingfors").await?;
+    assert_eq!(element_value(driver, input_id).await?, "Helsingfors");
     wait_for_text(driver, "Main note-field progress: 2 / 2 complete").await?;
 
     driver.refresh().await.context("refresh browser")?;
@@ -517,6 +545,7 @@ async fn run_new_language_scaffold_smoke(
         "id: overlay.translation.nb\nkind: translation\ntranslations: {}\n"
     );
 
+    open_details(driver, ".field-editor-details").await?;
     let input_id = "translation-input-notes_note_finland_fields_field_capital";
     let input = wait_for_element(driver, &format!("#{input_id}")).await?;
     input
@@ -549,12 +578,7 @@ async fn run_source_string_direct_smoke(
         .await
         .context("open source-string workbench")?;
     wait_for_loaded_probe(driver).await?;
-    wait_for_element(driver, "#source-string-pivot-panel").await?;
-    wait_for_element(driver, "#load-source-string-pivot-button")
-        .await?
-        .click()
-        .await
-        .context("load source-string pivot on demand")?;
+    open_workbench_view(driver, "source-strings").await?;
     wait_for_element(driver, ".source-string-row[data-source='Tbilisi']")
         .await
         .context("source-string rows loaded")?;
@@ -662,11 +686,7 @@ async fn run_optional_metadata_smoke(
         .context("open Workbench")?;
     wait_for_text(driver, "Main note-field progress: 2 / 2 complete").await?;
     wait_for_text(driver, "Optional metadata").await?;
-    wait_for_element(driver, "#load-optional-metadata-button")
-        .await?
-        .click()
-        .await
-        .context("load optional metadata on demand")?;
+    open_workbench_view(driver, "optional-metadata").await?;
     wait_for_text(driver, "Old Workbench").await?;
 
     let input = wait_for_element(driver, "#optional-translation-input-deck_name")
@@ -715,6 +735,27 @@ async fn run_ultimate_geography_manifest_smoke(
     wait_for_element(driver, ".anki-card-preview img")
         .await
         .context("media preview image appears")?;
+    wait_for_element(driver, "#workbench-view-switch")
+        .await
+        .context("top-level Workbench view switch appears")?;
+    wait_for_js_bool(
+        driver,
+        r#"
+        const titles = Array.from(document.querySelectorAll('.note-navigation-row strong')).map((el) => el.textContent.trim());
+        return titles.length > 0 && titles.every(Boolean) && titles[0] === 'Abkhazia' && !titles.includes('Sukhumi');
+        "#,
+        "human note titles are visible in navigation",
+    )
+    .await?;
+    wait_for_js_bool(
+        driver,
+        r#"
+        const labels = Array.from(document.querySelectorAll('.note-card .anki-card-preview')).map((el) => el.textContent.trim());
+        return labels.some((label) => label.includes('Country - Capital') || label.includes('country-capital')) && labels.some((label) => label.includes('Capital - Country') || label.includes('capital-country'));
+        "#,
+        "note card previews are labeled by template",
+    )
+    .await?;
     assert_workbench_dom_row_budget(driver)
         .await
         .context("UG initial Workbench DOM stays within row budget")?;
@@ -765,11 +806,9 @@ async fn run_ultimate_geography_manifest_smoke(
         .await
         .context("secondary pivots are lazy after UG language switch")?;
 
-    wait_for_element(driver, "#load-card-pivot-button")
-        .await?
-        .click()
+    open_workbench_view(driver, "cards")
         .await
-        .context("load UG card list on demand")?;
+        .context("load UG card list from top-level view switch")?;
     wait_for_element(driver, "#card-pivot-panel .card-row")
         .await
         .context("UG card navigation rows loaded")?;
@@ -788,11 +827,9 @@ async fn run_ultimate_geography_manifest_smoke(
     )
     .await?;
 
-    wait_for_element(driver, "#load-source-string-pivot-button")
-        .await?
-        .click()
+    open_workbench_view(driver, "source-strings")
         .await
-        .context("load UG source-string list on demand")?;
+        .context("load UG source-string list from top-level view switch")?;
     wait_for_element(driver, "#source-string-pivot-panel .source-string-row")
         .await
         .context("UG source-string navigation rows loaded")?;
@@ -882,6 +919,7 @@ async fn run_multi_pane_smoke(
         .await
         .context("make secondary pane writable")?;
 
+    open_details(driver, ".field-editor-details").await?;
     wait_for_element(driver, &format!("#{source_toggle}"))
         .await?
         .click()
@@ -986,13 +1024,8 @@ async fn run_card_pivot_smoke(
         .await
         .context("open card-pivot workbench")?;
     wait_for_loaded_probe(driver).await?;
-    wait_for_element(driver, "#card-pivot-panel").await?;
+    open_workbench_view(driver, "cards").await?;
     wait_for_text(driver, "Card pivot").await?;
-    wait_for_element(driver, "#load-card-pivot-button")
-        .await?
-        .click()
-        .await
-        .context("load card pivot on demand")?;
     wait_for_text(driver, "Country - Capital").await?;
 
     driver
@@ -1022,7 +1055,14 @@ async fn run_card_pivot_smoke(
     let source_card = source_card.json().as_str().unwrap_or_default();
     assert!(source_card.contains("class=\"flag\""));
     assert!(source_card.contains("/api/media/flags/ge-country.png"));
+    wait_for_js_bool(
+        driver,
+        "return Array.from(document.querySelectorAll('#card-pivot-panel .card-source-preview img')).some((img) => img.complete && img.naturalWidth > 0 && !img.currentSrc.includes('Missing'));",
+        "card preview media resolves to an actual image",
+    )
+    .await?;
 
+    open_details(driver, "#card-pivot-panel .field-editor-details").await?;
     wait_for_element(driver, "#source-pane-writable")
         .await?
         .click()
@@ -1099,9 +1139,7 @@ async fn run_card_pivot_smoke(
 
     driver.refresh().await.context("refresh card pivot")?;
     wait_for_loaded_probe(driver).await?;
-    wait_for_element(driver, "#load-card-pivot-button")
-        .await?
-        .click()
+    open_workbench_view(driver, "cards")
         .await
         .context("reload card pivot after refresh")?;
     wait_for_element(driver, &format!("#{input_id}"))
@@ -1145,6 +1183,7 @@ async fn run_source_edit_smoke(
     wait_for_loaded_probe(driver).await?;
     let source_id = "source-input-notes_note_georgia_country_fields_field_country";
     let toggle_id = "source-edit-toggle-notes_note_georgia_country_fields_field_country";
+    open_details(driver, ".field-editor-details").await?;
     wait_for_text(driver, "2 occurrence(s)").await?;
     wait_for_element(driver, "#source-pane-writable")
         .await?
@@ -1229,6 +1268,7 @@ async fn run_mixed_source_target_smoke(
         .await
         .context("open mixed source/target workbench")?;
     wait_for_loaded_probe(driver).await?;
+    open_details(driver, ".field-editor-details").await?;
     let suffix = "notes_note_georgia_country_fields_field_country";
     wait_for_element(driver, "#source-pane-writable")
         .await?
@@ -1311,6 +1351,7 @@ async fn run_ug_like_smoke(driver: &WebDriver, server: &RunningWorkbenchServer) 
         .context("open UG-like workbench")?;
     wait_for_loaded_probe(driver).await?;
     wait_for_element(driver, "#workbench-dom-panel").await?;
+    open_details(driver, ".field-editor-details").await?;
     wait_for_text(driver, "2 occurrence(s)").await?;
     wait_for_text(driver, "Georgia").await?;
     Ok(())
@@ -1320,6 +1361,30 @@ async fn wait_for_loaded_probe(driver: &WebDriver) -> Result<WebElement> {
     wait_for_element(driver, "#brainbrew-workbench-e2e[data-status='loaded']")
         .await
         .context("wait for workbench metadata probe")
+}
+
+async fn open_workbench_view(driver: &WebDriver, view: &str) -> Result<()> {
+    let button = wait_for_element(driver, &format!("#view-{view}")).await?;
+    button
+        .click()
+        .await
+        .with_context(|| format!("open Workbench {view} view"))?;
+    wait_for_element(driver, &format!("#view-panel-{view}:not([hidden])"))
+        .await
+        .with_context(|| format!("Workbench {view} view is visible"))?;
+    Ok(())
+}
+
+async fn open_details(driver: &WebDriver, selector: &str) -> Result<()> {
+    let script = format!(
+        r#"
+        const details = document.querySelector({selector:?});
+        if (!details) return false;
+        details.open = true;
+        return details.open === true;
+        "#,
+    );
+    wait_for_js_bool(driver, &script, &format!("open details {selector}")).await
 }
 
 async fn wait_for_element(driver: &WebDriver, css: &str) -> Result<WebElement> {

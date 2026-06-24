@@ -920,14 +920,7 @@ impl WorkspaceMetadata {
             return Err(format!("unknown media asset {requested_path:?}"));
         }
 
-        let mut candidates = vec![
-            self.manifest_root.join(&requested_path),
-            self.manifest_root.join("media").join(&requested_path),
-        ];
-        if let Some(media_root) = &self.media_root {
-            candidates.push(media_root.join(&requested_path));
-            candidates.push(media_root.join("media").join(&requested_path));
-        }
+        let candidates = self.media_file_candidates(&requested_path);
         if let Some(path) = candidates.iter().find(|path| path.is_file()) {
             let bytes = fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
             return Response::builder()
@@ -943,6 +936,39 @@ impl WorkspaceMetadata {
             .header(header::CONTENT_TYPE, "image/svg+xml")
             .body(Body::from(placeholder))
             .map_err(|error| format!("failed to build missing media placeholder: {error}"))
+    }
+
+    fn media_file_candidates(&self, requested_path: &str) -> Vec<PathBuf> {
+        let mut candidates = vec![
+            self.manifest_root.join(requested_path),
+            self.manifest_root.join("media").join(requested_path),
+        ];
+        if let Some(media_root) = &self.media_root {
+            candidates.push(media_root.join(requested_path));
+            candidates.push(media_root.join("media").join(requested_path));
+        }
+        if let Some(deck_dir_name) = self
+            .manifest_root
+            .file_name()
+            .and_then(|name| name.to_str())
+        {
+            for ancestor in self.manifest_root.ancestors() {
+                candidates.push(
+                    ancestor
+                        .join("external")
+                        .join(deck_dir_name)
+                        .join("media")
+                        .join(requested_path),
+                );
+                candidates.push(
+                    ancestor
+                        .join("external")
+                        .join(deck_dir_name)
+                        .join(requested_path),
+                );
+            }
+        }
+        candidates
     }
 
     fn media_path_declared(&self, requested_path: &str) -> Result<bool, String> {
@@ -2430,7 +2456,7 @@ fn produced_card_rows(
                 note_type_id: note.note_type_id.clone(),
                 template_id: template.id.clone(),
                 template_name: template.name.clone(),
-                title: note_title(Some(note)),
+                title: note_title(Some(note), Some(note_type)),
                 status: status.to_owned(),
                 field_rows,
                 content_group_badges: content_group_badges_for_note(&context.source_deck, note_id),
@@ -2686,10 +2712,10 @@ fn source_string_occurrence_json(
         },
         "status": row.category.as_str(),
         "note_id": row.note_id.to_string(),
-        "note_title": note_title(note),
+        "note_title": note_title(note, source_note_type),
         "field_id": row.field_id.to_string(),
         "field_name": row.field_name,
-        "friendly_context": format!("{} · {}", note_title(note), row.field_name),
+        "friendly_context": format!("{} · {}", note_title(note, source_note_type), row.field_name),
         "context_path": contextual_path_for_row(row, &context.report.entries),
         "content_group_badges": content_group_badges_for_note(&context.source_deck, &row.note_id),
         "direct_recommended": true,
@@ -2699,9 +2725,33 @@ fn source_string_occurrence_json(
     })
 }
 
-fn note_title(note: Option<&Note>) -> String {
-    note.and_then(|note| note.fields.values().next().cloned())
-        .unwrap_or_else(|| "unknown note".to_owned())
+fn note_title(note: Option<&Note>, note_type: Option<&NoteType>) -> String {
+    let Some(note) = note else {
+        return "unknown note".to_owned();
+    };
+    if let Some(note_type) = note_type {
+        for field in &note_type.fields {
+            if let Some(value) = note
+                .fields
+                .get(&field.id)
+                .and_then(|value| title_candidate(value))
+            {
+                return value;
+            }
+        }
+    }
+    note.fields
+        .values()
+        .find_map(|value| title_candidate(value))
+        .unwrap_or_else(|| note.id.to_string())
+}
+
+fn title_candidate(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty() || value.trim_start().starts_with('<') {
+        return None;
+    }
+    Some(value.to_owned())
 }
 
 fn content_group_badges_for_note(
@@ -3097,12 +3147,10 @@ fn note_navigation_rows(context: &SelectedTranslationContext, filter: Option<&st
         if !note_matches_filter(&field_rows, &note_entries, filter) {
             continue;
         }
-        let title = note
-            .fields
-            .values()
-            .next()
-            .cloned()
-            .unwrap_or_else(|| note_id.to_string());
+        let title = note_title(
+            Some(note),
+            context.source_deck.note_types.get(&note.note_type_id),
+        );
         let field_count = field_rows.len();
         let translatable_field_count = field_rows.iter().filter(|row| !row.structural).count();
         let missing_count = field_rows
@@ -3237,12 +3285,7 @@ fn note_pivot_notes_json(
             .get(&target_note.note_type_id)
             .unwrap_or(note_type);
         let target_preview = render_note_cards(target_deck, target_note, target_note_type);
-        let title = note
-            .fields
-            .values()
-            .next()
-            .cloned()
-            .unwrap_or_else(|| note_id.to_string());
+        let title = note_title(Some(note), Some(note_type));
         notes.push(json!({
             "index": index,
             "note_id": note_id.to_string(),
@@ -3499,7 +3542,7 @@ fn safe_media_relative_path(path: &str) -> Result<String, String> {
 fn missing_media_placeholder_svg(path: &str) -> String {
     let label = html_attribute_escape(path);
     format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 360 120\" role=\"img\" aria-label=\"missing media {label}\"><rect width=\"360\" height=\"120\" fill=\"#f8efe0\" stroke=\"#c9b892\"/><text x=\"20\" y=\"52\" fill=\"#58452a\" font-family=\"sans-serif\" font-size=\"18\">Missing media asset</text><text x=\"20\" y=\"82\" fill=\"#7a6240\" font-family=\"monospace\" font-size=\"14\">{label}</text></svg>"
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 360 120\" role=\"img\" aria-label=\"missing media {label}\"><rect width=\"360\" height=\"120\" fill=\"#111827\" stroke=\"#3b4a63\"/><text x=\"20\" y=\"52\" fill=\"#f87171\" font-family=\"sans-serif\" font-size=\"18\">Missing media asset</text><text x=\"20\" y=\"82\" fill=\"#bac6d6\" font-family=\"monospace\" font-size=\"14\">{label}</text></svg>"
     )
 }
 

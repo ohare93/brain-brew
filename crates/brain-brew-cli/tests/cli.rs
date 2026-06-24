@@ -474,6 +474,33 @@ fn workbench_navigation_lists_are_paginated_and_compact() {
 }
 
 #[test]
+fn workbench_navigation_titles_follow_note_type_field_order() {
+    let manifest = workspace_root().join("fixtures/ultimate-geography/brainbrew.yaml");
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let notes = get_json(
+        &server.url("/api/workbench/note-list?language=de&target=standard&limit=8&offset=0"),
+    );
+    let titles = notes["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["title"].as_str().unwrap_or_default().to_owned())
+        .collect::<Vec<_>>();
+    assert!(titles.iter().all(|title| !title.trim().is_empty()));
+    assert_eq!(titles.first().map(String::as_str), Some("Abkhazia"));
+    assert!(!titles.iter().any(|title| title == "Sukhumi"));
+}
+
+#[test]
 fn workbench_optional_metadata_list_is_paginated_and_keeps_full_totals() {
     let dir = temp_dir("workbench-optional-metadata-list");
     write_workbench_optional_metadata_workspace(&dir);
@@ -658,6 +685,35 @@ fn workbench_media_can_load_from_media_root_or_placeholder() {
     let body = placeholder.into_string().unwrap();
     assert!(body.contains("Missing media asset"));
     assert!(body.contains("flags/fi.png"));
+}
+
+#[test]
+fn workbench_media_auto_discovers_external_deck_media() {
+    let root = temp_dir("workbench-auto-external-media");
+    let manifest_dir = root.join("projects/deck-fixture");
+    fs::create_dir_all(&manifest_dir).unwrap();
+    write_workbench_workspace(&manifest_dir);
+    let external_media = root.join("external/deck-fixture/media/flags");
+    fs::create_dir_all(&external_media).unwrap();
+    fs::write(external_media.join("fi.png"), b"png").unwrap();
+
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        manifest_dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+    let media = ureq::get(&server.url("/api/media/flags/fi.png"))
+        .call()
+        .expect("GET declared media from inferred external media root succeeds");
+    assert_eq!(media.status(), 200);
+    assert_eq!(
+        media.header("content-type").unwrap_or_default(),
+        "image/png"
+    );
 }
 
 #[test]
