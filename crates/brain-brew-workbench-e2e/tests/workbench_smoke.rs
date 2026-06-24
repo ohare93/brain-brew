@@ -430,6 +430,7 @@ async fn run_edit_apply_smoke(
 ) -> Result<()> {
     run_app_shell_smoke(driver, server).await?;
     let input_id = "translation-input-notes_note_finland_fields_field_capital";
+    let inline_selector = ".note-card[data-note-id='note.finland'] .target-preview [data-preview-field-id='field.capital']";
     wait_for_js_bool(
         driver,
         r#"
@@ -439,22 +440,30 @@ async fn run_edit_apply_smoke(
         "target preview field is directly editable",
     )
     .await?;
-    driver
-        .execute(
-            r#"
-            const inline = document.querySelector(".note-card[data-note-id='note.finland'] .target-preview [data-preview-field-id='field.capital']");
-            inline.focus();
-            inline.textContent = 'Helsingfors';
-            inline.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Helsingfors' }));
-            return inline.getAttribute('data-staged');
-            "#,
-            Vec::new(),
-        )
+    set_contenteditable_caret(driver, inline_selector, "Helsinki".len()).await?;
+    send_real_keys_to_active_element(driver, "!").await?;
+    assert_contenteditable_state(driver, inline_selector, input_id, "Helsinki!", 9, true)
         .await
-        .context("edit target translation inline from card preview")?;
-    wait_for_text(driver, "Helsingfors").await?;
-    assert_eq!(element_value(driver, input_id).await?, "Helsingfors");
+        .context("note inline edit preserves caret after first keystroke")?;
+    assert_eq!(
+        element_text_content(
+            driver,
+            "status-text-notes_note_finland_fields_field_capital"
+        )
+        .await?,
+        "staged_direct"
+    );
     wait_for_text(driver, "Main note-field progress: 2 / 2 complete").await?;
+    send_real_keys_to_active_element(driver, "?").await?;
+    assert_contenteditable_state(driver, inline_selector, input_id, "Helsinki!?", 10, true)
+        .await
+        .context("note inline edit preserves caret after second keystroke")?;
+    select_contenteditable_contents(driver, inline_selector).await?;
+    send_real_keys_to_active_element(driver, "Helsingfors").await?;
+    assert_contenteditable_state(driver, inline_selector, input_id, "Helsingfors", 11, true)
+        .await
+        .context("note inline edit uses real keyboard entry for final value")?;
+    wait_for_text(driver, "Helsingfors").await?;
 
     driver.refresh().await.context("refresh browser")?;
     wait_for_loaded_probe(driver).await?;
@@ -1093,21 +1102,26 @@ async fn run_card_pivot_smoke(
     assert_eq!(source_preview.json().as_str(), Some("Sakartvelo card"));
 
     let input_id = "card-translation-input-notes_note_georgia_country_fields_field_capital";
-    let input = wait_for_element(driver, &format!("#{input_id}")).await?;
-    input.clear().await.context("clear card target input")?;
-    input
-        .send_keys("Tbilisi kort")
+    let inline_selector =
+        "#card-pivot-panel .card-target-preview [data-preview-field-id='field.capital']";
+    wait_for_element(driver, &format!("#{input_id}"))
         .await
-        .context("type card target translation")?;
+        .context("card target input exists for inline sync assertions")?;
+    set_contenteditable_caret(driver, inline_selector, "Tbilisi".len()).await?;
+    send_real_keys_to_active_element(driver, "!").await?;
+    assert_contenteditable_state(driver, inline_selector, input_id, "Tbilisi!", 8, true)
+        .await
+        .context("card inline edit preserves caret after first keystroke")?;
     wait_for_text(driver, "staged_direct").await?;
-    let target_preview = driver
-        .execute(
-            "return document.querySelector('#card-pivot-panel .card-target-preview [data-preview-field-id=\"field.capital\"]').innerHTML;",
-            Vec::new(),
-        )
+    send_real_keys_to_active_element(driver, "?").await?;
+    assert_contenteditable_state(driver, inline_selector, input_id, "Tbilisi!?", 9, true)
         .await
-        .context("read live card target preview")?;
-    assert_eq!(target_preview.json().as_str(), Some("Tbilisi kort"));
+        .context("card inline edit preserves caret after second keystroke")?;
+    select_contenteditable_contents(driver, inline_selector).await?;
+    send_real_keys_to_active_element(driver, "Tbilisi kort").await?;
+    assert_contenteditable_state(driver, inline_selector, input_id, "Tbilisi kort", 12, true)
+        .await
+        .context("card inline edit uses real keyboard entry for final value")?;
 
     driver
         .execute(
@@ -1455,6 +1469,180 @@ async fn element_value(driver: &WebDriver, id: &str) -> Result<String> {
         .await
         .context("read element value")?;
     Ok(value.json().as_str().unwrap_or_default().to_owned())
+}
+
+async fn element_text_content(driver: &WebDriver, id: &str) -> Result<String> {
+    let script = format!("return document.getElementById({id:?}).textContent;");
+    let value = driver
+        .execute(script.as_str(), Vec::new())
+        .await
+        .context("read element text content")?;
+    Ok(value.json().as_str().unwrap_or_default().to_owned())
+}
+
+async fn send_real_keys_to_active_element(driver: &WebDriver, text: &str) -> Result<()> {
+    driver
+        .action_chain()
+        .send_keys(text)
+        .perform()
+        .await
+        .with_context(|| format!("send real keys {text:?} to active element"))
+}
+
+async fn set_contenteditable_caret(
+    driver: &WebDriver,
+    selector: &str,
+    offset: usize,
+) -> Result<()> {
+    let script = format!(
+        r#"
+        const selector = {selector:?};
+        const offset = {offset};
+        const element = document.querySelector(selector);
+        if (!element) return {{ ok: false, reason: 'missing element' }};
+        element.focus();
+        const selection = window.getSelection();
+        const range = document.createRange();
+        let remaining = offset;
+        let found = false;
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {{
+            const length = node.textContent.length;
+            if (remaining <= length) {{
+                range.setStart(node, remaining);
+                found = true;
+                break;
+            }}
+            remaining -= length;
+        }}
+        if (!found) {{
+            if (!element.firstChild) {{
+                element.appendChild(document.createTextNode(''));
+            }}
+            range.selectNodeContents(element);
+            range.collapse(false);
+        }}
+        selection.removeAllRanges();
+        selection.addRange(range);
+        const probe = range.cloneRange();
+        probe.selectNodeContents(element);
+        probe.setEnd(selection.getRangeAt(0).endContainer, selection.getRangeAt(0).endOffset);
+        return {{ ok: document.activeElement === element, caretOffset: probe.toString().length }};
+        "#,
+    );
+    let result = driver
+        .execute(script.as_str(), Vec::new())
+        .await
+        .with_context(|| format!("set caret for {selector}"))?;
+    let json = result.json();
+    assert_eq!(
+        json["ok"].as_bool(),
+        Some(true),
+        "failed to focus {selector}: {json:?}"
+    );
+    assert_eq!(
+        json["caretOffset"].as_u64(),
+        Some(offset as u64),
+        "failed to place caret for {selector}: {json:?}"
+    );
+    Ok(())
+}
+
+async fn select_contenteditable_contents(driver: &WebDriver, selector: &str) -> Result<()> {
+    let script = format!(
+        r#"
+        const selector = {selector:?};
+        const element = document.querySelector(selector);
+        if (!element) return false;
+        element.focus();
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return document.activeElement === element && selection.toString() === element.textContent;
+        "#,
+    );
+    wait_for_js_bool(
+        driver,
+        &script,
+        &format!("select contenteditable contents for {selector}"),
+    )
+    .await
+}
+
+async fn assert_contenteditable_state(
+    driver: &WebDriver,
+    selector: &str,
+    input_id: &str,
+    expected_text: &str,
+    expected_caret: usize,
+    expected_staged: bool,
+) -> Result<()> {
+    let script = format!(
+        r#"
+        const selector = {selector:?};
+        const element = document.querySelector(selector);
+        if (!element) return {{ exists: false }};
+        const selection = window.getSelection();
+        let caretOffset = null;
+        if (selection && selection.rangeCount > 0) {{
+            const range = selection.getRangeAt(0);
+            if (element.contains(range.endContainer)) {{
+                const probe = range.cloneRange();
+                probe.selectNodeContents(element);
+                probe.setEnd(range.endContainer, range.endOffset);
+                caretOffset = probe.toString().length;
+            }}
+        }}
+        return {{
+            exists: true,
+            text: element.textContent,
+            active: document.activeElement === element,
+            caretOffset,
+            dataStaged: element.getAttribute('data-staged'),
+            contenteditable: element.getAttribute('contenteditable')
+        }};
+        "#,
+    );
+    let state = driver
+        .execute(script.as_str(), Vec::new())
+        .await
+        .with_context(|| format!("read contenteditable state for {selector}"))?;
+    let json = state.json();
+    assert_eq!(
+        json["exists"].as_bool(),
+        Some(true),
+        "inline field missing: {json:?}"
+    );
+    assert_eq!(
+        json["contenteditable"].as_str(),
+        Some("true"),
+        "inline field is not editable: {json:?}"
+    );
+    assert_eq!(
+        json["text"].as_str(),
+        Some(expected_text),
+        "inline field text mismatch: {json:?}"
+    );
+    assert_eq!(
+        json["active"].as_bool(),
+        Some(true),
+        "inline field lost focus: {json:?}"
+    );
+    assert_eq!(
+        json["caretOffset"].as_u64(),
+        Some(expected_caret as u64),
+        "inline field caret moved unexpectedly: {json:?}"
+    );
+    assert_eq!(
+        json["dataStaged"].as_str(),
+        Some(if expected_staged { "true" } else { "false" }),
+        "inline field staged marker mismatch: {json:?}"
+    );
+    assert_eq!(element_value(driver, input_id).await?, expected_text);
+    Ok(())
 }
 
 async fn install_delayed_note_list_fetch(

@@ -2021,10 +2021,14 @@ fn update_card_preview_field(
     let Ok(nodes) = document.query_selector_all(&selector) else {
         return;
     };
+    let active_element = document.active_element();
     for index in 0..nodes.length() {
         if let Some(node) = nodes.get(index)
             && let Ok(element) = node.dyn_into::<web_sys::Element>()
         {
+            if active_element.as_ref() == Some(&element) {
+                continue;
+            }
             element.set_inner_html(value);
         }
     }
@@ -4360,10 +4364,14 @@ fn update_preview_field(
     let Ok(nodes) = document.query_selector_all(&selector) else {
         return;
     };
+    let active_element = document.active_element();
     for index in 0..nodes.length() {
         if let Some(node) = nodes.get(index)
             && let Ok(element) = node.dyn_into::<web_sys::Element>()
         {
+            if active_element.as_ref() == Some(&element) {
+                continue;
+            }
             element.set_inner_html(value);
         }
     }
