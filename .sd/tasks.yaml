@@ -54,8 +54,12 @@ tasks:
       fi
       devenv shell workbench-ui-build
       media_args=()
-      if [ -n "${BRAINBREW_UG_MEDIA_ROOT:-}" ]; then
-        media_args=(--media-root "$BRAINBREW_UG_MEDIA_ROOT")
+      default_media_root="../../external/ultimate-geography/media"
+      media_root="${BRAINBREW_UG_MEDIA_ROOT:-$default_media_root}"
+      if [ -d "$media_root" ]; then
+        media_args=(--media-root "$media_root")
+      else
+        echo "warning: UG media root not found at $media_root; set BRAINBREW_UG_MEDIA_ROOT to override" >&2
       fi
       devenv shell brainbrew workbench serve --manifest fixtures/ultimate-geography/brainbrew.yaml --dev-assets target/workbench-ui "${media_args[@]}" "$@"
 
