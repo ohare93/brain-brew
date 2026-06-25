@@ -82,14 +82,14 @@ The Card pivot reviews produced cards one at a time, where a card is a Note rend
 - Field inspectors expose the underlying note-field source and translation rows used by that card. Browser edits can stage target translation edits or source note-field edits and use the shared Apply preview/confirmation APIs.
 - The Card pivot does not introduce card-specific storage; writes still update canonical translation/source YAML through Workbench Apply.
 
-## Optional metadata checklist
+## Metadata checklist
 
-Optional metadata review is separate from the main note-field completion metric:
+Metadata review is separate from the main note-field completion metric:
 
-- `GET /api/workbench/optional-metadata` returns main note-field progress plus optional metadata progress for the selected language/target/overlay.
-- Optional rows include paths classified by `translation_profile.optional_paths` and metadata categories such as deck metadata, note type names, field labels, card template names, variables, tags, adapter IDs when exposed, and structured-message formats.
-- The browser renders an Optional metadata checklist with status/warning text. Stale optional metadata is shown as a warning and does not increase the main note-field stale count.
-- Optional metadata edits stage browser-local translation edits and use the same Apply preview/confirmation workflow as Note, Source String, Card, and comparison panes.
+- `GET /api/workbench/metadata` returns main note-field progress plus metadata progress for the selected language/target/overlay.
+- Metadata rows use the configured `translation_profile.metadata_categories`; category keys are stable API values and labels are display text. `metadata_exclude_paths` can hide identity data such as adapter IDs even when broad category globs would otherwise match.
+- The browser renders a Metadata checklist with status/warning text. Stale metadata is shown as a warning and does not increase the main note-field stale count.
+- Metadata edits stage browser-local translation edits and use the same Apply preview/confirmation workflow as Note, Source String, Card, and comparison panes.
 
 ## Comparison language panes
 

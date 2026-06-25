@@ -145,7 +145,7 @@ async fn workbench_source_string_pivot_stages_direct_translation() -> Result<()>
 #[tokio::test]
 async fn workbench_optional_metadata_checklist_edits_separately() -> Result<()> {
     let artifacts = ArtifactDir::new("optional-metadata")?;
-    let workspace = TempDir::new().context("create optional metadata E2E workspace")?;
+    let workspace = TempDir::new().context("create metadata E2E workspace")?;
     write_optional_metadata_workbench_fixture(workspace.path())?;
 
     let server = RunningWorkbenchServer::spawn(
@@ -719,8 +719,8 @@ async fn run_optional_metadata_smoke(
         .await
         .context("open Workbench")?;
     wait_for_text(driver, "Main note-field progress: 2 / 2 complete").await?;
-    wait_for_text(driver, "Optional metadata").await?;
-    open_workbench_view(driver, "optional-metadata").await?;
+    wait_for_text(driver, "Metadata").await?;
+    open_workbench_view(driver, "metadata").await?;
     wait_for_text(driver, "Old Workbench").await?;
 
     let input = wait_for_element(driver, "#optional-translation-input-deck_name")
@@ -737,7 +737,7 @@ async fn run_optional_metadata_smoke(
         .await?
         .click()
         .await
-        .context("preview optional metadata apply")?;
+        .context("preview metadata apply")?;
     wait_for_apply_output(driver, "Apply preview").await?;
     wait_for_apply_output(driver, "da.yaml").await?;
     wait_for_apply_output(driver, "workspace").await?;
@@ -747,7 +747,7 @@ async fn run_optional_metadata_smoke(
         .await?
         .click()
         .await
-        .context("confirm optional metadata apply")?;
+        .context("confirm metadata apply")?;
     wait_for_apply_output(driver, "Applied").await?;
     assert!(fs::read_to_string(workspace.join("da.yaml"))?.contains("Arbejdsbord Røgtest"));
     assert!(fs::read_to_string(workspace.join("deck.yaml"))?.contains("name: Workbench Smoke"));
@@ -881,15 +881,15 @@ async fn run_ultimate_geography_manifest_smoke(
         .context("count UG source-string rows")?;
     assert!(source_rows.json().as_u64().unwrap_or(999) <= WORKBENCH_NAVIGATION_ROW_BUDGET);
 
-    open_workbench_view(driver, "optional-metadata")
+    open_workbench_view(driver, "metadata")
         .await
-        .context("load UG optional metadata list from top-level view switch")?;
-    assert_top_level_view_switch_contract(driver, "optional-metadata")
+        .context("load UG metadata list from top-level view switch")?;
+    assert_top_level_view_switch_contract(driver, "metadata")
         .await
-        .context("optional metadata view is the only visible Workbench view")?;
+        .context("metadata view is the only visible Workbench view")?;
     wait_for_element(driver, "#optional-metadata-checklist")
         .await
-        .context("UG optional metadata panel loaded")?;
+        .context("UG metadata panel loaded")?;
     assert_no_severe_browser_logs(driver).await?;
     Ok(())
 }
@@ -1672,7 +1672,7 @@ async fn assert_top_level_view_switch_contract(
 ) -> Result<()> {
     let script = format!(
         r#"
-        const expectedViews = ['notes', 'cards', 'source-strings', 'optional-metadata'];
+        const expectedViews = ['notes', 'cards', 'source-strings', 'metadata'];
         const activeView = {active_view:?};
         const switcher = document.querySelector('#workbench-view-switch');
         const nestedSwitcher = document.querySelector('.workbench-view #workbench-view-switch');
@@ -2210,8 +2210,8 @@ async fn assert_no_secondary_pivot_fetches(driver: &WebDriver) -> Result<()> {
                 || url.contains("/api/workbench/card-list")
                 || url.contains("/api/workbench/source-string-pivot")
                 || url.contains("/api/workbench/source-string-list")
-                || url.contains("/api/workbench/optional-metadata")
-                || url.contains("/api/workbench/optional-metadata-list")
+                || url.contains("/api/workbench/metadata")
+                || url.contains("/api/workbench/metadata-list")
         })
         .map(str::to_owned)
         .collect::<Vec<_>>();
@@ -2537,7 +2537,25 @@ languages:
 translation_profile:
   structural_fields:
     - field.flag
-  optional_paths:
+  metadata_categories:
+    - key: deck-metadata
+      label: Deck metadata
+      paths:
+        - deck.name
+        - deck.description
+    - key: field-label
+      label: Field labels
+      paths:
+        - note_types.*.fields.*.name
+    - key: card-template-name
+      label: Card template names
+      paths:
+        - note_types.*.card_templates.*.name
+    - key: tag
+      label: Tags
+      paths:
+        - notes.*.tags.*
+  metadata_paths:
     - deck.*
     - note_types.*.fields.*.name
     - note_types.*.card_templates.*.name
@@ -2614,7 +2632,13 @@ languages:
 translation_profile:
   structural_fields:
     - field.flag
-  optional_paths:
+  metadata_categories:
+    - key: deck-metadata
+      label: Deck metadata
+      paths:
+        - deck.name
+        - deck.description
+  metadata_paths:
     - deck.*
 "#,
     )?;
@@ -2710,7 +2734,13 @@ languages:
 translation_profile:
   structural_fields:
     - field.flag
-  optional_paths:
+  metadata_categories:
+    - key: deck-metadata
+      label: Deck metadata
+      paths:
+        - deck.name
+        - deck.description
+  metadata_paths:
     - deck.*
 "#,
     )?;

@@ -115,20 +115,53 @@ languages:
 
 ## Translation profile
 
-`translation_profile` classifies progress for language-first review. Main completion focuses on non-structural note field text; optional metadata belongs in a separate checklist.
+`translation_profile` classifies progress for language-first review. Main completion focuses on non-structural note field text; metadata belongs in a separate checklist.
 
 ```yaml
 translation_profile:
   structural_fields:
     - field.flag
     - field.map
-  optional_paths:
+  metadata_categories:
+    - key: deck-metadata
+      label: Deck metadata
+      paths:
+        - deck.name
+        - deck.description
+    - key: note-type-name
+      label: Note type names
+      paths:
+        - note_types.*.name
+    - key: field-label
+      label: Field labels
+      paths:
+        - note_types.*.fields.*.name
+    - key: card-template-name
+      label: Card template names
+      paths:
+        - note_types.*.card_templates.*.name
+    - key: tag
+      label: Tags
+      paths:
+        - notes.*.tags.*
+  metadata_paths:
     - deck.*
     - note_types.*
     - notes.*.tags.*
+  metadata_exclude_paths:
+    - deck.adapter_ids.*
+    - note_types.*.adapter_ids.*
+    - note_types.*.card_templates.*.adapter_ids.*
+    - notes.*.adapter_ids.*
+  metadata_category_order:
+    - deck-metadata
+    - note-type-name
+    - field-label
+    - card-template-name
+    - tag
 ```
 
-`structural_fields` excludes source fields such as flags or maps from main text completion. `optional_paths` marks deck metadata, note type/template metadata, tags, or other paths as optional review work instead of main translation completion.
+`structural_fields` excludes source fields such as flags or maps from main text completion. `metadata_categories` assigns metadata paths to maintainer-defined checklist groups with stable kebab-case keys and human labels. `metadata_paths` marks broad metadata review work instead of main translation completion, `metadata_exclude_paths` removes paths from that checklist even when a broad include such as `deck.*` or `note_types.*` would match, and `metadata_category_order` can override the checklist grouping order (otherwise category declaration order is used). Path `*` wildcards match dotted stable IDs, so `notes.*.tags.*` matches a path such as `notes.note.finland.tags.Europe`.
 
 ## Translation coverage policy
 

@@ -516,7 +516,7 @@ fn workbench_optional_metadata_list_is_paginated_and_keeps_full_totals() {
     ]);
 
     let optional =
-        get_json(&server.url("/api/workbench/optional-metadata-list?language=da&limit=1&offset=0"));
+        get_json(&server.url("/api/workbench/metadata-list?language=da&limit=1&offset=0"));
     assert_eq!(optional["language"]["code"], "da");
     assert_eq!(optional["limit"], 1);
     assert_eq!(optional["offset"], 0);
@@ -524,7 +524,7 @@ fn workbench_optional_metadata_list_is_paginated_and_keeps_full_totals() {
     assert_eq!(optional["has_more"], true);
     assert_eq!(optional["rows"].as_array().unwrap().len(), 1);
     assert_eq!(optional["main_progress"]["total"], 2);
-    assert_eq!(optional["optional_progress"]["total"], optional["total"]);
+    assert_eq!(optional["metadata_progress"]["total"], optional["total"]);
     assert!(optional["rows"][0]["path"].as_str().unwrap().contains('.'));
     assert!(optional["rows"][0].get("target").is_none());
 }
@@ -778,13 +778,45 @@ fn workbench_optional_metadata_progress_and_apply_are_separate_from_main_fields(
     assert_eq!(pivot["progress"]["total"], 2);
     assert_eq!(pivot["progress"]["complete"], 2);
     assert_eq!(pivot["progress"]["stale"], 0);
-    assert!(pivot["optional_progress"]["stale"].as_u64().unwrap() >= 1);
+    assert!(pivot["metadata_progress"]["stale"].as_u64().unwrap() >= 1);
 
-    let optional = get_json(&server.url("/api/workbench/optional-metadata?language=da"));
+    let optional = get_json(&server.url("/api/workbench/metadata?language=da"));
     assert_eq!(optional["main_progress"]["complete"], 2);
-    let deck_name = optional["items"]
-        .as_array()
-        .unwrap()
+    let optional_items = optional["items"].as_array().unwrap();
+    assert!(
+        optional_items.iter().all(|item| !item["path"]
+            .as_str()
+            .unwrap_or_default()
+            .contains(".adapter_ids.")),
+        "adapter IDs are identity metadata, not optional translation metadata: {optional_items:?}"
+    );
+    let category_positions = optional_items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            (
+                item["metadata_category_key"].as_str().unwrap_or_default(),
+                index,
+            )
+        })
+        .collect::<Vec<_>>();
+    let note_type_position = category_positions
+        .iter()
+        .find_map(|(category, index)| (*category == "note-type-name").then_some(*index))
+        .unwrap();
+    let field_label_position = category_positions
+        .iter()
+        .find_map(|(category, index)| (*category == "field-label").then_some(*index))
+        .unwrap();
+    let template_position = category_positions
+        .iter()
+        .find_map(|(category, index)| (*category == "card-template-name").then_some(*index))
+        .unwrap();
+    assert!(
+        note_type_position < field_label_position && field_label_position < template_position,
+        "metadata should be grouped in maintainer-friendly category order: {category_positions:?}"
+    );
+    let deck_name = optional_items
         .iter()
         .find(|item| item["path"] == "deck.name")
         .unwrap();
@@ -1177,7 +1209,13 @@ languages:
 translation_profile:
   structural_fields:
     - field.flag
-  optional_paths:
+  metadata_categories:
+    - key: deck-metadata
+      label: Deck metadata
+      paths:
+        - deck.name
+        - deck.description
+  metadata_paths:
     - deck.*
 "#,
     )
@@ -4559,6 +4597,11 @@ translations:
       new_source: Ultimate Geography
       target: Gammel arbejdsbord
       context: deck.name
+  adapter_ids:
+    crowdanki:uuid:
+      43c5ba66-9a65-11e8-90c9-a0481cc15658: da-deck-uuid
+    crowdanki:guid:
+      ug-finland-guid: da-finland-guid
 "#,
     )
     .unwrap();
@@ -4592,11 +4635,44 @@ languages:
 translation_profile:
   structural_fields:
     - field.flag
-  optional_paths:
+  metadata_categories:
+    - key: deck-metadata
+      label: Deck metadata
+      paths:
+        - deck.name
+        - deck.description
+    - key: note-type-name
+      label: Note type names
+      paths:
+        - note_types.*.name
+    - key: field-label
+      label: Field labels
+      paths:
+        - note_types.*.fields.*.name
+    - key: card-template-name
+      label: Card template names
+      paths:
+        - note_types.*.card_templates.*.name
+    - key: tag
+      label: Tags
+      paths:
+        - notes.*.tags.*
+  metadata_paths:
     - deck.*
     - note_types.*.fields.*.name
     - note_types.*.card_templates.*.name
     - notes.*.tags.*
+  metadata_exclude_paths:
+    - deck.adapter_ids.*
+    - note_types.*.adapter_ids.*
+    - note_types.*.card_templates.*.adapter_ids.*
+    - notes.*.adapter_ids.*
+  metadata_category_order:
+    - deck-metadata
+    - note-type-name
+    - field-label
+    - card-template-name
+    - tag
 "#,
     )
     .unwrap();
@@ -4801,7 +4877,13 @@ languages:
 translation_profile:
   structural_fields:
     - field.flag
-  optional_paths:
+  metadata_categories:
+    - key: deck-metadata
+      label: Deck metadata
+      paths:
+        - deck.name
+        - deck.description
+  metadata_paths:
     - deck.*
 "#,
     )
@@ -4840,7 +4922,13 @@ languages:
 translation_profile:
   structural_fields:
     - field.flag
-  optional_paths:
+  metadata_categories:
+    - key: deck-metadata
+      label: Deck metadata
+      paths:
+        - deck.name
+        - deck.description
+  metadata_paths:
     - deck.*
 "#,
     )

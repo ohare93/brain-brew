@@ -171,7 +171,19 @@ fn parses_and_formats_language_catalog_and_translation_profile() {
     let formatted = manifest::format_str(
         r#"
 translation_profile:
-  optional_paths: [note_types.*, deck.*, notes.*.tags.*]
+  metadata_category_order: [deck-metadata, note-type-name, field-label]
+  metadata_categories:
+    - key: field-label
+      label: Field labels
+      paths: [note_types.*.fields.*.name]
+    - key: deck-metadata
+      label: Deck metadata
+      paths: [deck.name, deck.description]
+    - key: note-type-name
+      label: Note type names
+      paths: [note_types.*.name]
+  metadata_exclude_paths: [deck.adapter_ids.*, notes.*.adapter_ids.*]
+  metadata_paths: [note_types.*, deck.*, notes.*.tags.*]
   structural_fields: [field.map, field.flag]
 languages:
   da:
@@ -254,10 +266,31 @@ translation_profile:
   structural_fields:
     - field.map
     - field.flag
-  optional_paths:
+  metadata_categories:
+    - key: field-label
+      label: Field labels
+      paths:
+        - 'note_types.*.fields.*.name'
+    - key: deck-metadata
+      label: Deck metadata
+      paths:
+        - deck.name
+        - deck.description
+    - key: note-type-name
+      label: Note type names
+      paths:
+        - 'note_types.*.name'
+  metadata_paths:
     - 'note_types.*'
     - 'deck.*'
     - 'notes.*.tags.*'
+  metadata_exclude_paths:
+    - 'deck.adapter_ids.*'
+    - 'notes.*.adapter_ids.*'
+  metadata_category_order:
+    - deck-metadata
+    - note-type-name
+    - field-label
 "#
     );
 
@@ -287,9 +320,30 @@ translation_profile:
         manifest.translation_profile.structural_fields,
         vec!["field.map", "field.flag"]
     );
+    assert_eq!(manifest.translation_profile.metadata_categories.len(), 3);
     assert_eq!(
-        manifest.translation_profile.optional_paths,
+        manifest.translation_profile.metadata_categories[0].key,
+        "field-label"
+    );
+    assert_eq!(
+        manifest.translation_profile.metadata_categories[0].label,
+        "Field labels"
+    );
+    assert_eq!(
+        manifest.translation_profile.metadata_categories[0].paths,
+        vec!["note_types.*.fields.*.name"]
+    );
+    assert_eq!(
+        manifest.translation_profile.metadata_paths,
         vec!["note_types.*", "deck.*", "notes.*.tags.*"]
+    );
+    assert_eq!(
+        manifest.translation_profile.metadata_exclude_paths,
+        vec!["deck.adapter_ids.*", "notes.*.adapter_ids.*"]
+    );
+    assert_eq!(
+        manifest.translation_profile.metadata_category_order,
+        vec!["deck-metadata", "note-type-name", "field-label"]
     );
 }
 

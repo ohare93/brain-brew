@@ -333,17 +333,17 @@ fn publish_note_pivot_panel(pivot: &Value) {
         progress["missing"].as_u64().unwrap_or(0),
         progress["stale"].as_u64().unwrap_or(0),
     ));
-    let optional_progress = &pivot["optional_progress"];
+    let metadata_progress = &pivot["metadata_progress"];
     html.push_str(&format!(
-        "<section id=\"optional-progress\" data-complete=\"{}\" data-total=\"{}\" data-missing=\"{}\" data-stale=\"{}\">Optional metadata: {} / {} complete, {} missing, {} stale</section>",
-        optional_progress["complete"].as_u64().unwrap_or(0),
-        optional_progress["total"].as_u64().unwrap_or(0),
-        optional_progress["missing"].as_u64().unwrap_or(0),
-        optional_progress["stale"].as_u64().unwrap_or(0),
-        optional_progress["complete"].as_u64().unwrap_or(0),
-        optional_progress["total"].as_u64().unwrap_or(0),
-        optional_progress["missing"].as_u64().unwrap_or(0),
-        optional_progress["stale"].as_u64().unwrap_or(0),
+        "<section id=\"optional-progress\" data-complete=\"{}\" data-total=\"{}\" data-missing=\"{}\" data-stale=\"{}\">Metadata: {} / {} complete, {} missing, {} stale</section>",
+        metadata_progress["complete"].as_u64().unwrap_or(0),
+        metadata_progress["total"].as_u64().unwrap_or(0),
+        metadata_progress["missing"].as_u64().unwrap_or(0),
+        metadata_progress["stale"].as_u64().unwrap_or(0),
+        metadata_progress["complete"].as_u64().unwrap_or(0),
+        metadata_progress["total"].as_u64().unwrap_or(0),
+        metadata_progress["missing"].as_u64().unwrap_or(0),
+        metadata_progress["stale"].as_u64().unwrap_or(0),
     ));
     html.push_str("<nav class=\"overlay-badges\">");
     for badge in pivot["overlay_badges"].as_array().into_iter().flatten() {
@@ -396,14 +396,14 @@ fn publish_note_pivot_panel(pivot: &Value) {
         "Load source strings",
     ));
     html.push_str("</section>");
-    html.push_str("<section id=\"view-panel-optional-metadata\" class=\"workbench-view\" data-view=\"optional-metadata\" hidden>");
+    html.push_str("<section id=\"view-panel-metadata\" class=\"workbench-view\" data-view=\"metadata\" hidden>");
     html.push_str(&lazy_secondary_pivot_panel_html(
         "optional-metadata-panel",
         "optional-metadata",
-        "Optional metadata checklist",
-        "Optional metadata rows are loaded only when you open the checklist.",
+        "Metadata checklist",
+        "Metadata rows are loaded only when you open the checklist.",
         "load-optional-metadata-button",
-        "Load optional metadata",
+        "Load metadata",
     ));
     html.push_str("</section></div>");
     html.push_str("<section class=\"apply-box\"><button id=\"apply-preview-button\" type=\"button\">Apply preview</button> <button id=\"apply-confirm-button\" type=\"button\">Confirm Apply</button><pre id=\"apply-preview-output\"></pre></section>");
@@ -433,7 +433,7 @@ fn workbench_view_switch_html() -> String {
         ("notes", "Notes"),
         ("cards", "Cards"),
         ("source-strings", "Source strings"),
-        ("optional-metadata", "Optional metadata"),
+        ("metadata", "Metadata"),
     ];
     let mut html = "<nav id=\"workbench-view-switch\" class=\"workbench-view-switch\" aria-label=\"Workbench views\">".to_owned();
     for (view, label) in views {
@@ -2597,9 +2597,9 @@ fn publish_optional_metadata_panel(optional: &Value) {
     let target = optional["target"]["label"].as_str().unwrap_or("");
     let overlay = optional["overlay"]["label"].as_str().unwrap_or("");
     let prefix = storage_prefix_for_parts(language, target, overlay);
-    let progress = &optional["optional_progress"];
+    let progress = &optional["metadata_progress"];
     let mut html = format!(
-        "<section id=\"optional-metadata-checklist\" data-storage-prefix=\"{}\"><h3>Optional metadata checklist</h3><p>Main note-field completion is separate. Optional metadata: {} / {} complete, {} missing, {} stale.</p>",
+        "<section id=\"optional-metadata-checklist\" data-storage-prefix=\"{}\"><h3>Metadata checklist</h3><p>Main note-field completion is separate. Metadata: {} / {} complete, {} missing, {} stale.</p>",
         escape_html(&prefix),
         progress["complete"].as_u64().unwrap_or(0),
         progress["total"].as_u64().unwrap_or(0),
@@ -2818,7 +2818,7 @@ fn register_lazy_pivot_load_handlers(pivot: &Value) {
 
 #[cfg(target_arch = "wasm32")]
 fn register_view_switch_handlers(pivot: &Value) {
-    for view in ["notes", "cards", "source-strings", "optional-metadata"] {
+    for view in ["notes", "cards", "source-strings", "metadata"] {
         attach_view_switch_handler(pivot, view);
     }
 }
@@ -2901,8 +2901,8 @@ fn maybe_load_view(pivot: &Value, view: &str) {
             let (language, target, overlay) = pivot_selection_parts(pivot);
             load_source_string_list_for_parts(language, target, overlay, None, None);
         }
-        "optional-metadata" if panel_is_unloaded("optional-metadata-panel") => {
-            set_panel_loading("optional-metadata-panel", "Loading optional metadata…");
+        "metadata" if panel_is_unloaded("optional-metadata-panel") => {
+            set_panel_loading("optional-metadata-panel", "Loading metadata…");
             let (language, target, overlay) = pivot_selection_parts(pivot);
             load_optional_metadata_for_parts(language, target, overlay);
         }
@@ -2955,7 +2955,7 @@ fn attach_source_string_pivot_load_handler(pivot: &Value) {
 fn attach_optional_metadata_load_handler(pivot: &Value) {
     let (language, target, overlay) = pivot_selection_parts(pivot);
     let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        set_panel_loading("optional-metadata-panel", "Loading optional metadata…");
+        set_panel_loading("optional-metadata-panel", "Loading metadata…");
         load_optional_metadata_for_parts(language.clone(), target.clone(), overlay.clone());
     }));
     attach_click_handler("load-optional-metadata-button", closure);
@@ -4844,7 +4844,7 @@ async fn fetch_optional_metadata_query(
     overlay: Option<String>,
 ) -> Result<Value, String> {
     let params = workbench_selection_params(language, target, overlay);
-    get_workbench_json("/api/workbench/optional-metadata", params).await
+    get_workbench_json("/api/workbench/metadata", params).await
 }
 
 #[cfg(target_arch = "wasm32")]

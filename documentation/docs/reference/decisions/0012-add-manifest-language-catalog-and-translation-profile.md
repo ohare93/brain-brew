@@ -38,20 +38,53 @@ languages:
       extended: da-extended
 ```
 
-`translation_profile:` classifies translation work for UI progress and review. The initial shape includes structural note fields and optional path globs:
+`translation_profile:` classifies translation work for UI progress and review. The shape includes structural note fields, configured metadata categories, metadata path globs, metadata exclusions for broad globs, and metadata category ordering:
 
 ```yaml
 translation_profile:
   structural_fields:
     - field.flag
     - field.map
-  optional_paths:
+  metadata_categories:
+    - key: deck-metadata
+      label: Deck metadata
+      paths:
+        - deck.name
+        - deck.description
+    - key: note-type-name
+      label: Note type names
+      paths:
+        - note_types.*.name
+    - key: field-label
+      label: Field labels
+      paths:
+        - note_types.*.fields.*.name
+    - key: card-template-name
+      label: Card template names
+      paths:
+        - note_types.*.card_templates.*.name
+    - key: tag
+      label: Tags
+      paths:
+        - notes.*.tags.*
+  metadata_paths:
     - deck.*
     - note_types.*
     - notes.*.tags.*
+  metadata_exclude_paths:
+    - deck.adapter_ids.*
+    - note_types.*.adapter_ids.*
+    - note_types.*.card_templates.*.adapter_ids.*
+    - notes.*.adapter_ids.*
+  metadata_category_order:
+    - deck-metadata
+    - note-type-name
+    - field-label
+    - card-template-name
+    - tag
 ```
 
-Main language completion counts non-structural note field text. Optional metadata such as deck description, note type names, field labels, and card templates appears in a separate optional checklist and does not block main completion.
+Main language completion counts non-structural note field text. Metadata such as deck description, note type names, field labels, and card templates appears in a separate metadata checklist and does not block main completion.
 
 ## Rationale
 
@@ -82,4 +115,4 @@ Main language completion counts non-structural note field text. Optional metadat
 - Manifest parsing/formatting must preserve the new metadata deterministically.
 - Workbench language dashboards should use `languages:` instead of target-name inference.
 - New-language creation should default to a labeled base translation overlay such as `overlay.translation.<code>`, `overlays/languages/<code>.yaml`, extension-specific translation overlays that mirror the selected template language, and target IDs based on the selected template, with an editable preview before writing.
-- Verification/reporting may expose both main deck-content completion and optional metadata status.
+- Verification/reporting may expose both main deck-content completion and metadata status.

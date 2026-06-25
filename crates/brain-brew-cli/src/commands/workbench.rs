@@ -19,8 +19,8 @@ use brain_brew_core::{
 };
 use brain_brew_formats::canonical_yaml;
 use brain_brew_formats::manifest::{
-    self, BuildTarget, FederatedDeckManifest, LanguageManifestEntry, OverlayManifestEntry,
-    TargetExports,
+    self, BuildTarget, FederatedDeckManifest, LanguageManifestEntry, MetadataCategory,
+    OverlayManifestEntry, TargetExports,
 };
 use include_dir::{Dir, include_dir};
 use serde::{Deserialize, Serialize};
@@ -193,6 +193,7 @@ fn app(metadata: Arc<WorkspaceMetadata>, dev_assets: Option<PathBuf>) -> Router 
         .route("/api/workbench/note-detail", get(note_detail))
         .route("/api/workbench/card-list", get(card_list))
         .route("/api/workbench/source-string-list", get(source_string_list))
+        .route("/api/workbench/metadata-list", get(optional_metadata_list))
         .route(
             "/api/workbench/optional-metadata-list",
             get(optional_metadata_list),
@@ -204,6 +205,7 @@ fn app(metadata: Arc<WorkspaceMetadata>, dev_assets: Option<PathBuf>) -> Router 
         )
         .route("/api/workbench/card-pivot", get(card_pivot))
         .route("/api/workbench/comparison-pane", get(comparison_pane))
+        .route("/api/workbench/metadata", get(optional_metadata))
         .route("/api/workbench/optional-metadata", get(optional_metadata))
         .route(
             "/api/workbench/new-language-preview",
@@ -482,7 +484,10 @@ impl WorkspaceMetadata {
             "targets": targets_json(&manifest),
             "translation_profile": {
                 "structural_fields": manifest.translation_profile.structural_fields,
-                "optional_paths": manifest.translation_profile.optional_paths,
+                "metadata_categories": manifest.translation_profile.metadata_categories.iter().map(metadata_category_json).collect::<Vec<_>>(),
+                "metadata_paths": manifest.translation_profile.metadata_paths,
+                "metadata_exclude_paths": manifest.translation_profile.metadata_exclude_paths,
+                "metadata_category_order": manifest.translation_profile.metadata_category_order,
             },
             "fingerprints": fingerprints,
         }))
@@ -1166,6 +1171,8 @@ impl WorkspaceMetadata {
                 .iter()
                 .cloned()
                 .collect(),
+            metadata_categories: manifest.translation_profile.metadata_categories.clone(),
+            metadata_exclude_paths: manifest.translation_profile.metadata_exclude_paths.clone(),
         })
     }
 }
@@ -1513,6 +1520,8 @@ struct WorkbenchSelection {
     overlay_display_file: String,
     overlay_badges: Vec<OverlayBadge>,
     structural_fields: BTreeSet<String>,
+    metadata_categories: Vec<MetadataCategory>,
+    metadata_exclude_paths: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -1908,7 +1917,7 @@ fn note_list_json_from_context(
         .map(|entry| (entry.path.as_str(), entry))
         .collect::<BTreeMap<_, _>>();
     let progress = main_progress(&context.source_deck, context, &entries_by_path);
-    let optional_progress = optional_metadata_progress(&optional_metadata_rows(context, manifest));
+    let metadata_progress = optional_metadata_progress(&optional_metadata_rows(context, manifest));
     let rows = note_navigation_rows(context, filter);
     let total = rows.len();
     let (page, has_more) = paginate(&rows, pagination);
@@ -1932,7 +1941,7 @@ fn note_list_json_from_context(
             "available": ["all", "missing", "stale", "needs_work"],
         },
         "progress": progress,
-        "optional_progress": optional_progress,
+        "metadata_progress": metadata_progress,
         "total": total,
         "limit": pagination.limit,
         "offset": pagination.offset,
@@ -2148,13 +2157,16 @@ fn optional_metadata_list_json_from_context(
         },
         "selection_options": selection_options_json(context, manifest),
         "main_progress": main_progress(&context.source_deck, context, &entries_by_path),
-        "optional_progress": optional_metadata_progress(&items),
+        "metadata_progress": optional_metadata_progress(&items),
         "total": total,
         "limit": pagination.limit,
         "offset": pagination.offset,
         "has_more": has_more,
         "rows": page,
-        "profile_optional_paths": manifest.translation_profile.optional_paths,
+        "profile_metadata_categories": manifest.translation_profile.metadata_categories.iter().map(metadata_category_json).collect::<Vec<_>>(),
+        "profile_metadata_paths": manifest.translation_profile.metadata_paths,
+        "profile_metadata_exclude_paths": manifest.translation_profile.metadata_exclude_paths,
+        "profile_metadata_category_order": manifest.translation_profile.metadata_category_order,
     })
 }
 
@@ -2172,7 +2184,7 @@ fn note_pivot_json_from_context(
         .collect::<BTreeMap<_, _>>();
     let source_counts = main_field_source_counts(&context.source_deck, &context.selection, context);
     let progress = main_progress(&context.source_deck, context, &entries_by_path);
-    let optional_progress = optional_metadata_progress(&optional_metadata_rows(context, manifest));
+    let metadata_progress = optional_metadata_progress(&optional_metadata_rows(context, manifest));
     let notes = note_pivot_notes_json(
         &context.source_deck,
         &context.target_deck,
@@ -2204,7 +2216,7 @@ fn note_pivot_json_from_context(
             "available": ["all", "missing", "stale", "needs_work"],
         },
         "progress": progress,
-        "optional_progress": optional_progress,
+        "metadata_progress": metadata_progress,
         "notes": notes,
         "stale_entries": stale_entries_json(&context.report.entries),
     })
@@ -2221,7 +2233,7 @@ fn optional_metadata_json_from_context(
         .map(|entry| (entry.path.as_str(), entry))
         .collect::<BTreeMap<_, _>>();
     let items = optional_metadata_rows(context, manifest);
-    let optional_progress = optional_metadata_progress(&items);
+    let metadata_progress = optional_metadata_progress(&items);
     json!({
         "language": {
             "code": context.selection.language_code,
@@ -2237,9 +2249,12 @@ fn optional_metadata_json_from_context(
             "file": context.selection.overlay_display_file,
         },
         "main_progress": main_progress(&context.source_deck, context, &entries_by_path),
-        "optional_progress": optional_progress,
+        "metadata_progress": metadata_progress,
         "items": items.iter().map(optional_metadata_item_json).collect::<Vec<_>>(),
-        "profile_optional_paths": manifest.translation_profile.optional_paths,
+        "profile_metadata_categories": manifest.translation_profile.metadata_categories.iter().map(metadata_category_json).collect::<Vec<_>>(),
+        "profile_metadata_paths": manifest.translation_profile.metadata_paths,
+        "profile_metadata_exclude_paths": manifest.translation_profile.metadata_exclude_paths,
+        "profile_metadata_category_order": manifest.translation_profile.metadata_category_order,
     })
 }
 
@@ -2791,6 +2806,14 @@ fn overlay_badges_json(context: &SelectedTranslationContext) -> Value {
     )
 }
 
+fn metadata_category_json(category: &MetadataCategory) -> Value {
+    json!({
+        "key": category.key,
+        "label": category.label,
+        "paths": category.paths,
+    })
+}
+
 fn selection_options_json(
     context: &SelectedTranslationContext,
     manifest: &FederatedDeckManifest,
@@ -2976,7 +2999,8 @@ struct OptionalMetadataRow {
     translated: String,
     category: TranslationCoverageCategory,
     metadata_category: String,
-    profile_optional: bool,
+    metadata_category_key: String,
+    profile_metadata: bool,
     warning: Option<String>,
 }
 
@@ -2993,20 +3017,29 @@ fn optional_metadata_rows(
     .filter(|row| !row.structural)
     .map(|row| row.path)
     .collect::<BTreeSet<_>>();
-    context
+    let mut rows = context
         .report
         .entries
         .iter()
         .filter(|entry| !main_paths.contains(entry.path.as_str()))
-        .filter(|entry| optional_metadata_category(&entry.path).is_some())
-        .map(|entry| {
-            let profile_optional =
-                path_matches_any(&manifest.translation_profile.optional_paths, &entry.path);
+        .filter(|entry| {
+            !path_matches_any(
+                &manifest.translation_profile.metadata_exclude_paths,
+                &entry.path,
+            )
+        })
+        .filter_map(|entry| {
+            let (metadata_category_key, metadata_category) = metadata_category_for_path(
+                &manifest.translation_profile.metadata_categories,
+                &entry.path,
+            )?;
+            let profile_metadata =
+                path_matches_any(&manifest.translation_profile.metadata_paths, &entry.path);
             let warning = is_stale_category(entry.category).then(|| match &entry.old_source {
                 Some(old) => format!("stale: source changed from {old:?}"),
-                None => "stale optional metadata".to_owned(),
+                None => "stale metadata".to_owned(),
             });
-            OptionalMetadataRow {
+            Some(OptionalMetadataRow {
                 path: entry.path.clone(),
                 source: entry.source.clone(),
                 translated: entry
@@ -3014,14 +3047,28 @@ fn optional_metadata_rows(
                     .clone()
                     .unwrap_or_else(|| entry.source.clone()),
                 category: entry.category,
-                metadata_category: optional_metadata_category(&entry.path)
-                    .unwrap_or("metadata")
-                    .to_owned(),
-                profile_optional,
+                metadata_category: metadata_category.to_owned(),
+                metadata_category_key: metadata_category_key.to_owned(),
+                profile_metadata,
                 warning,
-            }
+            })
         })
-        .collect()
+        .collect::<Vec<_>>();
+    rows.sort_by(|left, right| {
+        optional_metadata_category_rank(
+            &left.metadata_category_key,
+            &manifest.translation_profile.metadata_category_order,
+            &manifest.translation_profile.metadata_categories,
+        )
+        .cmp(&optional_metadata_category_rank(
+            &right.metadata_category_key,
+            &manifest.translation_profile.metadata_category_order,
+            &manifest.translation_profile.metadata_categories,
+        ))
+        .then_with(|| left.path.cmp(&right.path))
+        .then_with(|| left.source.cmp(&right.source))
+    });
+    rows
 }
 
 fn optional_metadata_progress(rows: &[OptionalMetadataRow]) -> Value {
@@ -3055,7 +3102,8 @@ fn optional_metadata_item_json(row: &OptionalMetadataRow) -> Value {
         "status": optional_row_status(row),
         "coverage_category": format!("{:?}", row.category),
         "metadata_category": row.metadata_category,
-        "profile_optional": row.profile_optional,
+        "metadata_category_key": row.metadata_category_key,
+        "profile_metadata": row.profile_metadata,
         "warning": row.warning,
         "editable": true,
     })
@@ -3071,33 +3119,41 @@ fn optional_row_status(row: &OptionalMetadataRow) -> &'static str {
     }
 }
 
-fn optional_metadata_category(path: &str) -> Option<&'static str> {
-    if path.starts_with("translations.stale_records.") {
-        return Some("stale translation record");
+fn metadata_category_for_path<'a>(
+    categories: &'a [MetadataCategory],
+    path: &str,
+) -> Option<(&'a str, &'a str)> {
+    categories
+        .iter()
+        .filter_map(|category| {
+            category
+                .paths
+                .iter()
+                .filter(|pattern| path_matches_pattern(pattern, path))
+                .map(|pattern| pattern.len())
+                .max()
+                .map(|matched_len| (matched_len, category))
+        })
+        .max_by_key(|(matched_len, _)| *matched_len)
+        .map(|(_, category)| (category.key.as_str(), category.label.as_str()))
+}
+
+fn optional_metadata_category_rank(
+    category_key: &str,
+    configured_order: &[String],
+    categories: &[MetadataCategory],
+) -> usize {
+    if let Some(index) = configured_order
+        .iter()
+        .position(|ordered| ordered == category_key)
+    {
+        return index;
     }
-    if path.starts_with("deck.variables.") {
-        Some("deck variable")
-    } else if path == "deck.name" || path == "deck.description" || path.starts_with("deck.") {
-        Some("deck metadata")
-    } else if path.contains(".fields.") && path.ends_with(".name") {
-        Some("field label")
-    } else if path.contains(".card_templates.") && path.ends_with(".name") {
-        Some("card template name")
-    } else if path.contains(".card_templates.") && path.contains(".variables.") {
-        Some("card template variable")
-    } else if path.contains(".variables.") {
-        Some("variable")
-    } else if path.contains(".adapter_ids.") {
-        Some("adapter id")
-    } else if path.starts_with("note_types.") && path.ends_with(".name") {
-        Some("note type name")
-    } else if path.contains(".tags.") {
-        Some("tag")
-    } else if path.ends_with(".format") {
-        Some("structured message format")
-    } else {
-        None
-    }
+    configured_order.len()
+        + categories
+            .iter()
+            .position(|category| category.key == category_key)
+            .unwrap_or(categories.len())
 }
 
 fn path_matches_any(patterns: &[String], path: &str) -> bool {
@@ -3107,15 +3163,33 @@ fn path_matches_any(patterns: &[String], path: &str) -> bool {
 }
 
 fn path_matches_pattern(pattern: &str, path: &str) -> bool {
-    let pattern_parts = pattern.split('.').collect::<Vec<_>>();
-    let path_parts = path.split('.').collect::<Vec<_>>();
-    if pattern_parts.len() != path_parts.len() {
-        return false;
+    let pattern = pattern.as_bytes();
+    let path = path.as_bytes();
+    let (mut pattern_index, mut path_index) = (0, 0);
+    let (mut star_index, mut star_path_index) = (None, 0);
+
+    while path_index < path.len() {
+        if pattern_index < pattern.len() && pattern[pattern_index] == path[path_index] {
+            pattern_index += 1;
+            path_index += 1;
+        } else if pattern_index < pattern.len() && pattern[pattern_index] == b'*' {
+            star_index = Some(pattern_index);
+            pattern_index += 1;
+            star_path_index = path_index;
+        } else if let Some(star) = star_index {
+            pattern_index = star + 1;
+            star_path_index += 1;
+            path_index = star_path_index;
+        } else {
+            return false;
+        }
     }
-    pattern_parts
-        .iter()
-        .zip(path_parts.iter())
-        .all(|(pattern, part)| *pattern == "*" || *pattern == *part)
+
+    while pattern_index < pattern.len() && pattern[pattern_index] == b'*' {
+        pattern_index += 1;
+    }
+
+    pattern_index == pattern.len()
 }
 
 fn note_navigation_rows(context: &SelectedTranslationContext, filter: Option<&str>) -> Vec<Value> {
@@ -3207,7 +3281,8 @@ fn optional_metadata_summary_json(row: &OptionalMetadataRow) -> Value {
         "status": optional_row_status(row),
         "coverage_category": format!("{:?}", row.category),
         "metadata_category": row.metadata_category,
-        "profile_optional": row.profile_optional,
+        "metadata_category_key": row.metadata_category_key,
+        "profile_metadata": row.profile_metadata,
         "warning": row.warning,
         "editable": true,
     })
@@ -4077,7 +4152,11 @@ fn editable_sources_by_path(context: &SelectedTranslationContext) -> BTreeMap<St
         sources.entry(row.path).or_insert(row.source);
     }
     for entry in &context.report.entries {
-        if entry.source.is_empty() || optional_metadata_category(&entry.path).is_none() {
+        if entry.source.is_empty()
+            || path_matches_any(&context.selection.metadata_exclude_paths, &entry.path)
+            || metadata_category_for_path(&context.selection.metadata_categories, &entry.path)
+                .is_none()
+        {
             continue;
         }
         sources
@@ -4125,7 +4204,8 @@ fn contextual_path_for_edit(
         return Ok(contextual_path_for_row(row, &context.report.entries));
     }
 
-    if optional_metadata_category(&edit.path).is_some()
+    if !path_matches_any(&context.selection.metadata_exclude_paths, &edit.path)
+        && metadata_category_for_path(&context.selection.metadata_categories, &edit.path).is_some()
         && context
             .report
             .entries

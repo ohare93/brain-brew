@@ -168,12 +168,27 @@ pub struct LanguageManifestEntry {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TranslationProfile {
     pub structural_fields: Vec<String>,
-    pub optional_paths: Vec<String>,
+    pub metadata_categories: Vec<MetadataCategory>,
+    pub metadata_paths: Vec<String>,
+    pub metadata_exclude_paths: Vec<String>,
+    pub metadata_category_order: Vec<String>,
+}
+
+/// One configurable metadata checklist category.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MetadataCategory {
+    pub key: String,
+    pub label: String,
+    pub paths: Vec<String>,
 }
 
 impl TranslationProfile {
     fn is_empty(&self) -> bool {
-        self.structural_fields.is_empty() && self.optional_paths.is_empty()
+        self.structural_fields.is_empty()
+            && self.metadata_categories.is_empty()
+            && self.metadata_paths.is_empty()
+            && self.metadata_exclude_paths.is_empty()
+            && self.metadata_category_order.is_empty()
     }
 }
 
@@ -356,10 +371,45 @@ pub fn to_string(manifest: &FederatedDeckManifest) -> String {
                 out.push_str(&format!("    - {}\n", yaml_scalar(field)));
             }
         }
-        if !manifest.translation_profile.optional_paths.is_empty() {
-            out.push_str("  optional_paths:\n");
-            for path in &manifest.translation_profile.optional_paths {
+        if !manifest.translation_profile.metadata_categories.is_empty() {
+            out.push_str("  metadata_categories:\n");
+            for category in &manifest.translation_profile.metadata_categories {
+                out.push_str(&format!("    - key: {}\n", yaml_scalar(&category.key)));
+                out.push_str(&format!("      label: {}\n", yaml_scalar(&category.label)));
+                if category.paths.is_empty() {
+                    out.push_str("      paths: []\n");
+                } else {
+                    out.push_str("      paths:\n");
+                    for path in &category.paths {
+                        out.push_str(&format!("        - {}\n", yaml_scalar(path)));
+                    }
+                }
+            }
+        }
+        if !manifest.translation_profile.metadata_paths.is_empty() {
+            out.push_str("  metadata_paths:\n");
+            for path in &manifest.translation_profile.metadata_paths {
                 out.push_str(&format!("    - {}\n", yaml_scalar(path)));
+            }
+        }
+        if !manifest
+            .translation_profile
+            .metadata_exclude_paths
+            .is_empty()
+        {
+            out.push_str("  metadata_exclude_paths:\n");
+            for path in &manifest.translation_profile.metadata_exclude_paths {
+                out.push_str(&format!("    - {}\n", yaml_scalar(path)));
+            }
+        }
+        if !manifest
+            .translation_profile
+            .metadata_category_order
+            .is_empty()
+        {
+            out.push_str("  metadata_category_order:\n");
+            for category in &manifest.translation_profile.metadata_category_order {
+                out.push_str(&format!("    - {}\n", yaml_scalar(category)));
             }
         }
     }
@@ -646,14 +696,46 @@ struct TranslationProfileYaml {
     #[serde(default)]
     structural_fields: Vec<String>,
     #[serde(default)]
-    optional_paths: Vec<String>,
+    metadata_categories: Vec<MetadataCategoryYaml>,
+    #[serde(default)]
+    metadata_paths: Vec<String>,
+    #[serde(default)]
+    metadata_exclude_paths: Vec<String>,
+    #[serde(default)]
+    metadata_category_order: Vec<String>,
 }
 
 impl TranslationProfileYaml {
     fn into_profile(self) -> TranslationProfile {
         TranslationProfile {
             structural_fields: self.structural_fields,
-            optional_paths: self.optional_paths,
+            metadata_categories: self
+                .metadata_categories
+                .into_iter()
+                .map(MetadataCategoryYaml::into_category)
+                .collect(),
+            metadata_paths: self.metadata_paths,
+            metadata_exclude_paths: self.metadata_exclude_paths,
+            metadata_category_order: self.metadata_category_order,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MetadataCategoryYaml {
+    key: String,
+    label: String,
+    #[serde(default)]
+    paths: Vec<String>,
+}
+
+impl MetadataCategoryYaml {
+    fn into_category(self) -> MetadataCategory {
+        MetadataCategory {
+            key: self.key,
+            label: self.label,
+            paths: self.paths,
         }
     }
 }
