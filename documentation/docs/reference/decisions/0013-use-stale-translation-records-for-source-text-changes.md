@@ -1,4 +1,4 @@
-# ADR-013: Use Stale Translation Records for Source Text Changes
+# ADR-013: Use Stale Translations for Source Text Changes
 
 **Date**: 2026-06-23  
 **Status**: Accepted  
@@ -12,22 +12,21 @@ A source-language maintainer may not be able to update every target language imm
 
 ## Decision
 
-Translation Dictionaries will support persisted **Stale Translation Records** under `translations.stale_records`.
+Translation overlays will support persisted **Stale Translations** under top-level `stale_translations`.
 
-A stale record stores the old source, new source, prior target text, and optional context path when needed:
+A stale translation stores the old source, new source, prior target text, and optional context path when needed:
 
 ```yaml
-translations:
-  stale_records:
-    - old_source: Autonomous community of Spain.
-      new_source: Autonomous region of Spain.
-      target: Selvstyrende region af Spanien.
-      context: notes.note.canary-islands.fields.field.country-info
+stale_translations:
+  - old_source: Autonomous community of Spain.
+    new_source: Autonomous region of Spain.
+    target: Selvstyrende region af Spanien.
+    context: notes.note.canary-islands.fields.field.country-info
 ```
 
-During compose/export, a stale record applies `target` to `new_source` but emits a warning that the translation needs review. Stale records do not block the main language completion percentage by default. `brainbrew verify` should warn by default and support an optional strict policy that fails when stale records remain.
+During compose/export, a stale translation applies `target` to `new_source` but emits a warning that the translation needs review. Stale translations do not block the main language completion percentage by default. `brainbrew verify` should warn by default and support an optional strict policy that fails when stale translations remain.
 
-When the Deck Workbench applies source-language edits, affected translations default to creating stale records. Maintainers may explicitly choose to migrate an old source key to the new source key while preserving target text when they know the existing translation is still correct. Resolving a stale record creates or updates the normal direct/contextual translation for `new_source` and removes the stale record.
+When the Deck Workbench applies source-language edits, affected translations default to creating stale translations. Maintainers may explicitly choose to migrate an old source key to the new source key while preserving target text when they know the existing translation is still correct. Resolving a stale translation creates or updates the normal direct/contextual translation for `new_source` and removes the stale translation.
 
 ## Rationale
 
@@ -40,9 +39,9 @@ When the Deck Workbench applies source-language edits, affected translations def
 
 **Cons:**
 
-- Extends the Translation Dictionary schema.
+- Extends the translation overlay schema.
 - Compose/export can produce output from a known-stale translation unless strict policy is enabled.
-- Tooling must surface warnings clearly so stale records are not forgotten.
+- Tooling must surface warnings clearly so stale translations are not forgotten.
 
 ## Alternatives Considered
 
@@ -53,7 +52,7 @@ When the Deck Workbench applies source-language edits, affected translations def
 
 ## Implications
 
-- Translation coverage and context reports must include stale records as warning/review items.
-- Workbench Apply preview for source edits must show affected target translations and default them to stale records.
-- Release workflows can opt into strict stale-record failure.
-- Documentation must explain the difference between stale records, missing translations, direct translations, contextual overrides, and global no-change decisions.
+- Translation coverage and context reports must include stale translations as warning/review items.
+- Workbench Apply preview for source edits must show affected target translations and default them to stale translations.
+- Release workflows can opt into strict stale failure.
+- Documentation must explain the difference between stale translations, missing translations, direct translations, contextual translations, target adaptations, and global no-change decisions.

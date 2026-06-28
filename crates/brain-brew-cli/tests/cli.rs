@@ -927,7 +927,7 @@ fn workbench_apply_groups_multi_pane_edits_by_file_and_content_group() {
                 "source": "Finland",
                 "value": "Finland source",
                 "scope": "field",
-                "impact_action": "stale_record"
+                "impact_action": "stale_translation"
             },
             {
                 "kind": "translation",
@@ -1377,7 +1377,7 @@ fn workbench_apply_preview_and_apply_write_translation_overlay() {
 }
 
 #[test]
-fn workbench_source_edits_create_contextual_stale_records_for_changed_occurrence() {
+fn workbench_source_edits_create_contextual_stale_translations_for_changed_occurrence() {
     let dir = temp_dir("workbench-source-stale");
     write_workbench_repeated_source_workspace(&dir);
     let server = spawn_workbench_server([
@@ -1400,7 +1400,7 @@ fn workbench_source_edits_create_contextual_stale_records_for_changed_occurrence
             "source": "Shared capital",
             "value": "Finnish capital",
             "scope": "field",
-            "impact_action": "stale_record"
+            "impact_action": "stale_translation"
         }]
     });
 
@@ -1428,7 +1428,7 @@ fn workbench_source_edits_create_contextual_stale_records_for_changed_occurrence
             .unwrap()
             .iter()
             .any(|entry| {
-                entry["mode"] == "stale_record"
+                entry["mode"] == "stale_translation"
                     && entry["old_source"] == "Shared capital"
                     && entry["new_source"] == "Finnish capital"
                     && entry["target"] == "Fælles hovedstad"
@@ -1443,7 +1443,7 @@ fn workbench_source_edits_create_contextual_stale_records_for_changed_occurrence
     assert!(
         !fs::read_to_string(dir.join("da.yaml"))
             .unwrap()
-            .contains("stale_records")
+            .contains("stale_translations")
     );
 
     let applied = post_json(&server.url("/api/workbench/apply"), request);
@@ -1455,7 +1455,7 @@ fn workbench_source_edits_create_contextual_stale_records_for_changed_occurrence
     let overlay = fs::read_to_string(dir.join("da.yaml")).unwrap();
     assert!(overlay.contains("Shared capital:"));
     assert!(overlay.contains("Fælles hovedstad"));
-    assert!(overlay.contains("stale_records:"));
+    assert!(overlay.contains("stale_translations:"));
     assert!(overlay.contains("old_source: Shared capital"));
     assert!(overlay.contains("new_source: Finnish capital"));
     assert!(overlay.contains("target:"));
@@ -1476,7 +1476,7 @@ fn workbench_source_edits_create_contextual_stale_records_for_changed_occurrence
         .clone();
     assert_eq!(finland_capital["source"], "Finnish capital");
     assert_eq!(finland_capital["target"], "Fælles hovedstad");
-    assert_eq!(finland_capital["status"], "stale_translation_record");
+    assert_eq!(finland_capital["status"], "stale_translation");
     let estonia_capital = pivot["notes"]
         .as_array()
         .unwrap()
@@ -1516,7 +1516,7 @@ fn workbench_source_edits_preserve_contextual_impacts_per_occurrence() {
             "source": "Shared capital",
             "value": "Regional capital",
             "scope": "all_occurrences",
-            "impact_action": "stale_record"
+            "impact_action": "stale_translation"
         }]
     });
 
@@ -1526,7 +1526,7 @@ fn workbench_source_edits_preserve_contextual_impacts_per_occurrence() {
         .as_array()
         .unwrap()
         .iter()
-        .filter(|entry| entry["mode"] == "stale_record")
+        .filter(|entry| entry["mode"] == "stale_translation")
         .collect::<Vec<_>>();
     assert_eq!(stale_entries.len(), 2);
     assert!(stale_entries.iter().any(|entry| {
@@ -1536,7 +1536,7 @@ fn workbench_source_edits_preserve_contextual_impacts_per_occurrence() {
         entry["context"] == "notes.note.estonia" && entry["target"] == "Estisk fælles"
     }));
     let overlay = fs::read_to_string(dir.join("da.yaml")).unwrap();
-    assert!(overlay.contains("stale_records:"));
+    assert!(overlay.contains("stale_translations:"));
     assert!(overlay.contains("Finsk fælles"));
     assert!(overlay.contains("Estisk fælles"));
     assert!(!overlay.contains("contextual:"));
@@ -1580,7 +1580,7 @@ fn workbench_source_edits_preserve_contextual_impacts_per_occurrence() {
     assert!(overlay.contains("Finsk fælles"));
     assert!(overlay.contains("Estisk fælles"));
     assert!(!overlay.contains("Shared capital:"));
-    assert!(!overlay.contains("stale_records"));
+    assert!(!overlay.contains("stale_translations"));
 }
 
 #[test]
@@ -1632,7 +1632,7 @@ fn workbench_source_edits_can_migrate_keys_change_all_and_preserve_includes() {
     assert!(overlay.contains("Migrated capital:"));
     assert!(overlay.contains("Fælles hovedstad"));
     assert!(!overlay.contains("Shared capital:"));
-    assert!(!overlay.contains("stale_records"));
+    assert!(!overlay.contains("stale_translations"));
 }
 
 #[test]
@@ -1660,7 +1660,7 @@ fn workbench_mixed_source_then_translation_apply_uses_new_source_state() {
                 "source": "Shared capital",
                 "value": "Finnish capital",
                 "scope": "field",
-                "impact_action": "stale_record"
+                "impact_action": "stale_translation"
             },
             {
                 "kind": "translation",
@@ -1679,7 +1679,7 @@ fn workbench_mixed_source_then_translation_apply_uses_new_source_state() {
     assert!(overlay.contains("Fælles hovedstad"));
     assert!(overlay.contains("Finnish capital:"));
     assert!(overlay.contains("Finsk hovedstad"));
-    assert!(!overlay.contains("stale_records"));
+    assert!(!overlay.contains("stale_translations"));
 }
 
 #[test]
@@ -2855,7 +2855,7 @@ fn translations_context_view_json_shows_structured_message_components() {
         unit["path"],
         "notes.note.finland.fields.field.flag-similarity.message.2"
     );
-    assert_eq!(unit["status"], "contextual_override");
+    assert_eq!(unit["status"], "contextual_translation");
     assert_eq!(
         unit["message"]["source"],
         "Iceland (blue background with a white cross), Norway (red background with a blue cross)"
@@ -2963,9 +2963,9 @@ fn translations_summary_exports_compact_counts_by_language() {
     assert_eq!(row["overlay"], "overlay.translation.da");
     assert_eq!(row["file"], "da.yaml");
     assert_eq!(row["direct_translation"], 1);
-    assert_eq!(row["contextual_override"], 1);
+    assert_eq!(row["contextual_translation"], 1);
     assert_eq!(row["no_change"], 0);
-    assert_eq!(row["target_language_addition"], 1);
+    assert_eq!(row["target_adaptation"], 1);
     assert_eq!(row["variable_translation"], 0);
     assert_eq!(row["adapter_id_translation"], 0);
     assert_eq!(row["untranslated_fallback"], 2);
@@ -3353,7 +3353,7 @@ translations:
 }
 
 #[test]
-fn translations_reports_missing_stale_contextual_and_additions_without_modifying() {
+fn translations_reports_missing_stale_contextual_and_adaptations_without_modifying() {
     let dir = temp_dir("translations-report");
     write_translation_workspace(&dir);
     let overlay_path = dir.join("da.yaml");
@@ -3370,8 +3370,8 @@ fn translations_reports_missing_stale_contextual_and_additions_without_modifying
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let out = stdout(&output);
     assert!(out.contains("Translation coverage for target da-standard"));
-    assert!(out.contains("contextual overrides: 1"));
-    assert!(out.contains("target-language additions: 1"));
+    assert!(out.contains("contextual translations: 1"));
+    assert!(out.contains("target adaptations: 1"));
     assert!(out.contains("stale_direct_key translations.direct.Removed source"));
     assert!(out.contains("missing_translation notes.note.sweden.fields.field.country"));
     assert_eq!(fs::read_to_string(overlay_path).unwrap(), before);
@@ -3421,8 +3421,10 @@ translations:
     notes.note:
       finland:
         Helsinki: Helsingfors
-  target_additions:
-    notes.note.finland.fields.field.flag: '<img src="fi-da.png">'
+target_adaptations:
+  notes.note.finland.fields.field.flag:
+    expected_source: ''
+    target: '<img src="fi-da.png">'
 "#,
     )
     .unwrap();
@@ -3472,8 +3474,10 @@ translations:
   no_change:
     - Stockholm
     - Sweden
-  target_additions:
-    notes.note.finland.fields.field.flag: '<img src="fi-da.png">'
+target_adaptations:
+  notes.note.finland.fields.field.flag:
+    expected_source: ''
+    target: '<img src="fi-da.png">'
 "#,
     )
     .unwrap();
@@ -3493,8 +3497,8 @@ translations:
 }
 
 #[test]
-fn stale_translation_records_warn_apply_and_fail_strict_verify() {
-    let dir = temp_dir("stale-records-verify");
+fn stale_translations_warn_apply_and_fail_strict_verify() {
+    let dir = temp_dir("stale-translations-verify");
     write_translation_workspace(&dir);
     let overlay_path = dir.join("da.yaml");
     fs::write(
@@ -3515,12 +3519,14 @@ translations:
         Helsinki: Helsingfors
   no_change:
     - Sweden
-  target_additions:
-    notes.note.finland.fields.field.flag: '<img src="fi-da.png">'
-  stale_records:
-    - old_source: Old Stockholm
-      new_source: Stockholm
-      target: 'Stockholm på dansk'
+target_adaptations:
+  notes.note.finland.fields.field.flag:
+    expected_source: ''
+    target: '<img src="fi-da.png">'
+stale_translations:
+  - old_source: Old Stockholm
+    new_source: Stockholm
+    target: 'Stockholm på dansk'
 "#,
     )
     .unwrap();
@@ -3537,7 +3543,7 @@ translations:
         "stderr: {}",
         stderr(&lenient_verify)
     );
-    assert!(stderr(&lenient_verify).contains("stale translation record warning"));
+    assert!(stderr(&lenient_verify).contains("stale translation warning"));
     assert!(stderr(&lenient_verify).contains("Old Stockholm"));
 
     let report_output = run([
@@ -3554,7 +3560,7 @@ translations:
         "stderr: {}",
         stderr(&report_output)
     );
-    assert!(stdout(&report_output).contains("stale_translation_record"));
+    assert!(stdout(&report_output).contains("stale_translation"));
     assert!(stdout(&report_output).contains("Old Stockholm"));
     assert!(!stdout(&report_output).contains("missing_translation"));
 
@@ -3567,7 +3573,7 @@ translations:
         "--context",
         "--json",
         "--status",
-        "stale_translation_record",
+        "stale_translation",
     ]);
     assert!(
         context_output.status.success(),
@@ -3578,7 +3584,7 @@ translations:
         serde_json::from_slice(&context_output.stdout).expect("context output is JSON");
     assert_eq!(
         context_json["contexts"][0]["units"][0]["status"],
-        "stale_translation_record"
+        "stale_translation"
     );
     assert_eq!(
         context_json["contexts"][0]["units"][0]["old_source"],
@@ -3593,7 +3599,7 @@ translations:
         "da-release",
     ]);
     assert!(!strict_verify.status.success());
-    assert!(stderr(&strict_verify).contains("translation stale-record strict policy failed"));
+    assert!(stderr(&strict_verify).contains("translation stale strict policy failed"));
 
     let compose_output = run([
         "compose",
@@ -3608,7 +3614,7 @@ translations:
         stderr(&compose_output)
     );
     assert!(stdout(&compose_output).contains("Stockholm på dansk"));
-    assert!(stderr(&compose_output).contains("stale translation record warning"));
+    assert!(stderr(&compose_output).contains("stale translation warning"));
 
     let raw_compose_output = run([
         "compose",
@@ -3622,7 +3628,7 @@ translations:
         stderr(&raw_compose_output)
     );
     assert!(stdout(&raw_compose_output).contains("Stockholm på dansk"));
-    assert!(stderr(&raw_compose_output).contains("stale translation record warning"));
+    assert!(stderr(&raw_compose_output).contains("stale translation warning"));
 
     let export_dir = dir.join("crowdanki-out");
     let export_output = run([
@@ -3640,7 +3646,7 @@ translations:
         "stderr: {}",
         stderr(&export_output)
     );
-    assert!(stderr(&export_output).contains("stale translation record warning"));
+    assert!(stderr(&export_output).contains("stale translation warning"));
     assert!(
         fs::read_to_string(export_dir.join("deck.json"))
             .unwrap()
@@ -4592,7 +4598,7 @@ translations:
   direct:
     Finland: Finland
     Helsinki: Helsinki
-  stale_records:
+  stale_translations:
     - old_source: Old Workbench
       new_source: Ultimate Geography
       target: Gammel arbejdsbord
@@ -4972,8 +4978,10 @@ translations:
   contextual:
     notes.note.finland:
       Helsinki: Helsingfors
-  target_additions:
-    notes.note.finland.fields.field.flag: '<img src="fi-da.png">'
+target_adaptations:
+  notes.note.finland.fields.field.flag:
+    expected_source: ''
+    target: '<img src="fi-da.png">'
 "#,
     )
     .unwrap();

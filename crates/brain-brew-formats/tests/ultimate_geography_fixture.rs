@@ -230,7 +230,7 @@ fn ultimate_geography_translation_overlays_use_dictionaries_not_template_copies(
             !overlay_source.contains("\n  changes:\n")
                 && !overlay_source.contains("\n  additions:\n")
                 && !overlay_source.contains("\n  path_overrides:\n"),
-            "{} uses direct/contextual/target_additions rather than old names",
+            "{} uses direct/contextual/target_adaptations rather than old names",
             overlay_ref.file
         );
         let overlay = read_overlay_file(&root, &overlay_path)
@@ -242,7 +242,7 @@ fn ultimate_geography_translation_overlays_use_dictionaries_not_template_copies(
         assert!(
             !translations.direct.is_empty()
                 || !translations.contextual.is_empty()
-                || !translations.target_additions.is_empty()
+                || !translations.target_adaptations.is_empty()
                 || !translations.variables.is_empty()
                 || !translations.adapter_ids.is_empty(),
             "{} has translation dictionary entries",
@@ -250,7 +250,7 @@ fn ultimate_geography_translation_overlays_use_dictionaries_not_template_copies(
         );
         assert!(
             overlay.note_changes.is_empty(),
-            "{} uses dictionary direct/contextual/target_additions instead of per-note field replacements",
+            "{} uses dictionary direct/contextual/target_adaptations instead of per-note field replacements",
             overlay_ref.file
         );
         assert!(
@@ -285,8 +285,8 @@ fn ultimate_geography_translation_overlays_use_dictionaries_not_template_copies(
                 "English Hardcore field content is not a translation overlay"
             );
             assert!(
-                translations.target_additions.is_empty(),
-                "{} uses field_fills for extension-owned blank field content instead of translations.target_additions",
+                translations.target_adaptations.is_empty(),
+                "{} uses field_fills for extension-owned blank field content instead of target_adaptations",
                 overlay_ref.file
             );
         }
@@ -1115,8 +1115,8 @@ fn ug_regression_translation_overlay_changes_flow_to_resolved_and_crowdanki_outp
             BTreeMap::from([(current_value, translated_value.clone())]),
         )]),
         no_change: BTreeSet::new(),
-        target_additions: BTreeMap::new(),
-        stale_records: Vec::new(),
+        target_adaptations: BTreeMap::new(),
+        stale_translations: Vec::new(),
         variables: BTreeMap::new(),
         adapter_ids: BTreeMap::new(),
         require_complete: false,

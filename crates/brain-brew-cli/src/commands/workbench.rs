@@ -13,9 +13,8 @@ use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use brain_brew_core::{
-    CanonicalDeck, CardTemplate, Note, NoteType, Overlay, OverlayKind, StableId,
-    StaleTranslationRecord, TranslationCoverageCategory, TranslationCoverageEntry,
-    TranslationDictionary,
+    CanonicalDeck, CardTemplate, Note, NoteType, Overlay, OverlayKind, StableId, StaleTranslation,
+    TranslationCoverageCategory, TranslationCoverageEntry, TranslationDictionary,
 };
 use brain_brew_formats::canonical_yaml;
 use brain_brew_formats::manifest::{
@@ -1485,12 +1484,12 @@ fn default_source_edit_scope() -> SourceEditScope {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 enum SourceImpactAction {
-    StaleRecord,
+    StaleTranslation,
     MigrateKey,
 }
 
 fn default_source_impact_action() -> SourceImpactAction {
-    SourceImpactAction::StaleRecord
+    SourceImpactAction::StaleTranslation
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -2785,9 +2784,9 @@ fn is_complete_translation_category(category: TranslationCoverageCategory) -> bo
     matches!(
         category,
         TranslationCoverageCategory::DirectTranslation
-            | TranslationCoverageCategory::ContextualOverride
+            | TranslationCoverageCategory::ContextualTranslation
             | TranslationCoverageCategory::NoChange
-            | TranslationCoverageCategory::StaleTranslationRecord
+            | TranslationCoverageCategory::StaleTranslation
     )
 }
 
@@ -2960,9 +2959,9 @@ fn main_progress(
             matches!(
                 row.category,
                 TranslationCoverageCategory::DirectTranslation
-                    | TranslationCoverageCategory::ContextualOverride
+                    | TranslationCoverageCategory::ContextualTranslation
                     | TranslationCoverageCategory::NoChange
-                    | TranslationCoverageCategory::StaleTranslationRecord
+                    | TranslationCoverageCategory::StaleTranslation
             )
         })
         .count();
@@ -3458,12 +3457,12 @@ fn is_stale_category(category: TranslationCoverageCategory) -> bool {
         category,
         TranslationCoverageCategory::StaleDirectKey
             | TranslationCoverageCategory::StaleContextualKey
-            | TranslationCoverageCategory::StaleTranslationRecord
+            | TranslationCoverageCategory::StaleTranslation
             | TranslationCoverageCategory::StaleNoChangeKey
-            | TranslationCoverageCategory::StaleTargetAddition
+            | TranslationCoverageCategory::StaleTargetAdaptation
             | TranslationCoverageCategory::StaleVariableKey
             | TranslationCoverageCategory::StaleAdapterIdKey
-            | TranslationCoverageCategory::InvalidTargetAddition
+            | TranslationCoverageCategory::InvalidTargetAdaptation
     )
 }
 
@@ -3827,11 +3826,11 @@ fn apply_source_translation_impact(
                 row.category,
                 TranslationCoverageCategory::DirectTranslation
                     | TranslationCoverageCategory::NoChange
-                    | TranslationCoverageCategory::StaleTranslationRecord
+                    | TranslationCoverageCategory::StaleTranslation
             )
         })
         && target_rows.iter().all(|row| {
-            row.category != TranslationCoverageCategory::StaleTranslationRecord
+            row.category != TranslationCoverageCategory::StaleTranslation
                 || context
                     .report
                     .entries
@@ -3861,7 +3860,7 @@ fn apply_source_translation_impact(
             Some(contextual_path_for_row(&row, &context.report.entries))
         };
         match edit.impact_action {
-            SourceImpactAction::StaleRecord => {
+            SourceImpactAction::StaleTranslation => {
                 if context_path.is_none() {
                     translations.direct.remove(&edit.source);
                     translations.no_change.remove(&edit.source);
@@ -3869,9 +3868,9 @@ fn apply_source_translation_impact(
                 } else {
                     remove_contextual_source_for_path(translations, &row.path, &edit.source);
                 }
-                upsert_stale_record(
+                upsert_stale_translation(
                     translations,
-                    StaleTranslationRecord {
+                    StaleTranslation {
                         old_source: edit.source.clone(),
                         new_source: edit.value.clone(),
                         target: target.clone(),
@@ -3879,14 +3878,14 @@ fn apply_source_translation_impact(
                     },
                 );
                 changed_entries.push(json!({
-                    "mode": "stale_record",
+                    "mode": "stale_translation",
                     "path": row.path,
                     "old_source": edit.source,
                     "new_source": edit.value,
                     "target": target,
                     "context": context_path,
-                    "impact_action": "stale_record",
-                    "available_impact_actions": ["stale_record", "migrate_key"],
+                    "impact_action": "stale_translation",
+                    "available_impact_actions": ["stale_translation", "migrate_key"],
                 }));
                 changed = true;
             }
@@ -3898,7 +3897,7 @@ fn apply_source_translation_impact(
                         .entry(context_path.clone())
                         .or_default()
                         .insert(edit.value.clone(), target.clone());
-                    remove_stale_records_for_path_source(translations, &row.path, &edit.value);
+                    remove_stale_translations_for_path_source(translations, &row.path, &edit.value);
                 } else {
                     translations.direct.remove(&edit.source);
                     translations.no_change.remove(&edit.source);
@@ -3906,7 +3905,7 @@ fn apply_source_translation_impact(
                     translations
                         .direct
                         .insert(edit.value.clone(), target.clone());
-                    remove_stale_records_for_path_source(translations, &row.path, &edit.value);
+                    remove_stale_translations_for_path_source(translations, &row.path, &edit.value);
                 }
                 changed_entries.push(json!({
                     "mode": "migrate_key",
@@ -3916,7 +3915,7 @@ fn apply_source_translation_impact(
                     "target": target,
                     "context": context_path,
                     "impact_action": "migrate_key",
-                    "available_impact_actions": ["stale_record", "migrate_key"],
+                    "available_impact_actions": ["stale_translation", "migrate_key"],
                 }));
                 changed = true;
             }
@@ -3928,20 +3927,20 @@ fn apply_source_translation_impact(
 fn target_text_for_source_impact(row: &MainFieldRow) -> Option<String> {
     match row.category {
         TranslationCoverageCategory::DirectTranslation
-        | TranslationCoverageCategory::ContextualOverride
+        | TranslationCoverageCategory::ContextualTranslation
         | TranslationCoverageCategory::NoChange
-        | TranslationCoverageCategory::StaleTranslationRecord => Some(row.translated.clone()),
+        | TranslationCoverageCategory::StaleTranslation => Some(row.translated.clone()),
         _ => None,
     }
 }
 
-fn upsert_stale_record(translations: &mut TranslationDictionary, record: StaleTranslationRecord) {
-    translations.stale_records.retain(|existing| {
+fn upsert_stale_translation(translations: &mut TranslationDictionary, record: StaleTranslation) {
+    translations.stale_translations.retain(|existing| {
         !(existing.old_source == record.old_source
             && existing.new_source == record.new_source
             && existing.context == record.context)
     });
-    translations.stale_records.push(record);
+    translations.stale_translations.push(record);
 }
 
 fn remove_contextual_source_everywhere(translations: &mut TranslationDictionary, source: &str) {
@@ -4260,7 +4259,7 @@ fn apply_staged_edits_to_overlay(
             EditMode::Direct => {
                 translations.no_change.remove(&edit.source);
                 remove_contextual_source_for_path(translations, &edit.path, &edit.source);
-                remove_stale_records_for_path_source(translations, &edit.path, &edit.source);
+                remove_stale_translations_for_path_source(translations, &edit.path, &edit.source);
                 let old = translations
                     .direct
                     .insert(edit.source.clone(), edit.value.clone());
@@ -4275,7 +4274,7 @@ fn apply_staged_edits_to_overlay(
             EditMode::Contextual => {
                 translations.no_change.remove(&edit.source);
                 let context_path = contextual_path_for_edit(context, edit)?;
-                remove_stale_records_for_path_source(translations, &edit.path, &edit.source);
+                remove_stale_translations_for_path_source(translations, &edit.path, &edit.source);
                 let replacements = translations
                     .contextual
                     .entry(context_path.clone())
@@ -4307,12 +4306,12 @@ fn apply_staged_edits_to_overlay(
     Ok(changed)
 }
 
-fn remove_stale_records_for_path_source(
+fn remove_stale_translations_for_path_source(
     translations: &mut TranslationDictionary,
     path: &str,
     source: &str,
 ) {
-    translations.stale_records.retain(|record| {
+    translations.stale_translations.retain(|record| {
         !(record.new_source == source
             && record.context.as_deref().is_none_or(|context| {
                 path == context
@@ -4438,10 +4437,10 @@ fn compose_lenient_translation_overlay(
                     TranslationCoverageCategory::StaleNoChangeKey => {
                         translations.no_change.remove(&entry.source);
                     }
-                    TranslationCoverageCategory::StaleTargetAddition
-                    | TranslationCoverageCategory::InvalidTargetAddition => {
+                    TranslationCoverageCategory::StaleTargetAdaptation
+                    | TranslationCoverageCategory::InvalidTargetAdaptation => {
                         let path = entry.context.as_deref().unwrap_or(&entry.path);
-                        translations.target_additions.remove(path);
+                        translations.target_adaptations.remove(path);
                     }
                     TranslationCoverageCategory::StaleVariableKey => {
                         if let Some(variable_key) = &entry.context

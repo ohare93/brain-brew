@@ -6,19 +6,19 @@ title: Translation overlays
 
 A translation overlay changes deck language or localized text. It should not add unrelated extension content.
 
-Translation dictionaries separate source-keyed translations from target-only text:
+Translation overlays separate faithful translations from intentional target-language adaptations:
 
 | Section | Use it for | Key shape |
 | --- | --- | --- |
-| `direct` | reusable translations of exact non-empty source strings | `source text: target text` |
-| `contextual` | path-scoped translations for a source string inside a deck context | `context path -> source text: target text` |
-| `no_change` | translator-reviewed text that intentionally stays identical to the source | `[source text]` |
-| `target_additions` | target-language text for fields intentionally blank in the source deck | `stable deck path: target text` |
-| `stale_records` | review debt for source text that changed while reusing the prior target text temporarily | list of `old_source`, `new_source`, `target`, optional `context` |
+| `translations.direct` | reusable faithful translations of exact non-empty source strings | `source text: target text` |
+| `translations.contextual` | faithful translations scoped to a stable deck context | `context path -> source text: target text` |
+| `translations.no_change` | translator-reviewed text whose faithful target is identical to source | `[source text]` |
+| `target_adaptations` | path-scoped target wording that intentionally diverges from or supplements the source | `stable deck path -> expected_source, target, optional reason` |
+| `stale_translations` | review debt for source text that changed while reusing the prior target text temporarily | list of `old_source`, `new_source`, `target`, optional `context` |
 
-Contextual translations win over direct translations. When multiple contextual scopes match, the longest matching context path wins. No-change entries cover missing translation checks but never modify composed output. Stale records apply their `target` text to `new_source` while reporting a stale-review warning until resolved.
+Contextual translations win over direct translations. When multiple contextual scopes match, the longest matching context path wins. No-change entries cover missing translation checks but never modify composed output. Target adaptations apply only at their exact path and only when `expected_source` still matches. Stale translations apply their `target` text to `new_source` while reporting a stale-review warning until resolved.
 
-The source key in `direct`, `contextual`, and `no_change` is the expected base. If the English/source text changes, composition fails with a stale source-key error instead of silently applying the wrong translation or no-change decision. Use `stale_records` when a source maintainer intentionally carries the old target text forward as explicit review debt.
+The source key in `direct`, `contextual`, and `no_change` is the expected base. If the English/source text changes, composition fails with a stale source-key error instead of silently applying the wrong translation or no-change decision. Use `stale_translations` when a source maintainer intentionally carries the old target text forward as explicit review debt.
 
 ## Direct translations
 
@@ -38,7 +38,7 @@ If `Germany` no longer appears in extracted translatable text, composition repor
 
 ## Contextual translations
 
-Use `translations.contextual` when a source string needs a translation only inside a stable deck context, or when the same English string needs different target text in different places.
+Use `translations.contextual` when a source string needs a faithful translation only inside a stable deck context, or when the same English string needs different faithful target text in different places.
 
 ```yaml
 translations:
@@ -148,34 +148,38 @@ Strict coverage reports missing and stale entries for each `text` or `ref` compo
 
 Coordinate with deck maintainers before migrating existing large fields: structured messages are best for repeated, composite source text where component reuse clearly reduces duplication.
 
-## Stale translation records
+## Stale translations
 
-Use `translations.stale_records` when source text changed and the previous target text should keep translated decks usable until a translator reviews it.
-
-```yaml
-translations:
-  stale_records:
-    - old_source: Autonomous community of Spain.
-      new_source: Autonomous region of Spain.
-      target: Selvstyrende region af Spanien.
-      context: notes.note.canary-islands.fields.field.country-info
-```
-
-A stale record with no `context` acts like a direct translation for `new_source`. A contextual stale record applies only at or below its context path, using the same context matching rules as `translations.contextual`. `brainbrew compose`, `brainbrew export crowdanki`, and lenient/default `brainbrew verify` emit stale-record warnings but still apply the target text. A strict translation coverage policy fails while stale records remain.
-
-Resolving a stale record moves it into a normal translation entry for `new_source` (`direct` when contextless, `contextual` when context is present) and removes the stale record.
-
-## Target-language additions for blank source fields
-
-Use `translations.target_additions` only when blank localized text genuinely belongs to the translation overlay. This is valid when the source deck intentionally has no English text for the field but a target language should supply text.
+Use `stale_translations` when source text changed and the previous target text should keep translated decks usable until a translator reviews it.
 
 ```yaml
-translations:
-  target_additions:
-    notes.note.united-kingdom.fields.field.country-info: Offiziell das Vereinigte Königreich Großbritannien und Nordirland.
+stale_translations:
+  - old_source: Autonomous community of Spain.
+    new_source: Autonomous region of Spain.
+    target: Selvstyrende region af Spanien.
+    context: notes.note.canary-islands.fields.field.country-info
 ```
 
-The current source value must be blank. If it is non-empty, composition rejects the entry and points to `direct` or `contextual` instead.
+A stale translation with no `context` acts like a direct translation for `new_source`. A contextual stale translation applies only at or below its context path, using the same context matching rules as `translations.contextual`. `brainbrew compose`, `brainbrew export crowdanki`, and lenient/default `brainbrew verify` emit stale warnings but still apply the target text. A strict translation coverage policy fails while stale translations remain.
+
+Resolving a stale translation moves it into a normal translation entry for `new_source` (`direct` when contextless, `contextual` when context is present) and removes the stale translation.
+
+## Target adaptations
+
+Use top-level `target_adaptations` when localized text intentionally diverges from, explains, or supplements the source. This includes blank-source target additions and target-language-specific wording that should not be described as a faithful translation.
+
+```yaml
+target_adaptations:
+  notes.note.taiwan.fields.field.country-info:
+    expected_source: Partially recognised state claimed by China.
+    target: 中国宣称对台湾拥有主权，但仅被部分国家承认
+    reason: target-language geopolitical wording
+  notes.note.united-kingdom.fields.field.country-info:
+    expected_source: ''
+    target: Offiziell das Vereinigte Königreich Großbritannien und Nordirland.
+```
+
+The current source value must equal `expected_source`. If it does not, composition rejects the adaptation so maintainers can review whether the target wording still applies.
 
 If an extension fills blank fields with new content, use [`field_fills`](field-fills.md) instead.
 
@@ -246,7 +250,7 @@ brainbrew translations --manifest brainbrew.yaml --all-targets --summary --json
 brainbrew translations --manifest brainbrew.yaml --target de-standard --full
 ```
 
-Report mode is the default and never modifies files. The human report is translator-focused by default: it shows missing note-field text translations and summarizes structural/media/tag values separately so flag HTML, map HTML, tags, deck metadata, and template names do not drown out translator work. For language-first tools, `brainbrew.yaml` can declare `languages` and `translation_profile` metadata as described in [Manifests and targets](manifests-targets.md). Use `--full` when you intentionally want every scalar fallback. JSON output remains stable and includes all coverage entries. Use `--context` for the first translator-in-context terminal view: it shows source English and target text together with translation status, note id, field id/name, note type, and card templates where the field appears. Filter or navigate the context view with `--language`, `--note`, `--field`, `--source`, `--duplicates`, `--status missing|stale|translated|direct|contextual|no-change`, and `--path-prefix`. Repeated source strings are shown as duplicate source groups so translators can see whether a reusable `direct`/`no_change` entry is enough or a path-specific `contextual` override is needed. YAML remains the canonical storage format; the terminal context view is the first ergonomic translator interface over that canonical data, and `--context --json` exposes the same note/field/card context model intended for the Deck Workbench. Use `--summary` for compact per-language/per-overlay counts; summary mode de-duplicates identical reports across target variants and includes direct translations, contextual overrides, no-change entries, target-language additions, variables, adapter IDs, raw untranslated fallbacks, actionable missing text translations, ignored entries, and stale/invalid keys. Human summary output uses narrow aligned columns by default; add `--summary --full` to include overlay/file columns, or `--summary --json` for complete machine-readable metadata. Missing fallbacks are source strings that would currently pass through unchanged in a translated target.
+Report mode is the default and never modifies files. The human report is translator-focused by default: it shows missing note-field text translations and summarizes structural/media/tag values separately so flag HTML, map HTML, tags, deck metadata, and template names do not drown out translator work. For language-first tools, `brainbrew.yaml` can declare `languages` and `translation_profile` metadata as described in [Manifests and targets](manifests-targets.md). Use `--full` when you intentionally want every scalar fallback. JSON output remains stable and includes all coverage entries. Use `--context` for the first translator-in-context terminal view: it shows source English and target text together with translation status, note id, field id/name, note type, and card templates where the field appears. Filter or navigate the context view with `--language`, `--note`, `--field`, `--source`, `--duplicates`, `--status missing|stale|translated|direct|contextual|no-change`, and `--path-prefix`. Repeated source strings are shown as duplicate source groups so translators can see whether a reusable `direct`/`no_change` entry is enough or a path-specific `contextual` override is needed. YAML remains the canonical storage format; the terminal context view is the first ergonomic translator interface over that canonical data, and `--context --json` exposes the same note/field/card context model intended for the Deck Workbench. Use `--summary` for compact per-language/per-overlay counts; summary mode de-duplicates identical reports across target variants and includes direct translations, contextual translations, no-change entries, target adaptations, variables, adapter IDs, raw untranslated fallbacks, actionable missing text translations, ignored entries, and stale/invalid keys. Human summary output uses narrow aligned columns by default; add `--summary --full` to include overlay/file columns, or `--summary --json` for complete machine-readable metadata. Missing fallbacks are source strings that would currently pass through unchanged in a translated target.
 
 To seed translator work after adding English notes or fields, run apply explicitly:
 
@@ -254,7 +258,7 @@ To seed translator work after adding English notes or fields, run apply explicit
 brainbrew translations --manifest brainbrew.yaml --target de-standard --apply
 ```
 
-Non-interactive `--apply` preserves the existing scriptable behavior: it inserts deterministic `source: source` translation stubs into `translations.direct` for the missing text fallbacks in scope. Interactive apply is selective: toggle rows with Space, confirm with Enter, then choose one action for all selected rows — mark `no_change`, add direct `source: source`, add contextual `source: source`, add `ignore_paths`, skip — or choose to decide per row. Context viewing does not introduce a second mutation path: combine context filters with `--apply --interactive` when you want to apply changes, and Brain Brew routes them through the same translation sync/apply machinery. It keeps reviewed no-change decisions distinct from real translations and does not invent target-language additions for blank source fields. Existing comments and layout are preserved where practical; run `brainbrew fmt overlays/languages/de.yaml` when you want fully canonical formatting.
+Non-interactive `--apply` preserves the existing scriptable behavior: it inserts deterministic `source: source` translation stubs into `translations.direct` for the missing text fallbacks in scope. Interactive apply is selective: toggle rows with Space, confirm with Enter, then choose one action for all selected rows — mark `no_change`, add direct `source: source`, add contextual `source: source`, add `ignore_paths`, skip — or choose to decide per row. Context viewing does not introduce a second mutation path: combine context filters with `--apply --interactive` when you want to apply changes, and Brain Brew routes them through the same translation sync/apply machinery. It keeps reviewed no-change decisions distinct from real translations and does not invent target adaptations for blank source fields. Existing comments and layout are preserved where practical; run `brainbrew fmt overlays/languages/de.yaml` when you want fully canonical formatting.
 
 When `require_complete: true`, composition fails if any extracted non-empty translatable string is not translated by `direct`, translated by a matching `contextual` entry, marked by `no_change`, or matched by `ignore_paths`. For release workflows, prefer target-level verification policy in `brainbrew.yaml`:
 
@@ -272,9 +276,9 @@ Translator context views should present extracted strings in the same categories
 
 - source strings that occur once or can be safely reused are candidates for `direct` or `no_change`;
 - repeated source strings should show their stable deck contexts so translators can choose a reusable `direct` translation, reusable `no_change`, contextual entries, or both;
-- blank source fields should be shown as target-language addition opportunities and written to `target_additions` only when the blank text belongs to the translation overlay.
+- blank source fields should be shown as target adaptation opportunities and written to `target_adaptations` only when the blank text belongs to the translation overlay.
 
-During sync/apply, stale source-key errors mean the translator should refresh against the current source deck before editing the target text. Missing direct/contextual translation errors indicate an untranslated extracted string. Invalid contextual errors indicate either a stale source key or an invalid context path. Invalid target-addition errors indicate the source is no longer blank.
+During sync/apply, stale source-key errors mean the translator should refresh against the current source deck before editing the target text. Missing direct/contextual translation errors indicate an untranslated extracted string. Invalid contextual errors indicate either a stale source key or an invalid context path. Invalid target-adaptation errors indicate the source no longer matches the adaptation's `expected_source`.
 
 ## Deterministic section order
 
@@ -285,8 +289,7 @@ The formatter emits translation dictionary sections in this order:
 3. `direct`
 4. `contextual`
 5. `no_change`
-6. `target_additions`
-7. `variables`
-8. `adapter_ids`
+6. `variables`
+7. `adapter_ids`
 
-A file with no `direct` section starts at the next non-empty section. That is still deterministic.
+Top-level `target_adaptations` and `stale_translations` are emitted after the `translations` dictionary. A file with no `direct` section starts at the next non-empty section. That is still deterministic.

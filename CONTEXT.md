@@ -125,11 +125,15 @@ A named text value defined on a deck, note type, card template, or note and refe
 _Avoid_: recipe variable, runtime Anki field
 
 **Translation Dictionary**:
-A translation overlay section mapping direct source text, contextual source text, explicit no-change decisions for reviewed unchanged text, target-language additions for blank source fields, source variables, adapter IDs, and stale translation records, with non-blank source keys acting as implicit expected bases.
-_Avoid_: CSV importer, global localization database
+A translation overlay section for faithful target-language text: direct source text, contextual source text, explicit no-change decisions for reviewed unchanged text, source variables, and adapter IDs, with non-blank source keys acting as implicit expected bases.
+_Avoid_: CSV importer, global localization database, target adaptation storage
 
-**Stale Translation Record**:
-A Translation Dictionary review item that applies a prior target text to changed source text while warning that the translation needs review.
+**Target Adaptation**:
+A path-scoped target-language value that intentionally diverges from, explains, or supplements the source while declaring the expected source value it adapts.
+_Avoid_: faithful translation, extension field fill
+
+**Stale Translation**:
+A translation review item that applies a prior target text to changed source text while warning that the translation needs review.
 _Avoid_: stale key only, automatic silent migration
 
 **Field Fill**:
@@ -221,7 +225,7 @@ _Avoid_: import only, export only, one-way conversion
 - **Deck Federation** combines one base **Deck** with zero or more **Overlays**.
 - An **Overlay** contains an **Overlay Fragment**.
 - An **Overlay** may use a **Translation Dictionary** to translate extracted source text without repeating per-field replacement boilerplate.
-- A **Translation Dictionary** may contain **Stale Translation Records** when source text changes invalidate existing target-language decisions.
+- An **Overlay** may contain **Stale Translations** when source text changes invalidate existing target-language decisions.
 - An **Overlay** may use **Field Fills** to add content to existing blank note fields without misclassifying that content as a translation.
 - A **Source Variable** lets shared card template structure refer to phrase values translated by a **Translation Dictionary**.
 - An **Overlay** uses **Change Intents** to change **Deck Entities** by **Stable ID**.

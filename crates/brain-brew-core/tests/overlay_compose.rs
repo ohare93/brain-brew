@@ -4,10 +4,21 @@ use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, CardTemplateSide,
     ChangeIntent, ComposeErrorKind, DeckChange, ExpectedBase, FieldChange, FieldDefinition,
     FieldDefinitionChange, MediaChange, MediaReference, MessageComponent, Note, NoteChange,
-    NoteType, NoteTypeChange, Overlay, OverlayKind, PropertyChange, StableId,
-    StaleTranslationRecord, StructuredMessage, TagChange, TranslationCoverageCategory,
+    NoteType, NoteTypeChange, Overlay, OverlayKind, PropertyChange, StableId, StaleTranslation,
+    StructuredMessage, TagChange, TargetAdaptation, TranslationCoverageCategory,
     TranslationDictionary,
 };
+
+fn target_adaptation(
+    expected_source: impl Into<String>,
+    target: impl Into<String>,
+) -> TargetAdaptation {
+    TargetAdaptation {
+        expected_source: expected_source.into(),
+        target: target.into(),
+        reason: None,
+    }
+}
 
 #[test]
 fn add_overlay_adds_a_new_note_to_the_resolved_deck() {
@@ -223,8 +234,8 @@ fn translation_dictionary_reports_stale_direct_entries() {
             direct: BTreeMap::from([("Missing source".to_owned(), "Mangler".to_owned())]),
             contextual: BTreeMap::new(),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::new(),
-            stale_records: Vec::new(),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: false,
@@ -247,7 +258,7 @@ fn translation_dictionary_reports_stale_direct_entries() {
 }
 
 #[test]
-fn translation_dictionary_distinguishes_direct_contextual_and_target_additions() {
+fn translation_dictionary_distinguishes_direct_contextual_and_target_adaptations() {
     let mut base = ug_style_deck();
     base.notes
         .get_mut(&sid("note.finland"))
@@ -282,11 +293,11 @@ fn translation_dictionary_distinguishes_direct_contextual_and_target_additions()
                 ),
             ]),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::from([(
+            target_adaptations: BTreeMap::from([(
                 "notes.note.sweden.fields.field.capital".to_owned(),
-                "Stockholm".to_owned(),
+                target_adaptation("", "Stockholm"),
             )]),
-            stale_records: Vec::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: false,
@@ -323,7 +334,7 @@ fn translation_dictionary_distinguishes_direct_contextual_and_target_additions()
 }
 
 #[test]
-fn stale_translation_record_applies_target_text_and_reports_review_debt() {
+fn stale_translation_applies_target_text_and_reports_review_debt() {
     let mut base = ug_style_deck();
     base.notes
         .get_mut(&sid("note.finland"))
@@ -337,8 +348,8 @@ fn stale_translation_record_applies_target_text_and_reports_review_debt() {
             direct: BTreeMap::from([("Finland".to_owned(), "Finland".to_owned())]),
             contextual: BTreeMap::new(),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::new(),
-            stale_records: vec![StaleTranslationRecord {
+            target_adaptations: BTreeMap::new(),
+            stale_translations: vec![StaleTranslation {
                 old_source: "Helsinki".to_owned(),
                 new_source: "Helsinki City".to_owned(),
                 target: "Helsingfors".to_owned(),
@@ -364,7 +375,7 @@ fn stale_translation_record_applies_target_text_and_reports_review_debt() {
         .translation_coverage(&overlay)
         .expect("translation overlay has coverage");
     assert!(report.entries.iter().any(|entry| {
-        entry.category == TranslationCoverageCategory::StaleTranslationRecord
+        entry.category == TranslationCoverageCategory::StaleTranslation
             && entry.path == "notes.note.finland.fields.field.capital"
             && entry.old_source.as_deref() == Some("Helsinki")
             && entry.source == "Helsinki City"
@@ -377,7 +388,7 @@ fn stale_translation_record_applies_target_text_and_reports_review_debt() {
 
     let resolved = base
         .compose(&[overlay])
-        .expect("stale records compose as warnings");
+        .expect("stale translations compose as warnings");
     assert_eq!(
         resolved.notes[&sid("note.finland")].fields[&sid("field.capital")],
         "Helsingfors"
@@ -385,7 +396,7 @@ fn stale_translation_record_applies_target_text_and_reports_review_debt() {
 }
 
 #[test]
-fn contextual_stale_translation_record_only_applies_under_its_context() {
+fn contextual_stale_translation_only_applies_under_its_context() {
     let mut base = ug_style_deck();
     base.notes
         .get_mut(&sid("note.finland"))
@@ -404,8 +415,8 @@ fn contextual_stale_translation_record_only_applies_under_its_context() {
             direct: BTreeMap::new(),
             contextual: BTreeMap::new(),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::new(),
-            stale_records: vec![StaleTranslationRecord {
+            target_adaptations: BTreeMap::new(),
+            stale_translations: vec![StaleTranslation {
                 old_source: "Helsinki".to_owned(),
                 new_source: "Capital city".to_owned(),
                 target: "Helsingfors".to_owned(),
@@ -426,7 +437,7 @@ fn contextual_stale_translation_record_only_applies_under_its_context() {
         .translation_coverage(&overlay)
         .expect("translation overlay has coverage");
     assert!(report.entries.iter().any(|entry| {
-        entry.category == TranslationCoverageCategory::StaleTranslationRecord
+        entry.category == TranslationCoverageCategory::StaleTranslation
             && entry.context.as_deref() == Some("notes.note.finland")
             && entry.path == "notes.note.finland.fields.field.capital"
     }));
@@ -437,7 +448,7 @@ fn contextual_stale_translation_record_only_applies_under_its_context() {
 
     let resolved = base
         .compose(&[overlay])
-        .expect("contextual stale record composes");
+        .expect("contextual stale translation composes");
     assert_eq!(
         resolved.notes[&sid("note.finland")].fields[&sid("field.capital")],
         "Helsingfors"
@@ -449,20 +460,20 @@ fn contextual_stale_translation_record_only_applies_under_its_context() {
 }
 
 #[test]
-fn resolving_stale_translation_records_migrates_to_normal_dictionary_entries() {
+fn resolving_stale_translations_migrates_to_normal_dictionary_entries() {
     let mut translations = TranslationDictionary {
         direct: BTreeMap::new(),
         contextual: BTreeMap::new(),
         no_change: BTreeSet::new(),
-        target_additions: BTreeMap::new(),
-        stale_records: vec![
-            StaleTranslationRecord {
+        target_adaptations: BTreeMap::new(),
+        stale_translations: vec![
+            StaleTranslation {
                 old_source: "Helsinki".to_owned(),
                 new_source: "Helsinki City".to_owned(),
                 target: "Helsingfors".to_owned(),
                 context: None,
             },
-            StaleTranslationRecord {
+            StaleTranslation {
                 old_source: "Capital".to_owned(),
                 new_source: "Capital city".to_owned(),
                 target: "Hovedstad".to_owned(),
@@ -476,19 +487,19 @@ fn resolving_stale_translation_records_migrates_to_normal_dictionary_entries() {
     };
 
     let direct = translations
-        .resolve_stale_record("Helsinki", "Helsinki City", None)
-        .expect("direct stale record resolves");
+        .resolve_stale_translation("Helsinki", "Helsinki City", None)
+        .expect("direct stale translation resolves");
     assert_eq!(direct.target, "Helsingfors");
     assert_eq!(translations.direct["Helsinki City"], "Helsingfors");
 
     translations
-        .resolve_stale_record("Capital", "Capital city", Some("notes.note.finland"))
-        .expect("contextual stale record resolves");
+        .resolve_stale_translation("Capital", "Capital city", Some("notes.note.finland"))
+        .expect("contextual stale translation resolves");
     assert_eq!(
         translations.contextual["notes.note.finland"]["Capital city"],
         "Hovedstad"
     );
-    assert!(translations.stale_records.is_empty());
+    assert!(translations.stale_translations.is_empty());
 }
 
 #[test]
@@ -504,8 +515,8 @@ fn translation_dictionary_can_translate_tags() {
                 BTreeMap::from([("Europe".to_owned(), "UG::Europe".to_owned())]),
             )]),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::new(),
-            stale_records: Vec::new(),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: false,
@@ -536,8 +547,8 @@ fn translation_dictionary_no_change_counts_as_reviewed_without_modifying_output(
             direct: BTreeMap::new(),
             contextual: BTreeMap::new(),
             no_change: BTreeSet::from(["Finland".to_owned(), "Helsinki".to_owned()]),
-            target_additions: BTreeMap::new(),
-            stale_records: Vec::new(),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: true,
@@ -586,8 +597,8 @@ fn translation_context_identifies_note_field_card_and_duplicate_status() {
             direct: BTreeMap::from([("Europe".to_owned(), "Europa".to_owned())]),
             contextual: BTreeMap::new(),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::new(),
-            stale_records: Vec::new(),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: false,
@@ -656,8 +667,8 @@ fn translation_dictionary_reports_stale_no_change_entries() {
                 "Removed source".to_owned(),
                 "Removed contextual".to_owned(),
             ]),
-            target_additions: BTreeMap::new(),
-            stale_records: Vec::new(),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: false,
@@ -698,8 +709,8 @@ fn translation_dictionary_reports_missing_direct_translation_when_complete() {
             direct: BTreeMap::new(),
             contextual: BTreeMap::new(),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::new(),
-            stale_records: Vec::new(),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: true,
@@ -725,7 +736,7 @@ fn translation_dictionary_reports_missing_direct_translation_when_complete() {
 }
 
 #[test]
-fn translation_dictionary_allows_field_level_contextual_override() {
+fn translation_dictionary_allows_field_level_contextual_translation() {
     let base = ug_style_deck();
     let overlay = Overlay {
         id: sid("overlay.translation.da"),
@@ -737,8 +748,8 @@ fn translation_dictionary_allows_field_level_contextual_override() {
                 BTreeMap::from([("Helsinki".to_owned(), "Helsingfors".to_owned())]),
             )]),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::new(),
-            stale_records: Vec::new(),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: false,
@@ -750,9 +761,9 @@ fn translation_dictionary_allows_field_level_contextual_override() {
         media_changes: BTreeMap::new(),
     };
 
-    let deck = base
-        .compose(&[overlay])
-        .expect("field-level contextual overrides are allowed for workbench source-string edits");
+    let deck = base.compose(&[overlay]).expect(
+        "field-level contextual translations are allowed for workbench source-string edits",
+    );
 
     assert_eq!(
         deck.notes
@@ -766,7 +777,43 @@ fn translation_dictionary_allows_field_level_contextual_override() {
 }
 
 #[test]
-fn translation_dictionary_target_addition_fails_when_base_is_not_blank() {
+fn target_adaptation_can_intentionally_replace_matching_nonblank_source() {
+    let base = ug_style_deck();
+    let overlay = Overlay {
+        id: sid("overlay.translation.zh"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::new(),
+            contextual: BTreeMap::new(),
+            no_change: BTreeSet::new(),
+            target_adaptations: BTreeMap::from([(
+                "notes.note.finland.fields.field.capital".to_owned(),
+                target_adaptation("Helsinki", "Helsinki, target-language wording"),
+            )]),
+            stale_translations: Vec::new(),
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            require_complete: false,
+            ignore_paths: BTreeSet::new(),
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let resolved = base
+        .compose(&[overlay])
+        .expect("target adaptation composes");
+
+    assert_eq!(
+        resolved.notes[&sid("note.finland")].fields[&sid("field.capital")],
+        "Helsinki, target-language wording"
+    );
+}
+
+#[test]
+fn translation_dictionary_target_adaptation_fails_when_expected_source_mismatches() {
     let base = ug_style_deck();
     let overlay = Overlay {
         id: sid("overlay.translation.da"),
@@ -775,11 +822,11 @@ fn translation_dictionary_target_addition_fails_when_base_is_not_blank() {
             direct: BTreeMap::new(),
             contextual: BTreeMap::new(),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::from([(
+            target_adaptations: BTreeMap::from([(
                 "notes.note.finland.fields.field.capital".to_owned(),
-                "Helsinki translated".to_owned(),
+                target_adaptation("", "Helsinki translated"),
             )]),
-            stale_records: Vec::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: false,
@@ -793,14 +840,12 @@ fn translation_dictionary_target_addition_fails_when_base_is_not_blank() {
 
     let report = base
         .compose(&[overlay])
-        .expect_err("target addition expects blank base");
+        .expect_err("target adaptation expected source should match");
 
     assert!(report.has_kind(ComposeErrorKind::ExpectedBaseMismatch));
     assert!(report.errors.iter().any(|error| {
         error.path == "notes.note.finland.fields.field.capital"
-            && error
-                .message
-                .contains("target-language addition expected blank source value")
+            && error.message.contains("target adaptation expected source")
     }));
 }
 
@@ -830,8 +875,8 @@ fn translation_coverage_reports_new_note_and_new_field_fallbacks() {
             ]),
             contextual: BTreeMap::new(),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::new(),
-            stale_records: Vec::new(),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: false,
@@ -880,8 +925,8 @@ fn translation_coverage_reports_stale_changed_or_removed_source_keys() {
             direct: BTreeMap::from([("Helsinki".to_owned(), "Helsingfors".to_owned())]),
             contextual: BTreeMap::new(),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::new(),
-            stale_records: Vec::new(),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: false,
@@ -927,11 +972,11 @@ fn translation_coverage_reports_path_specific_overrides_and_additions() {
                 BTreeMap::from([("Helsinki".to_owned(), "Helsingfors".to_owned())]),
             )]),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::from([(
+            target_adaptations: BTreeMap::from([(
                 "notes.note.finland.fields.field.flag".to_owned(),
-                "<img src=\"fi-da.png\">".to_owned(),
+                target_adaptation("", r#"<img src=\"fi-da.png\">"#),
             )]),
-            stale_records: Vec::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: false,
@@ -948,12 +993,12 @@ fn translation_coverage_reports_path_specific_overrides_and_additions() {
         .expect("translation overlay has coverage");
 
     assert!(report.entries.iter().any(|entry| {
-        entry.category == TranslationCoverageCategory::ContextualOverride
+        entry.category == TranslationCoverageCategory::ContextualTranslation
             && entry.context.as_deref() == Some("notes.note.finland")
             && entry.path == "notes.note.finland.fields.field.capital"
     }));
     assert!(report.entries.iter().any(|entry| {
-        entry.category == TranslationCoverageCategory::TargetLanguageAddition
+        entry.category == TranslationCoverageCategory::TargetAdaptation
             && entry.path == "notes.note.finland.fields.field.flag"
     }));
 }
@@ -981,8 +1026,8 @@ fn translation_dictionary_resolves_structured_message_components() {
                 )]),
             )]),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::new(),
-            stale_records: Vec::new(),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: true,
@@ -1012,7 +1057,7 @@ fn translation_dictionary_resolves_structured_message_components() {
             && entry.translated.as_deref() == Some("Island")
     }));
     assert!(report.entries.iter().any(|entry| {
-        entry.category == TranslationCoverageCategory::ContextualOverride
+        entry.category == TranslationCoverageCategory::ContextualTranslation
             && entry.path
                 == "notes.note.finland.fields.field.flag-similarity.message.variables.description_1"
             && entry.source == "blue background with a white cross"
@@ -1053,8 +1098,8 @@ fn translation_dictionary_can_translate_structured_message_format() {
             ]),
             contextual: BTreeMap::new(),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::new(),
-            stale_records: Vec::new(),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: true,
@@ -1108,8 +1153,8 @@ fn translation_dictionary_can_override_full_structured_message_when_needed() {
                 )]),
             )]),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::new(),
-            stale_records: Vec::new(),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: true,
@@ -1159,8 +1204,8 @@ fn translation_dictionary_reports_structured_message_missing_and_stale_component
             ]),
             contextual: BTreeMap::new(),
             no_change: BTreeSet::new(),
-            target_additions: BTreeMap::new(),
-            stale_records: Vec::new(),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: Vec::new(),
             variables: BTreeMap::new(),
             adapter_ids: BTreeMap::new(),
             require_complete: true,

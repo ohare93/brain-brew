@@ -224,7 +224,8 @@ async fn workbench_card_pivot_navigates_and_edits_card_field() -> Result<()> {
 }
 
 #[tokio::test]
-async fn workbench_edits_source_field_persists_refresh_and_creates_stale_record() -> Result<()> {
+async fn workbench_edits_source_field_persists_refresh_and_creates_stale_translation() -> Result<()>
+{
     let artifacts = ArtifactDir::new("source-edit")?;
     let workspace = TempDir::new().context("create source-edit E2E workspace")?;
     write_source_edit_workbench_fixture(workspace.path())?;
@@ -1277,7 +1278,7 @@ async fn run_source_edit_smoke(
     wait_for_apply_output(driver, "da.yaml").await?;
     wait_for_apply_output(driver, "Georgia -> Sakartvelo").await?;
     assert!(!fs::read_to_string(workspace.join("deck.yaml"))?.contains("Sakartvelo"));
-    assert!(!fs::read_to_string(workspace.join("da.yaml"))?.contains("stale_records"));
+    assert!(!fs::read_to_string(workspace.join("da.yaml"))?.contains("stale_translations"));
 
     wait_for_element(driver, "#apply-confirm-button")
         .await?
@@ -1289,7 +1290,7 @@ async fn run_source_edit_smoke(
     assert!(deck.contains("field.country: Sakartvelo"));
     assert!(deck.contains("field.country: Georgia"));
     let overlay = fs::read_to_string(workspace.join("da.yaml"))?;
-    assert!(overlay.contains("stale_records:"));
+    assert!(overlay.contains("stale_translations:"));
     assert!(overlay.contains("old_source: Georgia"));
     assert!(overlay.contains("new_source: Sakartvelo"));
     assert!(overlay.contains("context: notes.note.georgia-country"));
@@ -1384,7 +1385,7 @@ async fn run_mixed_source_target_smoke(
     let overlay = fs::read_to_string(workspace.join("da.yaml"))?;
     assert!(overlay.contains("Sakartvelo:"));
     assert!(overlay.contains("Sakartvelo på dansk"));
-    assert!(!overlay.contains("stale_records"));
+    assert!(!overlay.contains("stale_translations"));
     Ok(())
 }
 
@@ -2500,11 +2501,11 @@ translations:
   direct:
     Finland: Finland
     Helsinki: Helsinki
-  stale_records:
-    - old_source: Old Workbench
-      new_source: Workbench Smoke
-      target: Gammelt arbejdsbord
-      context: deck.name
+stale_translations:
+  - old_source: Old Workbench
+    new_source: Workbench Smoke
+    target: Gammelt arbejdsbord
+    context: deck.name
 "#,
     )?;
     fs::write(

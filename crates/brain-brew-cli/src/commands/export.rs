@@ -49,7 +49,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             &manifest_args.include_paths,
             &manifest_args.package_roots,
         )?;
-        verify::emit_stale_record_warnings(&plan)?;
+        verify::emit_stale_translation_warnings(&plan)?;
         let deck = plan.compose()?;
         let media_root = manifest_args
             .media_root
@@ -71,7 +71,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     };
 
     let (base, overlays) = read_deck_and_overlays(deck_path, &export_args.overlay_paths)?;
-    verify::emit_stale_record_warnings_for_overlays("ad-hoc", &base, &overlays)?;
+    verify::emit_stale_translation_warnings_for_overlays("ad-hoc", &base, &overlays)?;
     let deck = base
         .compose(
             &overlays

@@ -52,11 +52,11 @@ Do not use it for:
 - translating non-blank source text — use [`translations.direct`](translations.md#direct-translations) or [`translations.contextual`](translations.md#contextual-translations);
 - adding new notes — use `notes` with `intent: add`.
 
-## Why not `translations.target_additions`?
+## Why not `target_adaptations`?
 
 A path-indexed value is not automatically a translation.
 
-`translations.target_additions` says “this blank localized text belongs to a translation overlay.”
+`target_adaptations` says “this blank localized text belongs to a target-language overlay and intentionally adapts the source.”
 
 `field_fills` says “this extension or patch fills a blank field with new content.”
 

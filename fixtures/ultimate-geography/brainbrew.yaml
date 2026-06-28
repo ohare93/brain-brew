@@ -795,10 +795,10 @@ translation_profile:
       label: Tags
       paths:
         - 'notes.*.tags.*'
-    - key: stale-translation-record
-      label: Stale translation records
+    - key: stale-translation
+      label: Stale translations
       paths:
-        - 'translations.stale_records.*'
+        - 'stale_translations.*'
   metadata_paths:
     - 'deck.*'
     - 'note_types.*'

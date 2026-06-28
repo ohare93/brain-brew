@@ -669,8 +669,6 @@ translations:
     - Zagreb
     - Zanzibar
     - Zimbabwe
-  target_additions:
-    notes.note.celebes-sea.fields.field.country-info: Aussi connu comme la mer de Sulawesi.
   variables:
     label.capital:
       Capital: Capitale
@@ -1007,3 +1005,7 @@ translations:
       'zSc]-^U=0=': 'f^0aH]F%!V'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: fd72d808-58d4-43ea-97db-24196747f24c
+target_adaptations:
+  notes.note.celebes-sea.fields.field.country-info:
+    expected_source: ''
+    target: Aussi connu comme la mer de Sulawesi.

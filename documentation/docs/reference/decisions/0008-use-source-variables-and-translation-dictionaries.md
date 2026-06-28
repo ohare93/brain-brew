@@ -12,7 +12,7 @@ Translation overlays become hard to review when a small phrase change requires r
 
 Canonical Deck entities may define source variables, and translation overlays may use translation dictionaries.
 
-Text can reference variables with `${variable.name}`. Variables are resolved from the most specific scope to the broadest scope: card template, note, note type, then deck. Translation dictionaries map direct reusable source strings, contextual source-string translations scoped by stable deck path, explicit no-change decisions for reviewed text that intentionally stays identical, variable values, target-language additions for blank fields, and adapter IDs to translated values. The `direct`/`contextual` source keys and `no_change` source entries act as expected bases; `target_additions` requires the source field to remain blank.
+Text can reference variables with `${variable.name}`. Variables are resolved from the most specific scope to the broadest scope: card template, note, note type, then deck. Translation dictionaries map faithful direct reusable source strings, faithful contextual source-string translations scoped by stable deck path, explicit no-change decisions for reviewed text that intentionally stays identical, variable values, and adapter IDs to translated values. Top-level `target_adaptations` hold path-scoped target-language wording that intentionally diverges from or supplements the source. The `direct`/`contextual` source keys and `no_change` source entries act as expected bases; `target_adaptations` declare an explicit `expected_source`.
 
 CrowdAnki and other adapter exports render variables before writing output, so distributable decks contain ordinary adapter-compatible text and HTML.
 
@@ -43,6 +43,6 @@ CrowdAnki and other adapter exports render variables before writing output, so d
 ## Implications
 
 - Translation overlays should prefer variable and dictionary changes over structural template forks.
-- Stale direct/path-specific dictionary entries, stale no-change entries, and non-blank target additions fail composition.
+- Stale direct/path-specific dictionary entries, stale no-change entries, and target adaptations whose `expected_source` no longer matches fail composition.
 - Export parity is based on rendered deck semantics, not on preserving variable syntax in adapter output.
 - Documentation and skills should teach the variable-first workflow for UG-style variants.

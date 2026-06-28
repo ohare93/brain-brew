@@ -83,7 +83,7 @@ Use `translations.direct` for reusable content text, `translations.contextual` f
 
 ### 3. Use field fills for non-translation blank content
 
-If an extension fills fields that already exist but are blank on base notes, use `field_fills` in an extension or patch overlay. Do not put extension content under `translations.target_additions` just because it is path-indexed.
+If an extension fills fields that already exist but are blank on base notes, use `field_fills` in an extension or patch overlay. Do not put extension content under `target_adaptations` just because it is path-indexed.
 
 Prefer:
 
@@ -96,7 +96,7 @@ field_fills:
     field.flag: '<img src="ug-flag-anguilla.svg" />'
 ```
 
-Reserve `translations.target_additions` for blank localized text that is genuinely part of a translation overlay.
+Reserve `target_adaptations` for localized text that genuinely belongs to a translation overlay but intentionally adapts, explains, or supplements the source.
 
 ### 4. Shared extension overlay first, language-specific residue later
 
@@ -166,7 +166,7 @@ Stop if you see any of these:
 - `overlays/variants/extended/<lang>.yaml` contains full `card_templates:` blocks for every language.
 - Template HTML differs only by labels such as `Flag`, `Location`, or `Flag similar...`.
 - Translation overlays include `notes:` blocks for ordinary field translations.
-- Translation overlays use `translations.target_additions` for extension-owned field content instead of `field_fills`.
+- Translation overlays use `target_adaptations` for extension-owned field content instead of `field_fills`.
 - Translation overlays path-scope note-type names instead of translating a variable.
 - `expected_base` refers to the rendered value of a variable-backed source property.
 - The same extension template exists in more than one language file.

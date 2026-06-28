@@ -5,8 +5,8 @@ use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, ChangeIntent,
     DeckChange, ExpectedBase, FieldChange, FieldDefinition, FieldDefinitionChange, InvalidStableId,
     MediaChange, MediaReference, MessageComponent, Note, NoteChange, NoteType, NoteTypeChange,
-    Overlay, OverlayKind, PropertyChange, StableId, StaleTranslationRecord, StructuredMessage,
-    TagChange, TranslationDictionary, ValidationReport,
+    Overlay, OverlayKind, PropertyChange, StableId, StaleTranslation, StructuredMessage, TagChange,
+    TargetAdaptation, TranslationDictionary, ValidationReport,
 };
 use serde::Deserialize;
 
@@ -161,7 +161,13 @@ pub fn overlay_to_string(overlay: &Overlay) -> String {
     };
 
     if let Some(translations) = &overlay.translations {
-        write_translation_dictionary(&mut out, translations);
+        let has_top_level_translation_data = !translations.target_adaptations.is_empty()
+            || !translations.stale_translations.is_empty();
+        if !translation_dictionary_is_empty(translations) || !has_top_level_translation_data {
+            write_translation_dictionary(&mut out, translations);
+        }
+        write_target_adaptations(&mut out, &translations.target_adaptations);
+        write_stale_translations(&mut out, &translations.stale_translations);
     }
 
     if !field_additions.is_empty() {
@@ -591,36 +597,6 @@ fn write_translation_dictionary(out: &mut String, translations: &TranslationDict
     if !translations.no_change.is_empty() {
         write_no_change(out, &translations.no_change);
     }
-    if !translations.target_additions.is_empty() {
-        writeln!(out, "  target_additions:").expect("writing to a string cannot fail");
-        for (path, value) in &translations.target_additions {
-            writeln!(out, "    {}: {}", yaml_scalar(path), yaml_scalar(value))
-                .expect("writing to a string cannot fail");
-        }
-    }
-    if !translations.stale_records.is_empty() {
-        writeln!(out, "  stale_records:").expect("writing to a string cannot fail");
-        let mut records = translations.stale_records.clone();
-        records.sort_by(|left, right| {
-            left.context
-                .cmp(&right.context)
-                .then_with(|| left.new_source.cmp(&right.new_source))
-                .then_with(|| left.old_source.cmp(&right.old_source))
-                .then_with(|| left.target.cmp(&right.target))
-        });
-        for record in &records {
-            writeln!(out, "    - old_source: {}", yaml_scalar(&record.old_source))
-                .expect("writing to a string cannot fail");
-            writeln!(out, "      new_source: {}", yaml_scalar(&record.new_source))
-                .expect("writing to a string cannot fail");
-            writeln!(out, "      target: {}", yaml_scalar(&record.target))
-                .expect("writing to a string cannot fail");
-            if let Some(context) = &record.context {
-                writeln!(out, "      context: {}", yaml_scalar(context))
-                    .expect("writing to a string cannot fail");
-            }
-        }
-    }
     if !translations.variables.is_empty() {
         writeln!(out, "  variables:").expect("writing to a string cannot fail");
         for (variable_key, replacements) in &translations.variables {
@@ -653,14 +629,64 @@ fn write_translation_dictionary(out: &mut String, translations: &TranslationDict
     }
 }
 
+fn write_target_adaptations(
+    out: &mut String,
+    target_adaptations: &BTreeMap<String, TargetAdaptation>,
+) {
+    if target_adaptations.is_empty() {
+        return;
+    }
+    writeln!(out, "target_adaptations:").expect("writing to a string cannot fail");
+    for (path, adaptation) in target_adaptations {
+        writeln!(out, "  {}:", yaml_scalar(path)).expect("writing to a string cannot fail");
+        writeln!(
+            out,
+            "    expected_source: {}",
+            yaml_scalar(&adaptation.expected_source)
+        )
+        .expect("writing to a string cannot fail");
+        writeln!(out, "    target: {}", yaml_scalar(&adaptation.target))
+            .expect("writing to a string cannot fail");
+        if let Some(reason) = &adaptation.reason {
+            writeln!(out, "    reason: {}", yaml_scalar(reason))
+                .expect("writing to a string cannot fail");
+        }
+    }
+}
+
+fn write_stale_translations(out: &mut String, stale_translations: &[StaleTranslation]) {
+    if stale_translations.is_empty() {
+        return;
+    }
+    writeln!(out, "stale_translations:").expect("writing to a string cannot fail");
+    let mut records = stale_translations.to_vec();
+    records.sort_by(|left, right| {
+        left.context
+            .cmp(&right.context)
+            .then_with(|| left.new_source.cmp(&right.new_source))
+            .then_with(|| left.old_source.cmp(&right.old_source))
+            .then_with(|| left.target.cmp(&right.target))
+    });
+    for record in &records {
+        writeln!(out, "  - old_source: {}", yaml_scalar(&record.old_source))
+            .expect("writing to a string cannot fail");
+        writeln!(out, "    new_source: {}", yaml_scalar(&record.new_source))
+            .expect("writing to a string cannot fail");
+        writeln!(out, "    target: {}", yaml_scalar(&record.target))
+            .expect("writing to a string cannot fail");
+        if let Some(context) = &record.context {
+            writeln!(out, "    context: {}", yaml_scalar(context))
+                .expect("writing to a string cannot fail");
+        }
+    }
+}
+
 fn translation_dictionary_is_empty(translations: &TranslationDictionary) -> bool {
     !translations.require_complete
         && translations.ignore_paths.is_empty()
         && translations.direct.is_empty()
         && translations.contextual.is_empty()
         && translations.no_change.is_empty()
-        && translations.target_additions.is_empty()
-        && translations.stale_records.is_empty()
         && translations.variables.is_empty()
         && translations.adapter_ids.is_empty()
 }
@@ -1096,6 +1122,10 @@ struct OverlayYaml {
     #[serde(default)]
     translations: Option<TranslationDictionaryYaml>,
     #[serde(default)]
+    target_adaptations: BTreeMap<String, TargetAdaptationYaml>,
+    #[serde(default)]
+    stale_translations: Vec<StaleTranslationYaml>,
+    #[serde(default)]
     deck: Option<DeckChangeYaml>,
     #[serde(default)]
     field_additions: BTreeMap<String, FieldAdditionsYaml>,
@@ -1138,13 +1168,32 @@ impl OverlayYaml {
 
         apply_field_fills(self.field_fills, &mut note_changes)?;
 
+        let had_translations = self.translations.is_some();
+        let mut translations = self
+            .translations
+            .map(TranslationDictionaryYaml::into_translation_dictionary)
+            .transpose()?
+            .unwrap_or_default();
+        for (path, adaptation) in self.target_adaptations {
+            translations
+                .target_adaptations
+                .insert(path, adaptation.into_target_adaptation());
+        }
+        translations.stale_translations.extend(
+            self.stale_translations
+                .into_iter()
+                .map(StaleTranslationYaml::into_stale_translation),
+        );
+        let translations = (had_translations
+            || !translation_dictionary_is_empty(&translations)
+            || !translations.target_adaptations.is_empty()
+            || !translations.stale_translations.is_empty())
+        .then_some(translations);
+
         Ok(Overlay {
             id: sid(&self.id)?,
             kind: parse_overlay_kind(&self.kind)?,
-            translations: self
-                .translations
-                .map(TranslationDictionaryYaml::into_translation_dictionary)
-                .transpose()?,
+            translations,
             deck_change: self
                 .deck
                 .map(DeckChangeYaml::into_deck_change)
@@ -1338,9 +1387,9 @@ struct TranslationDictionaryYaml {
     #[serde(default)]
     no_change: BTreeSet<String>,
     #[serde(default)]
-    target_additions: BTreeMap<String, String>,
+    target_adaptations: BTreeMap<String, TargetAdaptationYaml>,
     #[serde(default)]
-    stale_records: Vec<StaleTranslationRecordYaml>,
+    stale_translations: Vec<StaleTranslationYaml>,
     #[serde(default)]
     variables: BTreeMap<String, BTreeMap<String, String>>,
     #[serde(default)]
@@ -1353,7 +1402,26 @@ struct TranslationDictionaryYaml {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct StaleTranslationRecordYaml {
+struct TargetAdaptationYaml {
+    expected_source: String,
+    target: String,
+    #[serde(default)]
+    reason: Option<String>,
+}
+
+impl TargetAdaptationYaml {
+    fn into_target_adaptation(self) -> TargetAdaptation {
+        TargetAdaptation {
+            expected_source: self.expected_source,
+            target: self.target,
+            reason: self.reason,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StaleTranslationYaml {
     old_source: String,
     new_source: String,
     target: String,
@@ -1361,9 +1429,9 @@ struct StaleTranslationRecordYaml {
     context: Option<String>,
 }
 
-impl StaleTranslationRecordYaml {
-    fn into_stale_record(self) -> StaleTranslationRecord {
-        StaleTranslationRecord {
+impl StaleTranslationYaml {
+    fn into_stale_translation(self) -> StaleTranslation {
+        StaleTranslation {
             old_source: self.old_source,
             new_source: self.new_source,
             target: self.target,
@@ -1380,11 +1448,15 @@ impl TranslationDictionaryYaml {
             direct: self.direct,
             contextual,
             no_change: self.no_change,
-            target_additions: self.target_additions,
-            stale_records: self
-                .stale_records
+            target_adaptations: self
+                .target_adaptations
                 .into_iter()
-                .map(StaleTranslationRecordYaml::into_stale_record)
+                .map(|(path, adaptation)| (path, adaptation.into_target_adaptation()))
+                .collect(),
+            stale_translations: self
+                .stale_translations
+                .into_iter()
+                .map(StaleTranslationYaml::into_stale_translation)
                 .collect(),
             variables: self.variables,
             adapter_ids: self.adapter_ids,

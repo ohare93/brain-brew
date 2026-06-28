@@ -111,15 +111,15 @@ fn verify_translation_coverage_policy(
                 }
             }
 
-            let stale_records = stale_record_warning_details(&report.entries);
-            if !stale_records.is_empty() {
+            let stale_translations = stale_translation_warning_details(&report.entries);
+            if !stale_translations.is_empty() {
                 let message = format!(
-                    "stale translation record warning for target {} overlay {} ({}): {} stale record(s): {}",
+                    "stale translation warning for target {} overlay {} ({}): {} stale translation(s): {}",
                     plan.target,
                     planned.id,
                     planned.display_file,
-                    stale_records.len(),
-                    stale_records
+                    stale_translations.len(),
+                    stale_translations
                         .iter()
                         .take(10)
                         .cloned()
@@ -127,9 +127,7 @@ fn verify_translation_coverage_policy(
                         .join(", ")
                 );
                 if policy == manifest::TranslationCoveragePolicy::Strict {
-                    return Err(format!(
-                        "translation stale-record strict policy failed: {message}"
-                    ));
+                    return Err(format!("translation stale strict policy failed: {message}"));
                 }
                 eprintln!("warning: {message}");
             }
@@ -144,44 +142,44 @@ fn verify_translation_coverage_policy(
     Ok(())
 }
 
-pub(crate) fn emit_stale_record_warnings(plan: &ManifestTargetPlan) -> Result<(), String> {
-    for message in stale_record_warning_messages(plan)? {
+pub(crate) fn emit_stale_translation_warnings(plan: &ManifestTargetPlan) -> Result<(), String> {
+    for message in stale_translation_warning_messages(plan)? {
         eprintln!("warning: {message}");
     }
     Ok(())
 }
 
-pub(crate) fn emit_stale_record_warnings_for_overlays(
+pub(crate) fn emit_stale_translation_warnings_for_overlays(
     target: &str,
     base: &CanonicalDeck,
     overlays: &[(String, Overlay)],
 ) -> Result<(), String> {
-    for message in stale_record_warning_messages_for_overlays(target, base, overlays)? {
+    for message in stale_translation_warning_messages_for_overlays(target, base, overlays)? {
         eprintln!("warning: {message}");
     }
     Ok(())
 }
 
-fn stale_record_warning_messages(plan: &ManifestTargetPlan) -> Result<Vec<String>, String> {
+fn stale_translation_warning_messages(plan: &ManifestTargetPlan) -> Result<Vec<String>, String> {
     let mut messages = Vec::new();
     let mut current = plan.base.clone();
     for (planned, overlay) in &plan.overlays {
         if let Some(report) = current.translation_coverage(overlay) {
-            let stale_records = stale_record_warning_details(&report.entries);
-            if !stale_records.is_empty() {
+            let stale_translations = stale_translation_warning_details(&report.entries);
+            if !stale_translations.is_empty() {
                 messages.push(format!(
-                    "stale translation record warning for target {} overlay {} ({}): {} stale record(s): {}",
+                    "stale translation warning for target {} overlay {} ({}): {} stale translation(s): {}",
                     plan.target,
                     planned.id,
                     planned.display_file,
-                    stale_records.len(),
-                    stale_records.iter().take(10).cloned().collect::<Vec<_>>().join(", ")
+                    stale_translations.len(),
+                    stale_translations.iter().take(10).cloned().collect::<Vec<_>>().join(", ")
                 ));
             }
         }
         current = current.compose(std::slice::from_ref(overlay)).map_err(|error| {
             format!(
-                "failed to compose overlay {} for target {} while checking stale translation records: {error}",
+                "failed to compose overlay {} for target {} while checking stale translations: {error}",
                 planned.id, plan.target
             )
         })?;
@@ -189,7 +187,7 @@ fn stale_record_warning_messages(plan: &ManifestTargetPlan) -> Result<Vec<String
     Ok(messages)
 }
 
-fn stale_record_warning_messages_for_overlays(
+fn stale_translation_warning_messages_for_overlays(
     target: &str,
     base: &CanonicalDeck,
     overlays: &[(String, Overlay)],
@@ -198,33 +196,35 @@ fn stale_record_warning_messages_for_overlays(
     let mut current = base.clone();
     for (display_file, overlay) in overlays {
         if let Some(report) = current.translation_coverage(overlay) {
-            let stale_records = stale_record_warning_details(&report.entries);
-            if !stale_records.is_empty() {
+            let stale_translations = stale_translation_warning_details(&report.entries);
+            if !stale_translations.is_empty() {
                 messages.push(format!(
-                    "stale translation record warning for target {target} overlay {} ({}): {} stale record(s): {}",
+                    "stale translation warning for target {target} overlay {} ({}): {} stale translation(s): {}",
                     overlay.id,
                     display_file,
-                    stale_records.len(),
-                    stale_records.iter().take(10).cloned().collect::<Vec<_>>().join(", ")
+                    stale_translations.len(),
+                    stale_translations.iter().take(10).cloned().collect::<Vec<_>>().join(", ")
                 ));
             }
         }
-        current = current.compose(std::slice::from_ref(overlay)).map_err(|error| {
-            format!(
-                "failed to compose overlay {} while checking stale translation records: {error}",
-                overlay.id
-            )
-        })?;
+        current = current
+            .compose(std::slice::from_ref(overlay))
+            .map_err(|error| {
+                format!(
+                    "failed to compose overlay {} while checking stale translations: {error}",
+                    overlay.id
+                )
+            })?;
     }
     Ok(messages)
 }
 
-fn stale_record_warning_details(
+fn stale_translation_warning_details(
     entries: &[brain_brew_core::TranslationCoverageEntry],
 ) -> Vec<String> {
     entries
         .iter()
-        .filter(|entry| entry.category == TranslationCoverageCategory::StaleTranslationRecord)
+        .filter(|entry| entry.category == TranslationCoverageCategory::StaleTranslation)
         .map(|entry| {
             format!(
                 "{} old {:?} -> new {:?}",

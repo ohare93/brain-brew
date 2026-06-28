@@ -328,55 +328,83 @@ translations:
 }
 
 #[test]
-fn translation_dictionary_parses_and_formats_stale_records() {
+fn translation_dictionary_parses_and_formats_stale_translations() {
     let formatted = canonical_yaml::overlay_format_str(
         r#"id: overlay.translation.da
 kind: translation
-translations:
-  stale_records:
-    - old_source: Helsinki
-      new_source: Helsinki City
-      target: Helsingfors
-    - old_source: Capital
-      new_source: Capital city
-      target: Hovedstad
-      context: notes.note.finland
+stale_translations:
+  - old_source: Helsinki
+    new_source: Helsinki City
+    target: Helsingfors
+  - old_source: Capital
+    new_source: Capital city
+    target: Hovedstad
+    context: notes.note.finland
 "#,
     )
-    .expect("stale records parse and format");
+    .expect("stale translations parse and format");
 
-    assert!(formatted.contains("  stale_records:\n"));
-    assert!(formatted.contains("    - old_source: Helsinki\n"));
-    assert!(formatted.contains("      new_source: Helsinki City\n"));
-    assert!(formatted.contains("      target: Helsingfors\n"));
-    assert!(formatted.contains("      context: notes.note.finland\n"));
+    assert!(formatted.contains("stale_translations:\n"));
+    assert!(formatted.contains("  - old_source: Helsinki\n"));
+    assert!(formatted.contains("    new_source: Helsinki City\n"));
+    assert!(formatted.contains("    target: Helsingfors\n"));
+    assert!(formatted.contains("    context: notes.note.finland\n"));
 
     let overlay = canonical_yaml::overlay_from_str(&formatted).expect("formatted overlay parses");
     let translations = overlay.translations.expect("translation dictionary");
-    assert_eq!(translations.stale_records.len(), 2);
-    assert_eq!(translations.stale_records[0].old_source, "Helsinki");
-    assert_eq!(translations.stale_records[0].new_source, "Helsinki City");
-    assert_eq!(translations.stale_records[0].target, "Helsingfors");
+    assert_eq!(translations.stale_translations.len(), 2);
+    assert_eq!(translations.stale_translations[0].old_source, "Helsinki");
     assert_eq!(
-        translations.stale_records[1].context.as_deref(),
+        translations.stale_translations[0].new_source,
+        "Helsinki City"
+    );
+    assert_eq!(translations.stale_translations[0].target, "Helsingfors");
+    assert_eq!(
+        translations.stale_translations[1].context.as_deref(),
         Some("notes.note.finland")
     );
 }
 
 #[test]
-fn translation_dictionary_rejects_unknown_stale_record_fields() {
+fn translation_dictionary_rejects_alpha_target_addition_and_stale_record_keys() {
+    let error = canonical_yaml::overlay_from_str(
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  target_additions:
+    notes.note.denmark.fields.field.country-info: Ekstra tekst.
+"#,
+    )
+    .expect_err("alpha target_additions key is not accepted");
+    assert!(error.to_string().contains("target_additions"));
+
     let error = canonical_yaml::overlay_from_str(
         r#"id: overlay.translation.da
 kind: translation
 translations:
   stale_records:
-    - old_source: Helsinki
-      new_source: Helsinki City
-      target: Helsingfors
-      unexpected: nope
+    - old_source: Old source
+      new_source: New source
+      target: Gammel oversættelse
 "#,
     )
-    .expect_err("unknown stale record fields are rejected");
+    .expect_err("alpha stale_records key is not accepted");
+    assert!(error.to_string().contains("stale_records"));
+}
+
+#[test]
+fn translation_dictionary_rejects_unknown_stale_translation_fields() {
+    let error = canonical_yaml::overlay_from_str(
+        r#"id: overlay.translation.da
+kind: translation
+stale_translations:
+  - old_source: Helsinki
+    new_source: Helsinki City
+    target: Helsingfors
+    unexpected: nope
+"#,
+    )
+    .expect_err("unknown stale translation fields are rejected");
 
     assert!(error.to_string().contains("unexpected"));
 }
@@ -413,8 +441,10 @@ translations:
         Country: Land
     deck.description:
       Shared source: Dæk-kontekst
-  target_additions:
-    notes.note.denmark.fields.field.country-info: Ekstra tekst.
+target_adaptations:
+  notes.note.denmark.fields.field.country-info:
+    expected_source: ''
+    target: Ekstra tekst.
 "#,
     )
     .expect("contextual translation sections parse");
@@ -433,8 +463,13 @@ translations:
         "Dæk-kontekst"
     );
     assert_eq!(
-        translations.target_additions["notes.note.denmark.fields.field.country-info"],
+        translations.target_adaptations["notes.note.denmark.fields.field.country-info"].target,
         "Ekstra tekst."
+    );
+    assert_eq!(
+        translations.target_adaptations["notes.note.denmark.fields.field.country-info"]
+            .expected_source,
+        ""
     );
 }
 

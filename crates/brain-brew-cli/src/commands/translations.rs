@@ -1337,10 +1337,10 @@ fn compose_lenient_translation_overlay(
                     TranslationCoverageCategory::StaleNoChangeKey => {
                         translations.no_change.remove(&entry.source);
                     }
-                    TranslationCoverageCategory::StaleTargetAddition
-                    | TranslationCoverageCategory::InvalidTargetAddition => {
+                    TranslationCoverageCategory::StaleTargetAdaptation
+                    | TranslationCoverageCategory::InvalidTargetAdaptation => {
                         let path = entry.context.as_deref().unwrap_or(&entry.path);
-                        translations.target_additions.remove(path);
+                        translations.target_adaptations.remove(path);
                     }
                     TranslationCoverageCategory::StaleVariableKey => {
                         if let Some(variable_key) = &entry.context
@@ -1409,7 +1409,7 @@ fn print_no_translation_reports(args: &TranslationArgs) -> Result<(), String> {
     }
     println!();
     println!(
-        "`brainbrew translations` reports source-keyed translation dictionaries such as `translations.direct`, `translations.contextual`, and `translations.target_additions`."
+        "`brainbrew translations` reports source-keyed translation dictionaries such as `translations.direct`, `translations.contextual`, plus path-scoped `target_adaptations`."
     );
     println!(
         "Patch-style translation overlays still compose, but they do not expose coverage data for this workflow yet."
@@ -1468,16 +1468,16 @@ fn print_human_reports(reports: &[ScopedTranslationReport], full: bool) {
         );
         println!(
             "  {}: {}",
-            color_stdout("contextual overrides", "36"),
-            all_counts.get("contextual_override").copied().unwrap_or(0)
+            color_stdout("contextual translations", "36"),
+            all_counts
+                .get("contextual_translation")
+                .copied()
+                .unwrap_or(0)
         );
         println!(
             "  {}: {}",
-            color_stdout("target-language additions", "35"),
-            all_counts
-                .get("target_language_addition")
-                .copied()
-                .unwrap_or(0)
+            color_stdout("target adaptations", "35"),
+            all_counts.get("target_adaptation").copied().unwrap_or(0)
         );
         println!(
             "  {}: {}",
@@ -1506,11 +1506,8 @@ fn print_human_reports(reports: &[ScopedTranslationReport], full: bool) {
         );
         println!(
             "  {}: {}",
-            color_stdout("stale translation records", "33"),
-            all_counts
-                .get("stale_translation_record")
-                .copied()
-                .unwrap_or(0)
+            color_stdout("stale translations", "33"),
+            all_counts.get("stale_translation").copied().unwrap_or(0)
         );
         println!(
             "  {}: {}",
@@ -1620,11 +1617,11 @@ fn is_stale_or_invalid(category: TranslationCoverageCategory) -> bool {
         TranslationCoverageCategory::StaleDirectKey
             | TranslationCoverageCategory::StaleContextualKey
             | TranslationCoverageCategory::StaleNoChangeKey
-            | TranslationCoverageCategory::StaleTargetAddition
+            | TranslationCoverageCategory::StaleTargetAdaptation
             | TranslationCoverageCategory::StaleVariableKey
             | TranslationCoverageCategory::StaleAdapterIdKey
-            | TranslationCoverageCategory::StaleTranslationRecord
-            | TranslationCoverageCategory::InvalidTargetAddition
+            | TranslationCoverageCategory::StaleTranslation
+            | TranslationCoverageCategory::InvalidTargetAdaptation
     )
 }
 
@@ -1633,7 +1630,7 @@ fn validate_status_filter(status: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!(
-            "invalid translation status {status:?}; expected missing, stale, translated, changed, direct, contextual, no-change, addition, variable, adapter-id, ignored, or a coverage category name"
+            "invalid translation status {status:?}; expected missing, stale, translated, changed, direct, contextual, no-change, adaptation, variable, adapter-id, ignored, or a coverage category name"
         ))
     }
 }
@@ -1652,13 +1649,13 @@ fn status_filter_is_known(status: &str) -> bool {
             | "direct"
             | "contextual"
             | "no_change"
-            | "addition"
+            | "adaptation"
             | "variable"
             | "adapter_id"
             | "ignored"
             | "direct_translation"
-            | "contextual_override"
-            | "target_language_addition"
+            | "contextual_translation"
+            | "target_adaptation"
             | "variable_translation"
             | "adapter_id_translation"
             | "ignored_source"
@@ -1666,11 +1663,11 @@ fn status_filter_is_known(status: &str) -> bool {
             | "stale_direct_key"
             | "stale_contextual_key"
             | "stale_no_change_key"
-            | "stale_target_addition"
+            | "stale_target_adaptation"
             | "stale_variable_key"
             | "stale_adapter_id_key"
-            | "stale_translation_record"
-            | "invalid_target_addition"
+            | "stale_translation"
+            | "invalid_target_adaptation"
     )
 }
 
@@ -1682,23 +1679,23 @@ fn status_matches_filter(category: TranslationCoverageCategory, status: &str) ->
         "translated" | "covered" => matches!(
             category,
             TranslationCoverageCategory::DirectTranslation
-                | TranslationCoverageCategory::ContextualOverride
+                | TranslationCoverageCategory::ContextualTranslation
                 | TranslationCoverageCategory::NoChange
-                | TranslationCoverageCategory::TargetLanguageAddition
+                | TranslationCoverageCategory::TargetAdaptation
                 | TranslationCoverageCategory::VariableTranslation
                 | TranslationCoverageCategory::AdapterIdTranslation
         ),
         "changed" => matches!(
             category,
             TranslationCoverageCategory::DirectTranslation
-                | TranslationCoverageCategory::ContextualOverride
-                | TranslationCoverageCategory::TargetLanguageAddition
+                | TranslationCoverageCategory::ContextualTranslation
+                | TranslationCoverageCategory::TargetAdaptation
                 | TranslationCoverageCategory::VariableTranslation
         ),
         "direct" => category == TranslationCoverageCategory::DirectTranslation,
-        "contextual" => category == TranslationCoverageCategory::ContextualOverride,
+        "contextual" => category == TranslationCoverageCategory::ContextualTranslation,
         "no_change" => category == TranslationCoverageCategory::NoChange,
-        "addition" => category == TranslationCoverageCategory::TargetLanguageAddition,
+        "adaptation" => category == TranslationCoverageCategory::TargetAdaptation,
         "variable" => category == TranslationCoverageCategory::VariableTranslation,
         "adapter_id" => category == TranslationCoverageCategory::AdapterIdTranslation,
         "ignored" => category == TranslationCoverageCategory::IgnoredSource,
@@ -2041,9 +2038,9 @@ fn wrap_context_cell(text: &str, width: usize) -> Vec<String> {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
 struct TranslationSummaryCounts {
     direct_translation: usize,
-    contextual_override: usize,
+    contextual_translation: usize,
     no_change: usize,
-    target_language_addition: usize,
+    target_adaptation: usize,
     variable_translation: usize,
     adapter_id_translation: usize,
     untranslated_fallback: usize,
@@ -2071,9 +2068,9 @@ fn print_json_summary(reports: &[ScopedTranslationReport]) {
                 "overlay": row.overlay_id,
                 "file": row.overlay_file,
                 "direct_translation": row.counts.direct_translation,
-                "contextual_override": row.counts.contextual_override,
+                "contextual_translation": row.counts.contextual_translation,
                 "no_change": row.counts.no_change,
-                "target_language_addition": row.counts.target_language_addition,
+                "target_adaptation": row.counts.target_adaptation,
                 "variable_translation": row.counts.variable_translation,
                 "adapter_id_translation": row.counts.adapter_id_translation,
                 "untranslated_fallback": row.counts.untranslated_fallback,
@@ -2110,7 +2107,7 @@ fn print_compact_human_summary_table(rows: Vec<TranslationSummaryRow>) {
         "direct".to_owned(),
         "ctxt".to_owned(),
         "same".to_owned(),
-        "add".to_owned(),
+        "adapt".to_owned(),
         "vars".to_owned(),
         "ids".to_owned(),
         "miss".to_owned(),
@@ -2124,9 +2121,9 @@ fn print_compact_human_summary_table(rows: Vec<TranslationSummaryRow>) {
             row.language,
             row.targets.len().to_string(),
             row.counts.direct_translation.to_string(),
-            row.counts.contextual_override.to_string(),
+            row.counts.contextual_translation.to_string(),
             row.counts.no_change.to_string(),
-            row.counts.target_language_addition.to_string(),
+            row.counts.target_adaptation.to_string(),
             row.counts.variable_translation.to_string(),
             row.counts.adapter_id_translation.to_string(),
             row.counts.missing_text_translation.to_string(),
@@ -2153,7 +2150,7 @@ fn print_full_human_summary_table(rows: Vec<TranslationSummaryRow>) {
         "direct".to_owned(),
         "contextual".to_owned(),
         "no-change".to_owned(),
-        "additions".to_owned(),
+        "adaptations".to_owned(),
         "variables".to_owned(),
         "adapter-ids".to_owned(),
         "missing-text".to_owned(),
@@ -2169,9 +2166,9 @@ fn print_full_human_summary_table(rows: Vec<TranslationSummaryRow>) {
             row.overlay_id,
             row.overlay_file,
             row.counts.direct_translation.to_string(),
-            row.counts.contextual_override.to_string(),
+            row.counts.contextual_translation.to_string(),
             row.counts.no_change.to_string(),
-            row.counts.target_language_addition.to_string(),
+            row.counts.target_adaptation.to_string(),
             row.counts.variable_translation.to_string(),
             row.counts.adapter_id_translation.to_string(),
             row.counts.missing_text_translation.to_string(),
@@ -2261,9 +2258,9 @@ fn translation_summary_counts(entries: &[TranslationCoverageEntry]) -> Translati
         .count();
     TranslationSummaryCounts {
         direct_translation: counts.get("direct_translation").copied().unwrap_or(0),
-        contextual_override: counts.get("contextual_override").copied().unwrap_or(0),
+        contextual_translation: counts.get("contextual_translation").copied().unwrap_or(0),
         no_change: counts.get("no_change").copied().unwrap_or(0),
-        target_language_addition: counts.get("target_language_addition").copied().unwrap_or(0),
+        target_adaptation: counts.get("target_adaptation").copied().unwrap_or(0),
         variable_translation: counts.get("variable_translation").copied().unwrap_or(0),
         adapter_id_translation: counts.get("adapter_id_translation").copied().unwrap_or(0),
         untranslated_fallback,
@@ -2831,21 +2828,21 @@ fn yaml_scalar(value: &str) -> String {
 fn color_category(category: TranslationCoverageCategory, text: &str) -> String {
     match category {
         TranslationCoverageCategory::DirectTranslation => color_stdout(text, "32"),
-        TranslationCoverageCategory::ContextualOverride => color_stdout(text, "36"),
+        TranslationCoverageCategory::ContextualTranslation => color_stdout(text, "36"),
         TranslationCoverageCategory::NoChange => color_stdout(text, "34"),
-        TranslationCoverageCategory::TargetLanguageAddition => color_stdout(text, "35"),
+        TranslationCoverageCategory::TargetAdaptation => color_stdout(text, "35"),
         TranslationCoverageCategory::VariableTranslation
         | TranslationCoverageCategory::AdapterIdTranslation
         | TranslationCoverageCategory::IgnoredSource => color_stdout(text, "2"),
         TranslationCoverageCategory::UntranslatedFallback => color_stdout(text, "31"),
         TranslationCoverageCategory::StaleDirectKey
         | TranslationCoverageCategory::StaleContextualKey
-        | TranslationCoverageCategory::StaleTranslationRecord
+        | TranslationCoverageCategory::StaleTranslation
         | TranslationCoverageCategory::StaleNoChangeKey
-        | TranslationCoverageCategory::StaleTargetAddition
+        | TranslationCoverageCategory::StaleTargetAdaptation
         | TranslationCoverageCategory::StaleVariableKey
         | TranslationCoverageCategory::StaleAdapterIdKey
-        | TranslationCoverageCategory::InvalidTargetAddition => color_stdout(text, "33"),
+        | TranslationCoverageCategory::InvalidTargetAdaptation => color_stdout(text, "33"),
     }
 }
 

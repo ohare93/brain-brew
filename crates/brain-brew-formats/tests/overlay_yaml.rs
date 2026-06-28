@@ -446,8 +446,6 @@ fn formatter_orders_translation_dictionary_sections_deterministically() {
         r#"id: overlay.translation.de
 kind: translation
 translations:
-  target_additions:
-    notes.note.anguilla.fields.field.capital: The Valley
   adapter_ids:
     crowdanki:guid:
       old-guid: new-guid
@@ -460,6 +458,10 @@ translations:
     - Andorra
   direct:
     Germany: Deutschland
+target_adaptations:
+  notes.note.anguilla.fields.field.capital:
+    expected_source: ''
+    target: The Valley
 "#,
     )
     .expect("overlay formats");
@@ -477,14 +479,13 @@ translations:
         "contextual translations are emitted before no-change entries"
     );
     assert!(
-        formatted.find("  no_change:\n").unwrap()
-            < formatted.find("  target_additions:\n").unwrap(),
-        "no-change entries are emitted before target additions"
+        formatted.find("  no_change:\n").unwrap() < formatted.find("  adapter_ids:\n").unwrap(),
+        "no-change entries are emitted before adapter_ids"
     );
     assert!(
-        formatted.find("  target_additions:\n").unwrap()
-            < formatted.find("  adapter_ids:\n").unwrap(),
-        "target additions are emitted before adapter_ids"
+        formatted.find("  adapter_ids:\n").unwrap()
+            < formatted.find("target_adaptations:\n").unwrap(),
+        "target adaptations are emitted after the translations dictionary"
     );
 }
 

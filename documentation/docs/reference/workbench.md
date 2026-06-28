@@ -57,7 +57,7 @@ The current note pivot supports target-translation edits and constrained source 
 - Target translation edits rewrite the selected Translation Overlay as canonical YAML.
 - Source note-field edits rewrite the Canonical Deck File, except `!include`-backed scalar fields rewrite the included file and keep the include reference intact.
 - Repeated source text edits default to the current field only. The browser UI shows the occurrence count and offers an all-occurrences scope.
-- Source edits default affected translations to Stale Translation Records. Maintainers can instead migrate the existing translation key to the new source while preserving target text.
+- Source edits default affected translations to Stale Translations. Maintainers can instead migrate the existing translation key to the new source while preserving target text.
 - Browser-local staged edits are stored in localStorage until Apply, so refresh keeps unsaved source and target edits while canonical YAML remains unchanged.
 
 ## Source String pivot
@@ -67,9 +67,9 @@ The Source String pivot complements the note-first view for reusable translation
 - `GET /api/workbench/source-string-pivot` groups translatable note-field and structured-message component text by source string.
 - Each source string reports status, occurrence count, completion counts, content-group badges, and how many occurrences a direct reusable translation will affect.
 - Selecting a source string shows every note/field occurrence with friendly context, field-level paths, content-group badges, and source/target previews.
-- Direct reusable translations are the default. Global no-change is staged as `translations.no_change`; unchanged exceptions are staged as normal contextual overrides whose target equals the source text.
+- Direct reusable translations are the default. Global no-change is staged as `translations.no_change`; unchanged exceptions are staged as normal contextual translations whose target equals the source text.
 - Contextual override controls use the selected occurrence's field-level path by default.
-- Structured-message source strings are exposed at component/format paths first; whole-field contextual overrides remain an advanced/manual action.
+- Structured-message source strings are exposed at component/format paths first; whole-field contextual translations remain an advanced/manual action.
 - Source String staged edits share the same browser-local localStorage and Apply preview/confirmation workflow as the Note pivot.
 
 ## Card pivot

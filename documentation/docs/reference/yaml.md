@@ -101,13 +101,6 @@ translations:
   no_change:
     - Andorra
     - Djibouti
-  target_additions:
-    notes.note.example.fields.field.country-info: Localized blank text.
-  stale_records:
-    - old_source: Old source text.
-      new_source: New source text.
-      target: Existing target text needing review.
-      context: notes.note.example.fields.field.country-info
   variables:
     label.capital:
       Capital: Hauptstadt
@@ -116,7 +109,21 @@ translations:
       old-guid: new-guid
 ```
 
-Formatter order is deterministic: `require_complete`, `ignore_paths`, `direct`, `contextual`, `no_change`, `target_additions`, `stale_records`, `variables`, `adapter_ids`.
+Formatter order is deterministic inside `translations`: `require_complete`, `ignore_paths`, `direct`, `contextual`, `no_change`, `variables`, `adapter_ids`.
+
+Top-level target adaptations and stale translations are emitted after `translations`:
+
+```yaml
+target_adaptations:
+  notes.note.example.fields.field.country-info:
+    expected_source: ''
+    target: Localized blank text.
+stale_translations:
+  - old_source: Old source text.
+    new_source: New source text.
+    target: Existing target text needing review.
+    context: notes.note.example.fields.field.country-info
+```
 
 ## Field additions
 

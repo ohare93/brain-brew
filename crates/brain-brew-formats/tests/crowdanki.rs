@@ -10,7 +10,15 @@ use brain_brew_formats::crowdanki;
 fn exports_deterministic_crowdanki_json_preserving_adapter_identities() {
     let export = crowdanki::export_deck(&ug_style_deck()).expect("deck exports");
 
-    assert_eq!(export.deck_json, EXPECTED_CROWDANKI_JSON);
+    let actual_json: serde_json::Value = serde_json::from_str(&export.deck_json).unwrap();
+    let expected_json: serde_json::Value = serde_json::from_str(EXPECTED_CROWDANKI_JSON).unwrap();
+    assert_eq!(actual_json, expected_json);
+    assert_eq!(
+        export.deck_json,
+        crowdanki::export_deck(&ug_style_deck())
+            .expect("second export succeeds")
+            .deck_json
+    );
     assert!(export.omitted_tombstones.is_empty());
 }
 

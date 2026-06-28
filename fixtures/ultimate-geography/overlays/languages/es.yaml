@@ -655,8 +655,6 @@ translations:
     - Yemen
     - Zagreb
     - Zambia
-  target_additions:
-    notes.note.celebes-sea.fields.field.country-info: 'También conocido como mar de Sulawesi.'
   variables:
     label.capital-hint.answer:
       'Hint: {{Capital hint}}': 'Pista: {{Capital hint}}'
@@ -992,6 +990,10 @@ translations:
     crowdanki:uuid:
       43c5ba66-9a65-11e8-90c9-a0481cc15658: cb4d32ee-12ed-9960-1841-28c09449ded0
       43e2586a-9a65-11e8-a777-a0481cc15658: 0bacddfd-1e81-4e62-9152-bdff33db0374
+target_adaptations:
+  notes.note.celebes-sea.fields.field.country-info:
+    expected_source: ''
+    target: 'También conocido como mar de Sulawesi.'
 deck:
   name:
     intent: replace

@@ -26,7 +26,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             &manifest_args.include_paths,
             &manifest_args.package_roots,
         )?;
-        verify::emit_stale_record_warnings(&plan)?;
+        verify::emit_stale_translation_warnings(&plan)?;
         let deck = plan.compose()?;
         let yaml = canonical_yaml::to_string(&deck).map_err(|error| error.to_string())?;
         if let Some(path) = manifest_args.out_path {
@@ -59,7 +59,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     let deck_path = Path::new(&args[0]);
     let (overlay_paths, out_path) = parse_overlay_and_optional_out(&args[1..])?;
     let (base, overlays) = read_deck_and_overlays(deck_path, &overlay_paths)?;
-    verify::emit_stale_record_warnings_for_overlays("ad-hoc", &base, &overlays)?;
+    verify::emit_stale_translation_warnings_for_overlays("ad-hoc", &base, &overlays)?;
     let deck = base
         .compose(
             &overlays

@@ -694,7 +694,7 @@ fn note_html(pivot: &Value, note: &Value) -> String {
         let source_impact = staged_source
             .as_ref()
             .and_then(|edit| edit["impact_action"].as_str())
-            .unwrap_or("stale_record");
+            .unwrap_or("stale_translation");
         let id = id_for_path(path);
         let editable = field["editable"].as_bool().unwrap_or(false);
         let source_editable = field["source_editable"].as_bool().unwrap_or(false);
@@ -714,7 +714,7 @@ fn note_html(pivot: &Value, note: &Value) -> String {
             .unwrap_or_else(|| field["status"].as_str().unwrap_or("unknown").to_owned());
         let occurrence_count = field["occurrence_count"].as_u64().unwrap_or(1);
         html.push_str(&format!(
-            "<tr data-field-path=\"{}\" data-note-id=\"{}\" data-field-id=\"{}\" data-editable=\"{}\" data-original-status=\"{}\"><td>{}</td><td class=\"source-text\"><span id=\"source-text-{}\">{}</span><div class=\"source-edit-controls\"><button id=\"source-edit-toggle-{}\" type=\"button\"{}>Edit source</button><input id=\"source-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\" data-note-id=\"{}\" data-field-id=\"{}\"{}{} /></div></td><td><input id=\"translation-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\" data-note-id=\"{}\" data-field-id=\"{}\"{} /><div id=\"target-text-{}\">{}</div></td><td id=\"status-text-{}\">{}</td><td>{} occurrence(s)<br><select id=\"source-scope-{}\"{}><option value=\"field\"{}>This field only</option><option value=\"all_occurrences\"{}>All occurrences</option></select></td><td><select id=\"translation-mode-{}\"{}><option value=\"direct\"{}>Direct</option><option value=\"contextual\"{}>Contextual</option><option value=\"no_change\"{}>No change</option></select><br><label>Source impact <select id=\"source-impact-{}\"{}><option value=\"stale_record\"{}>Create stale record</option><option value=\"migrate_key\"{}>Migrate key</option></select></label></td></tr>",
+            "<tr data-field-path=\"{}\" data-note-id=\"{}\" data-field-id=\"{}\" data-editable=\"{}\" data-original-status=\"{}\"><td>{}</td><td class=\"source-text\"><span id=\"source-text-{}\">{}</span><div class=\"source-edit-controls\"><button id=\"source-edit-toggle-{}\" type=\"button\"{}>Edit source</button><input id=\"source-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\" data-note-id=\"{}\" data-field-id=\"{}\"{}{} /></div></td><td><input id=\"translation-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\" data-note-id=\"{}\" data-field-id=\"{}\"{} /><div id=\"target-text-{}\">{}</div></td><td id=\"status-text-{}\">{}</td><td>{} occurrence(s)<br><select id=\"source-scope-{}\"{}><option value=\"field\"{}>This field only</option><option value=\"all_occurrences\"{}>All occurrences</option></select></td><td><select id=\"translation-mode-{}\"{}><option value=\"direct\"{}>Direct</option><option value=\"contextual\"{}>Contextual</option><option value=\"no_change\"{}>No change</option></select><br><label>Source impact <select id=\"source-impact-{}\"{}><option value=\"stale_translation\"{}>Create stale translation</option><option value=\"migrate_key\"{}>Migrate key</option></select></label></td></tr>",
             escape_html(path),
             escape_html(note["note_id"].as_str().unwrap_or("")),
             escape_html(field["field_id"].as_str().unwrap_or("")),
@@ -756,7 +756,7 @@ fn note_html(pivot: &Value, note: &Value) -> String {
             selected_attr(mode, "no_change"),
             id,
             source_controls_disabled,
-            selected_attr(source_impact, "stale_record"),
+            selected_attr(source_impact, "stale_translation"),
             selected_attr(source_impact, "migrate_key"),
         ));
     }
@@ -1173,7 +1173,7 @@ fn card_detail_html(pivot: &Value, card: &Value) -> String {
         let source_impact = staged_source
             .as_ref()
             .and_then(|edit| edit["impact_action"].as_str())
-            .unwrap_or("stale_record");
+            .unwrap_or("stale_translation");
         let status = staged
             .as_ref()
             .and_then(|edit| edit["mode"].as_str())
@@ -1183,7 +1183,7 @@ fn card_detail_html(pivot: &Value, card: &Value) -> String {
         let editable = field["editable"].as_bool().unwrap_or(false);
         let source_editable = field["source_editable"].as_bool().unwrap_or(false);
         html.push_str(&format!(
-            "<tr class=\"card-field-row\" data-path=\"{}\" data-source=\"{}\"><td>{}</td><td><span id=\"card-source-text-{}\">{}</span><br><button id=\"card-source-edit-toggle-{}\" type=\"button\"{}>Edit source</button> <input id=\"card-source-input-{}\" value=\"{}\"{}{}><br><select id=\"card-source-scope-{}\"{}><option value=\"field\"{}>This field only</option><option value=\"all_occurrences\"{}>All occurrences</option></select> <select id=\"card-source-impact-{}\"{}><option value=\"stale_record\"{}>Create stale record</option><option value=\"migrate_key\"{}>Migrate key</option></select></td><td><input id=\"card-translation-input-{}\" value=\"{}\"{}><div id=\"card-target-text-{}\">{}</div></td><td id=\"card-status-text-{}\">{}</td><td><select id=\"card-translation-mode-{}\"{}><option value=\"direct\"{}>Direct</option><option value=\"contextual\"{}>Contextual</option><option value=\"no_change\"{}>No change</option></select></td></tr>",
+            "<tr class=\"card-field-row\" data-path=\"{}\" data-source=\"{}\"><td>{}</td><td><span id=\"card-source-text-{}\">{}</span><br><button id=\"card-source-edit-toggle-{}\" type=\"button\"{}>Edit source</button> <input id=\"card-source-input-{}\" value=\"{}\"{}{}><br><select id=\"card-source-scope-{}\"{}><option value=\"field\"{}>This field only</option><option value=\"all_occurrences\"{}>All occurrences</option></select> <select id=\"card-source-impact-{}\"{}><option value=\"stale_translation\"{}>Create stale translation</option><option value=\"migrate_key\"{}>Migrate key</option></select></td><td><input id=\"card-translation-input-{}\" value=\"{}\"{}><div id=\"card-target-text-{}\">{}</div></td><td id=\"card-status-text-{}\">{}</td><td><select id=\"card-translation-mode-{}\"{}><option value=\"direct\"{}>Direct</option><option value=\"contextual\"{}>Contextual</option><option value=\"no_change\"{}>No change</option></select></td></tr>",
             escape_html(path),
             escape_html(source),
             escape_html(field["field_name"].as_str().unwrap_or("field")),
@@ -1201,7 +1201,7 @@ fn card_detail_html(pivot: &Value, card: &Value) -> String {
             selected_attr(source_scope, "all_occurrences"),
             id,
             if source_editable { "" } else { " disabled" },
-            selected_attr(source_impact, "stale_record"),
+            selected_attr(source_impact, "stale_translation"),
             selected_attr(source_impact, "migrate_key"),
             id,
             escape_html(value),
@@ -1326,7 +1326,7 @@ fn publish_card_pivot_panel(pivot: &Value) {
             let source_impact = staged_source
                 .as_ref()
                 .and_then(|edit| edit["impact_action"].as_str())
-                .unwrap_or("stale_record");
+                .unwrap_or("stale_translation");
             let status = staged
                 .as_ref()
                 .and_then(|edit| edit["mode"].as_str())
@@ -1336,7 +1336,7 @@ fn publish_card_pivot_panel(pivot: &Value) {
             let editable = field["editable"].as_bool().unwrap_or(false);
             let source_editable = field["source_editable"].as_bool().unwrap_or(false);
             html.push_str(&format!(
-                "<tr class=\"card-field-row\" data-path=\"{}\" data-source=\"{}\"><td>{}</td><td><span id=\"card-source-text-{}\">{}</span><br><button id=\"card-source-edit-toggle-{}\" type=\"button\"{}>Edit source</button> <input id=\"card-source-input-{}\" value=\"{}\"{}{}><br><select id=\"card-source-scope-{}\"{}><option value=\"field\"{}>This field only</option><option value=\"all_occurrences\"{}>All occurrences</option></select> <select id=\"card-source-impact-{}\"{}><option value=\"stale_record\"{}>Create stale record</option><option value=\"migrate_key\"{}>Migrate key</option></select></td><td><input id=\"card-translation-input-{}\" value=\"{}\"{}><div id=\"card-target-text-{}\">{}</div></td><td id=\"card-status-text-{}\">{}</td><td><select id=\"card-translation-mode-{}\"{}><option value=\"direct\"{}>Direct</option><option value=\"contextual\"{}>Contextual</option><option value=\"no_change\"{}>No change</option></select></td></tr>",
+                "<tr class=\"card-field-row\" data-path=\"{}\" data-source=\"{}\"><td>{}</td><td><span id=\"card-source-text-{}\">{}</span><br><button id=\"card-source-edit-toggle-{}\" type=\"button\"{}>Edit source</button> <input id=\"card-source-input-{}\" value=\"{}\"{}{}><br><select id=\"card-source-scope-{}\"{}><option value=\"field\"{}>This field only</option><option value=\"all_occurrences\"{}>All occurrences</option></select> <select id=\"card-source-impact-{}\"{}><option value=\"stale_translation\"{}>Create stale translation</option><option value=\"migrate_key\"{}>Migrate key</option></select></td><td><input id=\"card-translation-input-{}\" value=\"{}\"{}><div id=\"card-target-text-{}\">{}</div></td><td id=\"card-status-text-{}\">{}</td><td><select id=\"card-translation-mode-{}\"{}><option value=\"direct\"{}>Direct</option><option value=\"contextual\"{}>Contextual</option><option value=\"no_change\"{}>No change</option></select></td></tr>",
                 escape_html(path),
                 escape_html(source),
                 escape_html(field["field_name"].as_str().unwrap_or("field")),
@@ -1354,7 +1354,7 @@ fn publish_card_pivot_panel(pivot: &Value) {
                 selected_attr(source_scope, "all_occurrences"),
                 id,
                 if source_editable { "" } else { " disabled" },
-                selected_attr(source_impact, "stale_record"),
+                selected_attr(source_impact, "stale_translation"),
                 selected_attr(source_impact, "migrate_key"),
                 id,
                 escape_html(value),
@@ -1915,7 +1915,7 @@ fn attach_card_source_stage_handler(
                 .get_element_by_id(&impact_id)
                 .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
                 .map(|select| select.value())
-                .unwrap_or_else(|| "stale_record".to_owned());
+                .unwrap_or_else(|| "stale_translation".to_owned());
             stage_card_source_edit(&pivot, &path, &source, &value, &scope, &impact);
             if let Some(source_text) = document.get_element_by_id(&source_text_id) {
                 source_text.set_text_content(Some(&value));
@@ -4404,7 +4404,7 @@ fn refresh_progress_from_dom() {
         if status.starts_with("staged_")
             || matches!(
                 status.as_str(),
-                "direct_translation" | "contextual_override" | "no_change"
+                "direct_translation" | "contextual_translation" | "no_change"
             )
         {
             complete += 1;
