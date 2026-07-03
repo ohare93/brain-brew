@@ -11,7 +11,7 @@ use crate::io::{
     root_relative_path, verify_canonical_deck_format, verify_manifest_format,
     verify_overlay_format,
 };
-use crate::media_assets::validate_media_assets;
+use crate::media_assets::{validate_media_assets, validate_media_references};
 use crate::output;
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
@@ -61,6 +61,8 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         deck.validate().map_err(|error| error.to_string())?;
         if let Some(media_root) = &media_root {
             validate_media_assets(&deck, media_root)?;
+        } else {
+            validate_media_references(&deck)?;
         }
         verify_configured_exports(&root, &manifest, target, &deck)?;
     }

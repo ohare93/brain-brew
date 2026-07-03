@@ -3699,7 +3699,7 @@ stale_translations:
 }
 
 #[test]
-fn export_crowdanki_copies_media_from_media_root_and_checks_hashes() {
+fn export_crowdanki_copies_exact_declared_media_from_media_root_and_checks_hashes() {
     let dir = temp_dir("export-media");
     let deck_path = dir.join("deck.yaml");
     let media_root = dir.join("media");
@@ -3707,6 +3707,7 @@ fn export_crowdanki_copies_media_from_media_root_and_checks_hashes() {
     fs::write(&deck_path, MEDIA_CANONICAL_YAML).unwrap();
     fs::create_dir_all(media_root.join("flags")).unwrap();
     fs::write(media_root.join("flags/fi.png"), b"flag-bytes").unwrap();
+    fs::write(media_root.join("flags/undeclared.png"), b"extra").unwrap();
 
     let output = run([
         "export",
@@ -3723,6 +3724,29 @@ fn export_crowdanki_copies_media_from_media_root_and_checks_hashes() {
         fs::read(export_dir.join("media/flags/fi.png")).unwrap(),
         b"flag-bytes"
     );
+    assert!(!export_dir.join("media/flags/undeclared.png").exists());
+}
+
+#[test]
+fn verify_fails_on_referenced_but_undeclared_media_without_media_root() {
+    let dir = temp_dir("verify-undeclared-media");
+    fs::write(
+        dir.join("deck.yaml"),
+        MEDIA_CANONICAL_YAML.replace("path: flags/fi.png", "path: flags/other.png"),
+    )
+    .unwrap();
+    fs::write(dir.join("brainbrew.yaml"), SIMPLE_MEDIA_MANIFEST_YAML).unwrap();
+
+    let output = run([
+        "verify",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("used but not declared"));
+    assert!(stderr(&output).contains("flags/fi.png"));
 }
 
 #[test]
@@ -3743,7 +3767,84 @@ fn verify_checks_media_root_hashes() {
     ]);
 
     assert!(!output.status.success());
-    assert!(stderr(&output).contains("sha256"));
+    assert!(stderr(&output).contains("media.flags-fi-png"));
+    assert!(
+        stderr(&output)
+            .contains("expected 14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948")
+    );
+    assert!(
+        stderr(&output)
+            .contains("actual 7c1d387f892b3c965dfc1951e2a92a2149cd103cef25c8ba5d0cc30a3a21063f")
+    );
+}
+
+#[test]
+fn verify_fails_on_empty_media_hashes_with_media_root() {
+    let dir = temp_dir("verify-empty-media-hash");
+    fs::write(
+        dir.join("deck.yaml"),
+        MEDIA_CANONICAL_YAML.replace(
+            "14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948",
+            "''",
+        ),
+    )
+    .unwrap();
+    fs::write(dir.join("brainbrew.yaml"), SIMPLE_MEDIA_MANIFEST_YAML).unwrap();
+    fs::create_dir_all(dir.join("media/flags")).unwrap();
+    fs::write(dir.join("media/flags/fi.png"), b"flag-bytes").unwrap();
+
+    let output = run([
+        "verify",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+        "--media-root",
+        dir.join("media").to_str().unwrap(),
+    ]);
+
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("empty sha256"));
+    assert!(stderr(&output).contains("media.flags-fi-png"));
+}
+
+#[test]
+fn media_hash_updates_source_hashes_and_preserves_includes() {
+    let dir = temp_dir("media-hash");
+    fs::create_dir_all(dir.join("content")).unwrap();
+    fs::create_dir_all(dir.join("media/flags")).unwrap();
+    fs::write(dir.join("content/description.md"), "Included description\n").unwrap();
+    fs::write(dir.join("media/flags/fi.png"), b"flag-bytes").unwrap();
+    fs::write(
+        dir.join("deck.yaml"),
+        MEDIA_CANONICAL_YAML
+            .replace(
+                "description: A deck with media.",
+                "description: !include content/description.md",
+            )
+            .replace(
+                "14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948",
+                "''",
+            ),
+    )
+    .unwrap();
+    fs::write(dir.join("brainbrew.yaml"), SIMPLE_MEDIA_MANIFEST_YAML).unwrap();
+
+    let output = run([
+        "media",
+        "hash",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+        "--media-root",
+        dir.join("media").to_str().unwrap(),
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let source = fs::read_to_string(dir.join("deck.yaml")).unwrap();
+    assert!(source.contains("description: !include content/description.md"));
+    assert!(
+        source.contains("sha256: 14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948")
+    );
 }
 
 #[test]
@@ -4953,7 +5054,7 @@ notes:
     fields:
       field.capital: Shared capital
       field.country: Finland
-      field.flag: '<img src="fi.png">'
+      field.flag: '<img src="flags/fi.png">'
     tags:
       - Europe
     adapter_ids:
@@ -5098,7 +5199,7 @@ translation_profile:
 
 fn write_translation_workspace(dir: &Path) {
     let deck = SAMPLE_CANONICAL_YAML
-        .replace("field.flag: '<img src=\"fi.png\">'", "field.flag: ''")
+        .replace("field.flag: '<img src=\"flags/fi.png\">'", "field.flag: ''")
         .replace(
             "media:\n",
             r#"  note.sweden:
@@ -5114,6 +5215,14 @@ fn write_translation_workspace(dir: &Path) {
       crowdanki:guid: ug-sweden-guid
 media:
 "#,
+        )
+        .replace(
+            "media:\n  media.flags-fi-png:",
+            "media:\n  media.flags-fi-da-png:\n    path: fi-da.png\n    sha256: ''\n  media.flags-fi-png:",
+        )
+        .replace(
+            "media.flags-fi-png:\n    path: flags/fi.png\n    sha256: ''",
+            "media.flags-fi-png:\n    path: flags/fi.png\n    sha256: ''\n  media.flags-se-png:\n    path: se.png\n    sha256: ''",
         );
     fs::write(dir.join("deck.yaml"), deck).unwrap();
     fs::write(
@@ -5201,7 +5310,7 @@ notes:
     fields:
       field.capital: Helsinki
       field.country: Finland
-      field.flag: '<img src="fi.png">'
+      field.flag: '<img src="flags/fi.png">'
       field.flag-similarity:
         message:
           - ref: notes.note.iceland.fields.field.country
@@ -5620,7 +5729,7 @@ notes:
     adapter_ids:
       crowdanki:guid: ug-finland-guid
     fields:
-      field.flag: '<img src="fi.png">'
+      field.flag: '<img src="flags/fi.png">'
       field.capital: Helsinki
       field.country: Finland
     note_type_id: note-type.country
@@ -5756,7 +5865,7 @@ notes:
     fields:
       field.capital: Helsinki
       field.country: Finland
-      field.flag: '<img src="fi.png">'
+      field.flag: '<img src="flags/fi.png">'
     tags:
       - Europe
       - Nordic

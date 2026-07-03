@@ -12,6 +12,7 @@ pub(crate) fn general() -> String {
             "  export    Export a resolved deck to an adapter format, currently CrowdAnki\n",
             "  import    Import CrowdAnki into CanonicalDeck YAML\n",
             "  lock      Update or verify locked federated package inputs\n",
+            "  media     Verify and refresh declared media asset hashes\n",
             "  targets   List manifest targets\n",
             "  translations Report/apply translation coverage (aliases: translate, translation)\n",
             "  workbench Serve the local Deck Workbench browser UI and JSON API\n",
@@ -24,6 +25,7 @@ pub(crate) fn general() -> String {
             "  brainbrew compose --manifest brainbrew.yaml --target da-standard --out build/da.yaml\n",
             "  brainbrew compose --manifest america/brainbrew.yaml --include ultimate-geography/brainbrew.yaml --target en-america\n",
             "  brainbrew lock update --package anki-geo.ultimate-geography --path ../ultimate-geography\n",
+            "  brainbrew media hash --manifest brainbrew.yaml --all-targets --media-root media/\n",
             "  brainbrew export crowdanki --manifest brainbrew.yaml --target de-extended --media-root media/\n",
             "  brainbrew translate --manifest brainbrew.yaml --target de-standard\n",
             "  brainbrew workbench serve --manifest brainbrew.yaml\n",
@@ -53,6 +55,9 @@ pub(crate) fn command(name: &str) -> Option<&'static str> {
         ),
         "lock" => Some(
             "Usage:\n  brainbrew lock update --package <package-id> (--path <dir> | --git <github-url> [--ref <ref>] [--rev <rev>] | --tarball <url>) [--package-manifest brainbrew.yaml] [--lock brainbrew.lock]\n  brainbrew lock verify [--lock brainbrew.lock]\n\nExamples:\n  brainbrew lock update --package anki-geo.ultimate-geography --path ../ultimate-geography\n  brainbrew lock update --package anki-geo.ultimate-geography --git https://github.com/anki-geo/ultimate-geography.git --ref main\n  brainbrew lock verify\n",
+        ),
+        "media" => Some(
+            "Usage:\n  brainbrew media hash [--manifest brainbrew.yaml] (--all-targets | --target <target>) [--include package/brainbrew.yaml ...] [--package-root packages/] --media-root media/\n\nExamples:\n  brainbrew media hash --manifest brainbrew.yaml --all-targets --media-root media/\n  brainbrew media hash --manifest brainbrew.yaml --target en-standard --media-root media/\n\nComputes SHA-256 hashes for declared media files and writes missing or stale values back to deck/overlay source YAML using the include-preserving canonical formatter.\n",
         ),
         "targets" => Some(
             "Usage:\n  brainbrew targets [--manifest brainbrew.yaml] [--include package/brainbrew.yaml ...] [--package-root packages/] [--json]\n\nExamples:\n  brainbrew targets --manifest brainbrew.yaml\n  brainbrew targets --manifest brainbrew.yaml --json\n  brainbrew targets --package-root ../packages\n",

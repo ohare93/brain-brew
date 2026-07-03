@@ -36,11 +36,23 @@ Without a media root, Brain Brew can check that references are internally consis
 brainbrew verify --manifest brainbrew.yaml --all-targets
 ```
 
-With `--media-root`, it also checks files and hashes:
+Referenced-but-undeclared media fails verification. Declared-but-unreferenced media is reported as a warning.
+
+With `--media-root`, it also checks that files exist and declared hashes are non-empty and current:
 
 ```bash
 brainbrew verify --manifest brainbrew.yaml --all-targets --media-root media/
 ```
+
+## Refresh hashes
+
+After intentionally editing a media file, update source state with:
+
+```bash
+brainbrew media hash --manifest brainbrew.yaml --all-targets --media-root media/
+```
+
+The command writes missing or stale SHA-256 values into deck or overlay source YAML through the include-preserving formatter, so `!include`-bearing sources keep their include structure.
 
 ## Export media
 
@@ -53,6 +65,8 @@ brainbrew export crowdanki \
   --media-root media/ \
   --out build/crowdanki/en-standard
 ```
+
+Because export is authoritative for declared media, downstream scripts can drop blanket `cp media/*` steps. Undeclared files in the media root are not copied.
 
 ## Why references instead of embedded files?
 

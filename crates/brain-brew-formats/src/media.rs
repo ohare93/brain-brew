@@ -10,18 +10,34 @@ pub fn referenced_paths(deck: &CanonicalDeck) -> BTreeSet<String> {
 
     for note in deck.notes.values() {
         for value in note.fields.values() {
-            extract_from_text(value, &mut paths);
+            paths.extend(extract_media_references_from_rendered_field(value));
         }
     }
 
     for note_type in deck.note_types.values() {
-        extract_from_text(&note_type.styling, &mut paths);
+        paths.extend(extract_media_references_from_rendered_field(
+            &note_type.styling,
+        ));
         for template in &note_type.card_templates {
-            extract_from_text(&template.question_format, &mut paths);
-            extract_from_text(&template.answer_format, &mut paths);
+            paths.extend(extract_media_references_from_rendered_field(
+                &template.question_format,
+            ));
+            paths.extend(extract_media_references_from_rendered_field(
+                &template.answer_format,
+            ));
         }
     }
 
+    paths
+}
+
+/// Extract media paths from rendered Anki-compatible field/template text.
+///
+/// This intentionally centralizes today's string scanner so future structured media
+/// references can replace the extraction internals without changing callers.
+pub fn extract_media_references_from_rendered_field(text: &str) -> BTreeSet<String> {
+    let mut paths = BTreeSet::new();
+    extract_from_text(text, &mut paths);
     paths
 }
 
@@ -40,6 +56,11 @@ pub fn validate_hashes(
 
     for media in deck.media.values() {
         if media.sha256.is_empty() {
+            errors.push(MediaValidationError {
+                kind: MediaValidationErrorKind::EmptyHash,
+                path: media.path.clone(),
+                message: format!("media entry {} ({}) has empty sha256", media.id, media.path),
+            });
             continue;
         }
         let Some(bytes) = assets.get(&media.path) else {
@@ -47,8 +68,8 @@ pub fn validate_hashes(
                 kind: MediaValidationErrorKind::MissingAsset,
                 path: media.path.clone(),
                 message: format!(
-                    "media asset {} was not supplied for hash validation",
-                    media.path
+                    "media entry {} ({}) is declared but the file was not supplied for hash validation",
+                    media.id, media.path
                 ),
             });
             continue;
@@ -59,8 +80,8 @@ pub fn validate_hashes(
                 kind: MediaValidationErrorKind::HashMismatch,
                 path: media.path.clone(),
                 message: format!(
-                    "media asset {} has sha256 {}, expected {}",
-                    media.path, actual, media.sha256
+                    "media entry {} ({}) sha256 mismatch: expected {}, actual {}",
+                    media.id, media.path, media.sha256, actual
                 ),
             });
         }
@@ -73,8 +94,8 @@ pub fn validate_hashes(
     }
 }
 
-/// Validate that every used media path is declared and every declaration is used.
-pub fn validate_references(deck: &CanonicalDeck) -> Result<(), MediaValidationReport> {
+/// Build a media reference report with missing declarations as errors and unused declarations as warnings.
+pub fn reference_report(deck: &CanonicalDeck) -> MediaReferenceReport {
     let used = referenced_paths(deck);
     let declared = deck
         .media
@@ -82,6 +103,7 @@ pub fn validate_references(deck: &CanonicalDeck) -> Result<(), MediaValidationRe
         .map(|media| media.path.clone())
         .collect::<BTreeSet<_>>();
     let mut errors = Vec::new();
+    let mut warnings = Vec::new();
 
     for path in used.difference(&declared) {
         errors.push(MediaValidationError {
@@ -92,17 +114,25 @@ pub fn validate_references(deck: &CanonicalDeck) -> Result<(), MediaValidationRe
     }
 
     for path in declared.difference(&used) {
-        errors.push(MediaValidationError {
+        warnings.push(MediaValidationError {
             kind: MediaValidationErrorKind::UnusedReference,
             path: path.clone(),
             message: format!("media path {path} is declared but not used"),
         });
     }
 
-    if errors.is_empty() {
+    MediaReferenceReport { errors, warnings }
+}
+
+/// Validate that every used media path is declared.
+pub fn validate_references(deck: &CanonicalDeck) -> Result<(), MediaValidationReport> {
+    let report = reference_report(deck);
+    if report.errors.is_empty() {
         Ok(())
     } else {
-        Err(MediaValidationReport { errors })
+        Err(MediaValidationReport {
+            errors: report.errors,
+        })
     }
 }
 
@@ -190,7 +220,21 @@ fn has_uri_scheme(path: &str) -> bool {
             .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '-' | '.'))
 }
 
-/// A media reference validation report.
+/// A media reference validation report with errors and warnings.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MediaReferenceReport {
+    pub errors: Vec<MediaValidationError>,
+    pub warnings: Vec<MediaValidationError>,
+}
+
+impl MediaReferenceReport {
+    /// Returns true when the report contains at least one warning of the given kind.
+    pub fn has_warning_kind(&self, kind: MediaValidationErrorKind) -> bool {
+        self.warnings.iter().any(|error| error.kind == kind)
+    }
+}
+
+/// A media validation error report.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MediaValidationReport {
     pub errors: Vec<MediaValidationError>,
@@ -231,5 +275,6 @@ pub enum MediaValidationErrorKind {
     MissingReference,
     UnusedReference,
     MissingAsset,
+    EmptyHash,
     HashMismatch,
 }

@@ -52,6 +52,15 @@ brainbrew export crowdanki --manifest brainbrew.yaml --target en-standard
 
 Exports a CrowdAnki folder. Without `--out`, manifest-target exports default to `build/crowdanki/<target>` unless the target configures `exports.crowdanki.out`.
 
+## `media hash`
+
+```bash
+brainbrew media hash --manifest brainbrew.yaml --all-targets --media-root media/
+brainbrew media hash --manifest brainbrew.yaml --target en-standard --media-root media/
+```
+
+Computes SHA-256 values for declared media files and writes missing/stale hashes back to deck or overlay source YAML with include-preserving canonical formatting.
+
 ## `import crowdanki`
 
 ```bash
@@ -107,7 +116,7 @@ brainbrew verify --manifest brainbrew.yaml --all-targets
 brainbrew verify --manifest brainbrew.yaml --all-targets --media-root media/
 ```
 
-Runs the workspace verification gate. Stale translation records warn by default and fail when the target or command uses strict translation coverage (`translation_coverage: strict` or `--translation-coverage strict`).
+Runs the workspace verification gate. Referenced-but-undeclared media is always an error; declared-but-unreferenced media is a warning. With `--media-root`, missing files, empty hashes, and stale hashes are errors. Stale translation records warn by default and fail when the target or command uses strict translation coverage (`translation_coverage: strict` or `--translation-coverage strict`).
 
 ## `lock`
 

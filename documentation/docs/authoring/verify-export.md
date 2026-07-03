@@ -29,7 +29,7 @@ Verification checks:
 7. Canonical Deck validation;
 8. translation coverage policy, when configured or passed with `--translation-coverage`;
 9. stale translations, warning by default and failing under strict translation coverage;
-10. media references and SHA-256 hashes, when `--media-root` is passed;
+10. media references always, plus media file existence and SHA-256 hashes when `--media-root` is passed;
 11. configured CrowdAnki golden checks.
 
 ## Verify media
@@ -38,7 +38,13 @@ Verification checks:
 brainbrew verify --manifest brainbrew.yaml --all-targets --media-root media/
 ```
 
-With `--media-root`, Brain Brew checks that referenced media files exist and match their declared SHA-256 hashes.
+Without `--media-root`, Brain Brew checks rendered field/template media references (`<img src>`, `[sound:]`, and related URL forms) against declarations. Referenced-but-undeclared media is an error; declared-but-unreferenced media is a warning.
+
+With `--media-root`, Brain Brew also checks that every declared media file exists and that every declaration has a non-empty SHA-256 matching the file. Refresh hashes after intentional media edits with:
+
+```bash
+brainbrew media hash --manifest brainbrew.yaml --all-targets --media-root media/
+```
 
 ## Export CrowdAnki
 
@@ -60,6 +66,8 @@ brainbrew export crowdanki \
   --media-root media/ \
   --out build/crowdanki/de-standard
 ```
+
+Export copies the declared media set itself, so release scripts do not need a separate `cp media/*` step. Files present under `media-root` but not declared are not exported.
 
 ## Default and configured export paths
 

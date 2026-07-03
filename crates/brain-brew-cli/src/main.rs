@@ -44,6 +44,7 @@ fn run() -> Result<(), String> {
         "export" => commands::export::run(&args[1..]),
         "import" => commands::import::run(&args[1..]),
         "lock" => commands::lock::run(&args[1..]),
+        "media" => commands::media::run(&args[1..]),
         "targets" => commands::targets::run(&args[1..]),
         "translations" => commands::translations::run(&args[1..]),
         "verify" => commands::verify::run(&args[1..]),

@@ -5,8 +5,23 @@ use std::path::{Component, Path, PathBuf};
 use brain_brew_core::CanonicalDeck;
 use brain_brew_formats::media;
 
+pub(crate) fn validate_media_references(deck: &CanonicalDeck) -> Result<(), String> {
+    let report = media::reference_report(deck);
+    for warning in &report.warnings {
+        eprintln!("warning: {}", warning.message);
+    }
+    if report.errors.is_empty() {
+        Ok(())
+    } else {
+        Err(media::MediaValidationReport {
+            errors: report.errors,
+        }
+        .to_string())
+    }
+}
+
 pub(crate) fn validate_media_assets(deck: &CanonicalDeck, media_root: &Path) -> Result<(), String> {
-    media::validate_references(deck).map_err(|error| error.to_string())?;
+    validate_media_references(deck)?;
     let assets = read_media_assets(deck, media_root)?;
     media::validate_hashes(deck, &assets).map_err(|error| error.to_string())
 }
@@ -19,9 +34,13 @@ fn read_media_assets(
     for media in deck.media.values() {
         let relative_path = safe_media_relative_path(&media.path)?;
         let full_path = media_root.join(&relative_path);
-        let bytes =
-            fs::read(&full_path).map_err(|error| format!("{}: {error}", full_path.display()))?;
-        assets.insert(media.path.clone(), bytes);
+        match fs::read(&full_path) {
+            Ok(bytes) => {
+                assets.insert(media.path.clone(), bytes);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("{}: {error}", full_path.display())),
+        }
     }
     Ok(assets)
 }

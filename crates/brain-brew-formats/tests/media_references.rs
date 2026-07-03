@@ -18,6 +18,22 @@ fn extracts_media_references_from_fields_and_templates() {
 }
 
 #[test]
+fn extractor_finds_rendered_field_img_and_sound_references() {
+    let paths = media::extract_media_references_from_rendered_field(
+        r#"<img src="flags/fi.png"><img src='maps/fi.svg'>[sound:audio/fi.mp3]"#,
+    );
+
+    assert_eq!(
+        paths,
+        BTreeSet::from([
+            "audio/fi.mp3".to_owned(),
+            "flags/fi.png".to_owned(),
+            "maps/fi.svg".to_owned(),
+        ])
+    );
+}
+
+#[test]
 fn extracts_multiple_img_sources_from_one_field() {
     let mut deck = media_deck();
     deck.notes
@@ -123,7 +139,7 @@ fn reports_media_hash_mismatches() {
 }
 
 #[test]
-fn validation_reports_unused_media_references() {
+fn validation_warns_about_unused_media_references_without_failing() {
     let mut deck = media_deck();
     deck.media.insert(
         sid("media.unused"),
@@ -134,10 +150,37 @@ fn validation_reports_unused_media_references() {
         },
     );
 
-    let report = media::validate_references(&deck).expect_err("unused media must fail");
+    let report = media::reference_report(&deck);
 
-    assert!(report.has_kind(MediaValidationErrorKind::UnusedReference));
-    assert!(report.errors.iter().any(|error| error.path == "unused.png"));
+    assert!(media::validate_references(&deck).is_ok());
+    assert!(report.has_warning_kind(MediaValidationErrorKind::UnusedReference));
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|error| error.path == "unused.png")
+    );
+}
+
+#[test]
+fn reports_empty_media_hashes() {
+    let mut deck = media_deck();
+    deck.media
+        .get_mut(&sid("media.flags-fi-png"))
+        .unwrap()
+        .sha256 = String::new();
+    let assets = BTreeMap::from([("flags/fi.png".to_owned(), b"actual".to_vec())]);
+
+    let report = media::validate_hashes(&deck, &assets).expect_err("empty hash must fail");
+
+    assert!(report.has_kind(MediaValidationErrorKind::EmptyHash));
+    assert!(
+        report
+            .errors
+            .iter()
+            .any(|error| error.path == "flags/fi.png"
+                && error.message.contains("media.flags-fi-png"))
+    );
 }
 
 fn media_deck() -> CanonicalDeck {
