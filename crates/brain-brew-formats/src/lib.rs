@@ -11,6 +11,8 @@ pub mod manifest;
 pub mod media;
 pub mod source_includes;
 
+mod yaml_scalar;
+
 pub use brain_brew_core as core;
 
 /// Name of the formats crate.

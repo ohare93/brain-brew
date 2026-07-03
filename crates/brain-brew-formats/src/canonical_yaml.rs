@@ -10,6 +10,8 @@ use brain_brew_core::{
 };
 use serde::Deserialize;
 
+use crate::yaml_scalar::{scalar as yaml_scalar, write_multiline_or_scalar};
+
 const UG_TARGET_ADDITION_REASON: &str = "target addition from upstream UG";
 
 /// Parse a CanonicalDeck from strict canonical YAML.
@@ -1061,43 +1063,6 @@ fn change_intent_name(intent: ChangeIntent) -> &'static str {
         ChangeIntent::Remove => "remove",
         ChangeIntent::Override => "override",
     }
-}
-
-fn write_multiline_or_scalar(out: &mut String, indent: &str, key: &str, value: &str) {
-    if value.contains('\n') {
-        let chomp = if value.ends_with('\n') { "|" } else { "|-" };
-        writeln!(out, "{indent}{key}: {chomp}").expect("writing to a string cannot fail");
-        for line in value.lines() {
-            writeln!(out, "{indent}  {line}").expect("writing to a string cannot fail");
-        }
-    } else {
-        writeln!(out, "{indent}{key}: {}", yaml_scalar(value))
-            .expect("writing to a string cannot fail");
-    }
-}
-
-fn yaml_scalar(value: &str) -> String {
-    if can_emit_plain_scalar(value) {
-        value.to_owned()
-    } else {
-        format!("'{}'", value.replace('\'', "''"))
-    }
-}
-
-fn can_emit_plain_scalar(value: &str) -> bool {
-    !value.is_empty()
-        && !value.starts_with([
-            ' ', '-', '?', ':', '@', '`', '&', '*', '!', '|', '>', '#', '{', '[', ',',
-        ])
-        && !value.ends_with(' ')
-        && value
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, ' ' | '.' | ',' | '_' | '-' | '/'))
-        && !value.chars().all(|ch| ch.is_ascii_digit())
-        && !matches!(
-            value,
-            "true" | "false" | "True" | "False" | "TRUE" | "FALSE" | "null" | "Null" | "NULL"
-        )
 }
 
 #[derive(Debug)]

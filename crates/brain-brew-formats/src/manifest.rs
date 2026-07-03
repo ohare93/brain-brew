@@ -3,6 +3,8 @@ use std::fmt;
 
 use serde::Deserialize;
 
+use crate::yaml_scalar::scalar as yaml_scalar;
+
 /// Public manifest for a Federated Deck workspace.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FederatedDeckManifest {
@@ -432,27 +434,6 @@ fn parse_translation_coverage_policy(
         other => Err(ManifestError::InvalidTranslationCoveragePolicy(
             other.to_owned(),
         )),
-    }
-}
-
-fn yaml_scalar(value: &str) -> String {
-    if !value.is_empty()
-        && !value.starts_with([
-            ' ', '-', '?', ':', '@', '`', '&', '*', '!', '|', '>', '#', '{', '[', ',',
-        ])
-        && !value.ends_with(' ')
-        && value.chars().all(|ch| {
-            ch.is_ascii_alphanumeric() || matches!(ch, ' ' | '.' | ',' | '_' | '-' | '/' | ':')
-        })
-        && !value.chars().all(|ch| ch.is_ascii_digit())
-        && !matches!(
-            value,
-            "true" | "false" | "True" | "False" | "TRUE" | "FALSE" | "null" | "Null" | "NULL"
-        )
-    {
-        value.to_owned()
-    } else {
-        format!("'{}'", value.replace('\'', "''"))
     }
 }
 

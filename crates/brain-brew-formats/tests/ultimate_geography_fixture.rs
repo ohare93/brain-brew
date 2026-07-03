@@ -8,7 +8,7 @@ use brain_brew_formats::core::{
     Note, NoteChange, NoteTypeChange, Overlay, OverlayKind, PropertyChange, StableId, TagChange,
     TranslationDictionary,
 };
-use brain_brew_formats::{canonical_yaml, crowdanki, manifest, media, source_includes};
+use brain_brew_formats::{canonical_yaml, crowdanki, lockfile, manifest, media, source_includes};
 
 #[test]
 fn ultimate_geography_fixture_uses_file_includes_for_large_source_text() {
@@ -175,6 +175,73 @@ fn ultimate_geography_fixture_manifest_composes_all_targets() {
         media::validate_references(&deck)
             .unwrap_or_else(|error| panic!("{target} media references validate: {error}"));
     }
+}
+
+#[test]
+fn ultimate_geography_fixture_formatting_is_byte_idempotent() {
+    let root = fixture_root();
+
+    for manifest_file in ["brainbrew.yaml", "brainbrew-hardcore.yaml"] {
+        let source = fs::read_to_string(root.join(manifest_file)).unwrap();
+        let once = manifest::format_str(&source)
+            .unwrap_or_else(|error| panic!("{manifest_file} formats: {error}"));
+        let twice = manifest::format_str(&once)
+            .unwrap_or_else(|error| panic!("{manifest_file} formats twice: {error}"));
+        assert_eq!(twice, once, "{manifest_file} formatting is byte-idempotent");
+    }
+
+    for deck_file in ["deck.yaml", "deck-hardcore.yaml"] {
+        let deck_path = root.join(deck_file);
+        let deck = read_canonical_deck_file(&root, &deck_path)
+            .unwrap_or_else(|error| panic!("{deck_file} resolves and parses: {error}"));
+        let once = canonical_yaml::to_string(&deck)
+            .unwrap_or_else(|error| panic!("{deck_file} emits: {error}"));
+        let twice = canonical_yaml::format_str(&once)
+            .unwrap_or_else(|error| panic!("{deck_file} formats twice: {error}"));
+        assert_eq!(twice, once, "{deck_file} formatting is byte-idempotent");
+    }
+
+    let mut overlay_files = Vec::new();
+    collect_yaml_files(&root.join("overlays"), &mut overlay_files);
+    overlay_files.sort();
+    for overlay_path in overlay_files {
+        let overlay = read_overlay_file(&root, &overlay_path).unwrap_or_else(|error| {
+            panic!("{} resolves and parses: {error}", overlay_path.display())
+        });
+        let once = canonical_yaml::overlay_to_string(&overlay);
+        let twice = canonical_yaml::overlay_format_str(&once)
+            .unwrap_or_else(|error| panic!("{} formats twice: {error}", overlay_path.display()));
+        assert_eq!(
+            twice,
+            once,
+            "{} formatting is byte-idempotent",
+            overlay_path.display()
+        );
+    }
+
+    let lock_source = r#"
+packages:
+  anki-geo.ultimate-geography:
+    locked:
+      nar_hash: sha256-fixture
+      rev: ccf150a1b21e
+      url: https://github.com/anki-geo/ultimate-geography.git
+      type: git
+    original:
+      ref: main
+      url: https://github.com/anki-geo/ultimate-geography.git
+      type: git
+    package:
+      version: 0.1.0
+    manifest: brainbrew.yaml
+version: 1
+"#;
+    let lock_once = lockfile::format_str(lock_source).expect("fixture-style lock formats");
+    let lock_twice = lockfile::format_str(&lock_once).expect("fixture-style lock formats twice");
+    assert_eq!(
+        lock_twice, lock_once,
+        "lockfile formatting is byte-idempotent"
+    );
 }
 
 #[test]
@@ -1683,6 +1750,19 @@ fn string_set(values: &[serde_json::Value]) -> BTreeSet<String> {
 
 fn sid(value: &str) -> StableId {
     StableId::new(value).expect("test stable id is valid")
+}
+
+fn collect_yaml_files(dir: &Path, files: &mut Vec<PathBuf>) {
+    for entry in
+        fs::read_dir(dir).unwrap_or_else(|error| panic!("{} is readable: {error}", dir.display()))
+    {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            collect_yaml_files(&path, files);
+        } else if path.extension().and_then(|extension| extension.to_str()) == Some("yaml") {
+            files.push(path);
+        }
+    }
 }
 
 fn fixture_root() -> PathBuf {

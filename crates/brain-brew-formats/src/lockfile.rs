@@ -3,6 +3,8 @@ use std::fmt;
 
 use serde::Deserialize;
 
+use crate::yaml_scalar::scalar as yaml_scalar;
+
 /// Reproducible source lock for a set of Federated Deck package inputs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FederationLock {
@@ -96,27 +98,6 @@ fn write_source(out: &mut String, indent: &str, source: &LockedSource) {
     }
     if let Some(nar_hash) = &source.nar_hash {
         out.push_str(&format!("{indent}nar_hash: {}\n", yaml_scalar(nar_hash)));
-    }
-}
-
-fn yaml_scalar(value: &str) -> String {
-    if !value.is_empty()
-        && !value.starts_with([
-            ' ', '-', '?', ':', '@', '`', '&', '*', '!', '|', '>', '#', '{', '[', ',',
-        ])
-        && !value.ends_with(' ')
-        && value.chars().all(|ch| {
-            ch.is_ascii_alphanumeric() || matches!(ch, ' ' | '.' | ',' | '_' | '-' | '/' | ':')
-        })
-        && !value.chars().all(|ch| ch.is_ascii_digit())
-        && !matches!(
-            value,
-            "true" | "false" | "True" | "False" | "TRUE" | "FALSE" | "null" | "Null" | "NULL"
-        )
-    {
-        value.to_owned()
-    } else {
-        format!("'{}'", value.replace('\'', "''"))
     }
 }
 
