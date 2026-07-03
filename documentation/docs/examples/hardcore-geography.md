@@ -4,18 +4,17 @@ title: Hardcore Geography overlay
 
 # Hardcore Geography overlay
 
-Hardcore Geography is represented as an Ultimate Geography extension, not as a copied deck.
-
-Source used for the migration:
-
-- repository: [anki-geo/hardcore-geography](https://github.com/anki-geo/hardcore-geography)
-- inspected commit: `09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46`
+Hardcore Geography is represented in two fixture shapes: as an Ultimate Geography extension in `brainbrew.yaml`, and as the standalone upstream companion manifest in `brainbrew-hardcore.yaml`.
 
 ## Layout
 
 ```text
+fixtures/ultimate-geography/brainbrew-hardcore.yaml
+fixtures/ultimate-geography/deck-hardcore.yaml
 fixtures/ultimate-geography/overlays/extensions/hardcore.yaml
 fixtures/ultimate-geography/overlays/extensions/hardcore/field-fills/*.yaml
+fixtures/ultimate-geography/overlays/extensions/hardcore/companion-note-type-translations/*.yaml
+fixtures/ultimate-geography/overlays/extensions/hardcore/companion-translations/*.yaml
 fixtures/ultimate-geography/overlays/extensions/hardcore/translations/*.yaml
 ```
 
@@ -23,23 +22,23 @@ fixtures/ultimate-geography/overlays/extensions/hardcore/translations/*.yaml
 
 `hardcore.yaml` adds shared extension structure:
 
-- new Hardcore notes;
-- `UG::Overlapping` tags;
+- new Hardcore companion notes;
+- `UG::Overlapping` tags where companion rows overlap main UG rows;
 - media references;
-- preserved base map fields for overlapping notes.
+- distinct `note.hardcore-*` stable IDs for overlapping companion notes so main UG notes are preserved.
 
-`field-fills/<lang>.yaml` fills blank fields on existing UG notes:
+`field-fills/<lang>.yaml` fills blank fields on Hardcore companion notes:
 
 ```yaml
-id: overlay.extension.hardcore.field-fills.en
+id: overlay.extension.hardcore.field-fills
 kind: extension
 field_fills:
-  note.anguilla:
+  note.hardcore-anguilla:
     field.capital: The Valley
     field.flag: '<img src="ug-flag-anguilla.svg" />'
 ```
 
-`translations/<lang>.yaml` translates new Hardcore notes and maps legacy translated GUIDs. There is no English Hardcore translation file because English only needs extension field fills.
+`companion-note-type-translations/<lang>.yaml` and `companion-translations/<lang>.yaml` support the standalone Hardcore companion manifest. `translations/<lang>.yaml` translates new Hardcore notes and maps legacy translated GUIDs. There is no English Hardcore translation file because English only needs extension field fills.
 
 ## Composition order
 
@@ -56,10 +55,10 @@ Extended Hardcore targets include the shared Extended variant too.
 
 For overlapping rows, Hardcore is additive:
 
-- fill blank capital/flag fields;
-- add `UG::Overlapping`;
-- preserve existing Ultimate Geography maps;
-- preserve existing Ultimate Geography adapter IDs for existing notes.
+- add separate `note.hardcore-*` companion notes;
+- fill blank capital/flag fields on those companion notes;
+- add `UG::Overlapping` to the companion notes;
+- preserve existing Ultimate Geography maps and adapter IDs on the main UG notes.
 
 The one known non-blank disagreement is left out of the extension:
 

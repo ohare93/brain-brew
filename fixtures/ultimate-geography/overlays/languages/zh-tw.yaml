@@ -410,6 +410,7 @@ translations:
     Paraguay: '巴拉圭 (Paraguay)'
     Paramaribo: '巴拉馬利波 (Paramaribo)'
     Paris: '巴黎 (Paris)'
+    Partially recognised state claimed by China.: '中國宣稱擁有該地區主權，但僅有部分國家承認。'
     Partially recognised state claimed by Morocco. Also known as Western Sahara.: '摩洛哥宣稱擁有該地區主權，但僅有部分國家承認。又稱為西撒哈拉。'
     Partially recognised state claimed by Serbia.: '塞爾維亞宣稱擁有該地區主權，但僅有部分國家承認。'
     Persian Gulf: '波斯灣 (Persian Gulf)'
@@ -773,6 +774,8 @@ translations:
         Egypt: '埃及'
       yemen.fields.field.flag-similarity.message.variables.country_2:
         Iraq: '伊拉克'
+  target_additions:
+    notes.note.kiribati.fields.field.capital-info: '拉巴斯正在建造來取代馬拉波成為首都。'
   variables:
     label.capital:
       Capital: '首都'
@@ -1110,14 +1113,6 @@ translations:
     crowdanki:uuid:
       43c5ba66-9a65-11e8-90c9-a0481cc15658: 3d365148-83a7-4b53-8dbc-e3b183524025
       43e2586a-9a65-11e8-a777-a0481cc15658: d75ad494-71f3-4909-beda-b80ec04c7a0d
-target_adaptations:
-  notes.note.kiribati.fields.field.capital-info:
-    expected_source: ''
-    target: '拉巴斯正在建造來取代馬拉波成為首都。'
-  notes.note.taiwan.fields.field.country-info:
-    expected_source: Partially recognised state claimed by China.
-    target: '中國宣稱擁有該地區主權，但僅有部分國家承認。'
-    reason: target-language geopolitical wording
 deck:
   name:
     intent: replace
@@ -1126,6 +1121,6 @@ deck:
       value: Ultimate Geography
   description:
     intent: replace
-    value: !include source/descriptions/zh-tw.html
+    value: !include descriptions/ultimate-geography/zh-tw.html
     expected_base:
-      value: !include source/descriptions/en.html
+      value: !include descriptions/ultimate-geography/en.html

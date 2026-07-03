@@ -679,6 +679,24 @@ translations:
     - 'Yaoundé'
     - Yaren
     - Zagreb
+  target_additions:
+    notes.note.aegean-sea.fields.field.country-info: 'Auch Ägäis.'
+    notes.note.arctic-ocean.fields.field.country-info: 'Auch Nordpolarmeer, nördliches Eismeer, Arktische See oder Arktik.'
+    notes.note.atlantic-ocean.fields.field.country-info: Auch Atlantik.
+    notes.note.balkan-peninsula.fields.field.country-info: Auch Balkan.
+    notes.note.baltic-sea.fields.field.country-info: Auch Baltisches Meer.
+    notes.note.bay-of-biscay.fields.field.country-info: Auch Golf von Biskaya.
+    notes.note.belarus.fields.field.country-info: 'Auch Weißrussland.'
+    notes.note.burkina-faso.fields.field.capital-info: Auch Wagadugu.
+    notes.note.caspian-sea.fields.field.country-info: Auch Kaspisee.
+    notes.note.celebes-sea.fields.field.country-info: Auch Sulawesisee.
+    notes.note.moldova.fields.field.country-info: Auch Moldawien.
+    notes.note.norwegian-sea.fields.field.country-info: Auch Norwegische See oder Norwegisches Meer.
+    notes.note.pacific-ocean.fields.field.country-info: Auch Pazifik.
+    notes.note.persian-gulf.fields.field.country-info: Auch Arabischer Golf.
+    notes.note.solomon-islands.fields.field.country-info: Auch Salomoninseln.
+    notes.note.suriname.fields.field.country-info: Auch Surinam.
+    notes.note.white-sea.fields.field.country-info: 'Auch Weißmeer.'
   variables:
     label.capital:
       Capital: Hauptstadt
@@ -1015,55 +1033,3 @@ translations:
       'zSc]-^U=0=': '?[OEt<^,~Q'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: cb3de16f-7c9c-4944-994a-e17ec2018c28
-target_adaptations:
-  notes.note.aegean-sea.fields.field.country-info:
-    expected_source: ''
-    target: 'Auch Ägäis.'
-  notes.note.arctic-ocean.fields.field.country-info:
-    expected_source: ''
-    target: 'Auch Nordpolarmeer, nördliches Eismeer, Arktische See oder Arktik.'
-  notes.note.atlantic-ocean.fields.field.country-info:
-    expected_source: ''
-    target: Auch Atlantik.
-  notes.note.balkan-peninsula.fields.field.country-info:
-    expected_source: ''
-    target: Auch Balkan.
-  notes.note.baltic-sea.fields.field.country-info:
-    expected_source: ''
-    target: Auch Baltisches Meer.
-  notes.note.bay-of-biscay.fields.field.country-info:
-    expected_source: ''
-    target: Auch Golf von Biskaya.
-  notes.note.belarus.fields.field.country-info:
-    expected_source: ''
-    target: 'Auch Weißrussland.'
-  notes.note.burkina-faso.fields.field.capital-info:
-    expected_source: ''
-    target: Auch Wagadugu.
-  notes.note.caspian-sea.fields.field.country-info:
-    expected_source: ''
-    target: Auch Kaspisee.
-  notes.note.celebes-sea.fields.field.country-info:
-    expected_source: ''
-    target: Auch Sulawesisee.
-  notes.note.moldova.fields.field.country-info:
-    expected_source: ''
-    target: Auch Moldawien.
-  notes.note.norwegian-sea.fields.field.country-info:
-    expected_source: ''
-    target: Auch Norwegische See oder Norwegisches Meer.
-  notes.note.pacific-ocean.fields.field.country-info:
-    expected_source: ''
-    target: Auch Pazifik.
-  notes.note.persian-gulf.fields.field.country-info:
-    expected_source: ''
-    target: Auch Arabischer Golf.
-  notes.note.solomon-islands.fields.field.country-info:
-    expected_source: ''
-    target: Auch Salomoninseln.
-  notes.note.suriname.fields.field.country-info:
-    expected_source: ''
-    target: Auch Surinam.
-  notes.note.white-sea.fields.field.country-info:
-    expected_source: ''
-    target: 'Auch Weißmeer.'

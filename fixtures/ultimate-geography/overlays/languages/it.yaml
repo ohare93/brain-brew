@@ -664,6 +664,8 @@ translations:
     - Zambia
     - Zanzibar
     - Zimbabwe
+  target_additions:
+    notes.note.arctic-ocean.fields.field.country-info: Conosciuto a livello internazionale come Oceano Artico.
   variables:
     label.capital:
       Capital: Capitale
@@ -1000,7 +1002,3 @@ translations:
       'zSc]-^U=0=': 'Hq>2Y[(Y]*'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: cd65a274-7341-4e72-8de5-5d3d83ea4537
-target_adaptations:
-  notes.note.arctic-ocean.fields.field.country-info:
-    expected_source: ''
-    target: Conosciuto a livello internazionale come Oceano Artico.

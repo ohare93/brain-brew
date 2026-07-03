@@ -657,10 +657,10 @@ note_types:
         intent: merge
         question_format:
           intent: merge
-          value: !include source/templates/experimental/country-map-question.html
+          value: !include templates/ultimate-geography/experimental/country-map-question.html
         answer_format:
           intent: merge
-          value: !include source/templates/experimental/country-map-answer.html
+          value: !include templates/ultimate-geography/experimental/country-map-answer.html
 media:
   media.interactive-map-config-js:
     intent: add

@@ -412,6 +412,7 @@ translations:
     Paraguay: '巴拉圭(Paraguay)'
     Paramaribo: '帕拉马里博(Paramaribo)'
     Paris: '巴黎(Paris)'
+    Partially recognised state claimed by China.: '中国宣称对台湾拥有主权，但仅被部分国家承认'
     Partially recognised state claimed by Morocco. Also known as Western Sahara.: '摩洛哥(Morocco)宣称拥有主权但仅被部分国家承认的地区。'
     Partially recognised state claimed by Serbia.: '塞尔维亚(Serbia)宣称拥有主权但仅被部分国家承认的地区。'
     Persian Gulf: '波斯湾(Persian Gulf)'
@@ -780,6 +781,10 @@ translations:
         Egypt: '埃及'
       yemen.fields.field.flag-similarity.message.variables.country_2:
         Iraq: '伊拉克'
+  target_additions:
+    notes.note.myanmar.fields.field.capital-info: '缅甸于2005年11月6日首都从仰光(Yangon)迁往内比都(Naypyidaw)。'
+    notes.note.netherlands.fields.field.country-info: '现名尼德兰(Netherlands)，中文通译为荷兰(Holanda)'
+    notes.note.yellow-sea.fields.field.country-info: '虽然国际上普遍认为黄海(Yellow Sea)包含了渤海(Bohai Sea)，但在中国(China)，它们通常被视为两个独立的海域。'
   variables:
     label.capital:
       Capital: '首都'
@@ -1117,20 +1122,6 @@ translations:
     crowdanki:uuid:
       43c5ba66-9a65-11e8-90c9-a0481cc15658: 6c995ee1-4b62-4019-a033-de0ef8651c83
       43e2586a-9a65-11e8-a777-a0481cc15658: 30c7ff39-56b5-4693-8e16-aa862eb7a619
-target_adaptations:
-  notes.note.myanmar.fields.field.capital-info:
-    expected_source: ''
-    target: '缅甸于2005年11月6日首都从仰光(Yangon)迁往内比都(Naypyidaw)。'
-  notes.note.netherlands.fields.field.country-info:
-    expected_source: ''
-    target: '现名尼德兰(Netherlands)，中文通译为荷兰(Holanda)'
-  notes.note.taiwan.fields.field.country-info:
-    expected_source: Partially recognised state claimed by China.
-    target: '中国宣称对台湾拥有主权，但仅被部分国家承认'
-    reason: target-language geopolitical wording
-  notes.note.yellow-sea.fields.field.country-info:
-    expected_source: ''
-    target: '虽然国际上普遍认为黄海(Yellow Sea)包含了渤海(Bohai Sea)，但在中国(China)，它们通常被视为两个独立的海域。'
 deck:
   name:
     intent: replace
@@ -1139,6 +1130,6 @@ deck:
       value: Ultimate Geography
   description:
     intent: replace
-    value: !include source/descriptions/zh.html
+    value: !include descriptions/ultimate-geography/zh.html
     expected_base:
-      value: !include source/descriptions/en.html
+      value: !include descriptions/ultimate-geography/en.html

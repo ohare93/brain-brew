@@ -706,6 +706,9 @@ translations:
     - Yaren
     - Zanzibar
     - Zimbabwe
+  target_additions:
+    notes.note.pacific-ocean.fields.field.country-info: 'Známý též jako Pacifik.'
+    notes.note.united-kingdom.fields.field.country-info: 'Známé též jako Velká Británie.'
   variables:
     label.capital:
       Capital: 'Hlavní město'
@@ -1042,10 +1045,3 @@ translations:
       'zSc]-^U=0=': 'l1uc5E8j;X'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: 47d13c81-b471-4471-8e87-ebad53fa7307
-target_adaptations:
-  notes.note.pacific-ocean.fields.field.country-info:
-    expected_source: ''
-    target: 'Známý též jako Pacifik.'
-  notes.note.united-kingdom.fields.field.country-info:
-    expected_source: ''
-    target: 'Známé též jako Velká Británie.'

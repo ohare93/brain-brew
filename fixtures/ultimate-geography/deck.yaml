@@ -1,7 +1,7 @@
 deck:
   id: deck.ultimate-geography
   name: Ultimate Geography
-  description: !include source/descriptions/en.html
+  description: !include descriptions/ultimate-geography/en.html
   adapter_ids:
     crowdanki:deck_config_name: Ultimate Geography
     crowdanki:deck_config_uuid: 43d37fac-9a65-11e8-9cc5-a0481cc15658
@@ -17,6 +17,7 @@ note_types:
       label.location: Location
       note-type.name: Ultimate Geography
       sentence.flag-similar: 'Flag similar to {{Flag similarity}}.'
+      text.direction: ltr
       variant.name-suffix: ''
     field_order:
       - field.country
@@ -52,25 +53,25 @@ note_types:
     card_templates:
       template.capital-country:
         name: Capital - Country
-        question_format: !include source/templates/standard/capital-country-question.html
-        answer_format: !include source/templates/standard/capital-country-answer.html
+        question_format: !include templates/ultimate-geography/capital-country/question.html
+        answer_format: !include templates/ultimate-geography/capital-country/answer.html
         adapter_ids: {}
       template.country-capital:
         name: Country - Capital
-        question_format: !include source/templates/standard/country-capital-question.html
-        answer_format: !include source/templates/standard/country-capital-answer.html
+        question_format: !include templates/ultimate-geography/country-capital/question.html
+        answer_format: !include templates/ultimate-geography/country-capital/answer.html
         adapter_ids: {}
       template.flag-country:
         name: Flag - Country
-        question_format: !include source/templates/standard/flag-country-question.html
-        answer_format: !include source/templates/standard/flag-country-answer.html
+        question_format: !include templates/ultimate-geography/flag-country/question.html
+        answer_format: !include templates/ultimate-geography/flag-country/answer.html
         adapter_ids: {}
       template.map-country:
         name: Map - Country
-        question_format: !include source/templates/standard/map-country-question.html
-        answer_format: !include source/templates/standard/map-country-answer.html
+        question_format: !include templates/ultimate-geography/map-country/question.html
+        answer_format: !include templates/ultimate-geography/map-country/answer.html
         adapter_ids: {}
-    styling: !include source/styles/standard.css
+    styling: !include styles/ultimate-geography/card.css
     adapter_ids:
       crowdanki:uuid: 43e2586a-9a65-11e8-a777-a0481cc15658
 notes:

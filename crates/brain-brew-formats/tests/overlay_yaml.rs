@@ -490,6 +490,25 @@ target_adaptations:
 }
 
 #[test]
+fn parses_upstream_ug_target_additions_as_blank_source_adaptations() {
+    let overlay = canonical_yaml::overlay_from_str(
+        r#"id: overlay.translation.cs
+kind: translation
+translations:
+  target_additions:
+    notes.note.pacific-ocean.fields.field.country-info: 'Známý též jako Pacifik.'
+"#,
+    )
+    .expect("overlay parses");
+
+    let translations = overlay.translations.expect("translation dictionary");
+    let adaptation =
+        &translations.target_adaptations["notes.note.pacific-ocean.fields.field.country-info"];
+    assert_eq!(adaptation.expected_source, "");
+    assert_eq!(adaptation.target, "Známý též jako Pacifik.");
+}
+
+#[test]
 fn parses_metadata_and_adapter_id_overlay_changes() {
     let overlay = canonical_yaml::overlay_from_str(
         r#"id: overlay.translation.de

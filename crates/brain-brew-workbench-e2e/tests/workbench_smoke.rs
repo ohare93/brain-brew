@@ -765,7 +765,7 @@ async fn run_ultimate_geography_manifest_smoke(
         .await
         .context("open Ultimate Geography workbench")?;
     wait_for_loaded_probe(driver).await?;
-    wait_for_text(driver, "loaded 15 language(s)").await?;
+    wait_for_text(driver, "loaded 16 language(s)").await?;
     wait_for_text(driver, "Main note-field progress").await?;
     wait_for_element(driver, ".anki-card-preview img")
         .await

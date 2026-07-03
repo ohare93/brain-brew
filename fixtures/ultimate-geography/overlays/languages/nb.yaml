@@ -711,6 +711,25 @@ translations:
     - Zambia
     - Zanzibar
     - Zimbabwe
+  target_additions:
+    notes.note.arabian-sea.fields.field.country-info: 'Også kalt Arabiahavet.'
+    notes.note.balkan-peninsula.fields.field.country-info: 'Også kalt Balkanhalvøya.'
+    notes.note.baltic-sea.fields.field.country-info: 'Også kalt Det baltiske hav.'
+    notes.note.belarus.fields.field.country-info: 'Tidligere kjent som Hviterussland. Utenriksdepartementet begynte å bruke navnet Belarus 29. mai 2022.'
+    notes.note.china.fields.field.country-info: Offisielt Folkerepublikken Kina.
+    notes.note.finland.fields.field.capital-info: 'Det finske navnet er Helsinki, men Utenriksdepartementet i Norge anbefaler å bruke byens svenske navn.'
+    notes.note.greenland.fields.field.capital-info: 'På dansk Godthåb.'
+    notes.note.indian-ocean.fields.field.country-info: 'Også kalt Indiahavet.'
+    notes.note.kiribati.fields.field.capital-info: 'Mange regner Bairiki som Kiribatis hovedstad (også Utenriksdepartementet i Norge) fordi både parlamentet og presidenten en gang hadde sete der. Siden år 2000 har parlamentet og departementer blitt spredd utover Syd-Tarawa.'
+    notes.note.mongolia.fields.field.capital-info: 'Også kjent som Ulan Bator.'
+    notes.note.myanmar.fields.field.capital-info: 'Hovedstad flyttet til Naypyidaw (Nay Pyi Taw) fra Yangon (tidl. Rangoon) i 2005.'
+    notes.note.persian-gulf.fields.field.country-info: 'Også kalt Den persiske bukt, Persiagolfen, Den persiske gulf og Den arabiske bukt.'
+    notes.note.republic-of-the-congo.fields.field.country-info: Offisielt Republikken Kongo.
+    notes.note.sea-of-galilee.fields.field.country-info: 'Også kalt Galileasjøen, Tiberiassjøen eller Ginossarsjøen.'
+    notes.note.turkmenistan.fields.field.capital-info: 'Også kjent som Asjgabat.'
+    notes.note.united-kingdom.fields.field.country-info: 'Også kalt Det forente kongeriket Storbritannia og Nord-Irland.'
+    notes.note.united-states-of-america.fields.field.country-info: 'Også kjent som De forente stater eller Sambandsstatene.'
+    notes.note.white-sea.fields.field.country-info: 'Også kalt Hvitehavet.'
   variables:
     label.capital:
       Capital: Hovedstad
@@ -1045,58 +1064,3 @@ translations:
       'zSc]-^U=0=': 'td+]W)8y3S'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: 8ccdc1f6-b042-4d55-8fcd-9e08b5b71dc7
-target_adaptations:
-  notes.note.arabian-sea.fields.field.country-info:
-    expected_source: ''
-    target: 'Også kalt Arabiahavet.'
-  notes.note.balkan-peninsula.fields.field.country-info:
-    expected_source: ''
-    target: 'Også kalt Balkanhalvøya.'
-  notes.note.baltic-sea.fields.field.country-info:
-    expected_source: ''
-    target: 'Også kalt Det baltiske hav.'
-  notes.note.belarus.fields.field.country-info:
-    expected_source: ''
-    target: 'Tidligere kjent som Hviterussland. Utenriksdepartementet begynte å bruke navnet Belarus 29. mai 2022.'
-  notes.note.china.fields.field.country-info:
-    expected_source: ''
-    target: Offisielt Folkerepublikken Kina.
-  notes.note.finland.fields.field.capital-info:
-    expected_source: ''
-    target: 'Det finske navnet er Helsinki, men Utenriksdepartementet i Norge anbefaler å bruke byens svenske navn.'
-  notes.note.greenland.fields.field.capital-info:
-    expected_source: ''
-    target: 'På dansk Godthåb.'
-  notes.note.indian-ocean.fields.field.country-info:
-    expected_source: ''
-    target: 'Også kalt Indiahavet.'
-  notes.note.kiribati.fields.field.capital-info:
-    expected_source: ''
-    target: 'Mange regner Bairiki som Kiribatis hovedstad (også Utenriksdepartementet i Norge) fordi både parlamentet og presidenten en gang hadde sete der. Siden år 2000 har parlamentet og departementer blitt spredd utover Syd-Tarawa.'
-  notes.note.mongolia.fields.field.capital-info:
-    expected_source: ''
-    target: 'Også kjent som Ulan Bator.'
-  notes.note.myanmar.fields.field.capital-info:
-    expected_source: ''
-    target: 'Hovedstad flyttet til Naypyidaw (Nay Pyi Taw) fra Yangon (tidl. Rangoon) i 2005.'
-  notes.note.persian-gulf.fields.field.country-info:
-    expected_source: ''
-    target: 'Også kalt Den persiske bukt, Persiagolfen, Den persiske gulf og Den arabiske bukt.'
-  notes.note.republic-of-the-congo.fields.field.country-info:
-    expected_source: ''
-    target: Offisielt Republikken Kongo.
-  notes.note.sea-of-galilee.fields.field.country-info:
-    expected_source: ''
-    target: 'Også kalt Galileasjøen, Tiberiassjøen eller Ginossarsjøen.'
-  notes.note.turkmenistan.fields.field.capital-info:
-    expected_source: ''
-    target: 'Også kjent som Asjgabat.'
-  notes.note.united-kingdom.fields.field.country-info:
-    expected_source: ''
-    target: 'Også kalt Det forente kongeriket Storbritannia og Nord-Irland.'
-  notes.note.united-states-of-america.fields.field.country-info:
-    expected_source: ''
-    target: 'Også kjent som De forente stater eller Sambandsstatene.'
-  notes.note.white-sea.fields.field.country-info:
-    expected_source: ''
-    target: 'Også kalt Hvitehavet.'

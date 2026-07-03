@@ -655,6 +655,14 @@ translations:
     - Zambia
     - Zanzibar
     - Zimbabwe
+  target_additions:
+    notes.note.baltic-sea.fields.field.country-info: Ook wel Baltische Zee.
+    notes.note.belarus.fields.field.country-info: Ook bekend als Belarus.
+    notes.note.china.fields.field.capital-info: Ook als Beijing bekend.
+    notes.note.federated-states-of-micronesia.fields.field.country-info: 'Ook wel Micronesië of Micronesia genoemd.'
+    notes.note.maldives.fields.field.country-info: Ook wel Maldiven genoemd.
+    notes.note.pacific-ocean.fields.field.country-info: Ook wel Grote Oceaan of Pacifische Oceaan genoemd.
+    notes.note.sea-of-galilee.fields.field.country-info: Ook wel Meer van Kinneret, Meer van Galilea of Meer van Genezareth genoemd.
   variables:
     label.capital:
       Capital: Hoofdstad
@@ -991,25 +999,3 @@ translations:
       'zSc]-^U=0=': 'eY!@E#<EI8'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: 8263244e-6f5e-457a-bb65-a836a6c058a3
-target_adaptations:
-  notes.note.baltic-sea.fields.field.country-info:
-    expected_source: ''
-    target: Ook wel Baltische Zee.
-  notes.note.belarus.fields.field.country-info:
-    expected_source: ''
-    target: Ook bekend als Belarus.
-  notes.note.china.fields.field.capital-info:
-    expected_source: ''
-    target: Ook als Beijing bekend.
-  notes.note.federated-states-of-micronesia.fields.field.country-info:
-    expected_source: ''
-    target: 'Ook wel Micronesië of Micronesia genoemd.'
-  notes.note.maldives.fields.field.country-info:
-    expected_source: ''
-    target: Ook wel Maldiven genoemd.
-  notes.note.pacific-ocean.fields.field.country-info:
-    expected_source: ''
-    target: Ook wel Grote Oceaan of Pacifische Oceaan genoemd.
-  notes.note.sea-of-galilee.fields.field.country-info:
-    expected_source: ''
-    target: Ook wel Meer van Kinneret, Meer van Galilea of Meer van Genezareth genoemd.

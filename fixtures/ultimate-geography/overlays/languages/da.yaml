@@ -684,6 +684,14 @@ translations:
     - Zambia
     - Zanzibar
     - Zimbabwe
+  target_additions:
+    notes.note.arctic-ocean.fields.field.country-info: 'Også kendt som Det Arktiske Ocean.'
+    notes.note.balkan-peninsula.fields.field.country-info: 'Også kendt som Balkan.'
+    notes.note.baltic-sea.fields.field.country-info: 'Også kaldt Baltiske Hav.'
+    notes.note.belarus.fields.field.country-info: 'Også kendt som Hviderusland. Udenrigsministeriet er begyndt at bruge betegnelsen Belarus i marts 2021.'
+    notes.note.netherlands.fields.field.country-info: 'Også kendt som Holland.'
+    notes.note.united-kingdom.fields.field.country-info: 'Officielt benævnt Det Forenede Kongerige Storbritannien og Nordirland.'
+    notes.note.united-states-of-america.fields.field.country-info: Formelt Amerikas Forenede Stater.
   variables:
     label.capital:
       Capital: Hovedstad
@@ -1018,25 +1026,3 @@ translations:
       'zSc]-^U=0=': 'kQ{}[-(!z,'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: 15daaec7-4097-4d97-ba94-9db44f8b8f51
-target_adaptations:
-  notes.note.arctic-ocean.fields.field.country-info:
-    expected_source: ''
-    target: 'Også kendt som Det Arktiske Ocean.'
-  notes.note.balkan-peninsula.fields.field.country-info:
-    expected_source: ''
-    target: 'Også kendt som Balkan.'
-  notes.note.baltic-sea.fields.field.country-info:
-    expected_source: ''
-    target: 'Også kaldt Baltiske Hav.'
-  notes.note.belarus.fields.field.country-info:
-    expected_source: ''
-    target: 'Også kendt som Hviderusland. Udenrigsministeriet er begyndt at bruge betegnelsen Belarus i marts 2021.'
-  notes.note.netherlands.fields.field.country-info:
-    expected_source: ''
-    target: 'Også kendt som Holland.'
-  notes.note.united-kingdom.fields.field.country-info:
-    expected_source: ''
-    target: 'Officielt benævnt Det Forenede Kongerige Storbritannien og Nordirland.'
-  notes.note.united-states-of-america.fields.field.country-info:
-    expected_source: ''
-    target: Formelt Amerikas Forenede Stater.

@@ -10,6 +10,8 @@ use brain_brew_core::{
 };
 use serde::Deserialize;
 
+const UG_TARGET_ADDITION_REASON: &str = "target addition from upstream UG";
+
 /// Parse a CanonicalDeck from strict canonical YAML.
 pub fn from_str(input: &str) -> Result<CanonicalDeck, CanonicalYamlError> {
     let file: CanonicalDeckYaml = serde_yaml::from_str(input).map_err(CanonicalYamlError::Parse)?;
@@ -161,12 +163,17 @@ pub fn overlay_to_string(overlay: &Overlay) -> String {
     };
 
     if let Some(translations) = &overlay.translations {
-        let has_top_level_translation_data = !translations.target_adaptations.is_empty()
-            || !translations.stale_translations.is_empty();
-        if !translation_dictionary_is_empty(translations) || !has_top_level_translation_data {
-            write_translation_dictionary(&mut out, translations);
+        let (target_additions, target_adaptations) =
+            split_target_additions_for_format(&translations.target_adaptations);
+        let has_top_level_translation_data =
+            !target_adaptations.is_empty() || !translations.stale_translations.is_empty();
+        if !translation_dictionary_is_empty(translations)
+            || !target_additions.is_empty()
+            || !has_top_level_translation_data
+        {
+            write_translation_dictionary(&mut out, translations, &target_additions);
         }
-        write_target_adaptations(&mut out, &translations.target_adaptations);
+        write_target_adaptations(&mut out, &target_adaptations);
         write_stale_translations(&mut out, &translations.stale_translations);
     }
 
@@ -561,8 +568,12 @@ fn write_field_fills(
     }
 }
 
-fn write_translation_dictionary(out: &mut String, translations: &TranslationDictionary) {
-    if translation_dictionary_is_empty(translations) {
+fn write_translation_dictionary(
+    out: &mut String,
+    translations: &TranslationDictionary,
+    target_additions: &BTreeMap<String, String>,
+) {
+    if translation_dictionary_is_empty(translations) && target_additions.is_empty() {
         writeln!(out, "translations: {{}}").expect("writing to a string cannot fail");
         return;
     }
@@ -597,6 +608,13 @@ fn write_translation_dictionary(out: &mut String, translations: &TranslationDict
     if !translations.no_change.is_empty() {
         write_no_change(out, &translations.no_change);
     }
+    if !target_additions.is_empty() {
+        writeln!(out, "  target_additions:").expect("writing to a string cannot fail");
+        for (path, target) in target_additions {
+            writeln!(out, "    {}: {}", yaml_scalar(path), yaml_scalar(target))
+                .expect("writing to a string cannot fail");
+        }
+    }
     if !translations.variables.is_empty() {
         writeln!(out, "  variables:").expect("writing to a string cannot fail");
         for (variable_key, replacements) in &translations.variables {
@@ -627,6 +645,23 @@ fn write_translation_dictionary(out: &mut String, translations: &TranslationDict
             }
         }
     }
+}
+
+fn split_target_additions_for_format(
+    target_adaptations: &BTreeMap<String, TargetAdaptation>,
+) -> (BTreeMap<String, String>, BTreeMap<String, TargetAdaptation>) {
+    let mut target_additions = BTreeMap::new();
+    let mut remaining_target_adaptations = BTreeMap::new();
+    for (path, adaptation) in target_adaptations {
+        if adaptation.expected_source.is_empty()
+            && adaptation.reason.as_deref() == Some(UG_TARGET_ADDITION_REASON)
+        {
+            target_additions.insert(path.clone(), adaptation.target.clone());
+        } else {
+            remaining_target_adaptations.insert(path.clone(), adaptation.clone());
+        }
+    }
+    (target_additions, remaining_target_adaptations)
 }
 
 fn write_target_adaptations(
@@ -1389,6 +1424,8 @@ struct TranslationDictionaryYaml {
     #[serde(default)]
     target_adaptations: BTreeMap<String, TargetAdaptationYaml>,
     #[serde(default)]
+    target_additions: BTreeMap<String, String>,
+    #[serde(default)]
     stale_translations: Vec<StaleTranslationYaml>,
     #[serde(default)]
     variables: BTreeMap<String, BTreeMap<String, String>>,
@@ -1444,15 +1481,34 @@ impl TranslationDictionaryYaml {
     fn into_translation_dictionary(self) -> Result<TranslationDictionary, CanonicalYamlError> {
         let mut contextual = BTreeMap::new();
         flatten_contextual_translations(None, self.contextual, &mut contextual)?;
+        let mut target_adaptations = self
+            .target_adaptations
+            .into_iter()
+            .map(|(path, adaptation)| (path, adaptation.into_target_adaptation()))
+            .collect::<BTreeMap<_, _>>();
+        for (path, target) in self.target_additions {
+            if target_adaptations
+                .insert(
+                    path.clone(),
+                    TargetAdaptation {
+                        expected_source: String::new(),
+                        target,
+                        reason: Some(UG_TARGET_ADDITION_REASON.to_owned()),
+                    },
+                )
+                .is_some()
+            {
+                return Err(CanonicalYamlError::InvalidTranslationDictionary(format!(
+                    "target addition {path} duplicates target_adaptations entry"
+                )));
+            }
+        }
+
         Ok(TranslationDictionary {
             direct: self.direct,
             contextual,
             no_change: self.no_change,
-            target_adaptations: self
-                .target_adaptations
-                .into_iter()
-                .map(|(path, adaptation)| (path, adaptation.into_target_adaptation()))
-                .collect(),
+            target_adaptations,
             stale_translations: self
                 .stale_translations
                 .into_iter()

@@ -366,18 +366,7 @@ stale_translations:
 }
 
 #[test]
-fn translation_dictionary_rejects_alpha_target_addition_and_stale_record_keys() {
-    let error = canonical_yaml::overlay_from_str(
-        r#"id: overlay.translation.da
-kind: translation
-translations:
-  target_additions:
-    notes.note.denmark.fields.field.country-info: Ekstra tekst.
-"#,
-    )
-    .expect_err("alpha target_additions key is not accepted");
-    assert!(error.to_string().contains("target_additions"));
-
+fn translation_dictionary_rejects_alpha_stale_record_key() {
     let error = canonical_yaml::overlay_from_str(
         r#"id: overlay.translation.da
 kind: translation

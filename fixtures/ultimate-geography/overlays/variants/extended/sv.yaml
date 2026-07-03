@@ -8,9 +8,9 @@ deck:
       value: 'Ultimate Geography [SV]'
   description:
     intent: override
-    value: !include source/descriptions/en.html
+    value: !include descriptions/ultimate-geography/en.html
     expected_base:
-      value: !include source/descriptions/sv.html
+      value: !include descriptions/ultimate-geography/sv.html
   adapter_ids:
     crowdanki:uuid:
       intent: override

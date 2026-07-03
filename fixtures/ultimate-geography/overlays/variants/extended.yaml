@@ -15,14 +15,14 @@ note_types:
         insert_after: template.capital-country
         template:
           name: Country - Flag
-          question_format: !include source/templates/extended/country-flag-question.html
-          answer_format: !include source/templates/extended/country-flag-answer.html
+          question_format: !include templates/ultimate-geography/country-flag/question.html
+          answer_format: !include templates/ultimate-geography/country-flag/answer.html
           adapter_ids: {}
       template.country-map:
         intent: add
         insert_after: template.flag-country
         template:
           name: Country - Map
-          question_format: !include source/templates/extended/country-map-question.html
-          answer_format: !include source/templates/extended/country-map-answer.html
+          question_format: !include templates/ultimate-geography/country-map/question.html
+          answer_format: !include templates/ultimate-geography/country-map/answer.html
           adapter_ids: {}

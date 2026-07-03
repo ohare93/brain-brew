@@ -15,56 +15,60 @@ fn ultimate_geography_fixture_uses_file_includes_for_large_source_text() {
     let root = fixture_root();
     let deck_source = fs::read_to_string(root.join("deck.yaml")).unwrap();
     assert!(
-        deck_source.contains("description: !include source/descriptions/en.html"),
+        deck_source.contains("description: !include descriptions/ultimate-geography/en.html"),
         "deck description should live outside deck.yaml"
     );
     assert!(
         deck_source.contains(
-            "question_format: !include source/templates/standard/capital-country-question.html"
+            "question_format: !include templates/ultimate-geography/capital-country/question.html"
         ),
         "standard template HTML should live outside deck.yaml"
     );
     assert!(
-        deck_source.contains("styling: !include source/styles/standard.css"),
+        deck_source.contains("styling: !include styles/ultimate-geography/card.css"),
         "note type CSS should live outside deck.yaml"
     );
-    assert!(root.join("source/descriptions/en.html").exists());
     assert!(
-        root.join("source/templates/standard/country-capital-answer.html")
+        root.join("descriptions/ultimate-geography/en.html")
             .exists()
     );
-    assert!(root.join("source/styles/standard.css").exists());
+    assert!(
+        root.join("templates/ultimate-geography/country-capital/answer.html")
+            .exists()
+    );
+    assert!(root.join("styles/ultimate-geography/card.css").exists());
 
     let extended_source = fs::read_to_string(root.join("overlays/variants/extended.yaml")).unwrap();
     assert!(
         extended_source.contains(
-            "question_format: !include source/templates/extended/country-flag-question.html"
+            "question_format: !include templates/ultimate-geography/country-flag/question.html"
         ),
         "shared Extended template HTML should live outside overlay YAML"
     );
     assert!(
-        root.join("source/templates/extended/country-map-answer.html")
+        root.join("templates/ultimate-geography/country-map/answer.html")
             .exists()
     );
 
     let experimental_source =
         fs::read_to_string(root.join("overlays/variants/experimental.yaml")).unwrap();
     assert!(
-        experimental_source
-            .contains("value: !include source/templates/experimental/country-map-question.html"),
+        experimental_source.contains(
+            "value: !include templates/ultimate-geography/experimental/country-map-question.html"
+        ),
         "Experimental interactive map template HTML should live outside overlay YAML"
     );
     assert!(
-        root.join("source/templates/experimental/country-map-answer.html")
+        root.join("templates/ultimate-geography/experimental/country-map-answer.html")
             .exists()
     );
 
-    for language in ["es", "sv", "zh", "zh-tw"] {
+    for language in ["es", "he", "sv", "zh", "zh-tw"] {
         let overlay_source =
             fs::read_to_string(root.join(format!("overlays/languages/{language}.yaml"))).unwrap();
         assert!(
             overlay_source.contains(&format!(
-                "value: !include source/descriptions/{language}.html"
+                "value: !include descriptions/ultimate-geography/{language}.html"
             )),
             "{language} deck description should live outside translation overlay YAML"
         );
@@ -72,7 +76,7 @@ fn ultimate_geography_fixture_uses_file_includes_for_large_source_text() {
     let sv_extended_source =
         fs::read_to_string(root.join("overlays/variants/extended/sv.yaml")).unwrap();
     assert!(
-        sv_extended_source.contains("value: !include source/descriptions/en.html"),
+        sv_extended_source.contains("value: !include descriptions/ultimate-geography/en.html"),
         "Swedish Extended metadata override should reuse the shared English description include"
     );
 }
@@ -156,7 +160,9 @@ fn ultimate_geography_fixture_manifest_composes_all_targets() {
     assert_eq!(package.id, "anki-geo.ultimate-geography");
     assert_eq!(package.version, "0.1.0");
 
-    assert_eq!(manifest.targets.len(), 71);
+    assert_eq!(manifest.targets.len(), 74);
+    assert_eq!(manifest.languages.len(), 16);
+    assert!(manifest.languages.contains_key("he"));
     for target in manifest.targets.keys() {
         assert!(
             manifest.targets[target].exports.is_empty(),
@@ -172,24 +178,54 @@ fn ultimate_geography_fixture_manifest_composes_all_targets() {
 }
 
 #[test]
+fn ultimate_geography_hardcore_companion_manifest_composes_all_targets() {
+    let root = fixture_root();
+    let manifest = read_manifest_file(&root, "brainbrew-hardcore.yaml");
+
+    let package = manifest
+        .package
+        .as_ref()
+        .expect("hardcore fixture has package metadata");
+    assert_eq!(package.id, "anki-geo.hardcore-geography");
+    assert_eq!(manifest.base, "deck-hardcore.yaml");
+    assert_eq!(manifest.targets.len(), 26);
+    assert_eq!(manifest.languages.len(), 13);
+
+    for target in manifest.targets.keys() {
+        let deck = compose_target(&root, &manifest, target);
+        deck.validate()
+            .unwrap_or_else(|error| panic!("{target} validates: {error}"));
+        media::validate_references(&deck)
+            .unwrap_or_else(|error| panic!("{target} media references validate: {error}"));
+    }
+
+    let english = compose_target(&root, &manifest, "en-hardcore-companion-standard");
+    assert!(english.notes.contains_key(&sid("note.pitcairn-islands")));
+    assert_eq!(
+        english.name, "Hardcore Geography",
+        "the standalone hardcore manifest uses its own deck source"
+    );
+}
+
+#[test]
 fn ultimate_geography_hardcore_extension_builds_on_main_deck_without_erasing_base_content() {
     let root = fixture_root();
     let manifest = read_manifest(&root);
 
     let english = compose_target(&root, &manifest, "en-hardcore-standard");
-    assert_eq!(english.notes.len(), 336);
+    assert_eq!(english.notes.len(), 364);
     assert!(english.notes.contains_key(&sid("note.pitcairn-islands")));
     assert_eq!(
-        english.notes[&sid("note.anguilla")].fields[&sid("field.capital")],
+        english.notes[&sid("note.hardcore-anguilla")].fields[&sid("field.capital")],
         "The Valley"
     );
     assert_eq!(
         english.notes[&sid("note.anguilla")].fields[&sid("field.map")],
         "<img src=\"ug-map-anguilla.png\" />",
-        "Hardcore fills extra fields without blanking the main deck's existing map card"
+        "Hardcore companion notes no longer overwrite the main deck's existing map card"
     );
     assert!(
-        english.notes[&sid("note.anguilla")]
+        english.notes[&sid("note.hardcore-anguilla")]
             .tags
             .contains("UG::Overlapping")
     );
@@ -200,7 +236,7 @@ fn ultimate_geography_hardcore_extension_builds_on_main_deck_without_erasing_bas
         "Pitcairninseln"
     );
     assert_eq!(
-        german.notes[&sid("note.canary-islands")].fields[&sid("field.capital")],
+        german.notes[&sid("note.hardcore-canary-islands")].fields[&sid("field.capital")],
         "Santa Cruz de Tenerife, Las Palmas de Gran Canaria"
     );
 
@@ -1502,8 +1538,12 @@ fn note_field_json_path(deck: &CanonicalDeck, note_id: &str, field_id: &str) -> 
 }
 
 fn read_manifest(root: &Path) -> manifest::FederatedDeckManifest {
-    manifest::from_str(&fs::read_to_string(root.join("brainbrew.yaml")).unwrap())
-        .expect("manifest parses")
+    read_manifest_file(root, "brainbrew.yaml")
+}
+
+fn read_manifest_file(root: &Path, manifest_file: &str) -> manifest::FederatedDeckManifest {
+    manifest::from_str(&fs::read_to_string(root.join(manifest_file)).unwrap())
+        .unwrap_or_else(|error| panic!("{manifest_file} parses: {error}"))
 }
 
 fn read_canonical_deck_file(root: &Path, path: &Path) -> Result<CanonicalDeck, String> {
