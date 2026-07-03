@@ -821,6 +821,166 @@ struct TranslationCoverageBuilder<'a> {
     seen_adapter_ids: BTreeSet<(String, String)>,
 }
 
+#[derive(Clone, Copy)]
+struct TranslationResolveOptions<'a> {
+    path: &'a str,
+    variable_key: Option<&'a str>,
+    include_target_adaptation: bool,
+    include_variable: bool,
+    include_ignored: bool,
+}
+
+#[derive(Clone, Copy)]
+struct ContextualTranslationMatch<'a> {
+    context_path: &'a str,
+    translated: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct TranslationRecordOptions {
+    include_target_adaptation: bool,
+    include_variable: bool,
+    record_missing: bool,
+    record_ignored: bool,
+}
+
+enum TranslationOutcome<'a> {
+    TargetAdaptation {
+        adaptation: &'a TargetAdaptation,
+    },
+    Variable {
+        translated: &'a str,
+    },
+    Direct {
+        translated: &'a str,
+    },
+    Contextual {
+        translated: &'a str,
+        context_path: &'a str,
+        direct: Option<&'a str>,
+        matches: Vec<ContextualTranslationMatch<'a>>,
+    },
+    NoChange,
+    Stale {
+        index: usize,
+        record: &'a StaleTranslation,
+    },
+    Missing,
+    Ignored,
+    Empty,
+}
+
+impl<'a> TranslationOutcome<'a> {
+    fn direct_translation(&self) -> Option<&'a str> {
+        match self {
+            Self::Direct { translated } => Some(translated),
+            Self::Contextual { direct, .. } => *direct,
+            _ => None,
+        }
+    }
+
+    fn contextual_matches(&self) -> &[ContextualTranslationMatch<'a>] {
+        match self {
+            Self::Contextual { matches, .. } => matches,
+            _ => &[],
+        }
+    }
+}
+
+fn resolve_translation<'a>(
+    translations: &'a TranslationDictionary,
+    source: &str,
+    options: TranslationResolveOptions<'_>,
+) -> TranslationOutcome<'a> {
+    if options.include_target_adaptation
+        && let Some(adaptation) = translations.target_adaptations.get(options.path)
+    {
+        return TranslationOutcome::TargetAdaptation { adaptation };
+    }
+
+    if source.is_empty() {
+        return TranslationOutcome::Empty;
+    }
+
+    if options.include_ignored && is_ignored_translation_path(translations, options.path) {
+        return TranslationOutcome::Ignored;
+    }
+
+    if options.include_variable
+        && let Some(variable_key) = options.variable_key
+        && let Some(replacements) = translations.variables.get(variable_key)
+        && let Some(translated) = replacements.get(source)
+    {
+        return TranslationOutcome::Variable { translated };
+    }
+
+    let direct = translations.direct.get(source).map(String::as_str);
+    let mut contextual_matches = Vec::new();
+    let mut contextual_translation: Option<ContextualTranslationMatch<'a>> = None;
+    for (context_path, replacements) in &translations.contextual {
+        if context_matches_path(context_path, options.path)
+            && let Some(translated) = replacements.get(source)
+        {
+            let candidate = ContextualTranslationMatch {
+                context_path,
+                translated,
+            };
+            contextual_matches.push(candidate);
+            if contextual_translation
+                .as_ref()
+                .is_none_or(|current| context_path.len() > current.context_path.len())
+            {
+                contextual_translation = Some(candidate);
+            }
+        }
+    }
+
+    if let Some(contextual_translation) = contextual_translation {
+        return TranslationOutcome::Contextual {
+            translated: contextual_translation.translated,
+            context_path: contextual_translation.context_path,
+            direct,
+            matches: contextual_matches,
+        };
+    }
+
+    if let Some(translated) = direct {
+        return TranslationOutcome::Direct { translated };
+    }
+
+    if translations.no_change.contains(source) {
+        return TranslationOutcome::NoChange;
+    }
+
+    if let Some((index, record)) = matching_stale_translation(translations, source, options.path) {
+        return TranslationOutcome::Stale { index, record };
+    }
+
+    TranslationOutcome::Missing
+}
+
+fn has_explicit_string_entry(
+    translations: &TranslationDictionary,
+    value: &str,
+    path: &str,
+    variable_key: Option<&str>,
+) -> bool {
+    !matches!(
+        resolve_translation(
+            translations,
+            value,
+            TranslationResolveOptions {
+                path,
+                variable_key,
+                include_target_adaptation: false,
+                include_variable: true,
+                include_ignored: false,
+            },
+        ),
+        TranslationOutcome::Empty | TranslationOutcome::Ignored | TranslationOutcome::Missing
+    )
+}
+
 impl TranslationCoverageBuilder<'_> {
     fn record_variables(&mut self, variables: &BTreeMap<String, String>, path_prefix: &str) {
         for (key, value) in variables {
@@ -837,7 +997,7 @@ impl TranslationCoverageBuilder<'_> {
         message: &StructuredMessage,
     ) {
         if self.translations.target_adaptations.contains_key(&path)
-            || self.has_explicit_string_entry(resolved_value, &path, None)
+            || has_explicit_string_entry(self.translations, resolved_value, &path, None)
         {
             self.record_string(resolved_value, path, None);
             return;
@@ -860,7 +1020,7 @@ impl TranslationCoverageBuilder<'_> {
         }
 
         if let Some(format) = &message.format {
-            self.record_optional_string(format, message_format_path(note_id, field_id));
+            self.record_string_without_fallback(format, message_format_path(note_id, field_id));
             for (variable, component) in &message.variables {
                 self.record_message_component(
                     component,
@@ -891,234 +1051,174 @@ impl TranslationCoverageBuilder<'_> {
         }
     }
 
-    fn has_explicit_string_entry(
-        &self,
-        value: &str,
-        path: &str,
-        variable_key: Option<&str>,
-    ) -> bool {
-        if value.is_empty() {
-            return false;
-        }
-        if let Some(variable_key) = variable_key
-            && self
-                .translations
-                .variables
-                .get(variable_key)
-                .is_some_and(|replacements| replacements.contains_key(value))
-        {
-            return true;
-        }
-        self.translations.direct.contains_key(value)
-            || self.translations.no_change.contains(value)
-            || self
-                .translations
-                .contextual
-                .iter()
-                .any(|(context_path, replacements)| {
-                    context_matches_path(context_path, path) && replacements.contains_key(value)
-                })
-            || matching_stale_translation(self.translations, value, path).is_some()
-    }
-
     fn record_string(&mut self, value: &str, path: String, variable_key: Option<&str>) {
-        if let Some(adaptation) = self.translations.target_adaptations.get(&path) {
-            self.seen_target_adaptations.insert(path.clone());
-            let category = if value == adaptation.expected_source {
-                TranslationCoverageCategory::TargetAdaptation
-            } else {
-                TranslationCoverageCategory::InvalidTargetAdaptation
-            };
-            self.entries.push(TranslationCoverageEntry {
-                category,
-                path: path.clone(),
-                source: value.to_owned(),
-                old_source: Some(adaptation.expected_source.clone()),
-                translated: Some(adaptation.target.clone()),
-                context: Some(path),
-            });
-            return;
-        }
+        self.record_string_with_options(
+            value,
+            path,
+            variable_key,
+            TranslationRecordOptions {
+                include_target_adaptation: true,
+                include_variable: true,
+                record_missing: true,
+                record_ignored: true,
+            },
+        );
+    }
 
-        if value.is_empty() {
-            return;
-        }
+    fn record_string_without_fallback(&mut self, value: &str, path: String) {
+        self.record_string_with_options(
+            value,
+            path,
+            None,
+            TranslationRecordOptions {
+                include_target_adaptation: false,
+                include_variable: false,
+                record_missing: false,
+                record_ignored: false,
+            },
+        );
+    }
 
-        if is_ignored_translation_path(self.translations, &path) {
-            self.entries.push(TranslationCoverageEntry {
-                category: TranslationCoverageCategory::IgnoredSource,
-                path,
-                source: value.to_owned(),
-                old_source: None,
-                translated: None,
-                context: None,
-            });
-            return;
-        }
+    fn record_string_with_options(
+        &mut self,
+        value: &str,
+        path: String,
+        variable_key: Option<&str>,
+        record_options: TranslationRecordOptions,
+    ) {
+        let outcome = resolve_translation(
+            self.translations,
+            value,
+            TranslationResolveOptions {
+                path: &path,
+                variable_key,
+                include_target_adaptation: record_options.include_target_adaptation,
+                include_variable: record_options.include_variable,
+                include_ignored: true,
+            },
+        );
 
-        if let Some(variable_key) = variable_key
-            && let Some(replacements) = self.translations.variables.get(variable_key)
-            && let Some(translated) = replacements.get(value)
-        {
-            self.seen_variables
-                .insert((variable_key.to_owned(), value.to_owned()));
-            self.entries.push(TranslationCoverageEntry {
-                category: TranslationCoverageCategory::VariableTranslation,
-                path,
-                source: value.to_owned(),
-                old_source: None,
-                translated: Some(translated.clone()),
-                context: Some(variable_key.to_owned()),
-            });
-            return;
-        }
-
-        let source = value.to_owned();
-        self.seen_sources.insert(source.clone());
-        let direct_translation = self.translations.direct.get(value);
-        if direct_translation.is_some() {
-            self.seen_direct.insert(source.clone());
-        }
-        let no_change = self.translations.no_change.contains(value);
-
-        let mut contextual_translation: Option<(&String, &String)> = None;
-        for (context_path, replacements) in &self.translations.contextual {
-            if context_matches_path(context_path, &path)
-                && let Some(translated) = replacements.get(value)
-            {
-                self.seen_contextual
-                    .insert((context_path.clone(), source.clone()));
-                if contextual_translation
-                    .as_ref()
-                    .is_none_or(|(current_context, _)| context_path.len() > current_context.len())
-                {
-                    contextual_translation = Some((context_path, translated));
+        match &outcome {
+            TranslationOutcome::TargetAdaptation { adaptation } => {
+                self.seen_target_adaptations.insert(path.clone());
+                let category = if value == adaptation.expected_source {
+                    TranslationCoverageCategory::TargetAdaptation
+                } else {
+                    TranslationCoverageCategory::InvalidTargetAdaptation
+                };
+                self.entries.push(TranslationCoverageEntry {
+                    category,
+                    path: path.clone(),
+                    source: value.to_owned(),
+                    old_source: Some(adaptation.expected_source.clone()),
+                    translated: Some(adaptation.target.clone()),
+                    context: Some(path),
+                });
+            }
+            TranslationOutcome::Empty => {}
+            TranslationOutcome::Ignored => {
+                if record_options.record_ignored {
+                    self.entries.push(TranslationCoverageEntry {
+                        category: TranslationCoverageCategory::IgnoredSource,
+                        path,
+                        source: value.to_owned(),
+                        old_source: None,
+                        translated: None,
+                        context: None,
+                    });
                 }
             }
-        }
-
-        if let Some((context_path, translated)) = contextual_translation {
-            self.entries.push(TranslationCoverageEntry {
-                category: TranslationCoverageCategory::ContextualTranslation,
-                path,
-                source,
-                old_source: None,
-                translated: Some(translated.clone()),
-                context: Some(context_path.clone()),
-            });
-        } else if let Some(translated) = direct_translation {
-            self.entries.push(TranslationCoverageEntry {
-                category: TranslationCoverageCategory::DirectTranslation,
-                path,
-                source,
-                old_source: None,
-                translated: Some(translated.clone()),
-                context: None,
-            });
-        } else if no_change {
-            self.seen_no_change.insert(source.clone());
-            self.entries.push(TranslationCoverageEntry {
-                category: TranslationCoverageCategory::NoChange,
-                path,
-                source: source.clone(),
-                old_source: None,
-                translated: Some(source),
-                context: None,
-            });
-        } else if let Some((index, record)) =
-            matching_stale_translation(self.translations, &source, &path)
-        {
-            self.seen_stale_translations.insert(index);
-            self.entries.push(TranslationCoverageEntry {
-                category: TranslationCoverageCategory::StaleTranslation,
-                path,
-                source: source.clone(),
-                old_source: Some(record.old_source.clone()),
-                translated: Some(record.target.clone()),
-                context: record.context.clone(),
-            });
-        } else {
-            self.entries.push(TranslationCoverageEntry {
-                category: TranslationCoverageCategory::UntranslatedFallback,
-                path,
-                source: source.clone(),
-                old_source: None,
-                translated: Some(source),
-                context: None,
-            });
+            TranslationOutcome::Variable { translated } => {
+                if let Some(variable_key) = variable_key {
+                    self.seen_variables
+                        .insert((variable_key.to_owned(), value.to_owned()));
+                    self.entries.push(TranslationCoverageEntry {
+                        category: TranslationCoverageCategory::VariableTranslation,
+                        path,
+                        source: value.to_owned(),
+                        old_source: None,
+                        translated: Some((*translated).to_owned()),
+                        context: Some(variable_key.to_owned()),
+                    });
+                }
+            }
+            TranslationOutcome::Contextual {
+                translated,
+                context_path,
+                ..
+            } => {
+                let source = self.record_seen_source(value, &outcome);
+                self.entries.push(TranslationCoverageEntry {
+                    category: TranslationCoverageCategory::ContextualTranslation,
+                    path,
+                    source,
+                    old_source: None,
+                    translated: Some((*translated).to_owned()),
+                    context: Some((*context_path).to_owned()),
+                });
+            }
+            TranslationOutcome::Direct { translated } => {
+                let source = self.record_seen_source(value, &outcome);
+                self.entries.push(TranslationCoverageEntry {
+                    category: TranslationCoverageCategory::DirectTranslation,
+                    path,
+                    source,
+                    old_source: None,
+                    translated: Some((*translated).to_owned()),
+                    context: None,
+                });
+            }
+            TranslationOutcome::NoChange => {
+                let source = self.record_seen_source(value, &outcome);
+                self.seen_no_change.insert(source.clone());
+                self.entries.push(TranslationCoverageEntry {
+                    category: TranslationCoverageCategory::NoChange,
+                    path,
+                    source: source.clone(),
+                    old_source: None,
+                    translated: Some(source),
+                    context: None,
+                });
+            }
+            TranslationOutcome::Stale { index, record } => {
+                let source = self.record_seen_source(value, &outcome);
+                self.seen_stale_translations.insert(*index);
+                self.entries.push(TranslationCoverageEntry {
+                    category: TranslationCoverageCategory::StaleTranslation,
+                    path,
+                    source,
+                    old_source: Some(record.old_source.clone()),
+                    translated: Some(record.target.clone()),
+                    context: record.context.clone(),
+                });
+            }
+            TranslationOutcome::Missing => {
+                let source = self.record_seen_source(value, &outcome);
+                if record_options.record_missing {
+                    self.entries.push(TranslationCoverageEntry {
+                        category: TranslationCoverageCategory::UntranslatedFallback,
+                        path,
+                        source: source.clone(),
+                        old_source: None,
+                        translated: Some(source),
+                        context: None,
+                    });
+                }
+            }
         }
     }
 
-    fn record_optional_string(&mut self, value: &str, path: String) {
-        if value.is_empty() || is_ignored_translation_path(self.translations, &path) {
-            return;
-        }
-
+    fn record_seen_source(&mut self, value: &str, outcome: &TranslationOutcome<'_>) -> String {
         let source = value.to_owned();
         self.seen_sources.insert(source.clone());
-        let direct_translation = self.translations.direct.get(value);
-        if direct_translation.is_some() {
+        if outcome.direct_translation().is_some() {
             self.seen_direct.insert(source.clone());
         }
-        let no_change = self.translations.no_change.contains(value);
-
-        let mut contextual_translation: Option<(&String, &String)> = None;
-        for (context_path, replacements) in &self.translations.contextual {
-            if context_matches_path(context_path, &path)
-                && let Some(translated) = replacements.get(value)
-            {
-                self.seen_contextual
-                    .insert((context_path.clone(), source.clone()));
-                if contextual_translation
-                    .as_ref()
-                    .is_none_or(|(current_context, _)| context_path.len() > current_context.len())
-                {
-                    contextual_translation = Some((context_path, translated));
-                }
-            }
+        for contextual_match in outcome.contextual_matches() {
+            self.seen_contextual
+                .insert((contextual_match.context_path.to_owned(), source.clone()));
         }
-
-        if let Some((context_path, translated)) = contextual_translation {
-            self.entries.push(TranslationCoverageEntry {
-                category: TranslationCoverageCategory::ContextualTranslation,
-                path,
-                source,
-                old_source: None,
-                translated: Some(translated.clone()),
-                context: Some(context_path.clone()),
-            });
-        } else if let Some(translated) = direct_translation {
-            self.entries.push(TranslationCoverageEntry {
-                category: TranslationCoverageCategory::DirectTranslation,
-                path,
-                source,
-                old_source: None,
-                translated: Some(translated.clone()),
-                context: None,
-            });
-        } else if no_change {
-            self.seen_no_change.insert(source.clone());
-            self.entries.push(TranslationCoverageEntry {
-                category: TranslationCoverageCategory::NoChange,
-                path,
-                source: source.clone(),
-                old_source: None,
-                translated: Some(source),
-                context: None,
-            });
-        } else if let Some((index, record)) =
-            matching_stale_translation(self.translations, &source, &path)
-        {
-            self.seen_stale_translations.insert(index);
-            self.entries.push(TranslationCoverageEntry {
-                category: TranslationCoverageCategory::StaleTranslation,
-                path,
-                source: source.clone(),
-                old_source: Some(record.old_source.clone()),
-                translated: Some(record.target.clone()),
-                context: record.context.clone(),
-            });
-        }
+        source
     }
 
     fn record_tags(&mut self, tags: &BTreeSet<String>, path_prefix: &str) {
@@ -1822,7 +1922,7 @@ impl TranslationApplyContext<'_, '_> {
         message: &mut StructuredMessage,
     ) -> Option<String> {
         if self.translations.target_adaptations.contains_key(&path)
-            || self.has_explicit_string_entry(resolved_source, &path, None)
+            || has_explicit_string_entry(self.translations, resolved_source, &path, None)
         {
             let mut translated = resolved_source.to_owned();
             self.translate_string(&mut translated, path, None);
@@ -1834,7 +1934,7 @@ impl TranslationApplyContext<'_, '_> {
         }
 
         if let Some(format) = &mut message.format {
-            self.translate_optional_string(format, message_format_path(note_id, field_id));
+            self.translate_string_without_missing(format, message_format_path(note_id, field_id));
             for (variable, component) in &mut message.variables {
                 self.translate_message_component(
                     source_deck,
@@ -1876,229 +1976,116 @@ impl TranslationApplyContext<'_, '_> {
         }
     }
 
-    fn has_explicit_string_entry(
-        &self,
-        value: &str,
-        path: &str,
-        variable_key: Option<&str>,
-    ) -> bool {
-        if value.is_empty() {
-            return false;
-        }
-        if let Some(variable_key) = variable_key
-            && self
-                .translations
-                .variables
-                .get(variable_key)
-                .is_some_and(|replacements| replacements.contains_key(value))
-        {
-            return true;
-        }
-        self.translations.direct.contains_key(value)
-            || self.translations.no_change.contains(value)
-            || self
-                .translations
-                .contextual
-                .iter()
-                .any(|(context_path, replacements)| {
-                    context_matches_path(context_path, path) && replacements.contains_key(value)
-                })
-            || matching_stale_translation(self.translations, value, path).is_some()
-    }
-
     fn translate_string(&mut self, value: &mut String, path: String, variable_key: Option<&str>) {
-        if let Some(adaptation) = self.translations.target_adaptations.get(&path) {
-            self.seen_target_adaptations.insert(path.clone());
-            if value != &adaptation.expected_source {
-                self.errors.push(ComposeError::new(
-                    ComposeErrorKind::ExpectedBaseMismatch,
-                    path,
-                    format!(
-                        "target adaptation expected source {:?}, found {:?}",
-                        adaptation.expected_source, value
-                    ),
-                ));
-                return;
-            }
-            if !record_change_path(
-                &path,
-                self.overlay,
-                ChangeIntent::Replace,
-                self.changed_paths,
-                self.errors,
-            ) {
-                return;
-            }
-            *value = adaptation.target.clone();
-            return;
-        }
+        self.translate_string_with_options(value, path, variable_key, true, true, true);
+    }
 
-        if value.is_empty() || is_ignored_translation_path(self.translations, &path) {
-            return;
-        }
+    fn translate_string_without_missing(&mut self, value: &mut String, path: String) {
+        self.translate_string_with_options(value, path, None, false, false, false);
+    }
 
-        if let Some(variable_key) = variable_key
-            && let Some(replacements) = self.translations.variables.get(variable_key)
-            && let Some(translated) = replacements.get(value.as_str())
-        {
-            let source = value.clone();
-            self.seen_variables
-                .insert((variable_key.to_owned(), source));
-            if value != translated {
-                if !record_change_path(
-                    &path,
-                    self.overlay,
-                    ChangeIntent::Replace,
-                    self.changed_paths,
-                    self.errors,
-                ) {
+    fn translate_string_with_options(
+        &mut self,
+        value: &mut String,
+        path: String,
+        variable_key: Option<&str>,
+        include_target_adaptation: bool,
+        include_variable: bool,
+        record_missing: bool,
+    ) {
+        let outcome = resolve_translation(
+            self.translations,
+            value,
+            TranslationResolveOptions {
+                path: &path,
+                variable_key,
+                include_target_adaptation,
+                include_variable,
+                include_ignored: true,
+            },
+        );
+
+        match &outcome {
+            TranslationOutcome::TargetAdaptation { adaptation } => {
+                self.seen_target_adaptations.insert(path.clone());
+                if value != &adaptation.expected_source {
+                    self.errors.push(ComposeError::new(
+                        ComposeErrorKind::ExpectedBaseMismatch,
+                        path,
+                        format!(
+                            "target adaptation expected source {:?}, found {:?}",
+                            adaptation.expected_source, value
+                        ),
+                    ));
                     return;
                 }
-                *value = translated.clone();
+                self.apply_translated_value(value, &path, &adaptation.target);
             }
-            return;
-        }
-
-        let source = value.clone();
-        self.source_paths
-            .entry(source.clone())
-            .or_default()
-            .insert(path.clone());
-        let direct_translation = self.translations.direct.get(source.as_str());
-        if direct_translation.is_some() {
-            self.seen_direct.insert(source.clone());
-        }
-        let no_change = self.translations.no_change.contains(source.as_str());
-
-        let mut contextual_translation: Option<(&String, &String)> = None;
-        for (context_path, replacements) in &self.translations.contextual {
-            if context_matches_path(context_path, &path)
-                && let Some(translated) = replacements.get(source.as_str())
-            {
-                self.seen_contextual
-                    .insert((context_path.clone(), source.clone()));
-                if contextual_translation
-                    .as_ref()
-                    .is_none_or(|(current_context, _)| context_path.len() > current_context.len())
-                {
-                    contextual_translation = Some((context_path, translated));
+            TranslationOutcome::Empty | TranslationOutcome::Ignored => {}
+            TranslationOutcome::Variable { translated } => {
+                if let Some(variable_key) = variable_key {
+                    let source = value.clone();
+                    self.seen_variables
+                        .insert((variable_key.to_owned(), source));
+                    self.apply_translated_value(value, &path, translated);
                 }
             }
-        }
-
-        let translated = contextual_translation
-            .map(|(_, translated)| translated)
-            .or(direct_translation);
-        if let Some(translated) = translated {
-            if value != translated {
-                if !record_change_path(
-                    &path,
-                    self.overlay,
-                    ChangeIntent::Replace,
-                    self.changed_paths,
-                    self.errors,
-                ) {
-                    return;
-                }
-                *value = translated.clone();
+            TranslationOutcome::Contextual { translated, .. }
+            | TranslationOutcome::Direct { translated } => {
+                self.record_apply_source(value, &path, &outcome);
+                self.apply_translated_value(value, &path, translated);
             }
-            return;
-        }
-
-        if no_change {
-            return;
-        }
-
-        if let Some((_, record)) = matching_stale_translation(self.translations, &source, &path) {
-            if value != &record.target {
-                if !record_change_path(
-                    &path,
-                    self.overlay,
-                    ChangeIntent::Replace,
-                    self.changed_paths,
-                    self.errors,
-                ) {
-                    return;
-                }
-                *value = record.target.clone();
+            TranslationOutcome::NoChange => {
+                self.record_apply_source(value, &path, &outcome);
             }
-            return;
-        }
-
-        if self.translations.require_complete {
-            self.errors.push(ComposeError::new(
-                ComposeErrorKind::MissingTranslation,
-                path.clone(),
-                format!(
-                    "missing direct or contextual translation for {value:?} at {path}; add translations.direct, add translations.no_change for intentionally unchanged text, add a translations.contextual entry for path-specific text, or ignore the path"
-                ),
-            ));
+            TranslationOutcome::Stale { record, .. } => {
+                self.record_apply_source(value, &path, &outcome);
+                self.apply_translated_value(value, &path, &record.target);
+            }
+            TranslationOutcome::Missing => {
+                self.record_apply_source(value, &path, &outcome);
+                if record_missing && self.translations.require_complete {
+                    self.errors.push(ComposeError::new(
+                        ComposeErrorKind::MissingTranslation,
+                        path.clone(),
+                        format!(
+                            "missing direct or contextual translation for {value:?} at {path}; add translations.direct, add translations.no_change for intentionally unchanged text, add a translations.contextual entry for path-specific text, or ignore the path"
+                        ),
+                    ));
+                }
+            }
         }
     }
 
-    fn translate_optional_string(&mut self, value: &mut String, path: String) {
-        if value.is_empty() || is_ignored_translation_path(self.translations, &path) {
-            return;
-        }
-
-        let source = value.clone();
+    fn record_apply_source(&mut self, value: &str, path: &str, outcome: &TranslationOutcome<'_>) {
+        let source = value.to_owned();
         self.source_paths
             .entry(source.clone())
             .or_default()
-            .insert(path.clone());
-        let direct_translation = self.translations.direct.get(source.as_str());
-        if direct_translation.is_some() {
+            .insert(path.to_owned());
+        if outcome.direct_translation().is_some() {
             self.seen_direct.insert(source.clone());
         }
-        let mut contextual_translation: Option<(&String, &String)> = None;
-        for (context_path, replacements) in &self.translations.contextual {
-            if context_matches_path(context_path, &path)
-                && let Some(translated) = replacements.get(source.as_str())
-            {
-                self.seen_contextual
-                    .insert((context_path.clone(), source.clone()));
-                if contextual_translation
-                    .as_ref()
-                    .is_none_or(|(current_context, _)| context_path.len() > current_context.len())
-                {
-                    contextual_translation = Some((context_path, translated));
-                }
-            }
+        for contextual_match in outcome.contextual_matches() {
+            self.seen_contextual
+                .insert((contextual_match.context_path.to_owned(), source.clone()));
         }
+    }
 
-        let translated = contextual_translation
-            .map(|(_, translated)| translated)
-            .or(direct_translation);
-        if let Some(translated) = translated {
-            if value != translated {
-                if !record_change_path(
-                    &path,
-                    self.overlay,
-                    ChangeIntent::Replace,
-                    self.changed_paths,
-                    self.errors,
-                ) {
-                    return;
-                }
-                *value = translated.clone();
-            }
+    fn apply_translated_value(&mut self, value: &mut String, path: &str, translated: &str) {
+        if value == translated {
             return;
         }
-
-        if let Some((_, record)) = matching_stale_translation(self.translations, &source, &path)
-            && value != &record.target
-        {
-            if !record_change_path(
-                &path,
-                self.overlay,
-                ChangeIntent::Replace,
-                self.changed_paths,
-                self.errors,
-            ) {
-                return;
-            }
-            *value = record.target.clone();
+        if !record_change_path(
+            path,
+            self.overlay,
+            ChangeIntent::Replace,
+            self.changed_paths,
+            self.errors,
+        ) {
+            return;
         }
+        *value = translated.to_owned();
     }
 
     fn translate_tags(&mut self, tags: &mut BTreeSet<String>, path_prefix: &str) {
