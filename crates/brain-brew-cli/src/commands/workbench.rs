@@ -1,10 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::SystemTime;
 
 use axum::body::Body;
@@ -445,6 +445,7 @@ struct WorkspaceMetadata {
     manifest_root: PathBuf,
     media_root: Option<PathBuf>,
     cache: tokio::sync::RwLock<WorkspaceCache>,
+    apply_mutex: Mutex<()>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -502,7 +503,14 @@ impl WorkspaceMetadata {
             manifest_root: manifest_root(manifest_path),
             media_root,
             cache: tokio::sync::RwLock::new(WorkspaceCache::new(manifest)),
+            apply_mutex: Mutex::new(()),
         }
+    }
+
+    fn lock_apply(&self) -> Result<MutexGuard<'_, ()>, String> {
+        self.apply_mutex
+            .lock()
+            .map_err(|_| "workbench apply lock poisoned".to_owned())
     }
 
     fn current_manifest(&self) -> Result<FederatedDeckManifest, String> {
@@ -824,6 +832,7 @@ impl WorkspaceMetadata {
     }
 
     fn create_new_language_json(&self, request: NewLanguageRequest) -> Result<Value, String> {
+        let _apply_guard = self.lock_apply()?;
         let manifest = self.current_manifest()?;
         let (updated, overlay_writes) =
             apply_new_language_request(&self.manifest_root, &manifest, &request)?;
@@ -831,25 +840,31 @@ impl WorkspaceMetadata {
         manifest::from_str(&manifest_yaml)
             .map_err(|error| format!("invalid generated manifest: {error}"))?;
 
+        let mut writes = Vec::new();
+        let mut overlay_write_targets = Vec::new();
         for (relative_path, overlay) in overlay_writes {
-            let path = safe_new_language_relative_path(&relative_path)
-                .map(|relative| self.manifest_root.join(relative))?;
-            if path.exists() {
+            let relative = safe_new_language_relative_path(&relative_path)?;
+            let path = self.manifest_root.join(&relative);
+            let overlay_yaml = canonical_yaml::overlay_to_string(&overlay);
+            canonical_yaml::overlay_from_str(&overlay_yaml)
+                .map_err(|error| format!("invalid generated overlay {relative_path}: {error}"))?;
+            overlay_write_targets.push(AtomicFileWrite::text(path, relative_path, overlay_yaml));
+        }
+        for write in &overlay_write_targets {
+            if write.path.exists() {
                 return Err(format!(
                     "invalid new language overlay file already exists: {}",
-                    path.display()
+                    write.path.display()
                 ));
             }
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent)
-                    .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
-            }
-            fs::write(&path, canonical_yaml::overlay_to_string(&overlay))
-                .map_err(|error| format!("failed to write {}: {error}", path.display()))?;
         }
-        fs::write(&self.manifest_path, manifest_yaml).map_err(|error| {
-            format!("failed to write {}: {error}", self.manifest_path.display())
-        })?;
+        writes.extend(overlay_write_targets);
+        writes.push(AtomicFileWrite::text(
+            self.manifest_path.clone(),
+            workspace_path(&self.manifest_root, &self.manifest_path),
+            manifest_yaml,
+        ));
+        write_files_atomically(&writes)?;
         self.invalidate_workspace_cache_after_write()?;
 
         Ok(json!({
@@ -860,6 +875,11 @@ impl WorkspaceMetadata {
     }
 
     fn apply_request_json(&self, request: ApplyRequest, mode: ApplyMode) -> Result<Value, String> {
+        let _apply_guard = if mode == ApplyMode::Write {
+            Some(self.lock_apply()?)
+        } else {
+            None
+        };
         let manifest = self.current_manifest()?;
         let context = self.selected_translation_context(
             &manifest,
@@ -990,18 +1010,27 @@ impl WorkspaceMetadata {
             return Err("validation failed; preview before applying".to_owned());
         }
         if mode == ApplyMode::Write {
-            write_source_apply_plan(&source_plan, &modified_base, &base_file)?;
-            for (path, (_display_file, overlay, changed)) in &overlay_writes {
+            let mut writes = source_apply_writes(
+                &source_plan,
+                &modified_base,
+                &base_file,
+                &self.manifest_root,
+            )?;
+            for (path, (display_file, overlay, changed)) in &overlay_writes {
                 if !changed {
                     continue;
                 }
-                fs::write(path, canonical_yaml::overlay_to_string(overlay)).map_err(|error| {
-                    format!(
-                        "failed to write translation overlay {}: {error}",
-                        path.display()
-                    )
+                let overlay_yaml = canonical_yaml::overlay_to_string(overlay);
+                canonical_yaml::overlay_from_str(&overlay_yaml).map_err(|error| {
+                    format!("invalid generated translation overlay {display_file}: {error}")
                 })?;
+                writes.push(AtomicFileWrite::text(
+                    path.clone(),
+                    display_file.clone(),
+                    overlay_yaml,
+                ));
             }
+            write_files_atomically(&writes)?;
             self.invalidate_workspace_cache_after_write()?;
         }
 
@@ -3822,6 +3851,226 @@ fn read_overlay_for_rewrite(path: &Path) -> Result<Overlay, String> {
     canonical_yaml::overlay_from_str(&input).map_err(|error| error.to_string())
 }
 
+#[derive(Clone, Debug)]
+struct AtomicFileWrite {
+    path: PathBuf,
+    display_path: String,
+    contents: Vec<u8>,
+}
+
+impl AtomicFileWrite {
+    fn text(path: PathBuf, display_path: impl Into<String>, contents: String) -> Self {
+        Self {
+            path,
+            display_path: display_path.into(),
+            contents: contents.into_bytes(),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct PreparedAtomicWrite<'a> {
+    write: &'a AtomicFileWrite,
+    temp_path: PathBuf,
+}
+
+fn write_files_atomically(writes: &[AtomicFileWrite]) -> Result<(), String> {
+    if writes.is_empty() {
+        return Ok(());
+    }
+    validate_atomic_write_batch(writes)?;
+    for index in 0..writes.len() {
+        maybe_fail_atomic_write_hook("validate", index)?;
+    }
+    atomic_write_trace("transaction_begin", None, None);
+
+    let result = write_files_atomically_inner(writes);
+    atomic_write_trace("transaction_end", None, None);
+    result
+}
+
+fn write_files_atomically_inner(writes: &[AtomicFileWrite]) -> Result<(), String> {
+    let mut prepared = Vec::new();
+    for (index, write) in writes.iter().enumerate() {
+        maybe_fail_atomic_write_hook("temp", index)?;
+        let parent = write.path.parent().ok_or_else(|| {
+            format!(
+                "failed to prepare {}: target has no parent directory",
+                write.display_path
+            )
+        })?;
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
+        let temp_path = atomic_temp_path(&write.path, index)?;
+        atomic_write_trace("temp_write", Some(write), Some(&temp_path));
+        let mut temp = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)
+            .map_err(|error| {
+                format!(
+                    "failed to create temporary file for {} at {}: {error}",
+                    write.display_path,
+                    temp_path.display()
+                )
+            })?;
+        temp.write_all(&write.contents).map_err(|error| {
+            format!(
+                "failed to write temporary file for {} at {}: {error}",
+                write.display_path,
+                temp_path.display()
+            )
+        })?;
+        temp.sync_all().map_err(|error| {
+            format!(
+                "failed to fsync temporary file for {} at {}: {error}",
+                write.display_path,
+                temp_path.display()
+            )
+        })?;
+        drop(temp);
+        fsync_directory(parent)?;
+        prepared.push(PreparedAtomicWrite { write, temp_path });
+    }
+
+    let mut updated = Vec::<String>::new();
+    for (index, prepared_write) in prepared.iter().enumerate() {
+        if let Err(error) = maybe_fail_atomic_write_hook("rename", index) {
+            return Err(rename_phase_error(error, &updated, &prepared[index..]));
+        }
+        atomic_write_trace(
+            "rename",
+            Some(prepared_write.write),
+            Some(&prepared_write.temp_path),
+        );
+        if let Err(error) = fs::rename(&prepared_write.temp_path, &prepared_write.write.path) {
+            return Err(rename_phase_error(
+                format!(
+                    "failed to rename {} over {}: {error}",
+                    prepared_write.temp_path.display(),
+                    prepared_write.write.display_path
+                ),
+                &updated,
+                &prepared[index..],
+            ));
+        }
+        if let Some(parent) = prepared_write.write.path.parent() {
+            fsync_directory(parent)?;
+        }
+        updated.push(prepared_write.write.display_path.clone());
+    }
+    Ok(())
+}
+
+fn validate_atomic_write_batch(writes: &[AtomicFileWrite]) -> Result<(), String> {
+    let mut seen = BTreeSet::new();
+    for write in writes {
+        if write.path.as_os_str().is_empty() {
+            return Err("invalid atomic write target: empty path".to_owned());
+        }
+        if !seen.insert(write.path.clone()) {
+            return Err(format!(
+                "invalid atomic write batch: duplicate target {}",
+                write.path.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn atomic_temp_path(path: &Path, index: usize) -> Result<PathBuf, String> {
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("invalid atomic write target {}", path.display()))?;
+    let suffix = format!(
+        ".brainbrew-tmp-{}-{}-{index}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or_default()
+    );
+    Ok(path.with_file_name(format!("{file_name}{suffix}")))
+}
+
+fn fsync_directory(path: &Path) -> Result<(), String> {
+    File::open(path)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| format!("failed to fsync directory {}: {error}", path.display()))
+}
+
+fn rename_phase_error(
+    cause: String,
+    updated: &[String],
+    not_updated_writes: &[PreparedAtomicWrite<'_>],
+) -> String {
+    let not_updated = not_updated_writes
+        .iter()
+        .map(|write| write.write.display_path.clone())
+        .collect::<Vec<_>>();
+    format!(
+        "atomic write rename phase failed: {cause}; updated files: {}; not updated files: {}",
+        format_file_list(updated),
+        format_file_list(&not_updated),
+    )
+}
+
+fn format_file_list(files: &[String]) -> String {
+    if files.is_empty() {
+        "(none)".to_owned()
+    } else {
+        files.join(", ")
+    }
+}
+
+fn maybe_fail_atomic_write_hook(phase: &str, index: usize) -> Result<(), String> {
+    let env_name = match phase {
+        "validate" => "BRAINBREW_ATOMIC_WRITE_FAIL_VALIDATE_INDEX",
+        "temp" => "BRAINBREW_ATOMIC_WRITE_FAIL_TEMP_INDEX",
+        "rename" => "BRAINBREW_ATOMIC_WRITE_FAIL_RENAME_INDEX",
+        _ => return Ok(()),
+    };
+    if std::env::var(env_name)
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        == Some(index)
+    {
+        return Err(format!(
+            "injected atomic write {phase} failure at write index {index}"
+        ));
+    }
+    if phase == "rename"
+        && let Ok(value) = std::env::var("BRAINBREW_ATOMIC_WRITE_SLEEP_BEFORE_RENAME_MS")
+        && let Ok(milliseconds) = value.parse::<u64>()
+        && milliseconds > 0
+    {
+        std::thread::sleep(std::time::Duration::from_millis(milliseconds));
+    }
+    Ok(())
+}
+
+fn atomic_write_trace(event: &str, write: Option<&AtomicFileWrite>, temp_path: Option<&Path>) {
+    let Ok(trace_path) = std::env::var("BRAINBREW_ATOMIC_WRITE_TRACE") else {
+        return;
+    };
+    let mut line = event.to_owned();
+    if let Some(write) = write {
+        line.push(' ');
+        line.push_str(&write.display_path);
+    }
+    if let Some(temp_path) = temp_path {
+        line.push_str(" temp=");
+        line.push_str(&temp_path.display().to_string());
+    }
+    line.push('\n');
+    let _ = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(trace_path)
+        .and_then(|mut file| file.write_all(line.as_bytes()));
+}
+
 #[derive(Default)]
 struct SourceApplyPlan {
     changed_entries: Vec<Value>,
@@ -4268,32 +4517,47 @@ fn resolve_workbench_include_path(root: &Path, include_path: &str) -> Result<Pat
     Ok(root.join(requested))
 }
 
-fn write_source_apply_plan(
+fn source_apply_writes(
     plan: &SourceApplyPlan,
     modified_base: &CanonicalDeck,
     base_file: &Path,
-) -> Result<(), String> {
+    manifest_root: &Path,
+) -> Result<Vec<AtomicFileWrite>, String> {
+    let mut writes = Vec::new();
     if plan.deck_file_changed {
         let output = match &plan.deck_yaml_output {
             Some(output) => output.clone(),
             None => canonical_yaml::to_string(modified_base).map_err(|error| error.to_string())?,
         };
-        fs::write(base_file, output).map_err(|error| {
-            format!(
-                "failed to write source deck {}: {error}",
-                base_file.display()
-            )
-        })?;
+        if plan.deck_yaml_output.is_some() {
+            serde_yaml::from_str::<serde_yaml::Value>(&output).map_err(|error| {
+                format!(
+                    "invalid generated source deck {}: {error}",
+                    base_file.display()
+                )
+            })?;
+        } else {
+            canonical_yaml::from_str(&output).map_err(|error| {
+                format!(
+                    "invalid generated source deck {}: {error}",
+                    base_file.display()
+                )
+            })?;
+        }
+        writes.push(AtomicFileWrite::text(
+            base_file.to_path_buf(),
+            workspace_path(manifest_root, base_file),
+            output,
+        ));
     }
     for (path, value) in &plan.include_writes {
-        fs::write(path, value).map_err(|error| {
-            format!(
-                "failed to write included source {}: {error}",
-                path.display()
-            )
-        })?;
+        writes.push(AtomicFileWrite::text(
+            path.clone(),
+            workspace_path(manifest_root, path),
+            value.clone(),
+        ));
     }
-    Ok(())
+    Ok(writes)
 }
 
 fn push_unique_affected_file(

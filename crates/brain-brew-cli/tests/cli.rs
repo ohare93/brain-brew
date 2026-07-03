@@ -3,6 +3,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdout, Command, Stdio};
+use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use flate2::Compression;
@@ -1031,6 +1032,194 @@ fn workbench_apply_groups_multi_pane_edits_by_file_and_content_group() {
     assert!(da.contains("new_source: Finland source"));
     let nb = fs::read_to_string(dir.join("nb.yaml")).unwrap();
     assert!(nb.contains("Helsinki: Helsinki norsk"));
+}
+
+#[test]
+fn workbench_apply_validation_failure_leaves_all_targets_unchanged() {
+    let dir = temp_dir("workbench-atomic-validate");
+    write_multi_language_workbench_workspace(&dir);
+    let original_deck = fs::read(dir.join("deck.yaml")).unwrap();
+    let original_da = fs::read(dir.join("da.yaml")).unwrap();
+    let original_nb = fs::read(dir.join("nb.yaml")).unwrap();
+    let server = spawn_workbench_server_with_env(
+        [
+            "workbench",
+            "serve",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--port",
+            "0",
+            "--no-open",
+        ],
+        &[("BRAINBREW_ATOMIC_WRITE_FAIL_VALIDATE_INDEX", "1")],
+    );
+
+    let error = post_json_error(
+        &server.url("/api/workbench/apply"),
+        atomic_multi_file_apply_request("atomic validation"),
+    );
+
+    assert_eq!(error.0, 500);
+    assert!(
+        error.1.contains("validation/serialization") || error.1.contains("validate"),
+        "unexpected error body: {}",
+        error.1
+    );
+    assert_eq!(fs::read(dir.join("deck.yaml")).unwrap(), original_deck);
+    assert_eq!(fs::read(dir.join("da.yaml")).unwrap(), original_da);
+    assert_eq!(fs::read(dir.join("nb.yaml")).unwrap(), original_nb);
+}
+
+#[test]
+fn workbench_apply_temp_write_failure_leaves_targets_unchanged() {
+    let dir = temp_dir("workbench-atomic-temp-fail");
+    write_multi_language_workbench_workspace(&dir);
+    let original_deck = fs::read(dir.join("deck.yaml")).unwrap();
+    let original_da = fs::read(dir.join("da.yaml")).unwrap();
+    let original_nb = fs::read(dir.join("nb.yaml")).unwrap();
+    let server = spawn_workbench_server_with_env(
+        [
+            "workbench",
+            "serve",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--port",
+            "0",
+            "--no-open",
+        ],
+        &[("BRAINBREW_ATOMIC_WRITE_FAIL_TEMP_INDEX", "1")],
+    );
+
+    let error = post_json_error(
+        &server.url("/api/workbench/apply"),
+        atomic_multi_file_apply_request("atomic temp"),
+    );
+
+    assert_eq!(error.0, 500);
+    assert!(
+        error.1.contains("write temporary") || error.1.contains("temp"),
+        "unexpected error body: {}",
+        error.1
+    );
+    assert_eq!(fs::read(dir.join("deck.yaml")).unwrap(), original_deck);
+    assert_eq!(fs::read(dir.join("da.yaml")).unwrap(), original_da);
+    assert_eq!(fs::read(dir.join("nb.yaml")).unwrap(), original_nb);
+}
+
+#[test]
+fn workbench_apply_rename_failure_reports_updated_and_not_updated_files() {
+    let dir = temp_dir("workbench-atomic-rename-fail");
+    write_multi_language_workbench_workspace(&dir);
+    let server = spawn_workbench_server_with_env(
+        [
+            "workbench",
+            "serve",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--port",
+            "0",
+            "--no-open",
+        ],
+        &[("BRAINBREW_ATOMIC_WRITE_FAIL_RENAME_INDEX", "1")],
+    );
+
+    let error = post_json_error(
+        &server.url("/api/workbench/apply"),
+        atomic_multi_file_apply_request("atomic rename"),
+    );
+
+    assert_eq!(error.0, 500);
+    assert!(error.1.contains("rename phase failed"), "{}", error.1);
+    assert!(error.1.contains("updated files: deck.yaml"), "{}", error.1);
+    assert!(
+        error.1.contains("not updated files: da.yaml, nb.yaml")
+            || error.1.contains("not updated files: nb.yaml, da.yaml"),
+        "{}",
+        error.1
+    );
+}
+
+#[test]
+fn workbench_apply_uses_atomic_temp_rename_helper() {
+    let dir = temp_dir("workbench-atomic-trace");
+    write_multi_language_workbench_workspace(&dir);
+    let trace_path = dir.join("atomic-trace.log");
+    let server = spawn_workbench_server_with_env(
+        [
+            "workbench",
+            "serve",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--port",
+            "0",
+            "--no-open",
+        ],
+        &[("BRAINBREW_ATOMIC_WRITE_TRACE", trace_path.to_str().unwrap())],
+    );
+
+    let applied = post_json(
+        &server.url("/api/workbench/apply"),
+        atomic_multi_file_apply_request("atomic trace"),
+    );
+
+    assert_eq!(applied["applied"], true);
+    let trace = fs::read_to_string(trace_path).expect("atomic helper writes a trace");
+    assert!(trace.contains("transaction_begin"), "trace: {trace}");
+    assert!(trace.contains("temp_write"), "trace: {trace}");
+    assert!(trace.contains("rename"), "trace: {trace}");
+    assert!(
+        !trace.contains("write_target"),
+        "apply writes must not go directly to targets: {trace}"
+    );
+}
+
+#[test]
+fn workbench_concurrent_apply_requests_are_serialized() {
+    let dir = temp_dir("workbench-atomic-concurrent");
+    write_multi_language_workbench_workspace(&dir);
+    let trace_path = dir.join("atomic-concurrent-trace.log");
+    let trace_path_text = trace_path.to_str().unwrap().to_owned();
+    let server = spawn_workbench_server_with_env(
+        [
+            "workbench",
+            "serve",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--port",
+            "0",
+            "--no-open",
+        ],
+        &[
+            ("BRAINBREW_ATOMIC_WRITE_TRACE", trace_path_text.as_str()),
+            ("BRAINBREW_ATOMIC_WRITE_SLEEP_BEFORE_RENAME_MS", "150"),
+        ],
+    );
+    let first_url = server.url("/api/workbench/apply");
+    let second_url = first_url.clone();
+    let first = atomic_translation_apply_request("first serialized");
+    let second = atomic_translation_apply_request("second serialized");
+
+    let first_thread = thread::spawn(move || post_json(&first_url, first));
+    let second_thread = thread::spawn(move || post_json(&second_url, second));
+    assert_eq!(first_thread.join().unwrap()["applied"], true);
+    assert_eq!(second_thread.join().unwrap()["applied"], true);
+
+    let trace = fs::read_to_string(trace_path).expect("atomic helper writes a trace");
+    let mut active_transactions = 0usize;
+    for line in trace.lines() {
+        if line.contains("transaction_begin") {
+            assert_eq!(
+                active_transactions, 0,
+                "concurrent apply transactions overlapped: {trace}"
+            );
+            active_transactions += 1;
+        } else if line.contains("transaction_end") {
+            active_transactions = active_transactions
+                .checked_sub(1)
+                .expect("transaction_end without transaction_begin");
+        }
+    }
+    assert_eq!(active_transactions, 0, "unterminated transaction: {trace}");
 }
 
 #[test]
@@ -4604,8 +4793,19 @@ impl Drop for RunningWorkbenchServer {
 }
 
 fn spawn_workbench_server<const N: usize>(args: [&str; N]) -> RunningWorkbenchServer {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_brainbrew"))
-        .args(args)
+    spawn_workbench_server_with_env(args, &[])
+}
+
+fn spawn_workbench_server_with_env<const N: usize>(
+    args: [&str; N],
+    envs: &[(&str, &str)],
+) -> RunningWorkbenchServer {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_brainbrew"));
+    command.args(args);
+    for (name, value) in envs {
+        command.env(name, value);
+    }
+    let mut child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -4752,6 +4952,70 @@ fn post_json(url: &str, body: serde_json::Value) -> serde_json::Value {
         .expect("POST succeeds");
     assert_eq!(response.status(), 200);
     serde_json::from_str(&response.into_string().unwrap()).expect("response is JSON")
+}
+
+fn post_json_error(url: &str, body: serde_json::Value) -> (u16, String) {
+    let error = ureq::post(url)
+        .set("content-type", "application/json")
+        .send_string(&body.to_string())
+        .expect_err("POST should fail");
+    match error {
+        ureq::Error::Status(status, response) => (status, response.into_string().unwrap()),
+        other => panic!("unexpected POST error: {other}"),
+    }
+}
+
+fn atomic_translation_apply_request(value_suffix: &str) -> serde_json::Value {
+    serde_json::json!({
+        "language": "da",
+        "target": "standard",
+        "overlay": "base",
+        "edits": [{
+            "kind": "translation",
+            "path": "notes.note.finland.fields.field.capital",
+            "source": "Helsinki",
+            "value": format!("Helsingfors {value_suffix}"),
+            "mode": "direct"
+        }]
+    })
+}
+
+fn atomic_multi_file_apply_request(value_suffix: &str) -> serde_json::Value {
+    serde_json::json!({
+        "language": "da",
+        "target": "standard",
+        "overlay": "base",
+        "edits": [
+            {
+                "kind": "source",
+                "path": "notes.note.finland.fields.field.country",
+                "source": "Finland",
+                "value": format!("Finland {value_suffix}"),
+                "scope": "field",
+                "impact_action": "stale_translation"
+            },
+            {
+                "kind": "translation",
+                "language": "da",
+                "target": "standard",
+                "overlay": "base",
+                "path": "notes.note.finland.fields.field.capital",
+                "source": "Helsinki",
+                "value": format!("Helsingfors {value_suffix}"),
+                "mode": "direct"
+            },
+            {
+                "kind": "translation",
+                "language": "nb",
+                "target": "standard",
+                "overlay": "base",
+                "path": "notes.note.finland.fields.field.capital",
+                "source": "Helsinki",
+                "value": format!("Helsinki {value_suffix}"),
+                "mode": "direct"
+            }
+        ]
+    })
 }
 
 fn quoted_path_containing(html: &str, needle: &str) -> String {
