@@ -12,11 +12,14 @@ use crate::package_resolver::{discover_package_manifests, validate_package_depen
 
 pub(crate) fn format_source(input: &str) -> Result<String, String> {
     let mut errors = Vec::new();
-    match canonical_yaml::format_str(input) {
+    match source_includes::format_preserving_file_includes(input, canonical_yaml::format_str) {
         Ok(formatted) => return Ok(formatted),
         Err(error) => errors.push(format!("deck: {error}")),
     }
-    match canonical_yaml::overlay_format_str(input) {
+    match source_includes::format_preserving_file_includes(
+        input,
+        canonical_yaml::overlay_format_str,
+    ) {
         Ok(formatted) => return Ok(formatted),
         Err(error) => errors.push(format!("overlay: {error}")),
     }
@@ -34,10 +37,8 @@ pub(crate) fn format_source(input: &str) -> Result<String, String> {
     ))
 }
 
-pub(crate) fn format_source_at(path: &Path, input: &str) -> Result<String, String> {
-    let context = source_context_for_path(path)?;
-    let resolved = resolve_source_includes(input, path, &context)?;
-    format_source(&resolved)
+pub(crate) fn format_source_at(_path: &Path, input: &str) -> Result<String, String> {
+    format_source(input)
 }
 
 pub(crate) fn read_deck(path: &Path) -> Result<CanonicalDeck, String> {
@@ -522,14 +523,7 @@ where
     E: ToString,
 {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    let context = source_context_for_path(path)?;
-    let resolved = resolve_source_includes(&input, path, &context)?;
-    let formatted = format(&resolved).map_err(|error| error.to_string())?;
-    if input.contains("!include") {
-        // Source includes are authoring syntax; the formatter materializes them, so the
-        // resolved canonical bytes are intentionally different from the source file.
-        return Ok(());
-    }
+    let formatted = source_includes::format_preserving_file_includes(&input, format)?;
     if formatted != input {
         return Err(format!("{} is not in canonical format", path.display()));
     }

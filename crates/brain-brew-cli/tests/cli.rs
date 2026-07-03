@@ -4122,12 +4122,123 @@ fn file_includes_work_across_validate_compose_export_verify_diff_and_fmt() {
 
     let deck_for_fmt = dir.join("deck-to-format.yaml");
     fs::copy(dir.join("deck.yaml"), &deck_for_fmt).unwrap();
+    let original = fs::read_to_string(&deck_for_fmt).unwrap();
     let fmt = run(["fmt", deck_for_fmt.to_str().unwrap()]);
     assert!(fmt.status.success(), "stderr: {}", stderr(&fmt));
     let formatted = fs::read_to_string(deck_for_fmt).unwrap();
-    assert!(formatted.contains("Base deck description."));
-    assert!(formatted.contains("<section class=\"front\">{{Country}}</section>"));
-    assert!(!formatted.contains("!include"));
+    assert!(formatted.contains("description: !include ./content/../content/base-description.md"));
+    assert!(formatted.contains("question_format: !include templates/front.html"));
+    assert!(formatted.contains("answer_format: !include templates/back.html"));
+    assert!(formatted.contains("styling: !include styles/card.css"));
+    assert!(!formatted.contains("Base deck description."));
+    assert!(!formatted.contains("<section class=\"front\">{{Country}}</section>"));
+    assert_eq!(
+        include_directives(&formatted),
+        include_directives(&original)
+    );
+}
+
+#[test]
+fn fmt_preserves_include_markers_and_does_not_inline_included_content() {
+    let dir = temp_dir("fmt-preserves-includes");
+    write_include_workspace(&dir);
+    let deck_path = dir.join("deck.yaml");
+    let original = fs::read_to_string(&deck_path).unwrap();
+
+    let output = run(["fmt", deck_path.to_str().unwrap()]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let formatted = fs::read_to_string(deck_path).unwrap();
+    assert_eq!(
+        include_directives(&formatted),
+        include_directives(&original)
+    );
+    assert!(formatted.contains("description: !include ./content/../content/base-description.md"));
+    assert!(formatted.contains("question_format: !include templates/front.html"));
+    assert!(formatted.contains("answer_format: !include templates/back.html"));
+    assert!(formatted.contains("styling: !include styles/card.css"));
+    assert!(!formatted.contains("Base deck description."));
+    assert!(!formatted.contains("<section class=\"front\">{{Country}}</section>"));
+}
+
+#[test]
+fn fmt_on_include_bearing_file_is_idempotent() {
+    let dir = temp_dir("fmt-include-idempotent");
+    write_include_workspace(&dir);
+    let deck_path = dir.join("deck.yaml");
+
+    let first = run(["fmt", deck_path.to_str().unwrap()]);
+    assert!(first.status.success(), "stderr: {}", stderr(&first));
+    let after_first = fs::read_to_string(&deck_path).unwrap();
+
+    let second = run(["fmt", deck_path.to_str().unwrap()]);
+    assert!(second.status.success(), "stderr: {}", stderr(&second));
+    let after_second = fs::read_to_string(deck_path).unwrap();
+
+    assert_eq!(after_second, after_first);
+    assert!(
+        after_second.contains("description: !include ./content/../content/base-description.md")
+    );
+    assert!(!after_second.contains("Base deck description."));
+}
+
+#[test]
+fn fmt_normalizes_non_include_parts_of_include_bearing_file() {
+    let dir = temp_dir("fmt-include-normalizes-siblings");
+    write_include_workspace(&dir);
+    let deck_path = dir.join("deck.yaml");
+    let source = fs::read_to_string(&deck_path).unwrap();
+    fs::write(
+        &deck_path,
+        source.replace("name: Include Fixture", "name: 'Include Fixture'"),
+    )
+    .unwrap();
+
+    let output = run(["fmt", deck_path.to_str().unwrap()]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let formatted = fs::read_to_string(deck_path).unwrap();
+    assert!(formatted.contains("name: Include Fixture"));
+    assert!(!formatted.contains("name: 'Include Fixture'"));
+    assert!(formatted.contains("description: !include ./content/../content/base-description.md"));
+    assert!(!formatted.contains("Base deck description."));
+}
+
+#[test]
+fn verify_rejects_noncanonical_include_bearing_file_and_accepts_canonical_one() {
+    let canonical = temp_dir("verify-include-canonical");
+    write_include_workspace(&canonical);
+    let accepted = run([
+        "verify",
+        "--manifest",
+        canonical.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+    assert!(accepted.status.success(), "stderr: {}", stderr(&accepted));
+
+    let noncanonical = temp_dir("verify-include-noncanonical");
+    write_include_workspace(&noncanonical);
+    let deck_path = noncanonical.join("deck.yaml");
+    let source = fs::read_to_string(&deck_path).unwrap();
+    fs::write(
+        &deck_path,
+        source.replace("name: Include Fixture", "name: 'Include Fixture'"),
+    )
+    .unwrap();
+
+    let rejected = run([
+        "verify",
+        "--manifest",
+        noncanonical.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+
+    assert!(!rejected.status.success());
+    assert!(
+        stderr(&rejected).contains("deck.yaml is not in canonical format"),
+        "stderr: {}",
+        stderr(&rejected)
+    );
 }
 
 #[test]
@@ -5279,6 +5390,14 @@ fn write_tar_gz(path: &Path, root_name: &str, source_dir: &Path) {
     archive.append_dir_all(root_name, source_dir).unwrap();
     let encoder = archive.into_inner().unwrap();
     encoder.finish().unwrap();
+}
+
+fn include_directives(input: &str) -> Vec<String> {
+    input
+        .lines()
+        .filter(|line| line.contains("!include"))
+        .map(|line| line.trim().to_owned())
+        .collect()
 }
 
 fn stdout(output: &std::process::Output) -> String {

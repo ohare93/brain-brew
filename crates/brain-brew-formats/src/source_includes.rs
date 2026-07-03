@@ -4,6 +4,8 @@ use std::path::{Component, Path, PathBuf};
 
 use serde_yaml::Value;
 
+use crate::yaml_scalar;
+
 /// Resolve `!include path` tagged scalar authoring conveniences in a Canonical Deck or overlay YAML file.
 ///
 /// Include paths are interpreted relative to `package_root`. Paths may not escape that root unless the
@@ -32,6 +34,86 @@ pub fn resolve_file_includes(
         include_path: String::new(),
         kind: IncludeErrorKind::Parse(error.to_string()),
     })
+}
+
+/// Format a raw YAML source file without materializing `!include` tagged scalars.
+///
+/// The domain formatter still owns canonical ordering and scalar emission. Include
+/// tags are temporarily replaced with unique scalar sentinels before formatting,
+/// then restored as `!include <path>` tagged scalars in the canonical output.
+/// This keeps formatting and verification on one include-preserving path while
+/// leaving file include resolution as a read-path concern.
+pub fn format_preserving_file_includes<E>(
+    input: &str,
+    format: impl FnOnce(&str) -> Result<String, E>,
+) -> Result<String, String>
+where
+    E: ToString,
+{
+    if !input.contains("!include") {
+        return format(input).map_err(|error| error.to_string());
+    }
+
+    let mut value = serde_yaml::from_str::<Value>(input).map_err(|error| error.to_string())?;
+    let mut replacements = Vec::new();
+    replace_includes_with_sentinels(input, &mut value, &mut replacements)?;
+    let source_with_sentinels = serde_yaml::to_string(&value).map_err(|error| error.to_string())?;
+    let mut formatted = format(&source_with_sentinels).map_err(|error| error.to_string())?;
+    for replacement in replacements {
+        formatted = formatted.replace(&replacement.sentinel, &replacement.directive);
+    }
+    Ok(formatted)
+}
+
+struct IncludeReplacement {
+    sentinel: String,
+    directive: String,
+}
+
+fn replace_includes_with_sentinels(
+    original_input: &str,
+    value: &mut Value,
+    replacements: &mut Vec<IncludeReplacement>,
+) -> Result<(), String> {
+    match value {
+        Value::Tagged(tagged) if tagged.tag == "include" => {
+            let Value::String(path) = &tagged.value else {
+                return Err("!include path must be a scalar string".to_owned());
+            };
+            let sentinel = next_include_sentinel(original_input, replacements.len());
+            replacements.push(IncludeReplacement {
+                sentinel: sentinel.clone(),
+                directive: format!("!include {}", yaml_scalar::scalar(path)),
+            });
+            *value = Value::String(sentinel);
+        }
+        Value::Tagged(tagged) => {
+            replace_includes_with_sentinels(original_input, &mut tagged.value, replacements)?
+        }
+        Value::Sequence(sequence) => {
+            for item in sequence {
+                replace_includes_with_sentinels(original_input, item, replacements)?;
+            }
+        }
+        Value::Mapping(mapping) => {
+            for (_, item) in mapping {
+                replace_includes_with_sentinels(original_input, item, replacements)?;
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
+    Ok(())
+}
+
+fn next_include_sentinel(original_input: &str, index: usize) -> String {
+    let mut attempt = 0;
+    loop {
+        let sentinel = format!("__brain_brew_include_{index}_{attempt}__");
+        if !original_input.contains(&sentinel) {
+            return sentinel;
+        }
+        attempt += 1;
+    }
 }
 
 #[derive(Debug)]

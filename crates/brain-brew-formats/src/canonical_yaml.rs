@@ -128,13 +128,17 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
         write_adapter_ids(&mut out, "    ", &note.adapter_ids);
     }
 
-    writeln!(out, "media:").expect("writing to a string cannot fail");
-    for (id, media) in &deck.media {
-        writeln!(out, "  {id}:").expect("writing to a string cannot fail");
-        writeln!(out, "    path: {}", yaml_scalar(&media.path))
-            .expect("writing to a string cannot fail");
-        writeln!(out, "    sha256: {}", yaml_scalar(&media.sha256))
-            .expect("writing to a string cannot fail");
+    if deck.media.is_empty() {
+        writeln!(out, "media: {{}}").expect("writing to a string cannot fail");
+    } else {
+        writeln!(out, "media:").expect("writing to a string cannot fail");
+        for (id, media) in &deck.media {
+            writeln!(out, "  {id}:").expect("writing to a string cannot fail");
+            writeln!(out, "    path: {}", yaml_scalar(&media.path))
+                .expect("writing to a string cannot fail");
+            writeln!(out, "    sha256: {}", yaml_scalar(&media.sha256))
+                .expect("writing to a string cannot fail");
+        }
     }
 
     if deck.tombstones.is_empty() {
