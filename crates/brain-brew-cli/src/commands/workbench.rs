@@ -30,6 +30,7 @@ use tokio::net::TcpListener;
 use tokio::task;
 use tower_http::services::{ServeDir, ServeFile};
 
+use crate::commands::translation_overlay::compose_lenient_translation_overlay;
 use crate::help;
 use crate::io::{manifest_root, plan_manifest_target_with_packages, read_manifest};
 
@@ -4590,71 +4591,6 @@ fn context_with_modified_base_and_overlay(
         source_deck,
         target_deck: current,
         report,
-    })
-}
-
-fn compose_lenient_translation_overlay(
-    current: &CanonicalDeck,
-    overlay: &Overlay,
-) -> Result<CanonicalDeck, String> {
-    let mut sanitized = overlay.clone();
-    if let Some(translations) = &mut sanitized.translations {
-        translations.require_complete = false;
-        if let Some(report) = current.translation_coverage(overlay) {
-            for entry in report.entries {
-                match entry.category {
-                    TranslationCoverageCategory::StaleDirectKey => {
-                        translations.direct.remove(&entry.source);
-                    }
-                    TranslationCoverageCategory::StaleContextualKey => {
-                        if let Some(context) = &entry.context
-                            && let Some(replacements) = translations.contextual.get_mut(context)
-                        {
-                            replacements.remove(&entry.source);
-                            if replacements.is_empty() {
-                                translations.contextual.remove(context);
-                            }
-                        }
-                    }
-                    TranslationCoverageCategory::StaleNoChangeKey => {
-                        translations.no_change.remove(&entry.source);
-                    }
-                    TranslationCoverageCategory::StaleTargetAdaptation
-                    | TranslationCoverageCategory::InvalidTargetAdaptation => {
-                        let path = entry.context.as_deref().unwrap_or(&entry.path);
-                        translations.target_adaptations.remove(path);
-                    }
-                    TranslationCoverageCategory::StaleVariableKey => {
-                        if let Some(variable_key) = &entry.context
-                            && let Some(replacements) = translations.variables.get_mut(variable_key)
-                        {
-                            replacements.remove(&entry.source);
-                            if replacements.is_empty() {
-                                translations.variables.remove(variable_key);
-                            }
-                        }
-                    }
-                    TranslationCoverageCategory::StaleAdapterIdKey => {
-                        if let Some(adapter_key) = &entry.context
-                            && let Some(replacements) =
-                                translations.adapter_ids.get_mut(adapter_key)
-                        {
-                            replacements.remove(&entry.source);
-                            if replacements.is_empty() {
-                                translations.adapter_ids.remove(adapter_key);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-    current.compose(&[sanitized]).map_err(|error| {
-        format!(
-            "failed to compose translation overlay {}: {error}",
-            overlay.id
-        )
     })
 }
 

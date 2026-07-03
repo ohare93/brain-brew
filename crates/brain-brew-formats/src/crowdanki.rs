@@ -474,24 +474,7 @@ fn is_allowed_parity_path(options: &CrowdAnkiParityOptions, path: &str) -> bool 
     options
         .allowed_path_globs
         .iter()
-        .any(|pattern| glob_matches(pattern, path))
-}
-
-fn glob_matches(pattern: &str, value: &str) -> bool {
-    fn matches_parts(pattern: &[u8], value: &[u8]) -> bool {
-        match pattern.split_first() {
-            None => value.is_empty(),
-            Some((&b'*', rest)) => {
-                matches_parts(rest, value)
-                    || (!value.is_empty() && matches_parts(pattern, &value[1..]))
-            }
-            Some((&expected, rest)) => value.split_first().is_some_and(|(&actual, rest_value)| {
-                actual == expected && matches_parts(rest, rest_value)
-            }),
-        }
-    }
-
-    matches_parts(pattern.as_bytes(), value.as_bytes())
+        .any(|pattern| brain_brew_core::glob_matches(pattern, path))
 }
 
 fn json_path_key(parent: &str, key: &str) -> String {

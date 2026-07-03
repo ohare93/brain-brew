@@ -113,21 +113,12 @@ fn verify_translation_coverage_policy(
                 }
             }
 
-            let stale_translations = stale_translation_warning_details(&report.entries);
-            if !stale_translations.is_empty() {
-                let message = format!(
-                    "stale translation warning for target {} overlay {} ({}): {} stale translation(s): {}",
-                    plan.target,
-                    planned.id,
-                    planned.display_file,
-                    stale_translations.len(),
-                    stale_translations
-                        .iter()
-                        .take(10)
-                        .cloned()
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                );
+            if let Some(message) = stale_translation_warning_message(
+                &plan.target,
+                &planned.id,
+                &planned.display_file,
+                &report.entries,
+            ) {
                 if policy == manifest::TranslationCoveragePolicy::Strict {
                     return Err(format!("translation stale strict policy failed: {message}"));
                 }
@@ -166,18 +157,15 @@ fn stale_translation_warning_messages(plan: &ManifestTargetPlan) -> Result<Vec<S
     let mut messages = Vec::new();
     let mut current = plan.base.clone();
     for (planned, overlay) in &plan.overlays {
-        if let Some(report) = current.translation_coverage(overlay) {
-            let stale_translations = stale_translation_warning_details(&report.entries);
-            if !stale_translations.is_empty() {
-                messages.push(format!(
-                    "stale translation warning for target {} overlay {} ({}): {} stale translation(s): {}",
-                    plan.target,
-                    planned.id,
-                    planned.display_file,
-                    stale_translations.len(),
-                    stale_translations.iter().take(10).cloned().collect::<Vec<_>>().join(", ")
-                ));
-            }
+        if let Some(report) = current.translation_coverage(overlay)
+            && let Some(message) = stale_translation_warning_message(
+                &plan.target,
+                &planned.id,
+                &planned.display_file,
+                &report.entries,
+            )
+        {
+            messages.push(message);
         }
         current = current.compose(std::slice::from_ref(overlay)).map_err(|error| {
             format!(
@@ -197,17 +185,15 @@ fn stale_translation_warning_messages_for_overlays(
     let mut messages = Vec::new();
     let mut current = base.clone();
     for (display_file, overlay) in overlays {
-        if let Some(report) = current.translation_coverage(overlay) {
-            let stale_translations = stale_translation_warning_details(&report.entries);
-            if !stale_translations.is_empty() {
-                messages.push(format!(
-                    "stale translation warning for target {target} overlay {} ({}): {} stale translation(s): {}",
-                    overlay.id,
-                    display_file,
-                    stale_translations.len(),
-                    stale_translations.iter().take(10).cloned().collect::<Vec<_>>().join(", ")
-                ));
-            }
+        if let Some(report) = current.translation_coverage(overlay)
+            && let Some(message) = stale_translation_warning_message(
+                target,
+                overlay.id.as_str(),
+                display_file,
+                &report.entries,
+            )
+        {
+            messages.push(message);
         }
         current = current
             .compose(std::slice::from_ref(overlay))
@@ -219,6 +205,28 @@ fn stale_translation_warning_messages_for_overlays(
             })?;
     }
     Ok(messages)
+}
+
+fn stale_translation_warning_message(
+    target: &str,
+    overlay_id: &str,
+    display_file: &str,
+    entries: &[brain_brew_core::TranslationCoverageEntry],
+) -> Option<String> {
+    let stale_translations = stale_translation_warning_details(entries);
+    if stale_translations.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "stale translation warning for target {target} overlay {overlay_id} ({display_file}): {} stale translation(s): {}",
+        stale_translations.len(),
+        stale_translations
+            .iter()
+            .take(10)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))
 }
 
 fn stale_translation_warning_details(
@@ -287,4 +295,45 @@ fn verify_crowdanki_golden(
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use brain_brew_core::TranslationCoverageEntry;
+
+    #[test]
+    fn stale_translation_warning_message_matches_existing_text() {
+        let entries = vec![
+            TranslationCoverageEntry {
+                category: TranslationCoverageCategory::StaleTranslation,
+                path: "notes.note.finland.fields.field.capital".to_owned(),
+                source: "Helsinki changed".to_owned(),
+                old_source: Some("Helsinki".to_owned()),
+                translated: Some("Helsinki".to_owned()),
+                context: None,
+            },
+            TranslationCoverageEntry {
+                category: TranslationCoverageCategory::DirectTranslation,
+                path: "notes.note.sweden.fields.field.capital".to_owned(),
+                source: "Stockholm".to_owned(),
+                old_source: None,
+                translated: Some("Stockholm".to_owned()),
+                context: None,
+            },
+        ];
+
+        assert_eq!(
+            stale_translation_warning_message(
+                "en-standard",
+                "overlay.translation.en",
+                "overlays/languages/en.yaml",
+                &entries,
+            ),
+            Some(
+                "stale translation warning for target en-standard overlay overlay.translation.en (overlays/languages/en.yaml): 1 stale translation(s): notes.note.finland.fields.field.capital old \"Helsinki\" -> new \"Helsinki changed\""
+                    .to_owned()
+            )
+        );
+    }
 }

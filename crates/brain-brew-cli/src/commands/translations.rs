@@ -5,14 +5,16 @@ use std::io::{self, IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 
 use brain_brew_core::{
-    CanonicalDeck, Overlay, OverlayKind, TranslationContextUnit, TranslationContextView,
+    Overlay, OverlayKind, TranslationContextUnit, TranslationContextView,
     TranslationCoverageCategory, TranslationCoverageEntry, TranslationCoverageReport,
     TranslationMessageContext,
 };
 use brain_brew_formats::manifest::FederatedDeckManifest;
+use brain_brew_formats::yaml_scalar::scalar as yaml_scalar;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use serde_json::json;
 
+use crate::commands::translation_overlay::compose_lenient_translation_overlay;
 use crate::help;
 use crate::io::{PlannedOverlay, plan_manifest_target_with_packages, read_manifest};
 use crate::output;
@@ -1309,71 +1311,6 @@ fn entry_matches_scope(entry: &TranslationCoverageEntry, args: &TranslationArgs)
         return false;
     }
     true
-}
-
-fn compose_lenient_translation_overlay(
-    current: &CanonicalDeck,
-    overlay: &Overlay,
-) -> Result<CanonicalDeck, String> {
-    let mut sanitized = overlay.clone();
-    if let Some(translations) = &mut sanitized.translations {
-        translations.require_complete = false;
-        if let Some(report) = current.translation_coverage(overlay) {
-            for entry in report.entries {
-                match entry.category {
-                    TranslationCoverageCategory::StaleDirectKey => {
-                        translations.direct.remove(&entry.source);
-                    }
-                    TranslationCoverageCategory::StaleContextualKey => {
-                        if let Some(context) = &entry.context
-                            && let Some(replacements) = translations.contextual.get_mut(context)
-                        {
-                            replacements.remove(&entry.source);
-                            if replacements.is_empty() {
-                                translations.contextual.remove(context);
-                            }
-                        }
-                    }
-                    TranslationCoverageCategory::StaleNoChangeKey => {
-                        translations.no_change.remove(&entry.source);
-                    }
-                    TranslationCoverageCategory::StaleTargetAdaptation
-                    | TranslationCoverageCategory::InvalidTargetAdaptation => {
-                        let path = entry.context.as_deref().unwrap_or(&entry.path);
-                        translations.target_adaptations.remove(path);
-                    }
-                    TranslationCoverageCategory::StaleVariableKey => {
-                        if let Some(variable_key) = &entry.context
-                            && let Some(replacements) = translations.variables.get_mut(variable_key)
-                        {
-                            replacements.remove(&entry.source);
-                            if replacements.is_empty() {
-                                translations.variables.remove(variable_key);
-                            }
-                        }
-                    }
-                    TranslationCoverageCategory::StaleAdapterIdKey => {
-                        if let Some(adapter_key) = &entry.context
-                            && let Some(replacements) =
-                                translations.adapter_ids.get_mut(adapter_key)
-                        {
-                            replacements.remove(&entry.source);
-                            if replacements.is_empty() {
-                                translations.adapter_ids.remove(adapter_key);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-    current.compose(&[sanitized]).map_err(|error| {
-        format!(
-            "failed to compose translation overlay {}: {error}",
-            overlay.id
-        )
-    })
 }
 
 fn print_no_translation_reports(args: &TranslationArgs) -> Result<(), String> {
@@ -2804,27 +2741,6 @@ fn shell_word(value: &str) -> String {
     }
 }
 
-fn yaml_scalar(value: &str) -> String {
-    if !value.is_empty()
-        && !value.starts_with([
-            ' ', '-', '?', ':', '@', '`', '&', '*', '!', '|', '>', '#', '{', '[', ',',
-        ])
-        && !value.ends_with(' ')
-        && value.chars().all(|ch| {
-            ch.is_ascii_alphanumeric() || matches!(ch, ' ' | '.' | ',' | '_' | '-' | '/' | ':')
-        })
-        && !value.chars().all(|ch| ch.is_ascii_digit())
-        && !matches!(
-            value,
-            "true" | "false" | "True" | "False" | "TRUE" | "FALSE" | "null" | "Null" | "NULL"
-        )
-    {
-        value.to_owned()
-    } else {
-        format!("'{}'", value.replace('\'', "''"))
-    }
-}
-
 fn color_category(category: TranslationCoverageCategory, text: &str) -> String {
     match category {
         TranslationCoverageCategory::DirectTranslation => color_stdout(text, "32"),
@@ -2865,6 +2781,48 @@ fn color_enabled(is_terminal: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const HOSTILE_STRINGS: &[(&str, &str)] = &[
+        ("empty", ""),
+        ("leading space", " leading"),
+        ("trailing space", "trailing "),
+        ("yaml yes", "yes"),
+        ("yaml no", "no"),
+        ("yaml null", "null"),
+        ("yaml tilde", "~"),
+        ("yaml float", "1.0"),
+        ("yaml hex", "0x1F"),
+        ("single quote", "L'Anse aux Meadows"),
+        ("double quote", "said \"hello\""),
+        ("colon space", "capital: Helsinki"),
+        ("trailing colon", "label:"),
+        ("hash", "text # not a comment"),
+        ("accented", "Québec"),
+        ("cjk", "日本語"),
+        ("hebrew rtl", "עברית"),
+        ("newline", "first line\nsecond line"),
+        ("lone newline", "\n"),
+    ];
+
+    #[test]
+    fn translation_yaml_stub_emission_round_trips_hostile_scalars() {
+        for (case, value) in HOSTILE_STRINGS {
+            let input = "id: overlay.translation.hostile\nkind: translation\ntranslations:\n";
+            let output = insert_direct_stub_lines(input, &BTreeSet::from([(*value).to_owned()]));
+            let overlay = brain_brew_formats::canonical_yaml::overlay_from_str(&output)
+                .unwrap_or_else(|error| {
+                    panic!("{case}: emitted overlay parses: {error}\n{output}")
+                });
+            let translations = overlay
+                .translations
+                .unwrap_or_else(|| panic!("{case}: emitted overlay has translations"));
+            assert_eq!(
+                translations.direct.get(*value).map(String::as_str),
+                Some(*value),
+                "{case}: direct translation source and value round trip"
+            );
+        }
+    }
 
     #[test]
     fn raw_mode_uses_crlf_line_endings() {

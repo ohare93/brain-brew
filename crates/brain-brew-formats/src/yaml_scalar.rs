@@ -6,7 +6,7 @@ use std::fmt::Write as _;
 /// cannot treat it as a mapping delimiter (`http://example` is plain, `key: value`
 /// and `label:` are quoted), and a serde_yaml probe must parse the candidate back
 /// as the same string. Everything else is quoted losslessly.
-pub(crate) fn scalar(value: &str) -> String {
+pub fn scalar(value: &str) -> String {
     if can_emit_plain_scalar(value) {
         value.to_owned()
     } else if needs_double_quoted_scalar(value) {
@@ -21,7 +21,7 @@ pub(crate) fn scalar(value: &str) -> String {
 /// An explicit `2` indentation indicator is added when YAML auto-detection would
 /// corrupt a value whose first content line starts with whitespace. Chomp
 /// indicators preserve the exact trailing-newline shape.
-pub(crate) fn write_multiline_or_scalar(out: &mut String, indent: &str, key: &str, value: &str) {
+pub fn write_multiline_or_scalar(out: &mut String, indent: &str, key: &str, value: &str) {
     if value.contains('\n') && !value.starts_with('\n') {
         let chomp = match trailing_newline_count(value) {
             0 => "-",

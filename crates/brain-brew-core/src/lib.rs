@@ -509,30 +509,24 @@ fn resolve_structured_messages_with_validation_errors(
     deck: &mut CanonicalDeck,
     errors: &mut Vec<ValidationError>,
 ) {
-    let snapshot = deck.clone();
-    let mut resolved_fields = Vec::<(StableId, StableId, String)>::new();
-    for (note_id, note) in &snapshot.notes {
-        for (field_id, message) in &note.field_messages {
-            match render_structured_message(&snapshot, message) {
-                Ok(value) => resolved_fields.push((note_id.clone(), field_id.clone(), value)),
-                Err(error) => errors.push(ValidationError::new(
-                    ValidationErrorKind::InvalidMessageReference,
-                    format!("notes.{note_id}.fields.{field_id}.message"),
-                    error.message(),
-                )),
-            }
-        }
-    }
-    for (note_id, field_id, value) in resolved_fields {
-        if let Some(note) = deck.notes.get_mut(&note_id) {
-            note.fields.insert(field_id, value);
-        }
-    }
+    resolve_structured_messages(deck, errors, |path, message| {
+        ValidationError::new(ValidationErrorKind::InvalidMessageReference, path, message)
+    });
 }
 
 fn resolve_structured_messages_with_compose_errors(
     deck: &mut CanonicalDeck,
     errors: &mut Vec<ComposeError>,
+) {
+    resolve_structured_messages(deck, errors, |path, message| {
+        ComposeError::new(ComposeErrorKind::ValidationFailed, path, message)
+    });
+}
+
+fn resolve_structured_messages<E>(
+    deck: &mut CanonicalDeck,
+    errors: &mut Vec<E>,
+    make_error: impl Fn(String, String) -> E,
 ) {
     let snapshot = deck.clone();
     let mut resolved_fields = Vec::<(StableId, StableId, String)>::new();
@@ -540,8 +534,7 @@ fn resolve_structured_messages_with_compose_errors(
         for (field_id, message) in &note.field_messages {
             match render_structured_message(&snapshot, message) {
                 Ok(value) => resolved_fields.push((note_id.clone(), field_id.clone(), value)),
-                Err(error) => errors.push(ComposeError::new(
-                    ComposeErrorKind::ValidationFailed,
+                Err(error) => errors.push(make_error(
                     format!("notes.{note_id}.fields.{field_id}.message"),
                     error.message(),
                 )),
@@ -2311,21 +2304,46 @@ fn is_ignored_translation_path(translations: &TranslationDictionary, path: &str)
         .any(|pattern| glob_matches(pattern, path))
 }
 
-fn glob_matches(pattern: &str, value: &str) -> bool {
-    fn matches_parts(pattern: &[u8], value: &[u8]) -> bool {
-        match pattern.split_first() {
-            None => value.is_empty(),
-            Some((&b'*', rest)) => {
-                matches_parts(rest, value)
-                    || (!value.is_empty() && matches_parts(pattern, &value[1..]))
-            }
-            Some((&expected, rest)) => value.split_first().is_some_and(|(&actual, rest_value)| {
-                actual == expected && matches_parts(rest, rest_value)
-            }),
-        }
+pub fn glob_matches(pattern: &str, value: &str) -> bool {
+    if !pattern.contains('*') {
+        return pattern == value;
     }
 
-    matches_parts(pattern.as_bytes(), value.as_bytes())
+    let starts_with_star = pattern.starts_with('*');
+    let ends_with_star = pattern.ends_with('*');
+    let segments = pattern
+        .split('*')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>();
+
+    if segments.is_empty() {
+        return true;
+    }
+
+    let mut remaining = value;
+    let mut first_middle_segment = 0;
+    if !starts_with_star {
+        let first = segments[0];
+        if !remaining.starts_with(first) {
+            return false;
+        }
+        remaining = &remaining[first.len()..];
+        first_middle_segment = 1;
+    }
+
+    let middle_segment_end = if ends_with_star {
+        segments.len()
+    } else {
+        segments.len() - 1
+    };
+    for segment in &segments[first_middle_segment..middle_segment_end] {
+        let Some(offset) = remaining.find(segment) else {
+            return false;
+        };
+        remaining = &remaining[offset + segment.len()..];
+    }
+
+    ends_with_star || remaining.ends_with(segments[segments.len() - 1])
 }
 
 fn apply_deck_change(
@@ -4695,10 +4713,57 @@ pub enum ValidationErrorKind {
 
 #[cfg(test)]
 mod tests {
-    use super::CRATE_NAME;
+    use super::{CRATE_NAME, glob_matches};
 
     #[test]
     fn exposes_core_crate_name() {
         assert_eq!(CRATE_NAME, "brain-brew-core");
+    }
+
+    #[test]
+    fn glob_matches_table_driven_cases() {
+        let cases = [
+            ("literal-only match", "abc", "abc", true),
+            ("literal-only mismatch", "abc", "ab", false),
+            (
+                "star at start matches prefix",
+                "*world",
+                "hello world",
+                true,
+            ),
+            ("star at start can be empty", "*world", "world", true),
+            ("star in middle matches run", "he*ld", "hello world", true),
+            ("star in middle can be empty", "he*llo", "hello", true),
+            ("star at end matches suffix", "hello*", "hello world", true),
+            ("star at end can be empty", "hello*", "hello", true),
+            (
+                "multiple stars match ordered literals",
+                "a*b*c",
+                "axbyc",
+                true,
+            ),
+            ("multiple stars can be empty", "a**b", "ab", true),
+            (
+                "multiple stars do not reorder literals",
+                "a*b*c",
+                "acb",
+                false,
+            ),
+            (
+                "multiple stars require repeated literals",
+                "*a*a",
+                "a",
+                false,
+            ),
+            ("empty pattern matches empty input", "", "", true),
+            ("empty pattern rejects non-empty input", "", "a", false),
+            ("star matches empty input", "*", "", true),
+            ("literal rejects empty input", "a", "", false),
+            ("empty input with trailing star", "a*", "", false),
+        ];
+
+        for (case, pattern, value, expected) in cases {
+            assert_eq!(glob_matches(pattern, value), expected, "{case}");
+        }
     }
 }
