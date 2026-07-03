@@ -20,6 +20,8 @@ It helps a deck maintainer keep one canonical source, then compose it with trans
 - publish Federated Deck packages with named targets;
 - lock upstream package inputs for reproducible downstream composition.
 
+> **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.
+
 ## The core loop
 
 ```bash

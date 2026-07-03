@@ -29,6 +29,8 @@ Federation keeps the relationship explicit:
 
 ## Package composition
 
+> **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.
+
 A downstream package can extend an upstream target:
 
 ```yaml

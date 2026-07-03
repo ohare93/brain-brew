@@ -4,6 +4,8 @@ title: Lock file reference
 
 # Lock file reference
 
+> **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.
+
 `brainbrew.lock` pins package inputs for reproducible federation.
 
 ## Shape

@@ -4,6 +4,8 @@ title: Packages and lock files
 
 # Packages and lock files
 
+> **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.
+
 Federated packages let one repository compose with another without copying upstream source.
 
 ## Downstream package

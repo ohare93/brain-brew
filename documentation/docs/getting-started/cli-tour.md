@@ -77,3 +77,5 @@ brainbrew verify --manifest brainbrew.yaml --all-targets
 ```
 
 `verify` is the CI-friendly gate. It checks formatting, parsing, composition, validation, media references, lock files, and configured CrowdAnki goldens.
+
+> **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.

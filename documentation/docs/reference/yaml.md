@@ -202,6 +202,8 @@ targets:
 
 ## Lock file
 
+> **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.
+
 ```yaml
 version: 1
 packages:

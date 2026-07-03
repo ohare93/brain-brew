@@ -120,6 +120,8 @@ Runs the workspace verification gate. Referenced-but-undeclared media is always 
 
 ## `lock`
 
+> **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.
+
 ```bash
 brainbrew lock update --package upstream.package --path ../upstream
 brainbrew lock update --package upstream.package --git https://github.com/owner/repo.git --ref main

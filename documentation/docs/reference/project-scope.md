@@ -18,6 +18,8 @@ The maintained product surface is:
 - federated package locks;
 - CLI verification suitable for CI.
 
+> **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.
+
 ## Non-goals for the current milestone
 
 - SaaS or server sync;

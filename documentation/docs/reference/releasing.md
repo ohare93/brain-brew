@@ -22,6 +22,14 @@ Brain Brew uses the Cargo workspace version as the release version. Release tags
 
 Deck projects that depend on Brain Brew should pin or recommend a release tag in their contributor docs. For example, Ultimate Geography can link to the install page and say that contributors should install Brain Brew `v1.0.0-alpha.1` until the project intentionally moves to a newer Brain Brew release. CI workflows that prefer Nix can instead pin a flake revision, but that should be documented as the reproducible CI path rather than the normal user install path.
 
+## Preview compatibility promise
+
+For the next crates.io preview release, the compatibility promise covers Canonical Deck YAML, overlay YAML, manifest targets for a single package, deck and overlay composition semantics, and the core CLI verbs: `fmt`, `validate`, `compose`, `export crowdanki`, `import crowdanki`, `diff`, `explain`, `targets`, `translations`, `media`, and `verify`.
+
+The lock/package federation surface is explicitly outside that promise.
+
+> **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.
+
 ## Local release checks
 
 Before creating a tag:

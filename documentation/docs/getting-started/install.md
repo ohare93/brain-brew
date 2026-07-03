@@ -122,3 +122,5 @@ devenv test
 ## Runtime dependencies
 
 The CLI is intended to run natively. Nix is an install/build option, not a runtime requirement for package locking. `brainbrew lock update` computes NAR hashes and fetches path/tarball/GitHub inputs in Rust.
+
+> **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.

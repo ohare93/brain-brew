@@ -32,6 +32,8 @@ Verification checks:
 10. media references always, plus media file existence and SHA-256 hashes when `--media-root` is passed;
 11. configured CrowdAnki golden checks.
 
+> **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.
+
 ## Verify media
 
 ```bash
