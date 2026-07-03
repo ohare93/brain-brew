@@ -4,7 +4,7 @@ title: Ultimate Geography fixture
 
 # Ultimate Geography fixture
 
-Ultimate Geography is the large case study in this repository.
+Ultimate Geography is the large case study in this repository. The fixture mirrors the upstream repository's two-manifest shape: the main Ultimate Geography manifest plus the standalone Hardcore Geography companion manifest.
 
 ```text
 fixtures/ultimate-geography/
@@ -26,30 +26,41 @@ It demonstrates:
 - English Standard as a base Canonical Deck;
 - language overlays for all 16 UG languages, including Hebrew RTL coverage;
 - source variables for shared card-template labels;
-- the current UG include layout under `templates/<name>/{question,answer}.html`;
+- the current UG include layout for core and Extended cards under `templates/ultimate-geography/<card>/{question,answer}.html`;
 - a shared Extended variant overlay;
 - small per-language Extended metadata overlays;
 - Hardcore Geography as both an extension overlay and its standalone companion manifest;
-- 74 verified Ultimate Geography targets plus 26 Hardcore companion targets.
+- all language targets declared across both manifests.
 
 ## Inspect targets
 
+List targets from both manifests instead of relying on a committed count:
+
 ```bash
 brainbrew targets --manifest fixtures/ultimate-geography/brainbrew.yaml
+brainbrew targets --manifest fixtures/ultimate-geography/brainbrew-hardcore.yaml
 ```
 
 ## Verify all targets
 
+Verify both manifests so the main UG targets and the standalone Hardcore companion targets stay covered:
+
 ```bash
 brainbrew verify --manifest fixtures/ultimate-geography/brainbrew.yaml --all-targets
+brainbrew verify --manifest fixtures/ultimate-geography/brainbrew-hardcore.yaml --all-targets
 ```
 
-Expected output:
+Illustrative output, regenerated against the fixture on 2026-07-04 after measuring the upstream target listings:
 
 ```text
 ✓ verified 74 targets
   manifest: fixtures/ultimate-geography/brainbrew.yaml
+
+✓ verified 26 targets
+  manifest: fixtures/ultimate-geography/brainbrew-hardcore.yaml
 ```
+
+If upstream Ultimate Geography adds languages or target families, rerun the target listing for each manifest and refresh this example instead of copying the old numbers.
 
 ## Export one target
 
