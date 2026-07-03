@@ -787,19 +787,52 @@ impl CrowdAnkiDeckJson {
         deck_adapter_ids.insert("crowdanki:deck_config_uuid", self.deck_config_uuid);
         deck_adapter_ids.insert("crowdanki:deck_config_name", deck_config_name);
 
-        let mut note_type_by_uuid = BTreeMap::new();
-        let mut note_types = BTreeMap::new();
+        let mut note_type_by_uuid: BTreeMap<String, StableId> = BTreeMap::new();
+        let mut note_types: BTreeMap<StableId, NoteType> = BTreeMap::new();
         for note_model in self.note_models {
             let (uuid, id, note_type) = note_model.into_note_type()?;
+            if let Some(existing) = note_types.get(&id) {
+                return Err(CrowdAnkiError::Unsupported(format!(
+                    "CrowdAnki note models {:?} and {:?} both derive suggested stable ID {}; {}",
+                    existing.name,
+                    note_type.name,
+                    id,
+                    suggested_id_collision_resolution()
+                )));
+            }
+            if let Some(existing_id) = note_type_by_uuid.get(&uuid) {
+                let existing = note_types
+                    .get(existing_id)
+                    .expect("note type UUID map points at inserted note type");
+                return Err(CrowdAnkiError::Unsupported(format!(
+                    "CrowdAnki note models {:?} and {:?} share crowdanki_uuid {:?}; {}",
+                    existing.name,
+                    note_type.name,
+                    uuid,
+                    suggested_id_collision_resolution()
+                )));
+            }
             note_type_by_uuid.insert(uuid, id.clone());
             note_types.insert(id, note_type);
         }
 
-        let notes = self
-            .notes
-            .into_iter()
-            .map(|note| note.into_note(&note_types, &note_type_by_uuid))
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
+        let mut note_sources: BTreeMap<StableId, CrowdAnkiNoteSource> = BTreeMap::new();
+        let mut notes: BTreeMap<StableId, Note> = BTreeMap::new();
+        for note_json in self.notes {
+            let source = CrowdAnkiNoteSource::from_note_json(&note_json);
+            let (id, note) = note_json.into_note(&note_types, &note_type_by_uuid)?;
+            if let Some(existing) = note_sources.get(&id) {
+                return Err(CrowdAnkiError::Unsupported(format!(
+                    "CrowdAnki notes {} and {} both derive suggested stable ID {}; {}",
+                    existing.describe(),
+                    source.describe(),
+                    id,
+                    suggested_id_collision_resolution()
+                )));
+            }
+            note_sources.insert(id.clone(), source);
+            notes.insert(id, note);
+        }
 
         let media = self
             .media_files
@@ -1012,6 +1045,31 @@ struct CrowdAnkiNoteJson {
     tags: Vec<String>,
 }
 
+struct CrowdAnkiNoteSource {
+    guid: String,
+    first_field: String,
+}
+
+impl CrowdAnkiNoteSource {
+    fn from_note_json(note: &CrowdAnkiNoteJson) -> Self {
+        Self {
+            guid: note.guid.clone(),
+            first_field: note
+                .fields
+                .first()
+                .cloned()
+                .unwrap_or_else(|| note.guid.clone()),
+        }
+    }
+
+    fn describe(&self) -> String {
+        format!(
+            "guid {:?} with first field {:?}",
+            self.guid, self.first_field
+        )
+    }
+}
+
 impl CrowdAnkiNoteJson {
     fn into_note(
         self,
@@ -1080,6 +1138,10 @@ impl CrowdAnkiNoteJson {
             },
         ))
     }
+}
+
+fn suggested_id_collision_resolution() -> &'static str {
+    "resolve by correcting the suggested-ID override path before calling import_deck_accept_suggested_ids"
 }
 
 fn prefixed_stable_id(prefix: &str, source: &str) -> Result<StableId, CrowdAnkiError> {

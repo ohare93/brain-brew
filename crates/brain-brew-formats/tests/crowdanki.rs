@@ -71,6 +71,92 @@ fn import_preserves_crowdanki_adapter_identities() {
 }
 
 #[test]
+fn importing_notes_with_colliding_suggested_stable_ids_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["notes"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "__type__": "Note",
+            "data": "",
+            "fields": [
+                "Finland!",
+                "Helsinki duplicate",
+                "<img src=\"fi-duplicate.png\">"
+            ],
+            "flags": 0,
+            "guid": "ug-finland-duplicate-guid",
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "tags": ["duplicate"]
+        }));
+
+    let error = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect_err("colliding note stable IDs fail closed");
+    let message = error.to_string();
+
+    assert!(message.contains("note.finland"), "{message}");
+    assert!(message.contains("ug-finland-guid"), "{message}");
+    assert!(message.contains("Finland"), "{message}");
+    assert!(message.contains("ug-finland-duplicate-guid"), "{message}");
+    assert!(message.contains("Finland!"), "{message}");
+    assert!(
+        message.contains("import_deck_accept_suggested_ids"),
+        "{message}"
+    );
+}
+
+#[test]
+fn importing_note_models_with_colliding_suggested_stable_ids_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    let mut duplicate_model = deck_json["note_models"][0].clone();
+    duplicate_model["crowdanki_uuid"] = serde_json::json!("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+    duplicate_model["name"] = serde_json::json!("Country!");
+    deck_json["note_models"]
+        .as_array_mut()
+        .unwrap()
+        .push(duplicate_model);
+
+    let error = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect_err("colliding note model stable IDs fail closed");
+    let message = error.to_string();
+
+    assert!(message.contains("note-type.country"), "{message}");
+    assert!(message.contains("Country"), "{message}");
+    assert!(message.contains("Country!"), "{message}");
+    assert!(
+        message.contains("import_deck_accept_suggested_ids"),
+        "{message}"
+    );
+}
+
+#[test]
+fn importing_note_models_with_duplicate_crowdanki_uuid_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    let mut duplicate_model = deck_json["note_models"][0].clone();
+    duplicate_model["name"] = serde_json::json!("Country Duplicate UUID");
+    deck_json["note_models"]
+        .as_array_mut()
+        .unwrap()
+        .push(duplicate_model);
+
+    let error = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect_err("duplicate note model UUIDs fail closed");
+    let message = error.to_string();
+
+    assert!(message.contains("crowdanki_uuid"), "{message}");
+    assert!(
+        message.contains("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        "{message}"
+    );
+    assert!(message.contains("Country"), "{message}");
+    assert!(message.contains("Country Duplicate UUID"), "{message}");
+    assert!(
+        message.contains("import_deck_accept_suggested_ids"),
+        "{message}"
+    );
+}
+
+#[test]
 fn crowdanki_parity_comparator_accepts_exact_match() {
     let expected: serde_json::Value = serde_json::json!({
         "name": "Deck",
@@ -435,6 +521,10 @@ fn ug_style_deck() -> CanonicalDeck {
         tombstones: BTreeSet::new(),
         adapter_ids: deck_adapter_ids,
     }
+}
+
+fn expected_crowdanki_json_value() -> serde_json::Value {
+    serde_json::from_str(EXPECTED_CROWDANKI_JSON).expect("fixture JSON is valid")
 }
 
 fn sid(value: &str) -> StableId {
