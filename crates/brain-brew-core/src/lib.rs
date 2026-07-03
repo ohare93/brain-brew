@@ -3621,11 +3621,21 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
     }
 
     if errors.is_empty() {
-        let mut message_errors = Vec::new();
-        resolve_structured_messages_with_validation_errors(&mut rendered, &mut message_errors);
-        Ok(rendered)
+        let mut validation_errors = Vec::new();
+        resolve_structured_messages_with_validation_errors(&mut rendered, &mut validation_errors);
+        if validation_errors.is_empty() {
+            Ok(rendered)
+        } else {
+            Err(VariableRenderReport {
+                errors,
+                validation_errors,
+            })
+        }
     } else {
-        Err(VariableRenderReport { errors })
+        Err(VariableRenderReport {
+            errors,
+            validation_errors: Vec::new(),
+        })
     }
 }
 
@@ -3635,12 +3645,36 @@ fn render_message_variables(
     scopes: &[&BTreeMap<String, String>],
     errors: &mut Vec<VariableRenderError>,
 ) {
+    if let Some(format) = &mut message.format {
+        render_string_with_variables(format, &format!("{path}.format"), scopes, errors);
+        for (variable, component) in &mut message.variables {
+            render_message_component_variables(
+                component,
+                &format!("{path}.variables.{variable}"),
+                scopes,
+                errors,
+            );
+        }
+        return;
+    }
+
     for (index, component) in message.components.iter_mut().enumerate() {
-        match component {
-            MessageComponent::Literal(value) | MessageComponent::Text(value) => {
-                render_string_with_variables(value, &format!("{path}.{index}"), scopes, errors);
-            }
-            MessageComponent::FieldRef(_) => {}
+        render_message_component_variables(component, &format!("{path}.{index}"), scopes, errors);
+    }
+}
+
+fn render_message_component_variables(
+    component: &mut MessageComponent,
+    path: &str,
+    scopes: &[&BTreeMap<String, String>],
+    errors: &mut Vec<VariableRenderError>,
+) {
+    match component {
+        MessageComponent::Literal(value) | MessageComponent::Text(value) => {
+            render_string_with_variables(value, path, scopes, errors);
+        }
+        MessageComponent::FieldRef(reference) => {
+            render_string_with_variables(reference, path, scopes, errors);
         }
     }
 }
@@ -4450,15 +4484,25 @@ pub struct MediaReference {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VariableRenderReport {
     pub errors: Vec<VariableRenderError>,
+    pub validation_errors: Vec<ValidationError>,
 }
 
 impl fmt::Display for VariableRenderReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (index, error) in self.errors.iter().enumerate() {
-            if index > 0 {
+        let mut wrote_error = false;
+        for error in &self.errors {
+            if wrote_error {
                 writeln!(f)?;
             }
             write!(f, "{}: missing variable ${}", error.path, error.variable)?;
+            wrote_error = true;
+        }
+        for error in &self.validation_errors {
+            if wrote_error {
+                writeln!(f)?;
+            }
+            write!(f, "{}: {}", error.path, error.message)?;
+            wrote_error = true;
         }
         Ok(())
     }

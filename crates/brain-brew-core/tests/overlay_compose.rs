@@ -1004,6 +1004,34 @@ fn translation_coverage_reports_path_specific_overrides_and_additions() {
 }
 
 #[test]
+fn render_variables_reports_structured_message_resolution_errors_after_substitution() {
+    let deck = ug_style_deck_with_variable_field_ref_message("missing");
+
+    let report = deck
+        .render_variables()
+        .expect_err("unresolvable structured message refs must fail variable rendering");
+
+    let output = report.to_string();
+    assert!(output.contains("notes.note.finland.fields.field.summary.message"));
+    assert!(output.contains("notes.note.missing.fields.field.country"));
+    assert!(output.contains("does not resolve to a note field"));
+}
+
+#[test]
+fn render_variables_resolves_structured_message_field_refs_after_correct_substitution() {
+    let deck = ug_style_deck_with_variable_field_ref_message("iceland");
+
+    let rendered = deck
+        .render_variables()
+        .expect("correct structured message refs render after variable substitution");
+
+    assert_eq!(
+        rendered.notes[&sid("note.finland")].fields[&sid("field.summary")],
+        "Iceland"
+    );
+}
+
+#[test]
 fn translation_dictionary_resolves_structured_message_components() {
     let base = ug_style_deck_with_flag_similarity_message();
     let overlay = Overlay {
@@ -1818,6 +1846,51 @@ fn ug_style_deck() -> CanonicalDeck {
         tombstones: BTreeSet::new(),
         adapter_ids: deck_adapter_ids,
     }
+}
+
+fn ug_style_deck_with_variable_field_ref_message(target_note: &str) -> CanonicalDeck {
+    let mut deck = ug_style_deck();
+    deck.note_types
+        .get_mut(&sid("note-type.country"))
+        .unwrap()
+        .fields
+        .push(FieldDefinition {
+            id: sid("field.summary"),
+            name: "Summary".to_owned(),
+        });
+    deck.notes.insert(
+        sid("note.iceland"),
+        Note {
+            id: sid("note.iceland"),
+            note_type_id: sid("note-type.country"),
+            variables: BTreeMap::new(),
+            fields: BTreeMap::from([
+                (sid("field.country"), "Iceland".to_owned()),
+                (sid("field.capital"), "Reykjavik".to_owned()),
+                (sid("field.flag"), "<img src=\"is.png\">".to_owned()),
+                (sid("field.summary"), String::new()),
+            ]),
+            field_messages: BTreeMap::new(),
+            tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
+            adapter_ids: AdapterIds::new(),
+        },
+    );
+    let finland = deck.notes.get_mut(&sid("note.finland")).unwrap();
+    finland
+        .variables
+        .insert("target.note".to_owned(), target_note.to_owned());
+    finland.fields.insert(sid("field.summary"), String::new());
+    finland.field_messages.insert(
+        sid("field.summary"),
+        StructuredMessage {
+            components: vec![MessageComponent::FieldRef(
+                "notes.note.${target.note}.fields.field.country".to_owned(),
+            )],
+            format: None,
+            variables: BTreeMap::new(),
+        },
+    );
+    deck
 }
 
 fn ug_style_deck_with_flag_similarity_message() -> CanonicalDeck {
