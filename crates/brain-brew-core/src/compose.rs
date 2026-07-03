@@ -1,0 +1,1804 @@
+use std::collections::{BTreeMap, BTreeSet};
+
+use crate::messages::{
+    resolve_structured_messages_with_compose_errors,
+    resolve_structured_messages_with_validation_errors,
+};
+use crate::translation::apply_translation_dictionary;
+use crate::*;
+
+impl CanonicalDeck {
+    /// Apply an ordered overlay stack to this base deck.
+    pub fn compose(&self, overlays: &[Overlay]) -> Result<Self, ComposeReport> {
+        let mut resolved = self.clone();
+        let mut errors = Vec::new();
+        let mut changed_paths = BTreeMap::<String, StableId>::new();
+
+        resolve_structured_messages_with_compose_errors(&mut resolved, &mut errors);
+
+        for overlay in overlays {
+            apply_overlay(&mut resolved, overlay, &mut changed_paths, &mut errors);
+            resolve_structured_messages_with_compose_errors(&mut resolved, &mut errors);
+        }
+
+        if !errors.is_empty() {
+            return Err(ComposeReport { errors });
+        }
+
+        resolved.validate().map_err(|report| ComposeReport {
+            errors: report
+                .errors
+                .into_iter()
+                .map(|error| {
+                    ComposeError::new(
+                        ComposeErrorKind::ValidationFailed,
+                        error.path,
+                        error.message,
+                    )
+                })
+                .collect(),
+        })?;
+
+        Ok(resolved)
+    }
+
+    pub fn semantic_diff(&self, other: &Self) -> SemanticDiff {
+        let mut changes = Vec::new();
+
+        push_modified_if_changed(
+            &mut changes,
+            "deck.name".to_owned(),
+            &self.name,
+            &other.name,
+        );
+        push_modified_if_changed(
+            &mut changes,
+            "deck.description".to_owned(),
+            &self.description,
+            &other.description,
+        );
+        push_modified_if_changed(
+            &mut changes,
+            "deck.variables".to_owned(),
+            &string_map_summary(&self.variables),
+            &string_map_summary(&other.variables),
+        );
+
+        diff_note_types(&self.note_types, &other.note_types, &mut changes);
+        diff_notes(&self.notes, &other.notes, &mut changes);
+        diff_media(&self.media, &other.media, &mut changes);
+        diff_tombstones(&self.tombstones, &other.tombstones, &mut changes);
+
+        SemanticDiff { changes }
+    }
+
+    /// Render `${variable}` references in deck text using deck, note type, card template, and note scopes.
+    pub fn render_variables(&self) -> Result<Self, VariableRenderReport> {
+        render_deck_variables(self)
+    }
+}
+
+fn apply_overlay(
+    resolved: &mut CanonicalDeck,
+    overlay: &Overlay,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    if let Some(translations) = &overlay.translations {
+        apply_translation_dictionary(resolved, overlay, translations, changed_paths, errors);
+    }
+
+    if let Some(change) = &overlay.deck_change {
+        apply_deck_change(resolved, overlay, change, changed_paths, errors);
+    }
+
+    let mut added_fields = Vec::new();
+    for (note_type_id, change) in &overlay.note_type_changes {
+        match change.intent {
+            ChangeIntent::Add => apply_note_type_add(
+                resolved,
+                overlay,
+                note_type_id,
+                change,
+                changed_paths,
+                errors,
+            ),
+            ChangeIntent::Merge | ChangeIntent::Replace | ChangeIntent::Override => {
+                added_fields.extend(apply_note_type_change(
+                    resolved,
+                    overlay,
+                    note_type_id,
+                    change,
+                    changed_paths,
+                    errors,
+                ));
+            }
+            ChangeIntent::Remove => apply_note_type_remove(
+                resolved,
+                overlay,
+                note_type_id,
+                change,
+                changed_paths,
+                errors,
+            ),
+        }
+    }
+
+    for (note_id, change) in &overlay.note_changes {
+        match change.intent {
+            ChangeIntent::Add => {
+                apply_note_add(resolved, overlay, note_id, change, changed_paths, errors)
+            }
+            ChangeIntent::Merge | ChangeIntent::Replace | ChangeIntent::Override => {
+                apply_note_merge(resolved, overlay, note_id, change, changed_paths, errors);
+            }
+            ChangeIntent::Remove => {
+                apply_note_remove(resolved, overlay, note_id, change, changed_paths, errors);
+            }
+        }
+    }
+
+    for (note_type_id, field_id) in added_fields {
+        fill_added_field_blanks(resolved, &note_type_id, &field_id);
+    }
+
+    for (media_id, change) in &overlay.media_changes {
+        apply_media_change(resolved, overlay, media_id, change, changed_paths, errors);
+    }
+}
+
+fn fill_added_field_blanks(
+    resolved: &mut CanonicalDeck,
+    note_type_id: &StableId,
+    field_id: &StableId,
+) {
+    for note in resolved
+        .notes
+        .values_mut()
+        .filter(|note| &note.note_type_id == note_type_id)
+    {
+        note.fields.entry(field_id.clone()).or_default();
+    }
+}
+
+fn apply_deck_change(
+    resolved: &mut CanonicalDeck,
+    overlay: &Overlay,
+    change: &DeckChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    if let Some(name) = &change.name {
+        apply_string_property_change(
+            &mut resolved.name,
+            overlay,
+            "deck.name".to_owned(),
+            name,
+            changed_paths,
+            errors,
+        );
+    }
+    if let Some(description) = &change.description {
+        apply_string_property_change(
+            &mut resolved.description,
+            overlay,
+            "deck.description".to_owned(),
+            description,
+            changed_paths,
+            errors,
+        );
+    }
+    apply_variable_changes(
+        &mut resolved.variables,
+        overlay,
+        "deck.variables",
+        &change.variables,
+        changed_paths,
+        errors,
+    );
+    for (key, adapter_change) in &change.adapter_ids {
+        apply_adapter_id_change(
+            &mut resolved.adapter_ids,
+            overlay,
+            format!("deck.adapter_ids.{key}"),
+            key,
+            adapter_change,
+            changed_paths,
+            errors,
+        );
+    }
+}
+
+fn apply_note_type_add(
+    resolved: &mut CanonicalDeck,
+    overlay: &Overlay,
+    note_type_id: &StableId,
+    change: &NoteTypeChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    let path = format!("note_types.{note_type_id}");
+    if resolved.note_types.contains_key(note_type_id) {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::AlreadyExists,
+            path,
+            format!("note type {note_type_id} already exists"),
+        ));
+        return;
+    }
+    if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+        return;
+    }
+    let Some(note_type) = &change.note_type else {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::MissingOverlayPayload,
+            path,
+            format!("add change for note type {note_type_id} must include a note_type"),
+        ));
+        return;
+    };
+    if &note_type.id != note_type_id {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::ValidationFailed,
+            path,
+            format!(
+                "note type payload id {} does not match target {note_type_id}",
+                note_type.id
+            ),
+        ));
+        return;
+    }
+    resolved
+        .note_types
+        .insert(note_type_id.clone(), note_type.clone());
+}
+
+fn apply_note_type_remove(
+    resolved: &mut CanonicalDeck,
+    overlay: &Overlay,
+    note_type_id: &StableId,
+    change: &NoteTypeChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    let path = format!("note_types.{note_type_id}");
+    if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+        return;
+    }
+    if !has_expected_base(&change.expected_base, path.clone(), errors) {
+        return;
+    }
+    if !resolved.note_types.contains_key(note_type_id) {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::MissingOverlayTarget,
+            path,
+            format!("note type {note_type_id} does not exist"),
+        ));
+        return;
+    }
+    if resolved
+        .notes
+        .values()
+        .any(|note| &note.note_type_id == note_type_id)
+    {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::ValidationFailed,
+            path,
+            format!("cannot remove note type {note_type_id} while notes still reference it"),
+        ));
+        return;
+    }
+    if let Some(ExpectedBase::Value(expected_value)) = &change.expected_base {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::ExpectedBaseMismatch,
+            path,
+            format!("note type removal expected an entity marker, not value {expected_value:?}"),
+        ));
+        return;
+    }
+    resolved.note_types.remove(note_type_id);
+    resolved.tombstones.insert(note_type_id.clone());
+}
+
+fn apply_note_type_change(
+    resolved: &mut CanonicalDeck,
+    overlay: &Overlay,
+    note_type_id: &StableId,
+    change: &NoteTypeChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) -> Vec<(StableId, StableId)> {
+    let mut added_fields = Vec::new();
+    if requires_expected_base(change.intent)
+        && !has_expected_base(
+            &change.expected_base,
+            format!("note_types.{note_type_id}"),
+            errors,
+        )
+    {
+        return added_fields;
+    }
+
+    let Some(note_type) = resolved.note_types.get_mut(note_type_id) else {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::MissingOverlayTarget,
+            format!("note_types.{note_type_id}"),
+            format!("note type {note_type_id} does not exist"),
+        ));
+        return added_fields;
+    };
+
+    if let Some(name) = &change.name {
+        apply_string_property_change(
+            &mut note_type.name,
+            overlay,
+            format!("note_types.{note_type_id}.name"),
+            name,
+            changed_paths,
+            errors,
+        );
+    }
+    apply_variable_changes(
+        &mut note_type.variables,
+        overlay,
+        &format!("note_types.{note_type_id}.variables"),
+        &change.variables,
+        changed_paths,
+        errors,
+    );
+    if let Some(styling) = &change.styling {
+        apply_string_property_change(
+            &mut note_type.styling,
+            overlay,
+            format!("note_types.{note_type_id}.styling"),
+            styling,
+            changed_paths,
+            errors,
+        );
+    }
+    for (key, adapter_change) in &change.adapter_ids {
+        apply_adapter_id_change(
+            &mut note_type.adapter_ids,
+            overlay,
+            format!("note_types.{note_type_id}.adapter_ids.{key}"),
+            key,
+            adapter_change,
+            changed_paths,
+            errors,
+        );
+    }
+    for (template_id, template_change) in &change.card_templates {
+        apply_card_template_change(
+            note_type,
+            overlay,
+            note_type_id,
+            template_id,
+            template_change,
+            changed_paths,
+            errors,
+        );
+    }
+
+    for (field_id, field_change) in &change.fields {
+        if apply_field_definition_change(
+            note_type,
+            overlay,
+            note_type_id,
+            field_id,
+            field_change,
+            changed_paths,
+            errors,
+        ) {
+            added_fields.push((note_type_id.clone(), field_id.clone()));
+        }
+    }
+
+    added_fields
+}
+
+fn apply_card_template_change(
+    note_type: &mut NoteType,
+    overlay: &Overlay,
+    note_type_id: &StableId,
+    template_id: &StableId,
+    change: &CardTemplateChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    let path = format!("note_types.{note_type_id}.card_templates.{template_id}");
+    if requires_expected_base(change.intent)
+        && !has_expected_base(&change.expected_base, path.clone(), errors)
+    {
+        return;
+    }
+
+    let existing_index = note_type
+        .card_templates
+        .iter()
+        .position(|template| &template.id == template_id);
+
+    match change.intent {
+        ChangeIntent::Add if existing_index.is_some() => {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::AlreadyExists,
+                path,
+                format!("card template {template_id} already exists on note type {note_type_id}"),
+            ));
+            return;
+        }
+        ChangeIntent::Add => {
+            if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+                return;
+            }
+            let Some(template) = &change.template else {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::MissingOverlayPayload,
+                    path,
+                    format!("add change for card template {template_id} must include a template"),
+                ));
+                return;
+            };
+            if &template.id != template_id {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::ValidationFailed,
+                    path,
+                    format!(
+                        "card template payload id {} does not match target {template_id}",
+                        template.id
+                    ),
+                ));
+                return;
+            }
+            let insert_index = match &change.insert_after {
+                Some(after_id) => match note_type
+                    .card_templates
+                    .iter()
+                    .position(|template| &template.id == after_id)
+                {
+                    Some(index) => index + 1,
+                    None => {
+                        errors.push(ComposeError::new(
+                            ComposeErrorKind::MissingOverlayTarget,
+                            path,
+                            format!("insert_after template {after_id} does not exist"),
+                        ));
+                        return;
+                    }
+                },
+                None => note_type.card_templates.len(),
+            };
+            note_type
+                .card_templates
+                .insert(insert_index, template.clone());
+        }
+        ChangeIntent::Remove => {
+            if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+                return;
+            }
+            if let Some(index) = existing_index {
+                note_type.card_templates.remove(index);
+            } else {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::MissingOverlayTarget,
+                    path,
+                    format!(
+                        "card template {template_id} does not exist on note type {note_type_id}"
+                    ),
+                ));
+            }
+            return;
+        }
+        ChangeIntent::Merge | ChangeIntent::Replace | ChangeIntent::Override => {
+            if let Some(template) = &change.template {
+                if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+                    return;
+                }
+                let Some(index) = existing_index else {
+                    errors.push(ComposeError::new(
+                        ComposeErrorKind::MissingOverlayTarget,
+                        path,
+                        format!(
+                            "card template {template_id} does not exist on note type {note_type_id}"
+                        ),
+                    ));
+                    return;
+                };
+                if &template.id != template_id {
+                    errors.push(ComposeError::new(
+                        ComposeErrorKind::ValidationFailed,
+                        path,
+                        format!(
+                            "card template payload id {} does not match target {template_id}",
+                            template.id
+                        ),
+                    ));
+                    return;
+                }
+                note_type.card_templates[index] = template.clone();
+            }
+        }
+    }
+
+    let Some(template) = note_type
+        .card_templates
+        .iter_mut()
+        .find(|template| &template.id == template_id)
+    else {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::MissingOverlayTarget,
+            path,
+            format!("card template {template_id} does not exist on note type {note_type_id}"),
+        ));
+        return;
+    };
+
+    if let Some(name) = &change.name {
+        apply_string_property_change(
+            &mut template.name,
+            overlay,
+            format!("note_types.{note_type_id}.card_templates.{template_id}.name"),
+            name,
+            changed_paths,
+            errors,
+        );
+    }
+    apply_variable_changes(
+        &mut template.variables,
+        overlay,
+        &format!("note_types.{note_type_id}.card_templates.{template_id}.variables"),
+        &change.variables,
+        changed_paths,
+        errors,
+    );
+    if let Some(question_format) = &change.question_format {
+        apply_string_property_change(
+            &mut template.question_format,
+            overlay,
+            format!("note_types.{note_type_id}.card_templates.{template_id}.question_format"),
+            question_format,
+            changed_paths,
+            errors,
+        );
+    }
+    if let Some(answer_format) = &change.answer_format {
+        apply_string_property_change(
+            &mut template.answer_format,
+            overlay,
+            format!("note_types.{note_type_id}.card_templates.{template_id}.answer_format"),
+            answer_format,
+            changed_paths,
+            errors,
+        );
+    }
+    for (key, adapter_change) in &change.adapter_ids {
+        apply_adapter_id_change(
+            &mut template.adapter_ids,
+            overlay,
+            format!("note_types.{note_type_id}.card_templates.{template_id}.adapter_ids.{key}"),
+            key,
+            adapter_change,
+            changed_paths,
+            errors,
+        );
+    }
+}
+
+fn apply_string_property_change(
+    value: &mut String,
+    overlay: &Overlay,
+    path: String,
+    change: &PropertyChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+        return;
+    }
+
+    if requires_expected_base(change.intent)
+        && !has_expected_base(&change.expected_base, path.clone(), errors)
+    {
+        return;
+    }
+
+    if let Some(expected_base) = &change.expected_base {
+        match expected_base {
+            ExpectedBase::Value(expected_value) => {
+                if value != expected_value {
+                    errors.push(ComposeError::new(
+                        ComposeErrorKind::ExpectedBaseMismatch,
+                        path,
+                        format!(
+                            "expected base value {:?}, found {:?}",
+                            expected_value, value
+                        ),
+                    ));
+                    return;
+                }
+            }
+            ExpectedBase::EntityPresent => {
+                if value.is_empty() {
+                    errors.push(ComposeError::new(
+                        ComposeErrorKind::ExpectedBaseMismatch,
+                        path,
+                        "expected property to be present".to_owned(),
+                    ));
+                    return;
+                }
+            }
+        }
+    }
+
+    match change.intent {
+        ChangeIntent::Add if !value.is_empty() => {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::AlreadyExists,
+                path,
+                "property already has a value".to_owned(),
+            ));
+        }
+        ChangeIntent::Remove => value.clear(),
+        ChangeIntent::Add
+        | ChangeIntent::Merge
+        | ChangeIntent::Replace
+        | ChangeIntent::Override => {
+            let Some(new_value) = &change.value else {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::MissingOverlayPayload,
+                    path,
+                    "property change must include a value".to_owned(),
+                ));
+                return;
+            };
+            *value = new_value.clone();
+        }
+    }
+}
+
+fn apply_variable_changes(
+    variables: &mut BTreeMap<String, String>,
+    overlay: &Overlay,
+    path_prefix: &str,
+    changes: &BTreeMap<String, PropertyChange>,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    for (key, change) in changes {
+        apply_map_string_property_change(
+            variables,
+            overlay,
+            format!("{path_prefix}.{key}"),
+            key,
+            change,
+            changed_paths,
+            errors,
+        );
+    }
+}
+
+fn apply_map_string_property_change(
+    values: &mut BTreeMap<String, String>,
+    overlay: &Overlay,
+    path: String,
+    key: &str,
+    change: &PropertyChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+        return;
+    }
+
+    if requires_expected_base(change.intent)
+        && !has_expected_base(&change.expected_base, path.clone(), errors)
+    {
+        return;
+    }
+
+    if let Some(expected_base) = &change.expected_base {
+        match expected_base {
+            ExpectedBase::Value(expected_value) => {
+                let current_value = values.get(key);
+                if current_value != Some(expected_value) {
+                    errors.push(ComposeError::new(
+                        ComposeErrorKind::ExpectedBaseMismatch,
+                        path,
+                        format!(
+                            "expected base value {:?}, found {:?}",
+                            expected_value, current_value
+                        ),
+                    ));
+                    return;
+                }
+            }
+            ExpectedBase::EntityPresent => {
+                if !values.contains_key(key) {
+                    errors.push(ComposeError::new(
+                        ComposeErrorKind::ExpectedBaseMismatch,
+                        path,
+                        format!("expected variable {key} to be present"),
+                    ));
+                    return;
+                }
+            }
+        }
+    }
+
+    match change.intent {
+        ChangeIntent::Add if values.contains_key(key) => {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::AlreadyExists,
+                path,
+                format!("variable {key} already exists"),
+            ));
+        }
+        ChangeIntent::Remove => {
+            values.remove(key);
+        }
+        ChangeIntent::Add
+        | ChangeIntent::Merge
+        | ChangeIntent::Replace
+        | ChangeIntent::Override => {
+            let Some(value) = &change.value else {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::MissingOverlayPayload,
+                    path,
+                    format!("variable change for {key} must include a value"),
+                ));
+                return;
+            };
+            values.insert(key.to_owned(), value.clone());
+        }
+    }
+}
+
+fn apply_adapter_id_change(
+    adapter_ids: &mut AdapterIds,
+    overlay: &Overlay,
+    path: String,
+    key: &str,
+    change: &AdapterIdChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+        return;
+    }
+
+    if requires_expected_base(change.intent)
+        && !has_expected_base(&change.expected_base, path.clone(), errors)
+    {
+        return;
+    }
+
+    if let Some(expected_base) = &change.expected_base {
+        match expected_base {
+            ExpectedBase::Value(expected_value) => {
+                let current_value = adapter_ids.get(key);
+                if current_value != Some(expected_value.as_str()) {
+                    errors.push(ComposeError::new(
+                        ComposeErrorKind::ExpectedBaseMismatch,
+                        path,
+                        format!(
+                            "expected base value {:?}, found {:?}",
+                            expected_value, current_value
+                        ),
+                    ));
+                    return;
+                }
+            }
+            ExpectedBase::EntityPresent => {
+                if !adapter_ids.contains_key(key) {
+                    errors.push(ComposeError::new(
+                        ComposeErrorKind::ExpectedBaseMismatch,
+                        path,
+                        format!("expected adapter id {key} to be present"),
+                    ));
+                    return;
+                }
+            }
+        }
+    }
+
+    match change.intent {
+        ChangeIntent::Add if adapter_ids.contains_key(key) => {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::AlreadyExists,
+                path,
+                format!("adapter id {key} already exists"),
+            ));
+        }
+        ChangeIntent::Remove => {
+            adapter_ids.remove(key);
+        }
+        ChangeIntent::Add
+        | ChangeIntent::Merge
+        | ChangeIntent::Replace
+        | ChangeIntent::Override => {
+            let Some(value) = &change.value else {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::MissingOverlayPayload,
+                    path,
+                    format!("adapter id change for {key} must include a value"),
+                ));
+                return;
+            };
+            adapter_ids.insert(key.to_owned(), value.clone());
+        }
+    }
+}
+
+fn apply_field_definition_change(
+    note_type: &mut NoteType,
+    overlay: &Overlay,
+    note_type_id: &StableId,
+    field_id: &StableId,
+    change: &FieldDefinitionChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) -> bool {
+    let path = format!("note_types.{note_type_id}.fields.{field_id}");
+    if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+        return false;
+    }
+
+    if requires_expected_base(change.intent)
+        && !has_expected_base(&change.expected_base, path.clone(), errors)
+    {
+        return false;
+    }
+
+    let existing_index = note_type
+        .fields
+        .iter()
+        .position(|field| &field.id == field_id);
+    match change.intent {
+        ChangeIntent::Add if existing_index.is_some() => {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::AlreadyExists,
+                path,
+                format!("field {field_id} already exists on note type {note_type_id}"),
+            ));
+            false
+        }
+        ChangeIntent::Remove => {
+            if let Some(index) = existing_index {
+                note_type.fields.remove(index);
+            } else {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::MissingOverlayTarget,
+                    path,
+                    format!("field {field_id} does not exist on note type {note_type_id}"),
+                ));
+            }
+            false
+        }
+        ChangeIntent::Add
+        | ChangeIntent::Merge
+        | ChangeIntent::Replace
+        | ChangeIntent::Override => {
+            let Some(field) = &change.field else {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::MissingOverlayPayload,
+                    path,
+                    format!("field definition change for {field_id} must include a field"),
+                ));
+                return false;
+            };
+            if &field.id != field_id {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::ValidationFailed,
+                    path,
+                    format!(
+                        "field payload id {} does not match target {field_id}",
+                        field.id
+                    ),
+                ));
+                return false;
+            }
+            if let Some(index) = existing_index {
+                note_type.fields[index] = field.clone();
+                false
+            } else {
+                note_type.fields.push(field.clone());
+                change.intent == ChangeIntent::Add
+            }
+        }
+    }
+}
+
+fn apply_note_add(
+    resolved: &mut CanonicalDeck,
+    overlay: &Overlay,
+    note_id: &StableId,
+    change: &NoteChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    let path = format!("notes.{note_id}");
+    if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+        return;
+    }
+
+    if resolved.notes.contains_key(note_id) && !resolved.tombstones.contains(note_id) {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::AlreadyExists,
+            path,
+            format!("note {note_id} already exists"),
+        ));
+        return;
+    }
+
+    let Some(note) = &change.note else {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::MissingOverlayPayload,
+            path,
+            format!("add change for note {note_id} must include a note payload"),
+        ));
+        return;
+    };
+
+    resolved.notes.insert(note_id.clone(), note.clone());
+    resolved.tombstones.remove(note_id);
+}
+
+fn apply_note_merge(
+    resolved: &mut CanonicalDeck,
+    overlay: &Overlay,
+    note_id: &StableId,
+    change: &NoteChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    if requires_expected_base(change.intent)
+        && !has_expected_base(&change.expected_base, format!("notes.{note_id}"), errors)
+    {
+        return;
+    }
+
+    let Some(note) = resolved.notes.get_mut(note_id) else {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::MissingOverlayTarget,
+            format!("notes.{note_id}"),
+            format!("note {note_id} does not exist"),
+        ));
+        return;
+    };
+
+    apply_variable_changes(
+        &mut note.variables,
+        overlay,
+        &format!("notes.{note_id}.variables"),
+        &change.variables,
+        changed_paths,
+        errors,
+    );
+
+    for (tag, tag_change) in &change.tags {
+        apply_tag_change(
+            note,
+            overlay,
+            note_id,
+            tag,
+            tag_change,
+            changed_paths,
+            errors,
+        );
+    }
+
+    for (key, adapter_change) in &change.adapter_ids {
+        apply_adapter_id_change(
+            &mut note.adapter_ids,
+            overlay,
+            format!("notes.{note_id}.adapter_ids.{key}"),
+            key,
+            adapter_change,
+            changed_paths,
+            errors,
+        );
+    }
+
+    for (field_id, field_change) in &change.fields {
+        apply_field_change(
+            note,
+            overlay,
+            note_id,
+            field_id,
+            field_change,
+            changed_paths,
+            errors,
+        );
+    }
+}
+
+fn apply_tag_change(
+    note: &mut Note,
+    overlay: &Overlay,
+    note_id: &StableId,
+    tag: &str,
+    change: &TagChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    let path = format!("notes.{note_id}.tags.{tag}");
+    if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+        return;
+    }
+
+    if requires_expected_base(change.intent)
+        && !has_expected_base(&change.expected_base, path.clone(), errors)
+    {
+        return;
+    }
+
+    if let Some(expected_base) = &change.expected_base {
+        match expected_base {
+            ExpectedBase::EntityPresent => {
+                if !note.tags.contains(tag) {
+                    errors.push(ComposeError::new(
+                        ComposeErrorKind::ExpectedBaseMismatch,
+                        path,
+                        format!("expected tag {tag} to be present"),
+                    ));
+                    return;
+                }
+            }
+            ExpectedBase::Value(expected_value) => {
+                if expected_value != tag || !note.tags.contains(tag) {
+                    errors.push(ComposeError::new(
+                        ComposeErrorKind::ExpectedBaseMismatch,
+                        path,
+                        format!("expected tag value {:?} to be present", expected_value),
+                    ));
+                    return;
+                }
+            }
+        }
+    }
+
+    match change.intent {
+        ChangeIntent::Add if note.tags.contains(tag) => {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::AlreadyExists,
+                path,
+                format!("tag {tag} already exists on note {note_id}"),
+            ));
+        }
+        ChangeIntent::Remove => {
+            note.tags.remove(tag);
+        }
+        ChangeIntent::Add
+        | ChangeIntent::Merge
+        | ChangeIntent::Replace
+        | ChangeIntent::Override => {
+            note.tags.insert(tag.to_owned());
+        }
+    }
+}
+
+fn apply_field_change(
+    note: &mut Note,
+    overlay: &Overlay,
+    note_id: &StableId,
+    field_id: &StableId,
+    change: &FieldChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    let path = format!("notes.{note_id}.fields.{field_id}");
+    if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+        return;
+    }
+
+    if requires_expected_base(change.intent)
+        && !has_expected_base(&change.expected_base, path.clone(), errors)
+    {
+        return;
+    }
+
+    if let Some(expected_base) = &change.expected_base {
+        match expected_base {
+            ExpectedBase::Value(expected_value) => {
+                let current_value = note.fields.get(field_id).map(String::as_str);
+                if current_value != Some(expected_value.as_str()) {
+                    errors.push(ComposeError::new(
+                        ComposeErrorKind::ExpectedBaseMismatch,
+                        path,
+                        format!(
+                            "expected base value {:?}, found {:?}",
+                            expected_value, current_value
+                        ),
+                    ));
+                    return;
+                }
+            }
+            ExpectedBase::EntityPresent => {
+                if !note.fields.contains_key(field_id) {
+                    errors.push(ComposeError::new(
+                        ComposeErrorKind::ExpectedBaseMismatch,
+                        path,
+                        format!("expected field {field_id} to be present"),
+                    ));
+                    return;
+                }
+            }
+        }
+    }
+
+    match change.intent {
+        ChangeIntent::Add if note.fields.contains_key(field_id) => {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::AlreadyExists,
+                path,
+                format!("field {field_id} already exists on note {note_id}"),
+            ));
+        }
+        ChangeIntent::Remove => {
+            note.fields.remove(field_id);
+            note.field_messages.remove(field_id);
+        }
+        ChangeIntent::Add
+        | ChangeIntent::Merge
+        | ChangeIntent::Replace
+        | ChangeIntent::Override => {
+            if let Some(message) = &change.message {
+                note.fields.insert(field_id.clone(), String::new());
+                note.field_messages
+                    .insert(field_id.clone(), message.clone());
+                return;
+            }
+            let Some(value) = &change.value else {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::MissingOverlayPayload,
+                    path,
+                    format!("field change for {field_id} must include a value or message"),
+                ));
+                return;
+            };
+            note.fields.insert(field_id.clone(), value.clone());
+            note.field_messages.remove(field_id);
+        }
+    }
+}
+
+fn apply_media_change(
+    resolved: &mut CanonicalDeck,
+    overlay: &Overlay,
+    media_id: &StableId,
+    change: &MediaChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    let path = format!("media.{media_id}");
+    if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+        return;
+    }
+
+    if requires_expected_base(change.intent)
+        && !has_expected_base(&change.expected_base, path.clone(), errors)
+    {
+        return;
+    }
+
+    if let Some(expected_base) = &change.expected_base {
+        match expected_base {
+            ExpectedBase::EntityPresent => {
+                if !resolved.media.contains_key(media_id) {
+                    errors.push(ComposeError::new(
+                        ComposeErrorKind::ExpectedBaseMismatch,
+                        path,
+                        format!("expected media reference {media_id} to be present"),
+                    ));
+                    return;
+                }
+            }
+            ExpectedBase::Value(expected_value) => {
+                let current_value = resolved.media.get(media_id).map(media_reference_summary);
+                if current_value.as_deref() != Some(expected_value.as_str()) {
+                    errors.push(ComposeError::new(
+                        ComposeErrorKind::ExpectedBaseMismatch,
+                        path,
+                        format!(
+                            "expected base value {:?}, found {:?}",
+                            expected_value, current_value
+                        ),
+                    ));
+                    return;
+                }
+            }
+        }
+    }
+
+    match change.intent {
+        ChangeIntent::Add if resolved.media.contains_key(media_id) => {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::AlreadyExists,
+                path,
+                format!("media reference {media_id} already exists"),
+            ));
+        }
+        ChangeIntent::Remove => {
+            resolved.media.remove(media_id);
+        }
+        ChangeIntent::Add
+        | ChangeIntent::Merge
+        | ChangeIntent::Replace
+        | ChangeIntent::Override => {
+            let Some(media) = &change.media else {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::MissingOverlayPayload,
+                    path,
+                    format!("media change for {media_id} must include a media reference"),
+                ));
+                return;
+            };
+            if &media.id != media_id {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::ValidationFailed,
+                    path,
+                    format!(
+                        "media payload id {} does not match target {media_id}",
+                        media.id
+                    ),
+                ));
+                return;
+            }
+            resolved.media.insert(media_id.clone(), media.clone());
+        }
+    }
+}
+
+fn media_reference_summary(media: &MediaReference) -> String {
+    format!("path={};sha256={}", media.path, media.sha256)
+}
+
+fn apply_note_remove(
+    resolved: &mut CanonicalDeck,
+    overlay: &Overlay,
+    note_id: &StableId,
+    change: &NoteChange,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) {
+    let path = format!("notes.{note_id}");
+    if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+        return;
+    }
+
+    if !has_expected_base(&change.expected_base, path.clone(), errors) {
+        return;
+    }
+
+    if !resolved.notes.contains_key(note_id) {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::MissingOverlayTarget,
+            path,
+            format!("note {note_id} does not exist"),
+        ));
+        return;
+    }
+
+    if let Some(ExpectedBase::Value(expected_value)) = &change.expected_base {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::ExpectedBaseMismatch,
+            path,
+            format!("note removal expected an entity marker, not value {expected_value:?}"),
+        ));
+        return;
+    }
+
+    resolved.tombstones.insert(note_id.clone());
+}
+
+pub(crate) fn record_change_path(
+    path: &str,
+    overlay: &Overlay,
+    intent: ChangeIntent,
+    changed_paths: &mut BTreeMap<String, StableId>,
+    errors: &mut Vec<ComposeError>,
+) -> bool {
+    if let Some(previous_overlay_id) = changed_paths.get(path)
+        && intent != ChangeIntent::Override
+    {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::Conflict,
+            path.to_owned(),
+            format!(
+                "overlay {} conflicts with earlier overlay {} at {path}",
+                overlay.id, previous_overlay_id
+            ),
+        ));
+        return false;
+    }
+
+    changed_paths.insert(path.to_owned(), overlay.id.clone());
+    true
+}
+
+fn has_expected_base(
+    expected_base: &Option<ExpectedBase>,
+    path: String,
+    errors: &mut Vec<ComposeError>,
+) -> bool {
+    if expected_base.is_some() {
+        true
+    } else {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::MissingExpectedBase,
+            path,
+            "destructive overlay change must declare an expected base".to_owned(),
+        ));
+        false
+    }
+}
+
+fn requires_expected_base(intent: ChangeIntent) -> bool {
+    matches!(
+        intent,
+        ChangeIntent::Replace | ChangeIntent::Remove | ChangeIntent::Override
+    )
+}
+
+fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, VariableRenderReport> {
+    let mut rendered = deck.clone();
+    let mut errors = Vec::new();
+    let deck_variables = rendered.variables.clone();
+
+    render_string_with_variables(
+        &mut rendered.name,
+        "deck.name",
+        &[&deck_variables],
+        &mut errors,
+    );
+    render_string_with_variables(
+        &mut rendered.description,
+        "deck.description",
+        &[&deck_variables],
+        &mut errors,
+    );
+
+    for (note_type_id, note_type) in &mut rendered.note_types {
+        let note_type_variables = note_type.variables.clone();
+        render_string_with_variables(
+            &mut note_type.name,
+            &format!("note_types.{note_type_id}.name"),
+            &[&note_type_variables, &deck_variables],
+            &mut errors,
+        );
+        render_string_with_variables(
+            &mut note_type.styling,
+            &format!("note_types.{note_type_id}.styling"),
+            &[&note_type_variables, &deck_variables],
+            &mut errors,
+        );
+        for field in &mut note_type.fields {
+            render_string_with_variables(
+                &mut field.name,
+                &format!("note_types.{note_type_id}.fields.{}.name", field.id),
+                &[&note_type_variables, &deck_variables],
+                &mut errors,
+            );
+        }
+        for template in &mut note_type.card_templates {
+            let template_variables = template.variables.clone();
+            let scopes = [&template_variables, &note_type_variables, &deck_variables];
+            render_string_with_variables(
+                &mut template.name,
+                &format!(
+                    "note_types.{note_type_id}.card_templates.{}.name",
+                    template.id
+                ),
+                &scopes,
+                &mut errors,
+            );
+            render_string_with_variables(
+                &mut template.question_format,
+                &format!(
+                    "note_types.{note_type_id}.card_templates.{}.question_format",
+                    template.id
+                ),
+                &scopes,
+                &mut errors,
+            );
+            render_string_with_variables(
+                &mut template.answer_format,
+                &format!(
+                    "note_types.{note_type_id}.card_templates.{}.answer_format",
+                    template.id
+                ),
+                &scopes,
+                &mut errors,
+            );
+        }
+    }
+
+    for (note_id, note) in &mut rendered.notes {
+        let note_variables = note.variables.clone();
+        let note_type_variables = rendered
+            .note_types
+            .get(&note.note_type_id)
+            .map(|note_type| &note_type.variables);
+        for (field_id, value) in &mut note.fields {
+            let path = format!("notes.{note_id}.fields.{field_id}");
+            if let Some(note_type_variables) = note_type_variables {
+                render_string_with_variables(
+                    value,
+                    &path,
+                    &[&note_variables, note_type_variables, &deck_variables],
+                    &mut errors,
+                );
+            } else {
+                render_string_with_variables(
+                    value,
+                    &path,
+                    &[&note_variables, &deck_variables],
+                    &mut errors,
+                );
+            }
+        }
+        for (field_id, message) in &mut note.field_messages {
+            let scopes = if let Some(note_type_variables) = note_type_variables {
+                vec![&note_variables, note_type_variables, &deck_variables]
+            } else {
+                vec![&note_variables, &deck_variables]
+            };
+            render_message_variables(
+                message,
+                &format!("notes.{note_id}.fields.{field_id}.message"),
+                &scopes,
+                &mut errors,
+            );
+        }
+    }
+
+    if errors.is_empty() {
+        let mut validation_errors = Vec::new();
+        resolve_structured_messages_with_validation_errors(&mut rendered, &mut validation_errors);
+        if validation_errors.is_empty() {
+            Ok(rendered)
+        } else {
+            Err(VariableRenderReport {
+                errors,
+                validation_errors,
+            })
+        }
+    } else {
+        Err(VariableRenderReport {
+            errors,
+            validation_errors: Vec::new(),
+        })
+    }
+}
+
+fn render_message_variables(
+    message: &mut StructuredMessage,
+    path: &str,
+    scopes: &[&BTreeMap<String, String>],
+    errors: &mut Vec<VariableRenderError>,
+) {
+    if let Some(format) = &mut message.format {
+        render_string_with_variables(format, &format!("{path}.format"), scopes, errors);
+        for (variable, component) in &mut message.variables {
+            render_message_component_variables(
+                component,
+                &format!("{path}.variables.{variable}"),
+                scopes,
+                errors,
+            );
+        }
+        return;
+    }
+
+    for (index, component) in message.components.iter_mut().enumerate() {
+        render_message_component_variables(component, &format!("{path}.{index}"), scopes, errors);
+    }
+}
+
+fn render_message_component_variables(
+    component: &mut MessageComponent,
+    path: &str,
+    scopes: &[&BTreeMap<String, String>],
+    errors: &mut Vec<VariableRenderError>,
+) {
+    match component {
+        MessageComponent::Literal(value) | MessageComponent::Text(value) => {
+            render_string_with_variables(value, path, scopes, errors);
+        }
+        MessageComponent::FieldRef(reference) => {
+            render_string_with_variables(reference, path, scopes, errors);
+        }
+    }
+}
+
+fn render_string_with_variables(
+    value: &mut String,
+    path: &str,
+    scopes: &[&BTreeMap<String, String>],
+    errors: &mut Vec<VariableRenderError>,
+) {
+    let mut rendered = String::new();
+    let mut remaining = value.as_str();
+    while let Some(start) = remaining.find("${") {
+        rendered.push_str(&remaining[..start]);
+        let after_start = &remaining[start + 2..];
+        let Some(end) = after_start.find('}') else {
+            rendered.push_str(&remaining[start..]);
+            *value = rendered;
+            return;
+        };
+        let key = &after_start[..end];
+        if let Some(replacement) = lookup_variable(scopes, key) {
+            rendered.push_str(replacement);
+        } else {
+            errors.push(VariableRenderError {
+                path: path.to_owned(),
+                variable: key.to_owned(),
+            });
+            rendered.push_str(&remaining[start..start + end + 3]);
+        }
+        remaining = &after_start[end + 1..];
+    }
+    rendered.push_str(remaining);
+    *value = rendered;
+}
+
+fn lookup_variable<'a>(scopes: &[&'a BTreeMap<String, String>], key: &str) -> Option<&'a str> {
+    scopes
+        .iter()
+        .find_map(|scope| scope.get(key).map(String::as_str))
+}
+
+fn diff_note_types(
+    left: &BTreeMap<StableId, NoteType>,
+    right: &BTreeMap<StableId, NoteType>,
+    changes: &mut Vec<SemanticChange>,
+) {
+    for id in left.keys() {
+        if !right.contains_key(id) {
+            changes.push(SemanticChange::removed(format!("note_types.{id}")));
+        }
+    }
+
+    for (id, right_note_type) in right {
+        let Some(left_note_type) = left.get(id) else {
+            changes.push(SemanticChange::added(format!("note_types.{id}")));
+            continue;
+        };
+
+        push_modified_if_changed(
+            changes,
+            format!("note_types.{id}.name"),
+            &left_note_type.name,
+            &right_note_type.name,
+        );
+        push_modified_if_changed(
+            changes,
+            format!("note_types.{id}.styling"),
+            &left_note_type.styling,
+            &right_note_type.styling,
+        );
+        push_modified_if_changed(
+            changes,
+            format!("note_types.{id}.variables"),
+            &string_map_summary(&left_note_type.variables),
+            &string_map_summary(&right_note_type.variables),
+        );
+        push_modified_if_changed(
+            changes,
+            format!("note_types.{id}.fields"),
+            &field_summary(&left_note_type.fields),
+            &field_summary(&right_note_type.fields),
+        );
+        push_modified_if_changed(
+            changes,
+            format!("note_types.{id}.card_templates"),
+            &template_summary(&left_note_type.card_templates),
+            &template_summary(&right_note_type.card_templates),
+        );
+        push_modified_if_changed(
+            changes,
+            format!("note_types.{id}.adapter_ids"),
+            &adapter_ids_summary(&left_note_type.adapter_ids),
+            &adapter_ids_summary(&right_note_type.adapter_ids),
+        );
+    }
+}
+
+fn diff_notes(
+    left: &BTreeMap<StableId, Note>,
+    right: &BTreeMap<StableId, Note>,
+    changes: &mut Vec<SemanticChange>,
+) {
+    for id in left.keys() {
+        if !right.contains_key(id) {
+            changes.push(SemanticChange::removed(format!("notes.{id}")));
+        }
+    }
+
+    for (id, right_note) in right {
+        let Some(left_note) = left.get(id) else {
+            changes.push(SemanticChange::added(format!("notes.{id}")));
+            continue;
+        };
+
+        push_modified_if_changed(
+            changes,
+            format!("notes.{id}.note_type_id"),
+            &left_note.note_type_id.to_string(),
+            &right_note.note_type_id.to_string(),
+        );
+        push_modified_if_changed(
+            changes,
+            format!("notes.{id}.variables"),
+            &string_map_summary(&left_note.variables),
+            &string_map_summary(&right_note.variables),
+        );
+        diff_note_fields(id, &left_note.fields, &right_note.fields, changes);
+        push_modified_if_changed(
+            changes,
+            format!("notes.{id}.tags"),
+            &set_summary(&left_note.tags),
+            &set_summary(&right_note.tags),
+        );
+        push_modified_if_changed(
+            changes,
+            format!("notes.{id}.adapter_ids"),
+            &adapter_ids_summary(&left_note.adapter_ids),
+            &adapter_ids_summary(&right_note.adapter_ids),
+        );
+    }
+}
+
+fn diff_note_fields(
+    note_id: &StableId,
+    left: &BTreeMap<StableId, String>,
+    right: &BTreeMap<StableId, String>,
+    changes: &mut Vec<SemanticChange>,
+) {
+    for field_id in left.keys() {
+        if !right.contains_key(field_id) {
+            changes.push(SemanticChange::new(
+                SemanticChangeKind::Removed,
+                format!("notes.{note_id}.fields.{field_id}"),
+                left.get(field_id).cloned(),
+                None,
+            ));
+        }
+    }
+
+    for (field_id, right_value) in right {
+        let Some(left_value) = left.get(field_id) else {
+            changes.push(SemanticChange::new(
+                SemanticChangeKind::Added,
+                format!("notes.{note_id}.fields.{field_id}"),
+                None,
+                Some(right_value.clone()),
+            ));
+            continue;
+        };
+
+        push_modified_if_changed(
+            changes,
+            format!("notes.{note_id}.fields.{field_id}"),
+            left_value,
+            right_value,
+        );
+    }
+}
+
+fn diff_media(
+    left: &BTreeMap<StableId, MediaReference>,
+    right: &BTreeMap<StableId, MediaReference>,
+    changes: &mut Vec<SemanticChange>,
+) {
+    for id in left.keys() {
+        if !right.contains_key(id) {
+            changes.push(SemanticChange::removed(format!("media.{id}")));
+        }
+    }
+
+    for (id, right_media) in right {
+        let Some(left_media) = left.get(id) else {
+            changes.push(SemanticChange::added(format!("media.{id}")));
+            continue;
+        };
+
+        push_modified_if_changed(
+            changes,
+            format!("media.{id}.path"),
+            &left_media.path,
+            &right_media.path,
+        );
+        push_modified_if_changed(
+            changes,
+            format!("media.{id}.sha256"),
+            &left_media.sha256,
+            &right_media.sha256,
+        );
+    }
+}
+
+fn diff_tombstones(
+    left: &BTreeSet<StableId>,
+    right: &BTreeSet<StableId>,
+    changes: &mut Vec<SemanticChange>,
+) {
+    for id in left {
+        if !right.contains(id) {
+            changes.push(SemanticChange::removed(format!("tombstones.{id}")));
+        }
+    }
+
+    for id in right {
+        if !left.contains(id) {
+            changes.push(SemanticChange::new(
+                SemanticChangeKind::Tombstoned,
+                format!("tombstones.{id}"),
+                None,
+                Some(id.to_string()),
+            ));
+        }
+    }
+}
+
+fn push_modified_if_changed(
+    changes: &mut Vec<SemanticChange>,
+    path: String,
+    left: &str,
+    right: &str,
+) {
+    if left != right {
+        changes.push(SemanticChange::new(
+            SemanticChangeKind::Modified,
+            path,
+            Some(left.to_owned()),
+            Some(right.to_owned()),
+        ));
+    }
+}
+
+fn field_summary(fields: &[FieldDefinition]) -> String {
+    fields
+        .iter()
+        .map(|field| format!("{}={}", field.id, field.name))
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+fn template_summary(templates: &[CardTemplate]) -> String {
+    templates
+        .iter()
+        .map(|template| {
+            format!(
+                "{}={}:{}:{}:{}:{}",
+                template.id,
+                template.name,
+                string_map_summary(&template.variables),
+                template.question_format,
+                template.answer_format,
+                adapter_ids_summary(&template.adapter_ids)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+fn set_summary(values: &BTreeSet<String>) -> String {
+    values.iter().cloned().collect::<Vec<_>>().join("|")
+}
+
+fn string_map_summary(values: &BTreeMap<String, String>) -> String {
+    values
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+fn adapter_ids_summary(adapter_ids: &AdapterIds) -> String {
+    adapter_ids
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join("|")
+}
