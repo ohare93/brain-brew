@@ -245,6 +245,40 @@ version: 1
 }
 
 #[test]
+fn ultimate_geography_fixture_yaml_sources_are_checked_in_canonical() {
+    let root = fixture_root();
+    let mut yaml_files = Vec::new();
+    collect_yaml_files(&root, &mut yaml_files);
+    yaml_files.sort();
+
+    for path in yaml_files {
+        let source = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("{} is readable: {error}", path.display()));
+        let formatted = if path.file_name().and_then(|name| name.to_str()) == Some("brainbrew.yaml")
+            || path.file_name().and_then(|name| name.to_str()) == Some("brainbrew-hardcore.yaml")
+        {
+            manifest::format_str(&source)
+                .unwrap_or_else(|error| panic!("{} manifest formats: {error}", path.display()))
+        } else if path.starts_with(root.join("overlays")) {
+            source_includes::format_preserving_file_includes(
+                &source,
+                canonical_yaml::overlay_format_str,
+            )
+            .unwrap_or_else(|error| panic!("{} overlay formats: {error}", path.display()))
+        } else {
+            source_includes::format_preserving_file_includes(&source, canonical_yaml::format_str)
+                .unwrap_or_else(|error| panic!("{} deck formats: {error}", path.display()))
+        };
+        assert_eq!(
+            formatted,
+            source,
+            "{} is not canonical; run brainbrew fmt on the fixture source",
+            path.strip_prefix(&root).unwrap_or(&path).display()
+        );
+    }
+}
+
+#[test]
 fn ultimate_geography_hardcore_companion_manifest_composes_all_targets() {
     let root = fixture_root();
     let manifest = read_manifest_file(&root, "brainbrew-hardcore.yaml");

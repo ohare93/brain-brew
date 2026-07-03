@@ -2019,7 +2019,18 @@ impl TranslationApplyContext<'_, '_> {
                     ));
                     return;
                 }
-                self.apply_translated_value(value, &path, &adaptation.target);
+                if !record_change_path(
+                    &path,
+                    self.overlay,
+                    ChangeIntent::Replace,
+                    self.changed_paths,
+                    self.errors,
+                ) {
+                    return;
+                }
+                if value != &adaptation.target {
+                    *value = adaptation.target.clone();
+                }
             }
             TranslationOutcome::Empty | TranslationOutcome::Ignored => {}
             TranslationOutcome::Variable { translated } => {

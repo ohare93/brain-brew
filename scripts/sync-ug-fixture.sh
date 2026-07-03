@@ -65,6 +65,19 @@ cp -a "$ug_checkout/styles" "$tmp/"
 cat "$delta_dir/brainbrew.yaml.adr-0012.yaml" >> "$tmp/brainbrew.yaml"
 cat "$delta_dir/brainbrew-hardcore.yaml.adr-0012.yaml" >> "$tmp/brainbrew-hardcore.yaml"
 
+brainbrew_bin=${BRAINBREW_BIN:-}
+if [[ -z "$brainbrew_bin" ]]; then
+  cargo build --quiet --manifest-path "$repo_root/Cargo.toml" --bin brainbrew
+  brainbrew_bin="$repo_root/target/debug/brainbrew"
+elif [[ ! -x "$brainbrew_bin" ]]; then
+  echo "error: BRAINBREW_BIN is not executable: $brainbrew_bin" >&2
+  exit 1
+fi
+
+while IFS= read -r -d '' yaml_file; do
+  "$brainbrew_bin" fmt "$yaml_file" >/dev/null
+done < <(find "$tmp" -type f -name '*.yaml' -print0 | sort -z)
+
 rm -rf "$fixture_root"
 mv "$tmp" "$fixture_root"
 trap - EXIT

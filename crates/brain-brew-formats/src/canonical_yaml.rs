@@ -106,26 +106,31 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
         write_adapter_ids(&mut out, "    ", &note_type.adapter_ids);
     }
 
-    writeln!(out, "notes:").expect("writing to a string cannot fail");
-    for (id, note) in &deck.notes {
-        writeln!(out, "  {id}:").expect("writing to a string cannot fail");
-        writeln!(out, "    note_type_id: {}", note.note_type_id)
-            .expect("writing to a string cannot fail");
-        write_variables(&mut out, "    ", &note.variables);
-        writeln!(out, "    fields:").expect("writing to a string cannot fail");
-        for (field_id, value) in &note.fields {
-            if let Some(message) = note.field_messages.get(field_id) {
-                write_structured_message_field(&mut out, "      ", field_id, message);
-            } else {
-                writeln!(out, "      {field_id}: {}", yaml_scalar(value))
+    if deck.notes.is_empty() {
+        writeln!(out, "notes: {{}}").expect("writing to a string cannot fail");
+    } else {
+        writeln!(out, "notes:").expect("writing to a string cannot fail");
+        for (id, note) in &deck.notes {
+            writeln!(out, "  {id}:").expect("writing to a string cannot fail");
+            writeln!(out, "    note_type_id: {}", note.note_type_id)
+                .expect("writing to a string cannot fail");
+            write_variables(&mut out, "    ", &note.variables);
+            writeln!(out, "    fields:").expect("writing to a string cannot fail");
+            for (field_id, value) in &note.fields {
+                if let Some(message) = note.field_messages.get(field_id) {
+                    write_structured_message_field(&mut out, "      ", field_id, message);
+                } else {
+                    writeln!(out, "      {field_id}: {}", yaml_scalar(value))
+                        .expect("writing to a string cannot fail");
+                }
+            }
+            writeln!(out, "    tags:").expect("writing to a string cannot fail");
+            for tag in &note.tags {
+                writeln!(out, "      - {}", yaml_scalar(tag))
                     .expect("writing to a string cannot fail");
             }
+            write_adapter_ids(&mut out, "    ", &note.adapter_ids);
         }
-        writeln!(out, "    tags:").expect("writing to a string cannot fail");
-        for tag in &note.tags {
-            writeln!(out, "      - {}", yaml_scalar(tag)).expect("writing to a string cannot fail");
-        }
-        write_adapter_ids(&mut out, "    ", &note.adapter_ids);
     }
 
     if deck.media.is_empty() {

@@ -813,6 +813,44 @@ fn target_adaptation_can_intentionally_replace_matching_nonblank_source() {
 }
 
 #[test]
+fn noop_target_adaptation_reserves_change_path_for_later_overlay_conflicts() {
+    let base = ug_style_deck();
+    let adaptation = Overlay {
+        id: sid("overlay.translation.zh"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::new(),
+            contextual: BTreeMap::new(),
+            no_change: BTreeSet::new(),
+            target_adaptations: BTreeMap::from([(
+                "notes.note.finland.fields.field.capital".to_owned(),
+                target_adaptation("Helsinki", "Helsinki"),
+            )]),
+            stale_translations: Vec::new(),
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            require_complete: false,
+            ignore_paths: BTreeSet::new(),
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+    let later_patch = overlay_replacing_capital(ChangeIntent::Merge, None, "Helsinki City");
+
+    let report = base
+        .compose(&[adaptation, later_patch])
+        .expect_err("no-op target adaptation still reserves the path");
+
+    assert!(report.has_kind(ComposeErrorKind::Conflict));
+    assert!(report.errors.iter().any(|error| {
+        error.kind == ComposeErrorKind::Conflict
+            && error.path == "notes.note.finland.fields.field.capital"
+    }));
+}
+
+#[test]
 fn translation_dictionary_target_adaptation_fails_when_expected_source_mismatches() {
     let base = ug_style_deck();
     let overlay = Overlay {
@@ -1097,6 +1135,56 @@ fn translation_dictionary_resolves_structured_message_components() {
     assert_eq!(
         resolved.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
         "Island (blå bakgrunn med hvitt kors), Norge (rød bakgrunn med blått kors)"
+    );
+}
+
+#[test]
+fn translation_dictionary_no_change_wins_over_stale_record_for_structured_message_format() {
+    let base = ug_style_deck_with_flag_similarity_message();
+    let format_source = "{country_1} ({description_1}), {country_2} ({description_2})";
+    let overlay = Overlay {
+        id: sid("overlay.translation.nb"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::new(),
+            contextual: BTreeMap::new(),
+            no_change: BTreeSet::from([format_source.to_owned()]),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: vec![StaleTranslation {
+                old_source: "old structured message format".to_owned(),
+                new_source: format_source.to_owned(),
+                target: "STALE {country_1}".to_owned(),
+                context: Some("notes.note.finland.fields.field.flag-similarity.message".to_owned()),
+            }],
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            require_complete: false,
+            ignore_paths: BTreeSet::new(),
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let report = base
+        .translation_coverage(&overlay)
+        .expect("translation overlay has coverage");
+    assert!(report.entries.iter().any(|entry| {
+        entry.category == TranslationCoverageCategory::NoChange
+            && entry.path == "notes.note.finland.fields.field.flag-similarity.message.format"
+            && entry.source == format_source
+    }));
+    assert!(!report.entries.iter().any(|entry| {
+        entry.category == TranslationCoverageCategory::StaleTranslation
+            && entry.path == "notes.note.finland.fields.field.flag-similarity.message.format"
+    }));
+
+    let resolved = base.compose(&[overlay]).expect("translations compose");
+
+    assert_eq!(
+        resolved.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
+        "Iceland (blue background with a white cross), Norway (red background with a blue cross)"
     );
 }
 

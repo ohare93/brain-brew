@@ -14,6 +14,17 @@ fn emits_canonical_deck_yaml_with_explicit_order_arrays() {
 }
 
 #[test]
+fn emits_empty_notes_as_parseable_inline_map() {
+    let mut deck = ug_style_deck();
+    deck.notes.clear();
+
+    let yaml = canonical_yaml::to_string(&deck).expect("deck emits");
+
+    assert!(yaml.contains("notes: {}\n"));
+    canonical_yaml::from_str(&yaml).expect("emitted empty-notes deck parses");
+}
+
+#[test]
 fn parses_emitted_yaml_back_to_semantically_equal_deck() {
     let original = ug_style_deck();
     let yaml = canonical_yaml::to_string(&original).expect("deck emits");
