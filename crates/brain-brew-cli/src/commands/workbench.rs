@@ -5,6 +5,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use axum::body::Body;
 use axum::extract::{Path as AxumPath, Query, State};
@@ -26,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tokio::net::TcpListener;
+use tokio::task;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::help;
@@ -236,9 +238,14 @@ async fn health(State(metadata): State<Arc<WorkspaceMetadata>>) -> Json<Value> {
 async fn workspace(
     State(metadata): State<Arc<WorkspaceMetadata>>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .workspace_json()
-        .map(Json)
+    task::spawn_blocking(move || metadata.workspace_json().map(Json))
+        .await
+        .map_err(|error| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("workbench task failed: {error}"),
+            )
+        })?
         .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))
 }
 
@@ -246,147 +253,115 @@ async fn note_list(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<NoteListQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .note_list_json(&query)
-        .map(Json)
-        .map_err(workbench_api_error)
+    run_workbench_blocking(move || metadata.note_list_json(&query).map(Json)).await
 }
 
 async fn note_detail(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<NoteDetailQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .note_detail_json(&query)
-        .map(Json)
-        .map_err(workbench_api_error)
+    run_workbench_blocking(move || metadata.note_detail_json(&query).map(Json)).await
 }
 
 async fn card_list(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<CardListQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .card_list_json(&query)
-        .map(Json)
-        .map_err(workbench_api_error)
+    run_workbench_blocking(move || metadata.card_list_json(&query).map(Json)).await
 }
 
 async fn source_string_list(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<SourceStringListQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .source_string_list_json(&query)
-        .map(Json)
-        .map_err(workbench_api_error)
+    run_workbench_blocking(move || metadata.source_string_list_json(&query).map(Json)).await
 }
 
 async fn optional_metadata_list(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<OptionalMetadataListQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .optional_metadata_list_json(&query)
-        .map(Json)
-        .map_err(workbench_api_error)
+    run_workbench_blocking(move || metadata.optional_metadata_list_json(&query).map(Json)).await
 }
 
 async fn note_pivot(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<NotePivotQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .note_pivot_json(&query)
-        .map(Json)
-        .map_err(workbench_api_error)
+    run_workbench_blocking(move || metadata.note_pivot_json(&query).map(Json)).await
 }
 
 async fn source_string_pivot(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<SourceStringPivotQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .source_string_pivot_json(&query)
-        .map(Json)
-        .map_err(workbench_api_error)
+    run_workbench_blocking(move || metadata.source_string_pivot_json(&query).map(Json)).await
 }
 
 async fn card_pivot(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<CardPivotQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .card_pivot_json(&query)
-        .map(Json)
-        .map_err(workbench_api_error)
+    run_workbench_blocking(move || metadata.card_pivot_json(&query).map(Json)).await
 }
 
 async fn comparison_pane(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<ComparisonPaneQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .comparison_pane_json(&query)
-        .map(Json)
-        .map_err(workbench_api_error)
+    run_workbench_blocking(move || metadata.comparison_pane_json(&query).map(Json)).await
 }
 
 async fn optional_metadata(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<OptionalMetadataQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .optional_metadata_json(&query)
-        .map(Json)
-        .map_err(workbench_api_error)
+    run_workbench_blocking(move || metadata.optional_metadata_json(&query).map(Json)).await
 }
 
 async fn new_language_preview(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<NewLanguagePreviewQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .new_language_preview_json(&query)
-        .map(Json)
-        .map_err(workbench_api_error)
+    run_workbench_blocking(move || metadata.new_language_preview_json(&query).map(Json)).await
 }
 
 async fn create_new_language(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Json(request): Json<NewLanguageRequest>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .create_new_language_json(request)
-        .map(Json)
-        .map_err(workbench_api_error)
+    run_workbench_blocking(move || metadata.create_new_language_json(request).map(Json)).await
 }
 
 async fn apply_preview(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Json(request): Json<ApplyRequest>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .apply_request_json(request, ApplyMode::Preview)
-        .map(Json)
-        .map_err(workbench_api_error)
+    run_workbench_blocking(move || {
+        metadata
+            .apply_request_json(request, ApplyMode::Preview)
+            .map(Json)
+    })
+    .await
 }
 
 async fn apply_edits(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Json(request): Json<ApplyRequest>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    metadata
-        .apply_request_json(request, ApplyMode::Write)
-        .map(Json)
-        .map_err(workbench_api_error)
+    run_workbench_blocking(move || {
+        metadata
+            .apply_request_json(request, ApplyMode::Write)
+            .map(Json)
+    })
+    .await
 }
 
 async fn media_asset(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     AxumPath(path): AxumPath<String>,
 ) -> Result<Response, (StatusCode, String)> {
-    metadata.media_response(&path).map_err(workbench_api_error)
+    run_workbench_blocking(move || metadata.media_response(&path)).await
 }
 
 async fn favicon() -> Response {
@@ -394,6 +369,22 @@ async fn favicon() -> Response {
         .status(StatusCode::NO_CONTENT)
         .body(Body::empty())
         .unwrap_or_else(|_| Response::new(Body::empty()))
+}
+
+async fn run_workbench_blocking<T, F>(operation: F) -> Result<T, (StatusCode, String)>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    task::spawn_blocking(operation)
+        .await
+        .map_err(|error| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("workbench task failed: {error}"),
+            )
+        })?
+        .map_err(workbench_api_error)
 }
 
 fn workbench_api_error(error: String) -> (StatusCode, String) {
@@ -448,28 +439,153 @@ fn embedded_content_type(path: &str) -> &'static str {
     }
 }
 
-#[derive(Debug)]
 struct WorkspaceMetadata {
     manifest_path: PathBuf,
     manifest_root: PathBuf,
     media_root: Option<PathBuf>,
+    cache: tokio::sync::RwLock<WorkspaceCache>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct FileSignature {
+    len: u64,
+    modified: Option<SystemTime>,
+}
+
+#[derive(Clone)]
+struct CachedValue<T> {
+    generation: u64,
+    value: T,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct SelectionCacheKey {
+    language_code: String,
+    target_label: String,
+    overlay_label: String,
+}
+
+struct WorkspaceCache {
+    generation: u64,
+    manifest: FederatedDeckManifest,
+    file_signatures: BTreeMap<PathBuf, Option<FileSignature>>,
+    declared_media_paths: Option<CachedValue<BTreeSet<String>>>,
+    selected_contexts: BTreeMap<SelectionCacheKey, CachedValue<SelectedTranslationContext>>,
+}
+
+impl WorkspaceCache {
+    fn new(manifest: FederatedDeckManifest) -> Self {
+        Self {
+            generation: 0,
+            manifest,
+            file_signatures: BTreeMap::new(),
+            declared_media_paths: None,
+            selected_contexts: BTreeMap::new(),
+        }
+    }
+
+    fn clear_generation_caches(&mut self) {
+        self.declared_media_paths = None;
+        self.selected_contexts.clear();
+    }
 }
 
 impl WorkspaceMetadata {
     fn load(
         manifest_path: &Path,
-        _manifest: FederatedDeckManifest,
+        manifest: FederatedDeckManifest,
         media_root: Option<PathBuf>,
     ) -> Self {
         Self {
             manifest_path: manifest_path.to_path_buf(),
             manifest_root: manifest_root(manifest_path),
             media_root,
+            cache: tokio::sync::RwLock::new(WorkspaceCache::new(manifest)),
         }
     }
 
     fn current_manifest(&self) -> Result<FederatedDeckManifest, String> {
-        read_manifest(&self.manifest_path)
+        self.ensure_fresh_cache()?;
+        Ok(self.cache.blocking_read().manifest.clone())
+    }
+
+    fn ensure_fresh_cache(&self) -> Result<(), String> {
+        let (generation, manifest, previous_signatures) = {
+            let cache = self.cache.blocking_read();
+            (
+                cache.generation,
+                cache.manifest.clone(),
+                cache.file_signatures.clone(),
+            )
+        };
+        let current_signatures = self.tracked_file_signatures(&manifest);
+        if previous_signatures.is_empty() {
+            let mut cache = self.cache.blocking_write();
+            if cache.file_signatures.is_empty() {
+                cache.file_signatures = self.tracked_file_signatures(&cache.manifest);
+            }
+            return Ok(());
+        }
+        if current_signatures == previous_signatures {
+            return Ok(());
+        }
+
+        let manifest_changed = current_signatures.get(&self.manifest_path)
+            != previous_signatures.get(&self.manifest_path);
+        let refreshed_manifest = if manifest_changed {
+            read_manifest(&self.manifest_path)?
+        } else {
+            manifest
+        };
+        let refreshed_signatures = self.tracked_file_signatures(&refreshed_manifest);
+
+        let mut cache = self.cache.blocking_write();
+        if cache.generation == generation && cache.file_signatures == previous_signatures {
+            cache.generation += 1;
+            cache.manifest = refreshed_manifest;
+            cache.file_signatures = refreshed_signatures;
+            cache.clear_generation_caches();
+        }
+        Ok(())
+    }
+
+    fn invalidate_workspace_cache_after_write(&self) -> Result<(), String> {
+        let manifest = read_manifest(&self.manifest_path)?;
+        let signatures = self.tracked_file_signatures(&manifest);
+        let mut cache = self.cache.blocking_write();
+        cache.generation += 1;
+        cache.manifest = manifest;
+        cache.file_signatures = signatures;
+        cache.clear_generation_caches();
+        Ok(())
+    }
+
+    fn tracked_file_signatures(
+        &self,
+        manifest: &FederatedDeckManifest,
+    ) -> BTreeMap<PathBuf, Option<FileSignature>> {
+        let mut paths = vec![
+            self.manifest_path.clone(),
+            self.manifest_root.join(&manifest.base),
+        ];
+        paths.extend(
+            manifest
+                .overlays
+                .values()
+                .map(|overlay| self.manifest_root.join(&overlay.file)),
+        );
+        paths.sort();
+        paths.dedup();
+        paths
+            .into_iter()
+            .map(|path| {
+                let signature = fs::metadata(&path).ok().map(|metadata| FileSignature {
+                    len: metadata.len(),
+                    modified: metadata.modified().ok(),
+                });
+                (path, signature)
+            })
+            .collect()
     }
 
     fn workspace_json(&self) -> Result<Value, String> {
@@ -733,6 +849,7 @@ impl WorkspaceMetadata {
         fs::write(&self.manifest_path, manifest_yaml).map_err(|error| {
             format!("failed to write {}: {error}", self.manifest_path.display())
         })?;
+        self.invalidate_workspace_cache_after_write()?;
 
         Ok(json!({
             "created": true,
@@ -884,6 +1001,7 @@ impl WorkspaceMetadata {
                     )
                 })?;
             }
+            self.invalidate_workspace_cache_after_write()?;
         }
 
         let mut affected_files = source_plan.affected_files_json(&self.manifest_root);
@@ -976,18 +1094,50 @@ impl WorkspaceMetadata {
     }
 
     fn media_path_declared(&self, requested_path: &str) -> Result<bool, String> {
-        let manifest = self.current_manifest()?;
+        self.ensure_fresh_cache()?;
+        let (generation, manifest, cached) = {
+            let cache = self.cache.blocking_read();
+            (
+                cache.generation,
+                cache.manifest.clone(),
+                cache.declared_media_paths.clone(),
+            )
+        };
+        if let Some(cached) = cached
+            && cached.generation == generation
+        {
+            return Ok(cached.value.contains(requested_path));
+        }
+
+        let mut cache = self.cache.blocking_write();
+        if let Some(cached) = &cache.declared_media_paths
+            && cached.generation == cache.generation
+        {
+            return Ok(cached.value.contains(requested_path));
+        }
+        if cache.generation != generation {
+            drop(cache);
+            return self.media_path_declared(requested_path);
+        }
+        let declared_media_paths = self.collect_declared_media_paths(&manifest)?;
+        let declared = declared_media_paths.contains(requested_path);
+        cache.declared_media_paths = Some(CachedValue {
+            generation,
+            value: declared_media_paths,
+        });
+        Ok(declared)
+    }
+
+    fn collect_declared_media_paths(
+        &self,
+        manifest: &FederatedDeckManifest,
+    ) -> Result<BTreeSet<String>, String> {
+        let mut paths = BTreeSet::new();
         for target_id in manifest.targets.keys() {
             let plan =
                 plan_manifest_target_with_packages(&self.manifest_path, target_id, &[], &[])?;
             let mut current = plan.base;
-            if current
-                .media
-                .values()
-                .any(|media| media.path == requested_path)
-            {
-                return Ok(true);
-            }
+            paths.extend(current.media.values().map(|media| media.path.clone()));
             for (planned, overlay) in plan.overlays {
                 current = if overlay.translations.is_some() {
                     compose_lenient_translation_overlay(&current, &overlay)?
@@ -996,16 +1146,10 @@ impl WorkspaceMetadata {
                         format!("failed to compose overlay {}: {error}", planned.id)
                     })?
                 };
-                if current
-                    .media
-                    .values()
-                    .any(|media| media.path == requested_path)
-                {
-                    return Ok(true);
-                }
+                paths.extend(current.media.values().map(|media| media.path.clone()));
             }
         }
-        Ok(false)
+        Ok(paths)
     }
 
     fn selected_translation_context(
@@ -1017,6 +1161,44 @@ impl WorkspaceMetadata {
     ) -> Result<SelectedTranslationContext, String> {
         let selection =
             self.select_translation_target(manifest, language, target_label, overlay_label)?;
+        let key = SelectionCacheKey {
+            language_code: selection.language_code.clone(),
+            target_label: selection.target_label.clone(),
+            overlay_label: selection.overlay_label.clone(),
+        };
+        let (generation, cached) = {
+            let cache = self.cache.blocking_read();
+            (cache.generation, cache.selected_contexts.get(&key).cloned())
+        };
+        if let Some(cached) = cached
+            && cached.generation == generation
+        {
+            return Ok(cached.value);
+        }
+
+        let context = self.build_selected_translation_context(selection)?;
+        let mut cache = self.cache.blocking_write();
+        if let Some(cached) = cache.selected_contexts.get(&key)
+            && cached.generation == cache.generation
+        {
+            return Ok(cached.value.clone());
+        }
+        if cache.generation == generation {
+            cache.selected_contexts.insert(
+                key,
+                CachedValue {
+                    generation,
+                    value: context.clone(),
+                },
+            );
+        }
+        Ok(context)
+    }
+
+    fn build_selected_translation_context(
+        &self,
+        selection: WorkbenchSelection,
+    ) -> Result<SelectedTranslationContext, String> {
         let plan = plan_manifest_target_with_packages(
             &self.manifest_path,
             &selection.target_id,

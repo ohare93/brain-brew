@@ -3,7 +3,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdout, Command, Stdio};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use flate2::Compression;
 use flate2::write::GzEncoder;
@@ -633,6 +633,50 @@ fn workbench_note_pivot_exposes_target_translation_data_and_media() {
     assert_eq!(
         media.header("content-type").unwrap_or_default(),
         "image/png"
+    );
+}
+
+#[test]
+fn workbench_media_cache_refreshes_after_workspace_edit_and_rejects_undeclared_paths() {
+    let dir = temp_dir("workbench-media-cache-refresh");
+    write_workbench_workspace(&dir);
+    fs::create_dir_all(dir.join("media/flags")).unwrap();
+    fs::write(dir.join("media/flags/fi.png"), b"fi").unwrap();
+    fs::write(dir.join("media/flags/se.png"), b"se").unwrap();
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let original = ureq::get(&server.url("/api/media/flags/fi.png"))
+        .call()
+        .expect("initial declared media request warms the cache");
+    assert_eq!(original.status(), 200);
+
+    std::thread::sleep(Duration::from_millis(20));
+    let deck = fs::read_to_string(dir.join("deck.yaml")).unwrap();
+    fs::write(
+        dir.join("deck.yaml"),
+        deck.replace(
+            "  media.flags-fi-png:\n    path: flags/fi.png\n    sha256: ''",
+            "  media.flags-fi-png:\n    path: flags/fi.png\n    sha256: ''\n  media.flags-se-png:\n    path: flags/se.png\n    sha256: ''",
+        ),
+    )
+    .unwrap();
+
+    let refreshed = ureq::get(&server.url("/api/media/flags/se.png"))
+        .call()
+        .expect("newly declared media succeeds after cache invalidation");
+    assert_eq!(refreshed.status(), 200);
+    assert_get_status_contains(
+        &server.url("/api/media/flags/nope.png"),
+        400,
+        "unknown media asset",
     );
 }
 
