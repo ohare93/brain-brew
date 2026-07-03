@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::str::FromStr;
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 
@@ -55,6 +56,569 @@ impl fmt::Display for InvalidStableId {
 }
 
 impl std::error::Error for InvalidStableId {}
+
+/// A stable, deck-internal address rendered in the existing dotted on-disk syntax.
+///
+/// Dotted StableIds are intentionally preserved unescaped because current canonical
+/// fixtures already use IDs such as `note.finland` and `field.capital`. The parser
+/// treats the reserved grammar markers (`.fields.`, `.card_templates.`, and known
+/// property suffixes) as separators while keeping ordinary dots inside IDs. This
+/// keeps serialized YAML byte-identical while consolidating path parsing in one place.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DeckPath {
+    DeckName,
+    DeckDescription,
+    DeckVariables,
+    DeckVariable {
+        key: String,
+    },
+    DeckAdapterIds,
+    DeckAdapterId {
+        key: String,
+    },
+    NoteType {
+        note_type_id: StableId,
+    },
+    NoteTypeId {
+        note_type_id: StableId,
+    },
+    NoteTypeName {
+        note_type_id: StableId,
+    },
+    NoteTypeVariables {
+        note_type_id: StableId,
+    },
+    NoteTypeVariable {
+        note_type_id: StableId,
+        key: String,
+    },
+    NoteTypeStyling {
+        note_type_id: StableId,
+    },
+    NoteTypeFields {
+        note_type_id: StableId,
+    },
+    NoteTypeField {
+        note_type_id: StableId,
+        field_id: StableId,
+    },
+    NoteTypeFieldName {
+        note_type_id: StableId,
+        field_id: StableId,
+    },
+    NoteTypeCardTemplates {
+        note_type_id: StableId,
+    },
+    NoteTypeCardTemplate {
+        note_type_id: StableId,
+        template_id: StableId,
+    },
+    NoteTypeCardTemplateName {
+        note_type_id: StableId,
+        template_id: StableId,
+    },
+    NoteTypeCardTemplateVariables {
+        note_type_id: StableId,
+        template_id: StableId,
+    },
+    NoteTypeCardTemplateVariable {
+        note_type_id: StableId,
+        template_id: StableId,
+        key: String,
+    },
+    NoteTypeCardTemplateQuestionFormat {
+        note_type_id: StableId,
+        template_id: StableId,
+    },
+    NoteTypeCardTemplateAnswerFormat {
+        note_type_id: StableId,
+        template_id: StableId,
+    },
+    NoteTypeCardTemplateAdapterIds {
+        note_type_id: StableId,
+        template_id: StableId,
+    },
+    NoteTypeCardTemplateAdapterId {
+        note_type_id: StableId,
+        template_id: StableId,
+        key: String,
+    },
+    NoteTypeAdapterIds {
+        note_type_id: StableId,
+    },
+    NoteTypeAdapterId {
+        note_type_id: StableId,
+        key: String,
+    },
+    Note {
+        note_id: StableId,
+    },
+    NoteId {
+        note_id: StableId,
+    },
+    NoteNoteTypeId {
+        note_id: StableId,
+    },
+    NoteVariables {
+        note_id: StableId,
+    },
+    NoteVariable {
+        note_id: StableId,
+        key: String,
+    },
+    NoteField {
+        note_id: StableId,
+        field_id: StableId,
+    },
+    NoteFieldMessage {
+        note_id: StableId,
+        field_id: StableId,
+    },
+    NoteFieldMessageComponent {
+        note_id: StableId,
+        field_id: StableId,
+        index: usize,
+    },
+    NoteFieldMessageFormat {
+        note_id: StableId,
+        field_id: StableId,
+    },
+    NoteFieldMessageVariable {
+        note_id: StableId,
+        field_id: StableId,
+        variable: String,
+    },
+    NoteTags {
+        note_id: StableId,
+    },
+    NoteTag {
+        note_id: StableId,
+        tag: String,
+    },
+    NoteAdapterIds {
+        note_id: StableId,
+    },
+    NoteAdapterId {
+        note_id: StableId,
+        key: String,
+    },
+    Media {
+        media_id: StableId,
+    },
+    MediaId {
+        media_id: StableId,
+    },
+    MediaPath {
+        media_id: StableId,
+    },
+    MediaSha256 {
+        media_id: StableId,
+    },
+    Tombstone {
+        id: StableId,
+    },
+}
+
+impl fmt::Display for DeckPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DeckName => f.write_str("deck.name"),
+            Self::DeckDescription => f.write_str("deck.description"),
+            Self::DeckVariables => f.write_str("deck.variables"),
+            Self::DeckVariable { key } => write!(f, "deck.variables.{key}"),
+            Self::DeckAdapterIds => f.write_str("deck.adapter_ids"),
+            Self::DeckAdapterId { key } => write!(f, "deck.adapter_ids.{key}"),
+            Self::NoteType { note_type_id } => write!(f, "note_types.{note_type_id}"),
+            Self::NoteTypeId { note_type_id } => write!(f, "note_types.{note_type_id}.id"),
+            Self::NoteTypeName { note_type_id } => write!(f, "note_types.{note_type_id}.name"),
+            Self::NoteTypeVariables { note_type_id } => {
+                write!(f, "note_types.{note_type_id}.variables")
+            }
+            Self::NoteTypeVariable { note_type_id, key } => {
+                write!(f, "note_types.{note_type_id}.variables.{key}")
+            }
+            Self::NoteTypeStyling { note_type_id } => {
+                write!(f, "note_types.{note_type_id}.styling")
+            }
+            Self::NoteTypeFields { note_type_id } => write!(f, "note_types.{note_type_id}.fields"),
+            Self::NoteTypeField {
+                note_type_id,
+                field_id,
+            } => write!(f, "note_types.{note_type_id}.fields.{field_id}"),
+            Self::NoteTypeFieldName {
+                note_type_id,
+                field_id,
+            } => write!(f, "note_types.{note_type_id}.fields.{field_id}.name"),
+            Self::NoteTypeCardTemplates { note_type_id } => {
+                write!(f, "note_types.{note_type_id}.card_templates")
+            }
+            Self::NoteTypeCardTemplate {
+                note_type_id,
+                template_id,
+            } => write!(f, "note_types.{note_type_id}.card_templates.{template_id}"),
+            Self::NoteTypeCardTemplateName {
+                note_type_id,
+                template_id,
+            } => write!(
+                f,
+                "note_types.{note_type_id}.card_templates.{template_id}.name"
+            ),
+            Self::NoteTypeCardTemplateVariables {
+                note_type_id,
+                template_id,
+            } => write!(
+                f,
+                "note_types.{note_type_id}.card_templates.{template_id}.variables"
+            ),
+            Self::NoteTypeCardTemplateVariable {
+                note_type_id,
+                template_id,
+                key,
+            } => write!(
+                f,
+                "note_types.{note_type_id}.card_templates.{template_id}.variables.{key}"
+            ),
+            Self::NoteTypeCardTemplateQuestionFormat {
+                note_type_id,
+                template_id,
+            } => write!(
+                f,
+                "note_types.{note_type_id}.card_templates.{template_id}.question_format"
+            ),
+            Self::NoteTypeCardTemplateAnswerFormat {
+                note_type_id,
+                template_id,
+            } => write!(
+                f,
+                "note_types.{note_type_id}.card_templates.{template_id}.answer_format"
+            ),
+            Self::NoteTypeCardTemplateAdapterIds {
+                note_type_id,
+                template_id,
+            } => write!(
+                f,
+                "note_types.{note_type_id}.card_templates.{template_id}.adapter_ids"
+            ),
+            Self::NoteTypeCardTemplateAdapterId {
+                note_type_id,
+                template_id,
+                key,
+            } => write!(
+                f,
+                "note_types.{note_type_id}.card_templates.{template_id}.adapter_ids.{key}"
+            ),
+            Self::NoteTypeAdapterIds { note_type_id } => {
+                write!(f, "note_types.{note_type_id}.adapter_ids")
+            }
+            Self::NoteTypeAdapterId { note_type_id, key } => {
+                write!(f, "note_types.{note_type_id}.adapter_ids.{key}")
+            }
+            Self::Note { note_id } => write!(f, "notes.{note_id}"),
+            Self::NoteId { note_id } => write!(f, "notes.{note_id}.id"),
+            Self::NoteNoteTypeId { note_id } => write!(f, "notes.{note_id}.note_type_id"),
+            Self::NoteVariables { note_id } => write!(f, "notes.{note_id}.variables"),
+            Self::NoteVariable { note_id, key } => write!(f, "notes.{note_id}.variables.{key}"),
+            Self::NoteField { note_id, field_id } => write!(f, "notes.{note_id}.fields.{field_id}"),
+            Self::NoteFieldMessage { note_id, field_id } => {
+                write!(f, "notes.{note_id}.fields.{field_id}.message")
+            }
+            Self::NoteFieldMessageComponent {
+                note_id,
+                field_id,
+                index,
+            } => write!(f, "notes.{note_id}.fields.{field_id}.message.{index}"),
+            Self::NoteFieldMessageFormat { note_id, field_id } => {
+                write!(f, "notes.{note_id}.fields.{field_id}.message.format")
+            }
+            Self::NoteFieldMessageVariable {
+                note_id,
+                field_id,
+                variable,
+            } => write!(
+                f,
+                "notes.{note_id}.fields.{field_id}.message.variables.{variable}"
+            ),
+            Self::NoteTags { note_id } => write!(f, "notes.{note_id}.tags"),
+            Self::NoteTag { note_id, tag } => write!(f, "notes.{note_id}.tags.{tag}"),
+            Self::NoteAdapterIds { note_id } => write!(f, "notes.{note_id}.adapter_ids"),
+            Self::NoteAdapterId { note_id, key } => write!(f, "notes.{note_id}.adapter_ids.{key}"),
+            Self::Media { media_id } => write!(f, "media.{media_id}"),
+            Self::MediaId { media_id } => write!(f, "media.{media_id}.id"),
+            Self::MediaPath { media_id } => write!(f, "media.{media_id}.path"),
+            Self::MediaSha256 { media_id } => write!(f, "media.{media_id}.sha256"),
+            Self::Tombstone { id } => write!(f, "tombstones.{id}"),
+        }
+    }
+}
+
+impl FromStr for DeckPath {
+    type Err = InvalidDeckPath;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        parse_deck_path(value).ok_or_else(|| InvalidDeckPath {
+            value: value.to_owned(),
+        })
+    }
+}
+
+/// Error returned when text is not a valid DeckPath.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvalidDeckPath {
+    value: String,
+}
+
+impl InvalidDeckPath {
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+}
+
+impl fmt::Display for InvalidDeckPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid deck path {:?}", self.value)
+    }
+}
+
+impl std::error::Error for InvalidDeckPath {}
+
+fn parse_deck_path(value: &str) -> Option<DeckPath> {
+    match value {
+        "deck.name" => return Some(DeckPath::DeckName),
+        "deck.description" => return Some(DeckPath::DeckDescription),
+        "deck.variables" => return Some(DeckPath::DeckVariables),
+        "deck.adapter_ids" => return Some(DeckPath::DeckAdapterIds),
+        _ => {}
+    }
+
+    if let Some(key) = value.strip_prefix("deck.variables.") {
+        return non_empty_string(key).map(|key| DeckPath::DeckVariable { key });
+    }
+    if let Some(key) = value.strip_prefix("deck.adapter_ids.") {
+        return non_empty_string(key).map(|key| DeckPath::DeckAdapterId { key });
+    }
+    if let Some(rest) = value.strip_prefix("note_types.") {
+        return parse_note_type_path(rest);
+    }
+    if let Some(rest) = value.strip_prefix("notes.") {
+        return parse_note_path(rest);
+    }
+    if let Some(rest) = value.strip_prefix("media.") {
+        return parse_media_path(rest);
+    }
+    if let Some(rest) = value.strip_prefix("tombstones.") {
+        return stable_id(rest).map(|id| DeckPath::Tombstone { id });
+    }
+    None
+}
+
+fn parse_note_type_path(rest: &str) -> Option<DeckPath> {
+    if let Some((note_type_text, template_rest)) = rest.split_once(".card_templates.") {
+        let note_type_id = stable_id(note_type_text)?;
+        return parse_note_type_template_path(note_type_id, template_rest);
+    }
+    if let Some(note_type_text) = rest.strip_suffix(".card_templates") {
+        return stable_id(note_type_text)
+            .map(|note_type_id| DeckPath::NoteTypeCardTemplates { note_type_id });
+    }
+    if let Some((note_type_text, field_rest)) = rest.split_once(".fields.") {
+        let note_type_id = stable_id(note_type_text)?;
+        return parse_note_type_field_path(note_type_id, field_rest);
+    }
+    if let Some(note_type_text) = rest.strip_suffix(".fields") {
+        return stable_id(note_type_text)
+            .map(|note_type_id| DeckPath::NoteTypeFields { note_type_id });
+    }
+    if let Some((note_type_text, key)) = rest.split_once(".variables.") {
+        let note_type_id = stable_id(note_type_text)?;
+        return non_empty_string(key).map(|key| DeckPath::NoteTypeVariable { note_type_id, key });
+    }
+    if let Some(note_type_text) = rest.strip_suffix(".variables") {
+        return stable_id(note_type_text)
+            .map(|note_type_id| DeckPath::NoteTypeVariables { note_type_id });
+    }
+    if let Some((note_type_text, key)) = rest.split_once(".adapter_ids.") {
+        let note_type_id = stable_id(note_type_text)?;
+        return non_empty_string(key).map(|key| DeckPath::NoteTypeAdapterId { note_type_id, key });
+    }
+    if let Some(note_type_text) = rest.strip_suffix(".adapter_ids") {
+        return stable_id(note_type_text)
+            .map(|note_type_id| DeckPath::NoteTypeAdapterIds { note_type_id });
+    }
+    if let Some(note_type_text) = rest.strip_suffix(".styling") {
+        return stable_id(note_type_text)
+            .map(|note_type_id| DeckPath::NoteTypeStyling { note_type_id });
+    }
+    if let Some(note_type_text) = rest.strip_suffix(".name") {
+        return stable_id(note_type_text)
+            .map(|note_type_id| DeckPath::NoteTypeName { note_type_id });
+    }
+    if let Some(note_type_text) = rest.strip_suffix(".id") {
+        return stable_id(note_type_text).map(|note_type_id| DeckPath::NoteTypeId { note_type_id });
+    }
+    stable_id(rest).map(|note_type_id| DeckPath::NoteType { note_type_id })
+}
+
+fn parse_note_type_field_path(note_type_id: StableId, rest: &str) -> Option<DeckPath> {
+    if let Some(field_text) = rest.strip_suffix(".name") {
+        return stable_id(field_text).map(|field_id| DeckPath::NoteTypeFieldName {
+            note_type_id,
+            field_id,
+        });
+    }
+    stable_id(rest).map(|field_id| DeckPath::NoteTypeField {
+        note_type_id,
+        field_id,
+    })
+}
+
+fn parse_note_type_template_path(note_type_id: StableId, rest: &str) -> Option<DeckPath> {
+    if let Some((template_text, key)) = rest.split_once(".variables.") {
+        let template_id = stable_id(template_text)?;
+        return non_empty_string(key).map(|key| DeckPath::NoteTypeCardTemplateVariable {
+            note_type_id,
+            template_id,
+            key,
+        });
+    }
+    if let Some(template_text) = rest.strip_suffix(".variables") {
+        let template_id = stable_id(template_text)?;
+        return Some(DeckPath::NoteTypeCardTemplateVariables {
+            note_type_id,
+            template_id,
+        });
+    }
+    if let Some((template_text, key)) = rest.split_once(".adapter_ids.") {
+        let template_id = stable_id(template_text)?;
+        return non_empty_string(key).map(|key| DeckPath::NoteTypeCardTemplateAdapterId {
+            note_type_id,
+            template_id,
+            key,
+        });
+    }
+    if let Some(template_text) = rest.strip_suffix(".adapter_ids") {
+        let template_id = stable_id(template_text)?;
+        return Some(DeckPath::NoteTypeCardTemplateAdapterIds {
+            note_type_id,
+            template_id,
+        });
+    }
+    if let Some(template_text) = rest.strip_suffix(".question_format") {
+        let template_id = stable_id(template_text)?;
+        return Some(DeckPath::NoteTypeCardTemplateQuestionFormat {
+            note_type_id,
+            template_id,
+        });
+    }
+    if let Some(template_text) = rest.strip_suffix(".answer_format") {
+        let template_id = stable_id(template_text)?;
+        return Some(DeckPath::NoteTypeCardTemplateAnswerFormat {
+            note_type_id,
+            template_id,
+        });
+    }
+    if let Some(template_text) = rest.strip_suffix(".name") {
+        let template_id = stable_id(template_text)?;
+        return Some(DeckPath::NoteTypeCardTemplateName {
+            note_type_id,
+            template_id,
+        });
+    }
+    stable_id(rest).map(|template_id| DeckPath::NoteTypeCardTemplate {
+        note_type_id,
+        template_id,
+    })
+}
+
+fn parse_note_path(rest: &str) -> Option<DeckPath> {
+    if let Some((note_text, field_rest)) = rest.split_once(".fields.") {
+        let note_id = stable_id(note_text)?;
+        return parse_note_field_path(note_id, field_rest);
+    }
+    if rest.ends_with(".fields") {
+        return None;
+    }
+    if let Some((note_text, key)) = rest.split_once(".variables.") {
+        let note_id = stable_id(note_text)?;
+        return non_empty_string(key).map(|key| DeckPath::NoteVariable { note_id, key });
+    }
+    if let Some(note_text) = rest.strip_suffix(".variables") {
+        return stable_id(note_text).map(|note_id| DeckPath::NoteVariables { note_id });
+    }
+    if let Some((note_text, tag)) = rest.split_once(".tags.") {
+        let note_id = stable_id(note_text)?;
+        return non_empty_string(tag).map(|tag| DeckPath::NoteTag { note_id, tag });
+    }
+    if let Some(note_text) = rest.strip_suffix(".tags") {
+        return stable_id(note_text).map(|note_id| DeckPath::NoteTags { note_id });
+    }
+    if let Some((note_text, key)) = rest.split_once(".adapter_ids.") {
+        let note_id = stable_id(note_text)?;
+        return non_empty_string(key).map(|key| DeckPath::NoteAdapterId { note_id, key });
+    }
+    if let Some(note_text) = rest.strip_suffix(".adapter_ids") {
+        return stable_id(note_text).map(|note_id| DeckPath::NoteAdapterIds { note_id });
+    }
+    if let Some(note_text) = rest.strip_suffix(".note_type_id") {
+        return stable_id(note_text).map(|note_id| DeckPath::NoteNoteTypeId { note_id });
+    }
+    if let Some(note_text) = rest.strip_suffix(".id") {
+        return stable_id(note_text).map(|note_id| DeckPath::NoteId { note_id });
+    }
+    stable_id(rest).map(|note_id| DeckPath::Note { note_id })
+}
+
+fn parse_note_field_path(note_id: StableId, rest: &str) -> Option<DeckPath> {
+    if let Some((field_text, variable)) = rest.split_once(".message.variables.") {
+        let field_id = stable_id(field_text)?;
+        return non_empty_string(variable).map(|variable| DeckPath::NoteFieldMessageVariable {
+            note_id,
+            field_id,
+            variable,
+        });
+    }
+    if let Some(field_text) = rest.strip_suffix(".message.format") {
+        let field_id = stable_id(field_text)?;
+        return Some(DeckPath::NoteFieldMessageFormat { note_id, field_id });
+    }
+    if let Some((field_text, index_text)) = rest.rsplit_once(".message.") {
+        let field_id = stable_id(field_text)?;
+        let index = index_text.parse::<usize>().ok()?;
+        return Some(DeckPath::NoteFieldMessageComponent {
+            note_id,
+            field_id,
+            index,
+        });
+    }
+    if let Some(field_text) = rest.strip_suffix(".message") {
+        let field_id = stable_id(field_text)?;
+        return Some(DeckPath::NoteFieldMessage { note_id, field_id });
+    }
+    stable_id(rest).map(|field_id| DeckPath::NoteField { note_id, field_id })
+}
+
+fn parse_media_path(rest: &str) -> Option<DeckPath> {
+    if let Some(media_text) = rest.strip_suffix(".sha256") {
+        return stable_id(media_text).map(|media_id| DeckPath::MediaSha256 { media_id });
+    }
+    if let Some(media_text) = rest.strip_suffix(".path") {
+        return stable_id(media_text).map(|media_id| DeckPath::MediaPath { media_id });
+    }
+    if let Some(media_text) = rest.strip_suffix(".id") {
+        return stable_id(media_text).map(|media_id| DeckPath::MediaId { media_id });
+    }
+    stable_id(rest).map(|media_id| DeckPath::Media { media_id })
+}
+
+fn stable_id(value: &str) -> Option<StableId> {
+    if value.contains("..") {
+        return None;
+    }
+    StableId::new(value.to_owned()).ok()
+}
+
+fn non_empty_string(value: &str) -> Option<String> {
+    (!value.is_empty() && !value.contains("..")).then(|| value.to_owned())
+}
 
 /// Adapter-specific identities keyed by adapter namespace.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

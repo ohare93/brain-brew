@@ -44,70 +44,112 @@ fn translation_coverage_report(
         seen_adapter_ids: BTreeSet::new(),
     };
 
-    builder.record_string(&deck.name, "deck.name".to_owned(), None);
-    builder.record_string(&deck.description, "deck.description".to_owned(), None);
-    builder.record_variables(&deck.variables, "deck.variables");
-    builder.record_adapter_ids(&deck.adapter_ids, "deck.adapter_ids");
+    builder.record_string(&deck.name, DeckPath::DeckName.to_string(), None);
+    builder.record_string(
+        &deck.description,
+        DeckPath::DeckDescription.to_string(),
+        None,
+    );
+    builder.record_variables(&deck.variables, &DeckPath::DeckVariables.to_string());
+    builder.record_adapter_ids(&deck.adapter_ids, &DeckPath::DeckAdapterIds.to_string());
 
     for (note_type_id, note_type) in &deck.note_types {
         builder.record_string(
             &note_type.name,
-            format!("note_types.{note_type_id}.name"),
+            DeckPath::NoteTypeName {
+                note_type_id: note_type_id.clone(),
+            }
+            .to_string(),
             None,
         );
         builder.record_variables(
             &note_type.variables,
-            &format!("note_types.{note_type_id}.variables"),
+            &DeckPath::NoteTypeVariables {
+                note_type_id: note_type_id.clone(),
+            }
+            .to_string(),
         );
         for field in &note_type.fields {
             builder.record_string(
                 &field.name,
-                format!("note_types.{note_type_id}.fields.{}.name", field.id),
+                DeckPath::NoteTypeFieldName {
+                    note_type_id: note_type_id.clone(),
+                    field_id: field.id.clone(),
+                }
+                .to_string(),
                 None,
             );
         }
         for template in &note_type.card_templates {
             builder.record_string(
                 &template.name,
-                format!(
-                    "note_types.{note_type_id}.card_templates.{}.name",
-                    template.id
-                ),
+                DeckPath::NoteTypeCardTemplateName {
+                    note_type_id: note_type_id.clone(),
+                    template_id: template.id.clone(),
+                }
+                .to_string(),
                 None,
             );
             builder.record_variables(
                 &template.variables,
-                &format!(
-                    "note_types.{note_type_id}.card_templates.{}.variables",
-                    template.id
-                ),
+                &DeckPath::NoteTypeCardTemplateVariables {
+                    note_type_id: note_type_id.clone(),
+                    template_id: template.id.clone(),
+                }
+                .to_string(),
             );
             builder.record_adapter_ids(
                 &template.adapter_ids,
-                &format!(
-                    "note_types.{note_type_id}.card_templates.{}.adapter_ids",
-                    template.id
-                ),
+                &DeckPath::NoteTypeCardTemplateAdapterIds {
+                    note_type_id: note_type_id.clone(),
+                    template_id: template.id.clone(),
+                }
+                .to_string(),
             );
         }
         builder.record_adapter_ids(
             &note_type.adapter_ids,
-            &format!("note_types.{note_type_id}.adapter_ids"),
+            &DeckPath::NoteTypeAdapterIds {
+                note_type_id: note_type_id.clone(),
+            }
+            .to_string(),
         );
     }
 
     for (note_id, note) in &deck.notes {
-        builder.record_variables(&note.variables, &format!("notes.{note_id}.variables"));
+        builder.record_variables(
+            &note.variables,
+            &DeckPath::NoteVariables {
+                note_id: note_id.clone(),
+            }
+            .to_string(),
+        );
         for (field_id, value) in &note.fields {
-            let path = format!("notes.{note_id}.fields.{field_id}");
+            let path = DeckPath::NoteField {
+                note_id: note_id.clone(),
+                field_id: field_id.clone(),
+            }
+            .to_string();
             if let Some(message) = note.field_messages.get(field_id) {
                 builder.record_message(value, path, note_id, field_id, message);
             } else {
                 builder.record_string(value, path, None);
             }
         }
-        builder.record_tags(&note.tags, &format!("notes.{note_id}.tags"));
-        builder.record_adapter_ids(&note.adapter_ids, &format!("notes.{note_id}.adapter_ids"));
+        builder.record_tags(
+            &note.tags,
+            &DeckPath::NoteTags {
+                note_id: note_id.clone(),
+            }
+            .to_string(),
+        );
+        builder.record_adapter_ids(
+            &note.adapter_ids,
+            &DeckPath::NoteAdapterIds {
+                note_id: note_id.clone(),
+            }
+            .to_string(),
+        );
     }
 
     builder.finish(overlay.id.clone())
@@ -290,7 +332,7 @@ fn has_explicit_string_entry(
 impl TranslationCoverageBuilder<'_> {
     fn record_variables(&mut self, variables: &BTreeMap<String, String>, path_prefix: &str) {
         for (key, value) in variables {
-            self.record_string(value, format!("{path_prefix}.{key}"), Some(key));
+            self.record_string(value, map_entry_path(path_prefix, key), Some(key));
         }
     }
 
@@ -529,7 +571,7 @@ impl TranslationCoverageBuilder<'_> {
 
     fn record_tags(&mut self, tags: &BTreeSet<String>, path_prefix: &str) {
         for tag in tags {
-            self.record_string(tag, format!("{path_prefix}.{tag}"), None);
+            self.record_string(tag, map_entry_path(path_prefix, tag), None);
         }
     }
 
@@ -545,7 +587,7 @@ impl TranslationCoverageBuilder<'_> {
                 .insert((key.to_owned(), value.to_owned()));
             self.entries.push(TranslationCoverageEntry {
                 category: TranslationCoverageCategory::AdapterIdTranslation,
-                path: format!("{path_prefix}.{key}"),
+                path: map_entry_path(path_prefix, key),
                 source: value.to_owned(),
                 old_source: None,
                 translated: Some(translated.clone()),
@@ -757,43 +799,62 @@ fn translation_context_unit(
 }
 
 fn note_id_from_translation_path(path: &str) -> Option<StableId> {
-    let rest = path.strip_prefix("notes.")?;
-    let end = [".fields.", ".tags.", ".variables.", ".adapter_ids."]
-        .into_iter()
-        .filter_map(|marker| rest.find(marker))
-        .min()
-        .unwrap_or(rest.len());
-    StableId::new(rest[..end].to_owned()).ok()
+    match path.parse().ok()? {
+        DeckPath::Note { note_id }
+        | DeckPath::NoteId { note_id }
+        | DeckPath::NoteNoteTypeId { note_id }
+        | DeckPath::NoteVariables { note_id }
+        | DeckPath::NoteVariable { note_id, .. }
+        | DeckPath::NoteField { note_id, .. }
+        | DeckPath::NoteFieldMessage { note_id, .. }
+        | DeckPath::NoteFieldMessageComponent { note_id, .. }
+        | DeckPath::NoteFieldMessageFormat { note_id, .. }
+        | DeckPath::NoteFieldMessageVariable { note_id, .. }
+        | DeckPath::NoteTags { note_id }
+        | DeckPath::NoteTag { note_id, .. }
+        | DeckPath::NoteAdapterIds { note_id }
+        | DeckPath::NoteAdapterId { note_id, .. } => Some(note_id),
+        _ => None,
+    }
 }
 
 fn note_type_id_from_translation_path(path: &str) -> Option<StableId> {
-    let rest = path.strip_prefix("note_types.")?;
-    let end = [
-        ".fields.",
-        ".card_templates.",
-        ".variables.",
-        ".adapter_ids.",
-    ]
-    .into_iter()
-    .filter_map(|marker| rest.find(marker))
-    .min()
-    .unwrap_or(rest.len());
-    StableId::new(rest[..end].to_owned()).ok()
+    match path.parse().ok()? {
+        DeckPath::NoteType { note_type_id }
+        | DeckPath::NoteTypeId { note_type_id }
+        | DeckPath::NoteTypeName { note_type_id }
+        | DeckPath::NoteTypeVariables { note_type_id }
+        | DeckPath::NoteTypeVariable { note_type_id, .. }
+        | DeckPath::NoteTypeStyling { note_type_id }
+        | DeckPath::NoteTypeFields { note_type_id }
+        | DeckPath::NoteTypeField { note_type_id, .. }
+        | DeckPath::NoteTypeFieldName { note_type_id, .. }
+        | DeckPath::NoteTypeCardTemplates { note_type_id }
+        | DeckPath::NoteTypeCardTemplate { note_type_id, .. }
+        | DeckPath::NoteTypeCardTemplateName { note_type_id, .. }
+        | DeckPath::NoteTypeCardTemplateVariables { note_type_id, .. }
+        | DeckPath::NoteTypeCardTemplateVariable { note_type_id, .. }
+        | DeckPath::NoteTypeCardTemplateQuestionFormat { note_type_id, .. }
+        | DeckPath::NoteTypeCardTemplateAnswerFormat { note_type_id, .. }
+        | DeckPath::NoteTypeCardTemplateAdapterIds { note_type_id, .. }
+        | DeckPath::NoteTypeCardTemplateAdapterId { note_type_id, .. }
+        | DeckPath::NoteTypeAdapterIds { note_type_id }
+        | DeckPath::NoteTypeAdapterId { note_type_id, .. } => Some(note_type_id),
+        _ => None,
+    }
 }
 
-fn field_id_from_translation_path(path: &str, note_type: Option<&NoteType>) -> Option<StableId> {
-    let rest = path.split_once(".fields.")?.1;
-    if let Some(note_type) = note_type {
-        return note_type
-            .fields
-            .iter()
-            .filter(|field| {
-                rest == field.id.as_str() || rest.starts_with(&format!("{}.", field.id))
-            })
-            .max_by_key(|field| field.id.as_str().len())
-            .map(|field| field.id.clone());
+fn field_id_from_translation_path(path: &str, _note_type: Option<&NoteType>) -> Option<StableId> {
+    match path.parse().ok()? {
+        DeckPath::NoteField { field_id, .. }
+        | DeckPath::NoteFieldMessage { field_id, .. }
+        | DeckPath::NoteFieldMessageComponent { field_id, .. }
+        | DeckPath::NoteFieldMessageFormat { field_id, .. }
+        | DeckPath::NoteFieldMessageVariable { field_id, .. }
+        | DeckPath::NoteTypeField { field_id, .. }
+        | DeckPath::NoteTypeFieldName { field_id, .. } => Some(field_id),
+        _ => None,
     }
-    StableId::new(rest.strip_suffix(".name").unwrap_or(rest).to_owned()).ok()
 }
 
 fn field_definition_name<'a>(note_type: &'a NoteType, field_id: &StableId) -> Option<&'a str> {
@@ -815,7 +876,11 @@ fn note_field_contexts(
         .iter()
         .map(|field| {
             let source = note.fields.get(&field.id).cloned().unwrap_or_default();
-            let path = format!("notes.{note_id}.fields.{}", field.id);
+            let path = DeckPath::NoteField {
+                note_id: note_id.clone(),
+                field_id: field.id.clone(),
+            }
+            .to_string();
             let entry = entries_by_path.get(path.as_str()).copied();
             TranslationNoteFieldContext {
                 field_id: field.id.clone(),
@@ -840,7 +905,14 @@ fn message_context(
     let message = note.field_messages.get(field_id)?;
     let resolved_source = note.fields.get(field_id).cloned().unwrap_or_default();
     let full_field_translation = entries_by_path
-        .get(format!("notes.{note_id}.fields.{field_id}").as_str())
+        .get(
+            DeckPath::NoteField {
+                note_id: note_id.clone(),
+                field_id: field_id.clone(),
+            }
+            .to_string()
+            .as_str(),
+        )
         .and_then(|entry| entry.translated.clone());
 
     if let Some(format) = &message.format {
@@ -1017,67 +1089,99 @@ pub(crate) fn apply_translation_dictionary(
             changed_paths,
             errors,
         };
-        context.translate_string(&mut resolved.name, "deck.name".to_owned(), None);
+        context.translate_string(&mut resolved.name, DeckPath::DeckName.to_string(), None);
         context.translate_string(
             &mut resolved.description,
-            "deck.description".to_owned(),
+            DeckPath::DeckDescription.to_string(),
             None,
         );
-        context.translate_variables(&mut resolved.variables, "deck.variables");
-        context.translate_adapter_ids(&mut resolved.adapter_ids, "deck.adapter_ids");
+        context.translate_variables(
+            &mut resolved.variables,
+            &DeckPath::DeckVariables.to_string(),
+        );
+        context.translate_adapter_ids(
+            &mut resolved.adapter_ids,
+            &DeckPath::DeckAdapterIds.to_string(),
+        );
 
         for (note_type_id, note_type) in &mut resolved.note_types {
             context.translate_string(
                 &mut note_type.name,
-                format!("note_types.{note_type_id}.name"),
+                DeckPath::NoteTypeName {
+                    note_type_id: note_type_id.clone(),
+                }
+                .to_string(),
                 None,
             );
             context.translate_variables(
                 &mut note_type.variables,
-                &format!("note_types.{note_type_id}.variables"),
+                &DeckPath::NoteTypeVariables {
+                    note_type_id: note_type_id.clone(),
+                }
+                .to_string(),
             );
             for field in &mut note_type.fields {
                 context.translate_string(
                     &mut field.name,
-                    format!("note_types.{note_type_id}.fields.{}.name", field.id),
+                    DeckPath::NoteTypeFieldName {
+                        note_type_id: note_type_id.clone(),
+                        field_id: field.id.clone(),
+                    }
+                    .to_string(),
                     None,
                 );
             }
             for template in &mut note_type.card_templates {
                 context.translate_string(
                     &mut template.name,
-                    format!(
-                        "note_types.{note_type_id}.card_templates.{}.name",
-                        template.id
-                    ),
+                    DeckPath::NoteTypeCardTemplateName {
+                        note_type_id: note_type_id.clone(),
+                        template_id: template.id.clone(),
+                    }
+                    .to_string(),
                     None,
                 );
                 context.translate_variables(
                     &mut template.variables,
-                    &format!(
-                        "note_types.{note_type_id}.card_templates.{}.variables",
-                        template.id
-                    ),
+                    &DeckPath::NoteTypeCardTemplateVariables {
+                        note_type_id: note_type_id.clone(),
+                        template_id: template.id.clone(),
+                    }
+                    .to_string(),
                 );
                 context.translate_adapter_ids(
                     &mut template.adapter_ids,
-                    &format!(
-                        "note_types.{note_type_id}.card_templates.{}.adapter_ids",
-                        template.id
-                    ),
+                    &DeckPath::NoteTypeCardTemplateAdapterIds {
+                        note_type_id: note_type_id.clone(),
+                        template_id: template.id.clone(),
+                    }
+                    .to_string(),
                 );
             }
             context.translate_adapter_ids(
                 &mut note_type.adapter_ids,
-                &format!("note_types.{note_type_id}.adapter_ids"),
+                &DeckPath::NoteTypeAdapterIds {
+                    note_type_id: note_type_id.clone(),
+                }
+                .to_string(),
             );
         }
 
         for (note_id, note) in &mut resolved.notes {
-            context.translate_variables(&mut note.variables, &format!("notes.{note_id}.variables"));
+            context.translate_variables(
+                &mut note.variables,
+                &DeckPath::NoteVariables {
+                    note_id: note_id.clone(),
+                }
+                .to_string(),
+            );
             let field_ids = note.fields.keys().cloned().collect::<Vec<_>>();
             for field_id in field_ids {
-                let path = format!("notes.{note_id}.fields.{field_id}");
+                let path = DeckPath::NoteField {
+                    note_id: note_id.clone(),
+                    field_id: field_id.clone(),
+                }
+                .to_string();
                 if note.field_messages.contains_key(&field_id) {
                     let source = note.fields.get(&field_id).cloned().unwrap_or_default();
                     let full_override = {
@@ -1102,10 +1206,19 @@ pub(crate) fn apply_translation_dictionary(
                     context.translate_string(value, path, None);
                 }
             }
-            context.translate_tags(&mut note.tags, &format!("notes.{note_id}.tags"));
+            context.translate_tags(
+                &mut note.tags,
+                &DeckPath::NoteTags {
+                    note_id: note_id.clone(),
+                }
+                .to_string(),
+            );
             context.translate_adapter_ids(
                 &mut note.adapter_ids,
-                &format!("notes.{note_id}.adapter_ids"),
+                &DeckPath::NoteAdapterIds {
+                    note_id: note_id.clone(),
+                }
+                .to_string(),
             );
         }
     }
@@ -1214,7 +1327,7 @@ struct TranslationApplyContext<'a, 'b> {
 impl TranslationApplyContext<'_, '_> {
     fn translate_variables(&mut self, variables: &mut BTreeMap<String, String>, path_prefix: &str) {
         for (key, value) in variables {
-            self.translate_string(value, format!("{path_prefix}.{key}"), Some(key));
+            self.translate_string(value, map_entry_path(path_prefix, key), Some(key));
         }
     }
 
@@ -1408,7 +1521,7 @@ impl TranslationApplyContext<'_, '_> {
     fn translate_tags(&mut self, tags: &mut BTreeSet<String>, path_prefix: &str) {
         for tag in tags.iter().cloned().collect::<Vec<_>>() {
             let mut translated = tag.clone();
-            self.translate_string(&mut translated, format!("{path_prefix}.{tag}"), None);
+            self.translate_string(&mut translated, map_entry_path(path_prefix, &tag), None);
             if translated != tag {
                 tags.remove(&tag);
                 tags.insert(translated);
@@ -1430,7 +1543,7 @@ impl TranslationApplyContext<'_, '_> {
             };
             self.seen_adapter_ids.insert((key.clone(), value.clone()));
             if value != *translated {
-                let path = format!("{path_prefix}.{key}");
+                let path = map_entry_path(path_prefix, &key);
                 if !record_change_path(
                     &path,
                     self.overlay,
@@ -1471,7 +1584,16 @@ fn shortest_safe_context(
 }
 
 fn is_note_field_context(context_path: &str) -> bool {
-    context_path.starts_with("notes.") && context_path.contains(".fields.")
+    matches!(
+        context_path.parse().ok(),
+        Some(
+            DeckPath::NoteField { .. }
+                | DeckPath::NoteFieldMessage { .. }
+                | DeckPath::NoteFieldMessageComponent { .. }
+                | DeckPath::NoteFieldMessageFormat { .. }
+                | DeckPath::NoteFieldMessageVariable { .. }
+        )
+    )
 }
 
 fn contextual_replacement_is_safe(
@@ -1553,35 +1675,30 @@ fn direct_or_contextual_translation_for_path_with_candidate<'a>(
 }
 
 fn context_parent_candidates(context_path: &str) -> Vec<String> {
-    if context_path.contains(".message.variables.") || context_path.ends_with(".message.format") {
-        return Vec::new();
+    match context_path.parse().ok() {
+        Some(DeckPath::NoteFieldMessageFormat { .. })
+        | Some(DeckPath::NoteFieldMessageVariable { .. }) => Vec::new(),
+        Some(
+            DeckPath::NoteField { note_id, .. }
+            | DeckPath::NoteFieldMessage { note_id, .. }
+            | DeckPath::NoteFieldMessageComponent { note_id, .. }
+            | DeckPath::NoteTag { note_id, .. }
+            | DeckPath::NoteVariable { note_id, .. },
+        ) => vec![DeckPath::Note { note_id }.to_string()],
+        Some(
+            DeckPath::NoteTypeField { note_type_id, .. }
+            | DeckPath::NoteTypeFieldName { note_type_id, .. }
+            | DeckPath::NoteTypeCardTemplate { note_type_id, .. }
+            | DeckPath::NoteTypeCardTemplateName { note_type_id, .. }
+            | DeckPath::NoteTypeCardTemplateVariables { note_type_id, .. }
+            | DeckPath::NoteTypeCardTemplateVariable { note_type_id, .. }
+            | DeckPath::NoteTypeCardTemplateQuestionFormat { note_type_id, .. }
+            | DeckPath::NoteTypeCardTemplateAnswerFormat { note_type_id, .. }
+            | DeckPath::NoteTypeCardTemplateAdapterIds { note_type_id, .. }
+            | DeckPath::NoteTypeCardTemplateAdapterId { note_type_id, .. },
+        ) => vec![DeckPath::NoteType { note_type_id }.to_string()],
+        _ => Vec::new(),
     }
-    if let Some((note_context, _)) = context_path.split_once(".fields.")
-        && note_context.starts_with("notes.")
-    {
-        return vec![note_context.to_owned()];
-    }
-    if let Some((note_context, _)) = context_path.split_once(".tags.")
-        && note_context.starts_with("notes.")
-    {
-        return vec![note_context.to_owned()];
-    }
-    if let Some((note_context, _)) = context_path.split_once(".variables.")
-        && note_context.starts_with("notes.")
-    {
-        return vec![note_context.to_owned()];
-    }
-    if let Some((note_type_context, _)) = context_path.split_once(".fields.")
-        && note_type_context.starts_with("note_types.")
-    {
-        return vec![note_type_context.to_owned()];
-    }
-    if let Some((note_type_context, _)) = context_path.split_once(".card_templates.")
-        && note_type_context.starts_with("note_types.")
-    {
-        return vec![note_type_context.to_owned()];
-    }
-    Vec::new()
 }
 
 fn context_matches_path(context_path: &str, path: &str) -> bool {
@@ -1589,6 +1706,55 @@ fn context_matches_path(context_path: &str, path: &str) -> bool {
         || path
             .strip_prefix(context_path)
             .is_some_and(|suffix| suffix.starts_with('.'))
+}
+
+fn map_entry_path(path_prefix: &str, key: &str) -> String {
+    match path_prefix.parse().ok() {
+        Some(DeckPath::DeckVariables) => DeckPath::DeckVariable {
+            key: key.to_owned(),
+        },
+        Some(DeckPath::DeckAdapterIds) => DeckPath::DeckAdapterId {
+            key: key.to_owned(),
+        },
+        Some(DeckPath::NoteTypeVariables { note_type_id }) => DeckPath::NoteTypeVariable {
+            note_type_id,
+            key: key.to_owned(),
+        },
+        Some(DeckPath::NoteTypeAdapterIds { note_type_id }) => DeckPath::NoteTypeAdapterId {
+            note_type_id,
+            key: key.to_owned(),
+        },
+        Some(DeckPath::NoteTypeCardTemplateVariables {
+            note_type_id,
+            template_id,
+        }) => DeckPath::NoteTypeCardTemplateVariable {
+            note_type_id,
+            template_id,
+            key: key.to_owned(),
+        },
+        Some(DeckPath::NoteTypeCardTemplateAdapterIds {
+            note_type_id,
+            template_id,
+        }) => DeckPath::NoteTypeCardTemplateAdapterId {
+            note_type_id,
+            template_id,
+            key: key.to_owned(),
+        },
+        Some(DeckPath::NoteVariables { note_id }) => DeckPath::NoteVariable {
+            note_id,
+            key: key.to_owned(),
+        },
+        Some(DeckPath::NoteTags { note_id }) => DeckPath::NoteTag {
+            note_id,
+            tag: key.to_owned(),
+        },
+        Some(DeckPath::NoteAdapterIds { note_id }) => DeckPath::NoteAdapterId {
+            note_id,
+            key: key.to_owned(),
+        },
+        _ => panic!("unsupported deck path collection {path_prefix:?}"),
+    }
+    .to_string()
 }
 
 fn matching_stale_translation<'a>(

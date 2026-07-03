@@ -73,7 +73,11 @@ pub(crate) fn validate_message_references(
     if !message.variables.is_empty() {
         errors.push(ValidationError::new(
             ValidationErrorKind::InvalidMessageReference,
-            format!("notes.{note_id}.fields.{field_id}.message"),
+            DeckPath::NoteFieldMessage {
+                note_id: note_id.clone(),
+                field_id: field_id.clone(),
+            }
+            .to_string(),
             "structured message variables require an inline format".to_owned(),
         ));
     }
@@ -138,7 +142,11 @@ fn resolve_structured_messages<E>(
             match render_structured_message(&snapshot, message) {
                 Ok(value) => resolved_fields.push((note_id.clone(), field_id.clone(), value)),
                 Err(error) => errors.push(make_error(
-                    format!("notes.{note_id}.fields.{field_id}.message"),
+                    DeckPath::NoteFieldMessage {
+                        note_id: note_id.clone(),
+                        field_id: field_id.clone(),
+                    }
+                    .to_string(),
                     error.message(),
                 )),
             }
@@ -290,17 +298,13 @@ fn parse_message_format(format: &str) -> Result<Vec<MessageFormatPart>, String> 
 }
 
 pub(crate) fn field_value_at_path<'a>(deck: &'a CanonicalDeck, path: &str) -> Option<&'a str> {
-    let (note_id, field_id) = note_field_path_parts(path)?;
+    let DeckPath::NoteField { note_id, field_id } = path.parse().ok()? else {
+        return None;
+    };
     deck.notes
         .get(&note_id)
         .and_then(|note| note.fields.get(&field_id))
         .map(String::as_str)
-}
-
-fn note_field_path_parts(path: &str) -> Option<(StableId, StableId)> {
-    let rest = path.strip_prefix("notes.")?;
-    let (note_id, field_id) = rest.split_once(".fields.")?;
-    Some((StableId::new(note_id).ok()?, StableId::new(field_id).ok()?))
 }
 
 pub(crate) fn message_component_path(
@@ -308,11 +312,20 @@ pub(crate) fn message_component_path(
     field_id: &StableId,
     index: usize,
 ) -> String {
-    format!("notes.{note_id}.fields.{field_id}.message.{index}")
+    DeckPath::NoteFieldMessageComponent {
+        note_id: note_id.clone(),
+        field_id: field_id.clone(),
+        index,
+    }
+    .to_string()
 }
 
 pub(crate) fn message_format_path(note_id: &StableId, field_id: &StableId) -> String {
-    format!("notes.{note_id}.fields.{field_id}.message.format")
+    DeckPath::NoteFieldMessageFormat {
+        note_id: note_id.clone(),
+        field_id: field_id.clone(),
+    }
+    .to_string()
 }
 
 pub(crate) fn message_variable_path(
@@ -320,5 +333,10 @@ pub(crate) fn message_variable_path(
     field_id: &StableId,
     variable: &str,
 ) -> String {
-    format!("notes.{note_id}.fields.{field_id}.message.variables.{variable}")
+    DeckPath::NoteFieldMessageVariable {
+        note_id: note_id.clone(),
+        field_id: field_id.clone(),
+        variable: variable.to_owned(),
+    }
+    .to_string()
 }

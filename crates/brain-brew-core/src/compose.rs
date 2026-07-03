@@ -45,21 +45,16 @@ impl CanonicalDeck {
     pub fn semantic_diff(&self, other: &Self) -> SemanticDiff {
         let mut changes = Vec::new();
 
+        push_modified_if_changed(&mut changes, deck_name_path(), &self.name, &other.name);
         push_modified_if_changed(
             &mut changes,
-            "deck.name".to_owned(),
-            &self.name,
-            &other.name,
-        );
-        push_modified_if_changed(
-            &mut changes,
-            "deck.description".to_owned(),
+            deck_description_path(),
             &self.description,
             &other.description,
         );
         push_modified_if_changed(
             &mut changes,
-            "deck.variables".to_owned(),
+            deck_variables_path(),
             &string_map_summary(&self.variables),
             &string_map_summary(&other.variables),
         );
@@ -172,7 +167,7 @@ fn apply_deck_change(
         apply_string_property_change(
             &mut resolved.name,
             overlay,
-            "deck.name".to_owned(),
+            deck_name_path(),
             name,
             changed_paths,
             errors,
@@ -182,7 +177,7 @@ fn apply_deck_change(
         apply_string_property_change(
             &mut resolved.description,
             overlay,
-            "deck.description".to_owned(),
+            deck_description_path(),
             description,
             changed_paths,
             errors,
@@ -191,7 +186,7 @@ fn apply_deck_change(
     apply_variable_changes(
         &mut resolved.variables,
         overlay,
-        "deck.variables",
+        &deck_variables_path(),
         &change.variables,
         changed_paths,
         errors,
@@ -200,7 +195,7 @@ fn apply_deck_change(
         apply_adapter_id_change(
             &mut resolved.adapter_ids,
             overlay,
-            format!("deck.adapter_ids.{key}"),
+            deck_adapter_id_path(key),
             key,
             adapter_change,
             changed_paths,
@@ -217,7 +212,7 @@ fn apply_note_type_add(
     changed_paths: &mut BTreeMap<String, StableId>,
     errors: &mut Vec<ComposeError>,
 ) {
-    let path = format!("note_types.{note_type_id}");
+    let path = note_type_path(note_type_id);
     if resolved.note_types.contains_key(note_type_id) {
         errors.push(ComposeError::new(
             ComposeErrorKind::AlreadyExists,
@@ -261,7 +256,7 @@ fn apply_note_type_remove(
     changed_paths: &mut BTreeMap<String, StableId>,
     errors: &mut Vec<ComposeError>,
 ) {
-    let path = format!("note_types.{note_type_id}");
+    let path = note_type_path(note_type_id);
     if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
         return;
     }
@@ -310,11 +305,7 @@ fn apply_note_type_change(
 ) -> Vec<(StableId, StableId)> {
     let mut added_fields = Vec::new();
     if requires_expected_base(change.intent)
-        && !has_expected_base(
-            &change.expected_base,
-            format!("note_types.{note_type_id}"),
-            errors,
-        )
+        && !has_expected_base(&change.expected_base, note_type_path(note_type_id), errors)
     {
         return added_fields;
     }
@@ -322,7 +313,7 @@ fn apply_note_type_change(
     let Some(note_type) = resolved.note_types.get_mut(note_type_id) else {
         errors.push(ComposeError::new(
             ComposeErrorKind::MissingOverlayTarget,
-            format!("note_types.{note_type_id}"),
+            note_type_path(note_type_id),
             format!("note type {note_type_id} does not exist"),
         ));
         return added_fields;
@@ -332,7 +323,7 @@ fn apply_note_type_change(
         apply_string_property_change(
             &mut note_type.name,
             overlay,
-            format!("note_types.{note_type_id}.name"),
+            note_type_name_path(note_type_id),
             name,
             changed_paths,
             errors,
@@ -341,7 +332,7 @@ fn apply_note_type_change(
     apply_variable_changes(
         &mut note_type.variables,
         overlay,
-        &format!("note_types.{note_type_id}.variables"),
+        &note_type_variables_path(note_type_id),
         &change.variables,
         changed_paths,
         errors,
@@ -350,7 +341,7 @@ fn apply_note_type_change(
         apply_string_property_change(
             &mut note_type.styling,
             overlay,
-            format!("note_types.{note_type_id}.styling"),
+            note_type_styling_path(note_type_id),
             styling,
             changed_paths,
             errors,
@@ -360,7 +351,7 @@ fn apply_note_type_change(
         apply_adapter_id_change(
             &mut note_type.adapter_ids,
             overlay,
-            format!("note_types.{note_type_id}.adapter_ids.{key}"),
+            note_type_adapter_id_path(note_type_id, key),
             key,
             adapter_change,
             changed_paths,
@@ -405,7 +396,7 @@ fn apply_card_template_change(
     changed_paths: &mut BTreeMap<String, StableId>,
     errors: &mut Vec<ComposeError>,
 ) {
-    let path = format!("note_types.{note_type_id}.card_templates.{template_id}");
+    let path = card_template_path(note_type_id, template_id);
     if requires_expected_base(change.intent)
         && !has_expected_base(&change.expected_base, path.clone(), errors)
     {
@@ -536,7 +527,7 @@ fn apply_card_template_change(
         apply_string_property_change(
             &mut template.name,
             overlay,
-            format!("note_types.{note_type_id}.card_templates.{template_id}.name"),
+            card_template_name_path(note_type_id, template_id),
             name,
             changed_paths,
             errors,
@@ -545,7 +536,7 @@ fn apply_card_template_change(
     apply_variable_changes(
         &mut template.variables,
         overlay,
-        &format!("note_types.{note_type_id}.card_templates.{template_id}.variables"),
+        &card_template_variables_path(note_type_id, template_id),
         &change.variables,
         changed_paths,
         errors,
@@ -554,7 +545,7 @@ fn apply_card_template_change(
         apply_string_property_change(
             &mut template.question_format,
             overlay,
-            format!("note_types.{note_type_id}.card_templates.{template_id}.question_format"),
+            card_template_question_format_path(note_type_id, template_id),
             question_format,
             changed_paths,
             errors,
@@ -564,7 +555,7 @@ fn apply_card_template_change(
         apply_string_property_change(
             &mut template.answer_format,
             overlay,
-            format!("note_types.{note_type_id}.card_templates.{template_id}.answer_format"),
+            card_template_answer_format_path(note_type_id, template_id),
             answer_format,
             changed_paths,
             errors,
@@ -574,7 +565,7 @@ fn apply_card_template_change(
         apply_adapter_id_change(
             &mut template.adapter_ids,
             overlay,
-            format!("note_types.{note_type_id}.card_templates.{template_id}.adapter_ids.{key}"),
+            card_template_adapter_id_path(note_type_id, template_id, key),
             key,
             adapter_change,
             changed_paths,
@@ -667,7 +658,7 @@ fn apply_variable_changes(
         apply_map_string_property_change(
             variables,
             overlay,
-            format!("{path_prefix}.{key}"),
+            variable_entry_path(path_prefix, key),
             key,
             change,
             changed_paths,
@@ -837,7 +828,7 @@ fn apply_field_definition_change(
     changed_paths: &mut BTreeMap<String, StableId>,
     errors: &mut Vec<ComposeError>,
 ) -> bool {
-    let path = format!("note_types.{note_type_id}.fields.{field_id}");
+    let path = field_definition_path(note_type_id, field_id);
     if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
         return false;
     }
@@ -915,7 +906,7 @@ fn apply_note_add(
     changed_paths: &mut BTreeMap<String, StableId>,
     errors: &mut Vec<ComposeError>,
 ) {
-    let path = format!("notes.{note_id}");
+    let path = note_path(note_id);
     if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
         return;
     }
@@ -951,7 +942,7 @@ fn apply_note_merge(
     errors: &mut Vec<ComposeError>,
 ) {
     if requires_expected_base(change.intent)
-        && !has_expected_base(&change.expected_base, format!("notes.{note_id}"), errors)
+        && !has_expected_base(&change.expected_base, note_path(note_id), errors)
     {
         return;
     }
@@ -959,7 +950,7 @@ fn apply_note_merge(
     let Some(note) = resolved.notes.get_mut(note_id) else {
         errors.push(ComposeError::new(
             ComposeErrorKind::MissingOverlayTarget,
-            format!("notes.{note_id}"),
+            note_path(note_id),
             format!("note {note_id} does not exist"),
         ));
         return;
@@ -968,7 +959,7 @@ fn apply_note_merge(
     apply_variable_changes(
         &mut note.variables,
         overlay,
-        &format!("notes.{note_id}.variables"),
+        &note_variables_path(note_id),
         &change.variables,
         changed_paths,
         errors,
@@ -990,7 +981,7 @@ fn apply_note_merge(
         apply_adapter_id_change(
             &mut note.adapter_ids,
             overlay,
-            format!("notes.{note_id}.adapter_ids.{key}"),
+            note_adapter_id_path(note_id, key),
             key,
             adapter_change,
             changed_paths,
@@ -1020,7 +1011,7 @@ fn apply_tag_change(
     changed_paths: &mut BTreeMap<String, StableId>,
     errors: &mut Vec<ComposeError>,
 ) {
-    let path = format!("notes.{note_id}.tags.{tag}");
+    let path = note_tag_path(note_id, tag);
     if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
         return;
     }
@@ -1085,7 +1076,7 @@ fn apply_field_change(
     changed_paths: &mut BTreeMap<String, StableId>,
     errors: &mut Vec<ComposeError>,
 ) {
-    let path = format!("notes.{note_id}.fields.{field_id}");
+    let path = note_field_path(note_id, field_id);
     if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
         return;
     }
@@ -1169,7 +1160,7 @@ fn apply_media_change(
     changed_paths: &mut BTreeMap<String, StableId>,
     errors: &mut Vec<ComposeError>,
 ) {
-    let path = format!("media.{media_id}");
+    let path = media_path(media_id);
     if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
         return;
     }
@@ -1248,6 +1239,261 @@ fn apply_media_change(
     }
 }
 
+fn deck_name_path() -> String {
+    DeckPath::DeckName.to_string()
+}
+
+fn deck_description_path() -> String {
+    DeckPath::DeckDescription.to_string()
+}
+
+fn deck_variables_path() -> String {
+    DeckPath::DeckVariables.to_string()
+}
+
+fn deck_adapter_id_path(key: &str) -> String {
+    DeckPath::DeckAdapterId {
+        key: key.to_owned(),
+    }
+    .to_string()
+}
+
+fn variable_entry_path(path_prefix: &str, key: &str) -> String {
+    match path_prefix.parse().ok() {
+        Some(DeckPath::DeckVariables) => DeckPath::DeckVariable {
+            key: key.to_owned(),
+        },
+        Some(DeckPath::NoteTypeVariables { note_type_id }) => DeckPath::NoteTypeVariable {
+            note_type_id,
+            key: key.to_owned(),
+        },
+        Some(DeckPath::NoteTypeCardTemplateVariables {
+            note_type_id,
+            template_id,
+        }) => DeckPath::NoteTypeCardTemplateVariable {
+            note_type_id,
+            template_id,
+            key: key.to_owned(),
+        },
+        Some(DeckPath::NoteVariables { note_id }) => DeckPath::NoteVariable {
+            note_id,
+            key: key.to_owned(),
+        },
+        _ => panic!("unsupported variable deck path collection {path_prefix:?}"),
+    }
+    .to_string()
+}
+
+fn note_type_path(note_type_id: &StableId) -> String {
+    DeckPath::NoteType {
+        note_type_id: note_type_id.clone(),
+    }
+    .to_string()
+}
+
+fn note_type_name_path(note_type_id: &StableId) -> String {
+    DeckPath::NoteTypeName {
+        note_type_id: note_type_id.clone(),
+    }
+    .to_string()
+}
+
+fn note_type_variables_path(note_type_id: &StableId) -> String {
+    DeckPath::NoteTypeVariables {
+        note_type_id: note_type_id.clone(),
+    }
+    .to_string()
+}
+
+fn note_type_fields_path(note_type_id: &StableId) -> String {
+    DeckPath::NoteTypeFields {
+        note_type_id: note_type_id.clone(),
+    }
+    .to_string()
+}
+
+fn note_type_card_templates_path(note_type_id: &StableId) -> String {
+    DeckPath::NoteTypeCardTemplates {
+        note_type_id: note_type_id.clone(),
+    }
+    .to_string()
+}
+
+fn note_type_styling_path(note_type_id: &StableId) -> String {
+    DeckPath::NoteTypeStyling {
+        note_type_id: note_type_id.clone(),
+    }
+    .to_string()
+}
+
+fn note_type_adapter_ids_path(note_type_id: &StableId) -> String {
+    DeckPath::NoteTypeAdapterIds {
+        note_type_id: note_type_id.clone(),
+    }
+    .to_string()
+}
+
+fn note_type_adapter_id_path(note_type_id: &StableId, key: &str) -> String {
+    DeckPath::NoteTypeAdapterId {
+        note_type_id: note_type_id.clone(),
+        key: key.to_owned(),
+    }
+    .to_string()
+}
+
+fn card_template_path(note_type_id: &StableId, template_id: &StableId) -> String {
+    DeckPath::NoteTypeCardTemplate {
+        note_type_id: note_type_id.clone(),
+        template_id: template_id.clone(),
+    }
+    .to_string()
+}
+
+fn card_template_name_path(note_type_id: &StableId, template_id: &StableId) -> String {
+    DeckPath::NoteTypeCardTemplateName {
+        note_type_id: note_type_id.clone(),
+        template_id: template_id.clone(),
+    }
+    .to_string()
+}
+
+fn card_template_variables_path(note_type_id: &StableId, template_id: &StableId) -> String {
+    DeckPath::NoteTypeCardTemplateVariables {
+        note_type_id: note_type_id.clone(),
+        template_id: template_id.clone(),
+    }
+    .to_string()
+}
+
+fn card_template_question_format_path(note_type_id: &StableId, template_id: &StableId) -> String {
+    DeckPath::NoteTypeCardTemplateQuestionFormat {
+        note_type_id: note_type_id.clone(),
+        template_id: template_id.clone(),
+    }
+    .to_string()
+}
+
+fn card_template_answer_format_path(note_type_id: &StableId, template_id: &StableId) -> String {
+    DeckPath::NoteTypeCardTemplateAnswerFormat {
+        note_type_id: note_type_id.clone(),
+        template_id: template_id.clone(),
+    }
+    .to_string()
+}
+
+fn card_template_adapter_id_path(
+    note_type_id: &StableId,
+    template_id: &StableId,
+    key: &str,
+) -> String {
+    DeckPath::NoteTypeCardTemplateAdapterId {
+        note_type_id: note_type_id.clone(),
+        template_id: template_id.clone(),
+        key: key.to_owned(),
+    }
+    .to_string()
+}
+
+fn field_definition_path(note_type_id: &StableId, field_id: &StableId) -> String {
+    DeckPath::NoteTypeField {
+        note_type_id: note_type_id.clone(),
+        field_id: field_id.clone(),
+    }
+    .to_string()
+}
+
+fn note_path(note_id: &StableId) -> String {
+    DeckPath::Note {
+        note_id: note_id.clone(),
+    }
+    .to_string()
+}
+
+fn note_note_type_id_path(note_id: &StableId) -> String {
+    DeckPath::NoteNoteTypeId {
+        note_id: note_id.clone(),
+    }
+    .to_string()
+}
+
+fn note_variables_path(note_id: &StableId) -> String {
+    DeckPath::NoteVariables {
+        note_id: note_id.clone(),
+    }
+    .to_string()
+}
+
+fn note_tags_path(note_id: &StableId) -> String {
+    DeckPath::NoteTags {
+        note_id: note_id.clone(),
+    }
+    .to_string()
+}
+
+fn note_tag_path(note_id: &StableId, tag: &str) -> String {
+    DeckPath::NoteTag {
+        note_id: note_id.clone(),
+        tag: tag.to_owned(),
+    }
+    .to_string()
+}
+
+fn note_adapter_ids_path(note_id: &StableId) -> String {
+    DeckPath::NoteAdapterIds {
+        note_id: note_id.clone(),
+    }
+    .to_string()
+}
+
+fn note_adapter_id_path(note_id: &StableId, key: &str) -> String {
+    DeckPath::NoteAdapterId {
+        note_id: note_id.clone(),
+        key: key.to_owned(),
+    }
+    .to_string()
+}
+
+fn note_field_path(note_id: &StableId, field_id: &StableId) -> String {
+    DeckPath::NoteField {
+        note_id: note_id.clone(),
+        field_id: field_id.clone(),
+    }
+    .to_string()
+}
+
+fn note_field_message_path(note_id: &StableId, field_id: &StableId) -> String {
+    DeckPath::NoteFieldMessage {
+        note_id: note_id.clone(),
+        field_id: field_id.clone(),
+    }
+    .to_string()
+}
+
+fn media_path(media_id: &StableId) -> String {
+    DeckPath::Media {
+        media_id: media_id.clone(),
+    }
+    .to_string()
+}
+
+fn media_path_path(media_id: &StableId) -> String {
+    DeckPath::MediaPath {
+        media_id: media_id.clone(),
+    }
+    .to_string()
+}
+
+fn media_sha256_path(media_id: &StableId) -> String {
+    DeckPath::MediaSha256 {
+        media_id: media_id.clone(),
+    }
+    .to_string()
+}
+
+fn tombstone_path(id: &StableId) -> String {
+    DeckPath::Tombstone { id: id.clone() }.to_string()
+}
+
 fn media_reference_summary(media: &MediaReference) -> String {
     format!("path={};sha256={}", media.path, media.sha256)
 }
@@ -1260,7 +1506,7 @@ fn apply_note_remove(
     changed_paths: &mut BTreeMap<String, StableId>,
     errors: &mut Vec<ComposeError>,
 ) {
-    let path = format!("notes.{note_id}");
+    let path = note_path(note_id);
     if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
         return;
     }
@@ -1346,13 +1592,13 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
 
     render_string_with_variables(
         &mut rendered.name,
-        "deck.name",
+        &deck_name_path(),
         &[&deck_variables],
         &mut errors,
     );
     render_string_with_variables(
         &mut rendered.description,
-        "deck.description",
+        &deck_description_path(),
         &[&deck_variables],
         &mut errors,
     );
@@ -1361,20 +1607,24 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
         let note_type_variables = note_type.variables.clone();
         render_string_with_variables(
             &mut note_type.name,
-            &format!("note_types.{note_type_id}.name"),
+            &note_type_name_path(note_type_id),
             &[&note_type_variables, &deck_variables],
             &mut errors,
         );
         render_string_with_variables(
             &mut note_type.styling,
-            &format!("note_types.{note_type_id}.styling"),
+            &note_type_styling_path(note_type_id),
             &[&note_type_variables, &deck_variables],
             &mut errors,
         );
         for field in &mut note_type.fields {
             render_string_with_variables(
                 &mut field.name,
-                &format!("note_types.{note_type_id}.fields.{}.name", field.id),
+                &DeckPath::NoteTypeFieldName {
+                    note_type_id: note_type_id.clone(),
+                    field_id: field.id.clone(),
+                }
+                .to_string(),
                 &[&note_type_variables, &deck_variables],
                 &mut errors,
             );
@@ -1384,28 +1634,19 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
             let scopes = [&template_variables, &note_type_variables, &deck_variables];
             render_string_with_variables(
                 &mut template.name,
-                &format!(
-                    "note_types.{note_type_id}.card_templates.{}.name",
-                    template.id
-                ),
+                &card_template_name_path(note_type_id, &template.id),
                 &scopes,
                 &mut errors,
             );
             render_string_with_variables(
                 &mut template.question_format,
-                &format!(
-                    "note_types.{note_type_id}.card_templates.{}.question_format",
-                    template.id
-                ),
+                &card_template_question_format_path(note_type_id, &template.id),
                 &scopes,
                 &mut errors,
             );
             render_string_with_variables(
                 &mut template.answer_format,
-                &format!(
-                    "note_types.{note_type_id}.card_templates.{}.answer_format",
-                    template.id
-                ),
+                &card_template_answer_format_path(note_type_id, &template.id),
                 &scopes,
                 &mut errors,
             );
@@ -1419,7 +1660,7 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
             .get(&note.note_type_id)
             .map(|note_type| &note_type.variables);
         for (field_id, value) in &mut note.fields {
-            let path = format!("notes.{note_id}.fields.{field_id}");
+            let path = note_field_path(note_id, field_id);
             if let Some(note_type_variables) = note_type_variables {
                 render_string_with_variables(
                     value,
@@ -1444,7 +1685,7 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
             };
             render_message_variables(
                 message,
-                &format!("notes.{note_id}.fields.{field_id}.message"),
+                &note_field_message_path(note_id, field_id),
                 &scopes,
                 &mut errors,
             );
@@ -1476,12 +1717,31 @@ fn render_message_variables(
     scopes: &[&BTreeMap<String, String>],
     errors: &mut Vec<VariableRenderError>,
 ) {
+    let DeckPath::NoteFieldMessage { note_id, field_id } = path.parse().expect("message path")
+    else {
+        panic!("unsupported message path {path:?}");
+    };
+
     if let Some(format) = &mut message.format {
-        render_string_with_variables(format, &format!("{path}.format"), scopes, errors);
+        render_string_with_variables(
+            format,
+            &DeckPath::NoteFieldMessageFormat {
+                note_id: note_id.clone(),
+                field_id: field_id.clone(),
+            }
+            .to_string(),
+            scopes,
+            errors,
+        );
         for (variable, component) in &mut message.variables {
             render_message_component_variables(
                 component,
-                &format!("{path}.variables.{variable}"),
+                &DeckPath::NoteFieldMessageVariable {
+                    note_id: note_id.clone(),
+                    field_id: field_id.clone(),
+                    variable: variable.clone(),
+                }
+                .to_string(),
                 scopes,
                 errors,
             );
@@ -1490,7 +1750,17 @@ fn render_message_variables(
     }
 
     for (index, component) in message.components.iter_mut().enumerate() {
-        render_message_component_variables(component, &format!("{path}.{index}"), scopes, errors);
+        render_message_component_variables(
+            component,
+            &DeckPath::NoteFieldMessageComponent {
+                note_id: note_id.clone(),
+                field_id: field_id.clone(),
+                index,
+            }
+            .to_string(),
+            scopes,
+            errors,
+        );
     }
 }
 
@@ -1555,49 +1825,49 @@ fn diff_note_types(
 ) {
     for id in left.keys() {
         if !right.contains_key(id) {
-            changes.push(SemanticChange::removed(format!("note_types.{id}")));
+            changes.push(SemanticChange::removed(note_type_path(id)));
         }
     }
 
     for (id, right_note_type) in right {
         let Some(left_note_type) = left.get(id) else {
-            changes.push(SemanticChange::added(format!("note_types.{id}")));
+            changes.push(SemanticChange::added(note_type_path(id)));
             continue;
         };
 
         push_modified_if_changed(
             changes,
-            format!("note_types.{id}.name"),
+            note_type_name_path(id),
             &left_note_type.name,
             &right_note_type.name,
         );
         push_modified_if_changed(
             changes,
-            format!("note_types.{id}.styling"),
+            note_type_styling_path(id),
             &left_note_type.styling,
             &right_note_type.styling,
         );
         push_modified_if_changed(
             changes,
-            format!("note_types.{id}.variables"),
+            note_type_variables_path(id),
             &string_map_summary(&left_note_type.variables),
             &string_map_summary(&right_note_type.variables),
         );
         push_modified_if_changed(
             changes,
-            format!("note_types.{id}.fields"),
+            note_type_fields_path(id),
             &field_summary(&left_note_type.fields),
             &field_summary(&right_note_type.fields),
         );
         push_modified_if_changed(
             changes,
-            format!("note_types.{id}.card_templates"),
+            note_type_card_templates_path(id),
             &template_summary(&left_note_type.card_templates),
             &template_summary(&right_note_type.card_templates),
         );
         push_modified_if_changed(
             changes,
-            format!("note_types.{id}.adapter_ids"),
+            note_type_adapter_ids_path(id),
             &adapter_ids_summary(&left_note_type.adapter_ids),
             &adapter_ids_summary(&right_note_type.adapter_ids),
         );
@@ -1611,38 +1881,38 @@ fn diff_notes(
 ) {
     for id in left.keys() {
         if !right.contains_key(id) {
-            changes.push(SemanticChange::removed(format!("notes.{id}")));
+            changes.push(SemanticChange::removed(note_path(id)));
         }
     }
 
     for (id, right_note) in right {
         let Some(left_note) = left.get(id) else {
-            changes.push(SemanticChange::added(format!("notes.{id}")));
+            changes.push(SemanticChange::added(note_path(id)));
             continue;
         };
 
         push_modified_if_changed(
             changes,
-            format!("notes.{id}.note_type_id"),
+            note_note_type_id_path(id),
             &left_note.note_type_id.to_string(),
             &right_note.note_type_id.to_string(),
         );
         push_modified_if_changed(
             changes,
-            format!("notes.{id}.variables"),
+            note_variables_path(id),
             &string_map_summary(&left_note.variables),
             &string_map_summary(&right_note.variables),
         );
         diff_note_fields(id, &left_note.fields, &right_note.fields, changes);
         push_modified_if_changed(
             changes,
-            format!("notes.{id}.tags"),
+            note_tags_path(id),
             &set_summary(&left_note.tags),
             &set_summary(&right_note.tags),
         );
         push_modified_if_changed(
             changes,
-            format!("notes.{id}.adapter_ids"),
+            note_adapter_ids_path(id),
             &adapter_ids_summary(&left_note.adapter_ids),
             &adapter_ids_summary(&right_note.adapter_ids),
         );
@@ -1659,7 +1929,7 @@ fn diff_note_fields(
         if !right.contains_key(field_id) {
             changes.push(SemanticChange::new(
                 SemanticChangeKind::Removed,
-                format!("notes.{note_id}.fields.{field_id}"),
+                note_field_path(note_id, field_id),
                 left.get(field_id).cloned(),
                 None,
             ));
@@ -1670,7 +1940,7 @@ fn diff_note_fields(
         let Some(left_value) = left.get(field_id) else {
             changes.push(SemanticChange::new(
                 SemanticChangeKind::Added,
-                format!("notes.{note_id}.fields.{field_id}"),
+                note_field_path(note_id, field_id),
                 None,
                 Some(right_value.clone()),
             ));
@@ -1679,7 +1949,7 @@ fn diff_note_fields(
 
         push_modified_if_changed(
             changes,
-            format!("notes.{note_id}.fields.{field_id}"),
+            note_field_path(note_id, field_id),
             left_value,
             right_value,
         );
@@ -1693,25 +1963,25 @@ fn diff_media(
 ) {
     for id in left.keys() {
         if !right.contains_key(id) {
-            changes.push(SemanticChange::removed(format!("media.{id}")));
+            changes.push(SemanticChange::removed(media_path(id)));
         }
     }
 
     for (id, right_media) in right {
         let Some(left_media) = left.get(id) else {
-            changes.push(SemanticChange::added(format!("media.{id}")));
+            changes.push(SemanticChange::added(media_path(id)));
             continue;
         };
 
         push_modified_if_changed(
             changes,
-            format!("media.{id}.path"),
+            media_path_path(id),
             &left_media.path,
             &right_media.path,
         );
         push_modified_if_changed(
             changes,
-            format!("media.{id}.sha256"),
+            media_sha256_path(id),
             &left_media.sha256,
             &right_media.sha256,
         );
@@ -1725,7 +1995,7 @@ fn diff_tombstones(
 ) {
     for id in left {
         if !right.contains(id) {
-            changes.push(SemanticChange::removed(format!("tombstones.{id}")));
+            changes.push(SemanticChange::removed(tombstone_path(id)));
         }
     }
 
@@ -1733,7 +2003,7 @@ fn diff_tombstones(
         if !left.contains(id) {
             changes.push(SemanticChange::new(
                 SemanticChangeKind::Tombstoned,
-                format!("tombstones.{id}"),
+                tombstone_path(id),
                 None,
                 Some(id.to_string()),
             ));

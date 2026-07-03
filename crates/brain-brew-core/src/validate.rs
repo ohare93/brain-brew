@@ -12,7 +12,10 @@ impl CanonicalDeck {
             if &note_type.id != id {
                 errors.push(ValidationError::new(
                     ValidationErrorKind::MismatchedEntityId,
-                    format!("note_types.{id}.id"),
+                    DeckPath::NoteTypeId {
+                        note_type_id: id.clone(),
+                    }
+                    .to_string(),
                     format!("note type stored under {id} contains id {}", note_type.id),
                 ));
             }
@@ -20,14 +23,26 @@ impl CanonicalDeck {
             push_duplicate_id_errors(
                 note_type.fields.iter().map(|field| &field.id),
                 ValidationErrorKind::DuplicateFieldDefinition,
-                |duplicate_id| format!("note_types.{id}.fields.{duplicate_id}"),
+                |duplicate_id| {
+                    DeckPath::NoteTypeField {
+                        note_type_id: id.clone(),
+                        field_id: duplicate_id.clone(),
+                    }
+                    .to_string()
+                },
                 &mut errors,
             );
 
             push_duplicate_id_errors(
                 note_type.card_templates.iter().map(|template| &template.id),
                 ValidationErrorKind::DuplicateCardTemplate,
-                |duplicate_id| format!("note_types.{id}.card_templates.{duplicate_id}"),
+                |duplicate_id| {
+                    DeckPath::NoteTypeCardTemplate {
+                        note_type_id: id.clone(),
+                        template_id: duplicate_id.clone(),
+                    }
+                    .to_string()
+                },
                 &mut errors,
             );
         }
@@ -36,7 +51,10 @@ impl CanonicalDeck {
             if &media.id != id {
                 errors.push(ValidationError::new(
                     ValidationErrorKind::MismatchedEntityId,
-                    format!("media.{id}.id"),
+                    DeckPath::MediaId {
+                        media_id: id.clone(),
+                    }
+                    .to_string(),
                     format!("media stored under {id} contains id {}", media.id),
                 ));
             }
@@ -46,7 +64,10 @@ impl CanonicalDeck {
             if &note.id != id {
                 errors.push(ValidationError::new(
                     ValidationErrorKind::MismatchedEntityId,
-                    format!("notes.{id}.id"),
+                    DeckPath::NoteId {
+                        note_id: id.clone(),
+                    }
+                    .to_string(),
                     format!("note stored under {id} contains id {}", note.id),
                 ));
             }
@@ -54,7 +75,10 @@ impl CanonicalDeck {
             let Some(note_type) = self.note_types.get(&note.note_type_id) else {
                 errors.push(ValidationError::new(
                     ValidationErrorKind::MissingNoteType,
-                    format!("notes.{id}.note_type_id"),
+                    DeckPath::NoteNoteTypeId {
+                        note_id: id.clone(),
+                    }
+                    .to_string(),
                     format!("note references missing note type {}", note.note_type_id),
                 ));
                 continue;
@@ -70,7 +94,11 @@ impl CanonicalDeck {
                 if !expected_field_ids.contains(field_id) {
                     errors.push(ValidationError::new(
                         ValidationErrorKind::UnknownNoteField,
-                        format!("notes.{id}.fields.{field_id}"),
+                        DeckPath::NoteField {
+                            note_id: id.clone(),
+                            field_id: field_id.clone(),
+                        }
+                        .to_string(),
                         format!(
                             "note field {field_id} is not defined by note type {}",
                             note.note_type_id
@@ -83,7 +111,11 @@ impl CanonicalDeck {
                 if !expected_field_ids.contains(field_id) {
                     errors.push(ValidationError::new(
                         ValidationErrorKind::UnknownNoteField,
-                        format!("notes.{id}.fields.{field_id}.message"),
+                        DeckPath::NoteFieldMessage {
+                            note_id: id.clone(),
+                            field_id: field_id.clone(),
+                        }
+                        .to_string(),
                         format!(
                             "structured message field {field_id} is not defined by note type {}",
                             note.note_type_id
@@ -97,7 +129,11 @@ impl CanonicalDeck {
                 if !note.fields.contains_key(&field_id) {
                     errors.push(ValidationError::new(
                         ValidationErrorKind::MissingNoteField,
-                        format!("notes.{id}.fields.{field_id}"),
+                        DeckPath::NoteField {
+                            note_id: id.clone(),
+                            field_id: field_id.clone(),
+                        }
+                        .to_string(),
                         format!(
                             "note is missing field {field_id} defined by note type {}",
                             note.note_type_id
