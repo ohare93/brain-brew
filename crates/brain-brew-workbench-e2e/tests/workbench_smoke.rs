@@ -50,7 +50,7 @@ async fn workbench_app_shell_loads_workspace_metadata() -> Result<()> {
 async fn workbench_ignores_stale_language_reload_responses() -> Result<()> {
     let artifacts = ArtifactDir::new("language-freshness")?;
     let workspace = TempDir::new().context("create freshness E2E workspace")?;
-    write_small_workbench_fixture(workspace.path())?;
+    write_multi_language_workbench_fixture(workspace.path())?;
 
     let server = RunningWorkbenchServer::spawn(
         workspace.path().join("brainbrew.yaml"),
@@ -403,7 +403,7 @@ async fn run_language_freshness_smoke(
     driver: &WebDriver,
     server: &RunningWorkbenchServer,
 ) -> Result<()> {
-    install_delayed_note_list_fetch(driver, "en", 800).await?;
+    install_delayed_note_list_fetch(driver, "nb").await?;
     install_fetch_recorder(driver).await?;
     driver
         .goto(server.url("/"))
@@ -412,33 +412,73 @@ async fn run_language_freshness_smoke(
     wait_for_loaded_probe(driver).await?;
     wait_for_element(driver, "#language-select").await?;
 
-    select_value(
+    dispatch_select_change(
         driver,
         "#language-select",
-        "en",
-        "switch to delayed English language",
+        "nb",
+        "switch to delayed Norwegian language",
     )
     .await?;
-    select_value(
+    wait_for_js_bool(
+        driver,
+        r#"
+        const select = document.getElementById('language-select');
+        const active = document.querySelector('#workbench-dom-panel [data-language="da"]');
+        const delayed = Array.isArray(window.__brainbrewDelayedNoteListFetches)
+            && window.__brainbrewDelayedNoteListFetches.some((fetch) =>
+                fetch.language === 'nb' && fetch.state === 'pending'
+            );
+        return select && select.value === 'nb' && active !== null && delayed;
+        "#,
+        "delayed Norwegian reload is pending while the previous Danish panel remains visible",
+    )
+    .await?;
+
+    dispatch_select_change(
         driver,
         "#language-select",
         "da",
         "switch back to Danish language",
     )
     .await?;
+    driver
+        .execute(
+            "window.__brainbrewReleaseDelayedNoteListFetches();",
+            Vec::new(),
+        )
+        .await
+        .context("release delayed Norwegian note-list fetch")?;
 
     wait_for_js_bool(
         driver,
         r#"
+        const noteListRecordCompletedFor = (language) => {
+            const records = Array.isArray(window.__brainbrewFetchRecords)
+                ? window.__brainbrewFetchRecords
+                : [];
+            return records.some((record) => {
+                if (record.state !== 'body-consumed') return false;
+                const parsed = new URL(record.url, window.location.href);
+                return parsed.pathname === '/api/workbench/note-list'
+                    && parsed.searchParams.get('language') === language;
+            });
+        };
         const select = document.getElementById('language-select');
         const active = document.querySelector('#workbench-dom-panel [data-language="da"]');
-        const stale = document.querySelector('#workbench-dom-panel [data-language="en"]');
-        return select && select.value === 'da' && active !== null && stale === null;
+        const stale = document.querySelector('#workbench-dom-panel [data-language="nb"]');
+        const delayedStaleCompleted = Array.isArray(window.__brainbrewDelayedNoteListFetches)
+            && window.__brainbrewDelayedNoteListFetches.some((fetch) =>
+                fetch.language === 'nb' && fetch.state === 'body-consumed'
+            );
+        return select && select.value === 'da'
+            && active !== null
+            && stale === null
+            && delayedStaleCompleted
+            && noteListRecordCompletedFor('da');
         "#,
-        "latest language remains visible after delayed stale response",
+        "latest language remains visible after delayed stale response completes",
     )
     .await?;
-    tokio::time::sleep(Duration::from_millis(950)).await;
     let final_language = driver
         .execute(
             "return document.getElementById('language-select').value;",
@@ -1862,6 +1902,34 @@ async fn select_value(driver: &WebDriver, css: &str, value: &str, description: &
         .with_context(|| format!("{description} via {css}={value:?}"))
 }
 
+async fn dispatch_select_change(
+    driver: &WebDriver,
+    css: &str,
+    value: &str,
+    description: &str,
+) -> Result<()> {
+    let script = format!(
+        r#"
+        const select = document.querySelector({css:?});
+        if (!select) return false;
+        select.value = {value:?};
+        if (select.value !== {value:?}) return false;
+        select.dispatchEvent(new Event('change', {{ bubbles: true }}));
+        return true;
+        "#,
+    );
+    let changed = driver
+        .execute(script.as_str(), Vec::new())
+        .await
+        .with_context(|| format!("{description} via {css}={value:?}"))?;
+    assert_eq!(
+        changed.json().as_bool(),
+        Some(true),
+        "{description} via {css}={value:?}"
+    );
+    Ok(())
+}
+
 async fn wait_for_text(driver: &WebDriver, expected: &str) -> Result<()> {
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
@@ -2092,17 +2160,38 @@ async fn assert_contenteditable_state(
     Ok(())
 }
 
-async fn install_delayed_note_list_fetch(
-    driver: &WebDriver,
-    delayed_language: &str,
-    delay_ms: u64,
-) -> Result<()> {
+async fn install_delayed_note_list_fetch(driver: &WebDriver, delayed_language: &str) -> Result<()> {
     let script = format!(
         r#"
         (() => {{
             const originalFetch = window.fetch.bind(window);
             const delayedLanguage = {delayed_language:?};
-            const delayMs = {delay_ms};
+            window.__brainbrewDelayedNoteListFetches = [];
+            window.__brainbrewReleaseDelayedNoteListFetches = () => {{
+                for (const record of window.__brainbrewDelayedNoteListFetches) {{
+                    if (record.state === 'pending' && typeof record.release === 'function') {{
+                        record.release();
+                    }}
+                }}
+            }};
+            const recordBodyConsumption = (response, record) => {{
+                for (const method of ['json', 'text', 'arrayBuffer', 'blob', 'formData']) {{
+                    if (typeof response[method] !== 'function') continue;
+                    const originalMethod = response[method].bind(response);
+                    response[method] = (...methodArgs) => originalMethod(...methodArgs).then(
+                        (value) => {{
+                            record.state = 'body-consumed';
+                            return value;
+                        }},
+                        (error) => {{
+                            record.state = 'failed';
+                            record.error = String(error);
+                            throw error;
+                        }},
+                    );
+                }}
+                return response;
+            }};
             window.fetch = (...args) => {{
                 const request = args[0];
                 const url = typeof request === 'string'
@@ -2114,8 +2203,28 @@ async fn install_delayed_note_list_fetch(
                 if (!shouldDelay) {{
                     return originalFetch(...args);
                 }}
-                return new Promise((resolve) => setTimeout(resolve, delayMs))
-                    .then(() => originalFetch(...args));
+                let release;
+                const gate = new Promise((resolve) => {{
+                    release = () => {{
+                        record.state = 'released';
+                        resolve();
+                    }};
+                }});
+                const record = {{ language: delayedLanguage, url, state: 'pending', release }};
+                window.__brainbrewDelayedNoteListFetches.push(record);
+                return gate
+                    .then(() => originalFetch(...args))
+                    .then(
+                        (response) => {{
+                            record.state = 'response';
+                            return recordBodyConsumption(response, record);
+                        }},
+                        (error) => {{
+                            record.state = 'failed';
+                            record.error = String(error);
+                            throw error;
+                        }},
+                    );
             }};
         }})();
         "#
@@ -2138,13 +2247,44 @@ async fn install_fetch_recorder(driver: &WebDriver) -> Result<()> {
             (() => {
                 const originalFetch = window.fetch.bind(window);
                 window.__brainbrewFetchUrls = [];
+                window.__brainbrewFetchRecords = [];
+                const recordBodyConsumption = (response, record) => {
+                    for (const method of ['json', 'text', 'arrayBuffer', 'blob', 'formData']) {
+                        if (typeof response[method] !== 'function') continue;
+                        const originalMethod = response[method].bind(response);
+                        response[method] = (...methodArgs) => originalMethod(...methodArgs).then(
+                            (value) => {
+                                record.state = 'body-consumed';
+                                return value;
+                            },
+                            (error) => {
+                                record.state = 'failed';
+                                record.error = String(error);
+                                throw error;
+                            },
+                        );
+                    }
+                    return response;
+                };
                 window.fetch = (...args) => {
                     const request = args[0];
                     const url = typeof request === 'string'
                         ? request
                         : (request && request.url) ? request.url : String(request);
+                    const record = { url, state: 'pending' };
                     window.__brainbrewFetchUrls.push(url);
-                    return originalFetch(...args);
+                    window.__brainbrewFetchRecords.push(record);
+                    return originalFetch(...args).then(
+                        (response) => {
+                            record.state = 'response';
+                            return recordBodyConsumption(response, record);
+                        },
+                        (error) => {
+                            record.state = 'failed';
+                            record.error = String(error);
+                            throw error;
+                        },
+                    );
                 };
             })();
             "#,
