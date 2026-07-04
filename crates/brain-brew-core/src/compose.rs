@@ -1127,6 +1127,7 @@ fn apply_field_change(
         ChangeIntent::Remove => {
             note.fields.remove(field_id);
             note.field_messages.remove(field_id);
+            note.field_images.remove(field_id);
         }
         ChangeIntent::Add
         | ChangeIntent::Merge
@@ -1136,18 +1137,26 @@ fn apply_field_change(
                 note.fields.insert(field_id.clone(), String::new());
                 note.field_messages
                     .insert(field_id.clone(), message.clone());
+                note.field_images.remove(field_id);
+                return;
+            }
+            if let Some(images) = &change.images {
+                note.fields.insert(field_id.clone(), String::new());
+                note.field_images.insert(field_id.clone(), images.clone());
+                note.field_messages.remove(field_id);
                 return;
             }
             let Some(value) = &change.value else {
                 errors.push(ComposeError::new(
                     ComposeErrorKind::MissingOverlayPayload,
                     path,
-                    format!("field change for {field_id} must include a value or message"),
+                    format!("field change for {field_id} must include a value, message, or images"),
                 ));
                 return;
             };
             note.fields.insert(field_id.clone(), value.clone());
             note.field_messages.remove(field_id);
+            note.field_images.remove(field_id);
         }
     }
 }

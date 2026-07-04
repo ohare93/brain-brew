@@ -499,6 +499,7 @@ fn ug_style_deck() -> CanonicalDeck {
             (sid("field.flag"), "<img src=\"fi.png\">".to_owned()),
         ]),
         field_messages: BTreeMap::new(),
+        field_images: BTreeMap::new(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: note_adapter_ids,
     };

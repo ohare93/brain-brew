@@ -3,9 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, CardTemplateSide,
     ChangeIntent, ComposeErrorKind, DeckChange, ExpectedBase, FieldChange, FieldDefinition,
-    FieldDefinitionChange, MediaChange, MediaReference, MessageComponent, Note, NoteChange,
-    NoteType, NoteTypeChange, Overlay, OverlayKind, PropertyChange, StableId, StaleTranslation,
-    StructuredMessage, TagChange, TargetAdaptation, TranslationCoverageCategory,
+    FieldDefinitionChange, FieldImageReference, MediaChange, MediaReference, MessageComponent,
+    Note, NoteChange, NoteType, NoteTypeChange, Overlay, OverlayKind, PropertyChange, StableId,
+    StaleTranslation, StructuredMessage, TagChange, TargetAdaptation, TranslationCoverageCategory,
     TranslationDictionary,
 };
 
@@ -118,6 +118,7 @@ fn extension_overlay_can_add_a_note_type_and_notes_using_it() {
                         (sid("field.map"), "<img src=\"europe.png\" />".to_owned()),
                     ]),
                     field_messages: BTreeMap::new(),
+                    field_images: BTreeMap::new(),
                     tags: BTreeSet::from(["UG::Europe".to_owned()]),
                     adapter_ids: AdapterIds::new(),
                 }),
@@ -1372,6 +1373,93 @@ fn translation_dictionary_reports_structured_message_missing_and_stale_component
 }
 
 #[test]
+fn field_image_changes_replace_raw_fields_and_raw_changes_clear_images() {
+    let mut base = ug_style_deck();
+    base.notes
+        .get_mut(&sid("note.finland"))
+        .unwrap()
+        .fields
+        .insert(sid("field.flag"), "raw flag html".to_owned());
+
+    let to_image = Overlay {
+        id: sid("overlay.patch.flag-image"),
+        kind: OverlayKind::Patch,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::from([(
+            sid("note.finland"),
+            NoteChange {
+                intent: ChangeIntent::Merge,
+                note: None,
+                variables: BTreeMap::new(),
+                fields: BTreeMap::from([(
+                    sid("field.flag"),
+                    FieldChange {
+                        intent: ChangeIntent::Replace,
+                        value: None,
+                        message: None,
+                        images: Some(vec![FieldImageReference {
+                            media_id: sid("media.flag.finland"),
+                        }]),
+                        expected_base: Some(ExpectedBase::Value("raw flag html".to_owned())),
+                    },
+                )]),
+                tags: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: None,
+            },
+        )]),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let imaged = base.compose(&[to_image]).expect("image field composes");
+    let note = &imaged.notes[&sid("note.finland")];
+    assert_eq!(note.fields[&sid("field.flag")], "");
+    assert_eq!(
+        note.field_images[&sid("field.flag")][0].media_id,
+        sid("media.flag.finland")
+    );
+    assert!(!note.field_messages.contains_key(&sid("field.flag")));
+
+    let to_raw = Overlay {
+        id: sid("overlay.patch.flag-raw"),
+        kind: OverlayKind::Patch,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::from([(
+            sid("note.finland"),
+            NoteChange {
+                intent: ChangeIntent::Merge,
+                note: None,
+                variables: BTreeMap::new(),
+                fields: BTreeMap::from([(
+                    sid("field.flag"),
+                    FieldChange {
+                        intent: ChangeIntent::Replace,
+                        value: Some("replacement raw html".to_owned()),
+                        message: None,
+                        images: None,
+                        expected_base: Some(ExpectedBase::Value(String::new())),
+                    },
+                )]),
+                tags: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: None,
+            },
+        )]),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let raw = imaged.compose(&[to_raw]).expect("raw replacement composes");
+    let note = &raw.notes[&sid("note.finland")];
+    assert_eq!(note.fields[&sid("field.flag")], "replacement raw html");
+    assert!(!note.field_images.contains_key(&sid("field.flag")));
+    assert!(!note.field_messages.contains_key(&sid("field.flag")));
+}
+
+#[test]
 fn extension_overlay_can_add_a_note_type_field_and_backfill_note_values() {
     let base = ug_style_deck();
     let overlay = Overlay {
@@ -1415,6 +1503,7 @@ fn extension_overlay_can_add_a_note_type_field_and_backfill_note_values() {
                         intent: ChangeIntent::Add,
                         value: Some("5.6 million".to_owned()),
                         message: None,
+                        images: None,
                         expected_base: None,
                     },
                 )]),
@@ -1850,6 +1939,7 @@ fn overlay_replacing_capital(
                         intent,
                         value: Some(value.to_owned()),
                         message: None,
+                        images: None,
                         expected_base,
                     },
                 )]),
@@ -1909,6 +1999,7 @@ fn ug_style_deck() -> CanonicalDeck {
             (sid("field.flag"), "<img src=\"fi.png\">".to_owned()),
         ]),
         field_messages: BTreeMap::new(),
+        field_images: BTreeMap::new(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: note_adapter_ids,
     };
@@ -1959,6 +2050,7 @@ fn ug_style_deck_with_variable_field_ref_message(target_note: &str) -> Canonical
                 (sid("field.summary"), String::new()),
             ]),
             field_messages: BTreeMap::new(),
+            field_images: BTreeMap::new(),
             tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
             adapter_ids: AdapterIds::new(),
         },
@@ -2004,6 +2096,7 @@ fn ug_style_deck_with_flag_similarity_message() -> CanonicalDeck {
                 (sid("field.flag-similarity"), String::new()),
             ]),
             field_messages: BTreeMap::new(),
+            field_images: BTreeMap::new(),
             tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
             adapter_ids: AdapterIds::new(),
         },
@@ -2021,6 +2114,7 @@ fn ug_style_deck_with_flag_similarity_message() -> CanonicalDeck {
                 (sid("field.flag-similarity"), String::new()),
             ]),
             field_messages: BTreeMap::new(),
+            field_images: BTreeMap::new(),
             tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
             adapter_ids: AdapterIds::new(),
         },
@@ -2071,6 +2165,7 @@ fn sweden_note() -> Note {
             (sid("field.flag"), "<img src=\"se.png\">".to_owned()),
         ]),
         field_messages: BTreeMap::new(),
+        field_images: BTreeMap::new(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: AdapterIds::new(),
     }

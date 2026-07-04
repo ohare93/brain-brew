@@ -4,7 +4,7 @@ use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, MediaReference, Note, NoteType,
     SemanticChangeKind, StableId,
 };
-use brain_brew_formats::{canonical_yaml, crowdanki};
+use brain_brew_formats::{canonical_yaml, crowdanki, source_includes};
 
 #[test]
 fn emits_canonical_deck_yaml_with_explicit_order_arrays() {
@@ -516,6 +516,77 @@ translations:
 }
 
 #[test]
+fn parses_emits_and_formats_structured_image_fields() {
+    let yaml = image_deck_yaml("field.flag: !image media.flag.finland");
+
+    let deck = canonical_yaml::from_str(&yaml).expect("image field yaml parses");
+    let note = &deck.notes[&sid("note.finland")];
+    assert_eq!(note.fields[&sid("field.flag")], "");
+    assert_eq!(
+        note.field_images[&sid("field.flag")][0].media_id,
+        sid("media.flag.finland")
+    );
+
+    let emitted = canonical_yaml::to_string(&deck).expect("image field emits");
+    assert!(emitted.contains("field.flag: !image media.flag.finland\n"));
+    let reparsed = canonical_yaml::from_str(&emitted).expect("emitted image yaml parses");
+    assert_eq!(reparsed, deck);
+
+    let once = canonical_yaml::format_str(&yaml).expect("image field formats once");
+    let twice = canonical_yaml::format_str(&once).expect("image field formats twice");
+    assert_eq!(twice, once);
+}
+
+#[test]
+fn image_field_sequence_canonicalizes_singletons_and_emits_block_sequences() {
+    let singleton = canonical_yaml::format_str(&image_deck_yaml(
+        "field.flag:\n        - !image media.flag.finland",
+    ))
+    .expect("singleton image sequence formats");
+    assert!(singleton.contains("field.flag: !image media.flag.finland\n"));
+
+    let sequence = canonical_yaml::format_str(&image_deck_yaml(
+        "field.flag:\n        - !image media.flag.finland\n        - !image media.flag.finland.blur",
+    ))
+    .expect("image sequence formats");
+    assert!(sequence.contains(
+        "field.flag:\n        - !image media.flag.finland\n        - !image media.flag.finland.blur\n"
+    ));
+    let parsed = canonical_yaml::from_str(&sequence).expect("image sequence parses");
+    assert_eq!(
+        parsed.notes[&sid("note.finland")].field_images[&sid("field.flag")].len(),
+        2
+    );
+    assert_eq!(canonical_yaml::format_str(&sequence).unwrap(), sequence);
+}
+
+#[test]
+fn include_resolver_passes_image_tags_through_when_includes_are_present() {
+    let dir = std::env::temp_dir().join(format!("brain-brew-image-include-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(dir.join("capital.txt"), "Helsinki").expect("write include");
+    let source = image_deck_yaml("field.flag: !image media.flag.finland")
+        .replace("description: ''", "description: !include capital.txt");
+
+    let resolved =
+        source_includes::resolve_file_includes(&source, &dir.join("deck.yaml"), &dir, &[])
+            .expect("include resolver accepts !image alongside !include");
+
+    assert!(resolved.contains("!image media.flag.finland"));
+    let formatted =
+        source_includes::format_preserving_file_includes(&source, canonical_yaml::format_str)
+            .expect("include-preserving format accepts !image alongside !include");
+    assert!(formatted.contains("field.flag: !image media.flag.finland\n"));
+    let deck = canonical_yaml::from_str(&resolved).expect("resolved deck parses");
+    assert!(
+        deck.notes[&sid("note.finland")]
+            .field_images
+            .contains_key(&sid("field.flag"))
+    );
+}
+
+#[test]
 fn parser_rejects_unknown_fields_in_canonical_yaml() {
     let yaml = EXPECTED_CANONICAL_YAML.replace(
         "name: Ultimate Geography\n",
@@ -577,6 +648,52 @@ media:
 tombstones: []
 "#;
 
+fn image_deck_yaml(flag_field_yaml: &str) -> String {
+    format!(
+        r#"deck:
+  id: deck.image-fixture
+  name: Image Fixture
+  description: ''
+  adapter_ids: {{}}
+note_types:
+  note-type.country:
+    name: Country
+    field_order:
+      - field.country
+      - field.capital
+      - field.flag
+    fields:
+      field.country:
+        name: Country
+      field.capital:
+        name: Capital
+      field.flag:
+        name: Flag
+    card_template_order: []
+    card_templates: {{}}
+    styling: ''
+    adapter_ids: {{}}
+notes:
+  note.finland:
+    note_type_id: note-type.country
+    fields:
+      field.country: Finland
+      field.capital: Helsinki
+      {flag_field_yaml}
+    tags: []
+    adapter_ids: {{}}
+media:
+  media.flag.finland:
+    path: flags/fi.png
+    sha256: hash-fi
+  media.flag.finland.blur:
+    path: flags/fi-blur.png
+    sha256: hash-fi-blur
+tombstones: []
+"#
+    )
+}
+
 fn ug_style_deck() -> CanonicalDeck {
     let deck_adapter_ids = AdapterIds::new();
     let mut note_type_adapter_ids = AdapterIds::new();
@@ -625,6 +742,7 @@ fn ug_style_deck() -> CanonicalDeck {
             (sid("field.flag"), "<img src=\"fi.png\">".to_owned()),
         ]),
         field_messages: BTreeMap::new(),
+        field_images: BTreeMap::new(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: note_adapter_ids,
     };

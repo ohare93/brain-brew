@@ -1080,6 +1080,7 @@ pub struct FieldChange {
     pub intent: ChangeIntent,
     pub value: Option<String>,
     pub message: Option<StructuredMessage>,
+    pub images: Option<Vec<FieldImageReference>>,
     pub expected_base: Option<ExpectedBase>,
 }
 
@@ -1121,8 +1122,15 @@ pub struct Note {
     pub variables: BTreeMap<String, String>,
     pub fields: BTreeMap<StableId, String>,
     pub field_messages: BTreeMap<StableId, StructuredMessage>,
+    pub field_images: BTreeMap<StableId, Vec<FieldImageReference>>,
     pub tags: BTreeSet<String>,
     pub adapter_ids: AdapterIds,
+}
+
+/// A structured reference from a note field to a declared media asset by stable ID.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FieldImageReference {
+    pub media_id: StableId,
 }
 
 /// A field value assembled from reusable references, translatable fragments, and literal glue.
@@ -1389,4 +1397,5 @@ pub enum ValidationErrorKind {
     DuplicateCardTemplate,
     InvalidMessageReference,
     InvalidStableId,
+    ConflictingFieldRepresentation,
 }

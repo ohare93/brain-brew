@@ -127,6 +127,7 @@ fn draft_note_changes(left: &CanonicalDeck, right: &CanonicalDeck, overlay: &mut
                         intent: ChangeIntent::Replace,
                         value: Some(right_value.clone()),
                         message: None,
+                        images: None,
                         expected_base: Some(ExpectedBase::Value(left_value.clone())),
                     },
                 );

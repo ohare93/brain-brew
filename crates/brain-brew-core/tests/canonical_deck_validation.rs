@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
-    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, MediaReference, Note, NoteType,
-    StableId, ValidationErrorKind,
+    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, MediaReference,
+    Note, NoteType, StableId, ValidationErrorKind,
 };
 
 #[test]
@@ -93,6 +93,32 @@ fn validation_rejects_note_fields_not_defined_by_its_note_type() {
             .iter()
             .any(|error| error.path == "notes.note.finland.fields.field.population")
     );
+}
+
+#[test]
+fn validation_rejects_conflicting_field_representations() {
+    let mut deck = ug_style_deck();
+    let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
+    note.fields
+        .insert(sid("field.flag"), "raw flag html".to_owned());
+    note.field_images.insert(
+        sid("field.flag"),
+        vec![FieldImageReference {
+            media_id: sid("media.flag.finland"),
+        }],
+    );
+
+    let report = deck
+        .validate()
+        .expect_err("raw field plus structured image must fail validation");
+
+    assert!(report.has_kind(ValidationErrorKind::ConflictingFieldRepresentation));
+    assert!(report.errors.iter().any(|error| {
+        error.path == "notes.note.finland.fields.field.flag"
+            && error.message.contains("conflicting field representations")
+            && error.message.contains("raw value")
+            && error.message.contains("structured images")
+    }));
 }
 
 #[test]
@@ -268,6 +294,7 @@ fn ug_style_deck() -> CanonicalDeck {
             (sid("field.flag"), "<img src=\"fi.png\">".to_owned()),
         ]),
         field_messages: BTreeMap::new(),
+        field_images: BTreeMap::new(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: note_adapter_ids,
     };

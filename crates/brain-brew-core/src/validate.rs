@@ -175,6 +175,30 @@ impl CanonicalDeck {
                     &mut invalid_stable_id_paths,
                 );
             }
+            for (field_id, images) in &note.field_images {
+                push_invalid_stable_id_error(
+                    field_id,
+                    DeckPath::NoteField {
+                        note_id: id.clone(),
+                        field_id: field_id.clone(),
+                    }
+                    .to_string(),
+                    &mut errors,
+                    &mut invalid_stable_id_paths,
+                );
+                for image in images {
+                    push_invalid_stable_id_error(
+                        &image.media_id,
+                        DeckPath::NoteField {
+                            note_id: id.clone(),
+                            field_id: field_id.clone(),
+                        }
+                        .to_string(),
+                        &mut errors,
+                        &mut invalid_stable_id_paths,
+                    );
+                }
+            }
 
             if &note.id != id {
                 errors.push(ValidationError::new(
@@ -238,6 +262,74 @@ impl CanonicalDeck {
                     ));
                 }
                 validate_message_references(self, id, field_id, message, &mut errors);
+            }
+
+            for (field_id, images) in &note.field_images {
+                if images.is_empty() {
+                    errors.push(ValidationError::new(
+                        ValidationErrorKind::ConflictingFieldRepresentation,
+                        DeckPath::NoteField {
+                            note_id: id.clone(),
+                            field_id: field_id.clone(),
+                        }
+                        .to_string(),
+                        format!("structured image field {field_id} must not be empty"),
+                    ));
+                }
+                if !expected_field_ids.contains(field_id) {
+                    errors.push(ValidationError::new(
+                        ValidationErrorKind::UnknownNoteField,
+                        DeckPath::NoteField {
+                            note_id: id.clone(),
+                            field_id: field_id.clone(),
+                        }
+                        .to_string(),
+                        format!(
+                            "structured image field {field_id} is not defined by note type {}",
+                            note.note_type_id
+                        ),
+                    ));
+                }
+            }
+
+            for field_id in note
+                .fields
+                .keys()
+                .chain(note.field_messages.keys())
+                .chain(note.field_images.keys())
+                .cloned()
+                .collect::<BTreeSet<_>>()
+            {
+                let has_raw_value = note
+                    .fields
+                    .get(&field_id)
+                    .is_some_and(|value| !value.is_empty());
+                let has_message = note.field_messages.contains_key(&field_id);
+                let has_images = note.field_images.contains_key(&field_id);
+                if has_images && (has_raw_value || has_message) {
+                    let mut representations = Vec::new();
+                    if has_raw_value {
+                        representations.push("raw value");
+                    }
+                    if has_message {
+                        representations.push("structured message");
+                    }
+                    if has_images {
+                        representations.push("structured images");
+                    }
+                    errors.push(ValidationError::new(
+                        ValidationErrorKind::ConflictingFieldRepresentation,
+                        DeckPath::NoteField {
+                            note_id: id.clone(),
+                            field_id: field_id.clone(),
+                        }
+                        .to_string(),
+                        format!(
+                            "conflicting field representations for {field_id}: {}",
+                            representations.join(", ")
+                        ),
+                    ));
+                }
             }
 
             for field_id in expected_field_ids {

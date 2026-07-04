@@ -3,12 +3,14 @@ use std::fmt::{self, Write as _};
 
 use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, ChangeIntent,
-    DeckChange, ExpectedBase, FieldChange, FieldDefinition, FieldDefinitionChange, InvalidStableId,
-    MediaChange, MediaReference, MessageComponent, Note, NoteChange, NoteType, NoteTypeChange,
-    Overlay, OverlayKind, PropertyChange, StableId, StaleTranslation, StructuredMessage, TagChange,
-    TargetAdaptation, TranslationDictionary, ValidationReport,
+    DeckChange, ExpectedBase, FieldChange, FieldDefinition, FieldDefinitionChange,
+    FieldImageReference, InvalidStableId, MediaChange, MediaReference, MessageComponent, Note,
+    NoteChange, NoteType, NoteTypeChange, Overlay, OverlayKind, PropertyChange, StableId,
+    StaleTranslation, StructuredMessage, TagChange, TargetAdaptation, TranslationDictionary,
+    ValidationReport,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+use serde_yaml::Value;
 
 use crate::yaml_scalar::{scalar as yaml_scalar, write_multiline_or_scalar};
 
@@ -119,6 +121,8 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
             for (field_id, value) in &note.fields {
                 if let Some(message) = note.field_messages.get(field_id) {
                     write_structured_message_field(&mut out, "      ", field_id, message);
+                } else if let Some(images) = note.field_images.get(field_id) {
+                    write_image_field_value(&mut out, "      ", field_id, images);
                 } else {
                     writeln!(out, "      {field_id}: {}", yaml_scalar(value))
                         .expect("writing to a string cannot fail");
@@ -360,13 +364,14 @@ pub fn overlay_to_string(overlay: &Overlay) -> String {
 #[derive(Default)]
 struct FieldAdditionsForFormat {
     fields: BTreeMap<StableId, String>,
-    values: BTreeMap<StableId, BTreeMap<StableId, String>>,
+    values: BTreeMap<StableId, BTreeMap<StableId, FieldValueForFormat>>,
 }
 
 #[derive(Clone)]
-enum FieldFillForFormat {
+enum FieldValueForFormat {
     Scalar(String),
     Message(StructuredMessage),
+    Images(Vec<FieldImageReference>),
 }
 
 fn split_field_additions_for_format(
@@ -416,7 +421,7 @@ fn split_field_additions_for_format(
         }
         for (field_id, field_change) in &change.fields {
             if field_change.intent == ChangeIntent::Add && field_change.expected_base.is_none() {
-                let Some(value) = &field_change.value else {
+                let Some(value) = field_addition_format_value(field_change) else {
                     continue;
                 };
                 let Some(note_type_id) = field_to_note_type.get(field_id) else {
@@ -428,7 +433,7 @@ fn split_field_additions_for_format(
                     .values
                     .entry(note_id.clone())
                     .or_default()
-                    .insert(field_id.clone(), value.clone());
+                    .insert(field_id.clone(), value);
             }
         }
     }
@@ -462,10 +467,10 @@ fn split_field_additions_for_format(
 fn split_field_fills_for_format(
     mut note_changes: BTreeMap<StableId, NoteChange>,
 ) -> (
-    BTreeMap<StableId, BTreeMap<StableId, FieldFillForFormat>>,
+    BTreeMap<StableId, BTreeMap<StableId, FieldValueForFormat>>,
     BTreeMap<StableId, NoteChange>,
 ) {
-    let mut field_fills = BTreeMap::<StableId, BTreeMap<StableId, FieldFillForFormat>>::new();
+    let mut field_fills = BTreeMap::<StableId, BTreeMap<StableId, FieldValueForFormat>>::new();
 
     for (note_id, change) in &note_changes {
         if change.intent != ChangeIntent::Merge {
@@ -494,20 +499,37 @@ fn split_field_fills_for_format(
     (field_fills, note_changes)
 }
 
-fn field_fill_value(change: &FieldChange) -> Option<FieldFillForFormat> {
+fn field_fill_value(change: &FieldChange) -> Option<FieldValueForFormat> {
     if change.intent == ChangeIntent::Replace
         && matches!(change.expected_base, Some(ExpectedBase::Value(ref value)) if value.is_empty())
     {
-        if let Some(message) = &change.message {
-            Some(FieldFillForFormat::Message(message.clone()))
-        } else {
-            change
-                .value
-                .as_ref()
-                .map(|value| FieldFillForFormat::Scalar(value.clone()))
-        }
+        field_change_format_value(change)
     } else {
         None
+    }
+}
+
+fn field_addition_format_value(change: &FieldChange) -> Option<FieldValueForFormat> {
+    if let Some(images) = &change.images {
+        Some(FieldValueForFormat::Images(images.clone()))
+    } else {
+        change
+            .value
+            .as_ref()
+            .map(|value| FieldValueForFormat::Scalar(value.clone()))
+    }
+}
+
+fn field_change_format_value(change: &FieldChange) -> Option<FieldValueForFormat> {
+    if let Some(message) = &change.message {
+        Some(FieldValueForFormat::Message(message.clone()))
+    } else if let Some(images) = &change.images {
+        Some(FieldValueForFormat::Images(images.clone()))
+    } else {
+        change
+            .value
+            .as_ref()
+            .map(|value| FieldValueForFormat::Scalar(value.clone()))
     }
 }
 
@@ -550,8 +572,7 @@ fn write_field_additions(
             for (note_id, values) in &additions.values {
                 writeln!(out, "      {note_id}:").expect("writing to a string cannot fail");
                 for (field_id, value) in values {
-                    writeln!(out, "        {field_id}: {}", yaml_scalar(value))
-                        .expect("writing to a string cannot fail");
+                    write_field_value_for_format(out, "        ", field_id, value);
                 }
             }
         }
@@ -560,21 +581,33 @@ fn write_field_additions(
 
 fn write_field_fills(
     out: &mut String,
-    field_fills: &BTreeMap<StableId, BTreeMap<StableId, FieldFillForFormat>>,
+    field_fills: &BTreeMap<StableId, BTreeMap<StableId, FieldValueForFormat>>,
 ) {
     writeln!(out, "field_fills:").expect("writing to a string cannot fail");
     for (note_id, fields) in field_fills {
         writeln!(out, "  {note_id}:").expect("writing to a string cannot fail");
         for (field_id, value) in fields {
-            match value {
-                FieldFillForFormat::Scalar(value) => {
-                    writeln!(out, "    {field_id}: {}", yaml_scalar(value))
-                        .expect("writing to a string cannot fail");
-                }
-                FieldFillForFormat::Message(message) => {
-                    write_structured_message_field(out, "    ", field_id, message);
-                }
-            }
+            write_field_value_for_format(out, "    ", field_id, value);
+        }
+    }
+}
+
+fn write_field_value_for_format(
+    out: &mut String,
+    indent: &str,
+    field_id: &StableId,
+    value: &FieldValueForFormat,
+) {
+    match value {
+        FieldValueForFormat::Scalar(value) => {
+            writeln!(out, "{indent}{field_id}: {}", yaml_scalar(value))
+                .expect("writing to a string cannot fail");
+        }
+        FieldValueForFormat::Message(message) => {
+            write_structured_message_field(out, indent, field_id, message);
+        }
+        FieldValueForFormat::Images(images) => {
+            write_image_field_value(out, indent, field_id, images);
         }
     }
 }
@@ -899,11 +932,38 @@ fn write_field_change(out: &mut String, indent: &str, field_id: &StableId, chang
     if let Some(value) = &change.value {
         write_multiline_or_scalar(out, &format!("{indent}  "), "value", value);
     }
+    if let Some(images) = &change.images {
+        write_image_change_value(out, &format!("{indent}  "), images);
+    }
     if let Some(message) = &change.message {
         write_structured_message_value(out, &format!("{indent}  "), message);
     }
     if let Some(expected_base) = &change.expected_base {
         write_expected_base(out, &format!("{indent}  "), expected_base);
+    }
+}
+
+fn write_image_change_value(out: &mut String, indent: &str, images: &[FieldImageReference]) {
+    match images {
+        [image] => {
+            writeln!(
+                out,
+                "{indent}value: !image {}",
+                yaml_scalar(image.media_id.as_str())
+            )
+            .expect("writing to a string cannot fail");
+        }
+        _ => {
+            writeln!(out, "{indent}value:").expect("writing to a string cannot fail");
+            for image in images {
+                writeln!(
+                    out,
+                    "{indent}  - !image {}",
+                    yaml_scalar(image.media_id.as_str())
+                )
+                .expect("writing to a string cannot fail");
+            }
+        }
     }
 }
 
@@ -967,6 +1027,8 @@ fn write_note_payload(out: &mut String, indent: &str, note: &Note) {
     for (field_id, value) in &note.fields {
         if let Some(message) = note.field_messages.get(field_id) {
             write_structured_message_field(out, &format!("{indent}  "), field_id, message);
+        } else if let Some(images) = note.field_images.get(field_id) {
+            write_image_field_value(out, &format!("{indent}  "), field_id, images);
         } else {
             writeln!(out, "{indent}  {field_id}: {}", yaml_scalar(value))
                 .expect("writing to a string cannot fail");
@@ -977,6 +1039,35 @@ fn write_note_payload(out: &mut String, indent: &str, note: &Note) {
         writeln!(out, "{indent}  - {}", yaml_scalar(tag)).expect("writing to a string cannot fail");
     }
     write_adapter_ids(out, indent, &note.adapter_ids);
+}
+
+fn write_image_field_value(
+    out: &mut String,
+    indent: &str,
+    field_id: &StableId,
+    images: &[FieldImageReference],
+) {
+    match images {
+        [image] => {
+            writeln!(
+                out,
+                "{indent}{field_id}: !image {}",
+                yaml_scalar(image.media_id.as_str())
+            )
+            .expect("writing to a string cannot fail");
+        }
+        _ => {
+            writeln!(out, "{indent}{field_id}:").expect("writing to a string cannot fail");
+            for image in images {
+                writeln!(
+                    out,
+                    "{indent}  - !image {}",
+                    yaml_scalar(image.media_id.as_str())
+                )
+                .expect("writing to a string cannot fail");
+            }
+        }
+    }
 }
 
 fn write_structured_message_field(
@@ -1084,6 +1175,7 @@ pub enum CanonicalYamlError {
     InvalidTranslationDictionary(String),
     InvalidFieldAddition(String),
     InvalidFieldFill(String),
+    InvalidFieldValue(String),
     MissingOrderedEntity { section: &'static str, id: String },
     UnorderedEntity { section: &'static str, id: String },
     Validation(ValidationReport),
@@ -1104,6 +1196,7 @@ impl fmt::Display for CanonicalYamlError {
             }
             Self::InvalidFieldAddition(message) => write!(f, "invalid field addition: {message}"),
             Self::InvalidFieldFill(message) => write!(f, "invalid field fill: {message}"),
+            Self::InvalidFieldValue(message) => write!(f, "invalid field value: {message}"),
             Self::MissingOrderedEntity { section, id } => {
                 write!(f, "{section} order references missing entity {id}")
             }
@@ -1226,7 +1319,7 @@ impl OverlayYaml {
 struct FieldAdditionsYaml {
     fields: BTreeMap<String, String>,
     #[serde(default)]
-    values: BTreeMap<String, BTreeMap<String, String>>,
+    values: BTreeMap<String, BTreeMap<String, FieldValueYaml>>,
 }
 
 impl FieldAdditionsYaml {
@@ -1296,12 +1389,22 @@ impl FieldAdditionsYaml {
                         "field_additions.{note_type_id}.values.{note_id}.{field_id} conflicts with another field change"
                     )));
                 }
+                let (value, images) = match value {
+                    FieldValueYaml::Scalar(value) => (Some(value), None),
+                    FieldValueYaml::Images(images) => (None, Some(images.into_images()?)),
+                    FieldValueYaml::Formatted(_) | FieldValueYaml::Message(_) => {
+                        return Err(CanonicalYamlError::InvalidFieldAddition(format!(
+                            "field_additions.{note_type_id}.values.{note_id}.{field_id} must be a scalar string or !image reference"
+                        )));
+                    }
+                };
                 note_change.fields.insert(
                     field_id,
                     FieldChange {
                         intent: ChangeIntent::Add,
-                        value: Some(value),
+                        value,
                         message: None,
+                        images,
                         expected_base: None,
                     },
                 );
@@ -1338,12 +1441,15 @@ fn apply_field_fills(
                     "field_fills.{note_id}.{field_id} conflicts with another field change"
                 )));
             }
-            let (value, message) = match value {
-                FieldValueYaml::Scalar(value) => (Some(value), None),
+            let (value, message, images) = match value {
+                FieldValueYaml::Scalar(value) => (Some(value), None, None),
+                FieldValueYaml::Images(images) => (None, None, Some(images.into_images()?)),
                 FieldValueYaml::Formatted(message) => {
-                    (None, Some(message.into_structured_message()))
+                    (None, Some(message.into_structured_message()), None)
                 }
-                FieldValueYaml::Message(message) => (None, Some(message.into_structured_message())),
+                FieldValueYaml::Message(message) => {
+                    (None, Some(message.into_structured_message()), None)
+                }
             };
             note_change.fields.insert(
                 field_id,
@@ -1351,6 +1457,7 @@ fn apply_field_fills(
                     intent: ChangeIntent::Replace,
                     value,
                     message,
+                    images,
                     expected_base: Some(ExpectedBase::Value(String::new())),
                 },
             );
@@ -1878,7 +1985,7 @@ impl NoteChangeYaml {
 struct FieldChangeYaml {
     intent: String,
     #[serde(default)]
-    value: Option<String>,
+    value: Option<FieldValueYaml>,
     #[serde(default)]
     message: Option<Vec<MessageComponentYaml>>,
     #[serde(default)]
@@ -1903,10 +2010,21 @@ impl FieldChangeYaml {
             self.message
                 .map(|message| ComponentMessageYaml { message }.into_structured_message())
         };
+        let (value, images) = match self.value {
+            Some(FieldValueYaml::Scalar(value)) => (Some(value), None),
+            Some(FieldValueYaml::Images(images)) => (None, Some(images.into_images()?)),
+            Some(FieldValueYaml::Formatted(_) | FieldValueYaml::Message(_)) => {
+                return Err(CanonicalYamlError::InvalidFieldValue(
+                    "field change value must be a scalar string or !image reference".to_owned(),
+                ));
+            }
+            None => (None, None),
+        };
         Ok(FieldChange {
             intent: parse_change_intent(&self.intent)?,
-            value: self.value,
+            value,
             message,
+            images,
             expected_base: self
                 .expected_base
                 .map(ExpectedBaseYaml::into_expected_base)
@@ -2155,11 +2273,16 @@ impl NoteYaml {
     fn into_note(self, id: StableId) -> Result<Note, CanonicalYamlError> {
         let mut fields = BTreeMap::new();
         let mut field_messages = BTreeMap::new();
+        let mut field_images = BTreeMap::new();
         for (field_id, value) in self.fields {
             let field_id = sid(&field_id)?;
             match value {
                 FieldValueYaml::Scalar(value) => {
                     fields.insert(field_id, value);
+                }
+                FieldValueYaml::Images(images) => {
+                    fields.insert(field_id.clone(), String::new());
+                    field_images.insert(field_id, images.into_images()?);
                 }
                 FieldValueYaml::Formatted(message) => {
                     fields.insert(field_id.clone(), String::new());
@@ -2177,18 +2300,99 @@ impl NoteYaml {
             variables: self.variables,
             fields,
             field_messages,
+            field_images,
             tags: self.tags,
             adapter_ids: adapter_ids_from_map(self.adapter_ids),
         })
     }
 }
 
-#[derive(Deserialize)]
-#[serde(untagged)]
 enum FieldValueYaml {
     Scalar(String),
+    Images(ImageReferencesYaml),
     Formatted(FormattedMessageYaml),
     Message(ComponentMessageYaml),
+}
+
+struct ImageReferencesYaml(Vec<String>);
+
+impl ImageReferencesYaml {
+    fn into_images(self) -> Result<Vec<FieldImageReference>, CanonicalYamlError> {
+        self.0
+            .into_iter()
+            .map(|media_id| {
+                Ok(FieldImageReference {
+                    media_id: sid(&media_id)?,
+                })
+            })
+            .collect()
+    }
+}
+
+impl<'de> Deserialize<'de> for FieldValueYaml {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        field_value_from_yaml_value(value).map_err(serde::de::Error::custom)
+    }
+}
+
+fn field_value_from_yaml_value(value: Value) -> Result<FieldValueYaml, String> {
+    if let Some(media_id) = image_scalar_from_yaml_value(&value)? {
+        return Ok(FieldValueYaml::Images(ImageReferencesYaml(vec![media_id])));
+    }
+
+    if let Value::Sequence(sequence) = &value {
+        if sequence.is_empty() {
+            return Err("!image field sequence must not be empty".to_owned());
+        }
+        let mut images = Vec::new();
+        for item in sequence {
+            let Some(media_id) = image_scalar_from_yaml_value(item)? else {
+                return Err(
+                    "field image sequences may contain only !image tagged scalars".to_owned(),
+                );
+            };
+            images.push(media_id);
+        }
+        return Ok(FieldValueYaml::Images(ImageReferencesYaml(images)));
+    }
+
+    if matches!(value, Value::Tagged(_)) {
+        return Err("unsupported YAML tag in field value".to_owned());
+    }
+
+    if let Ok(value) = serde_yaml::from_value::<String>(value.clone()) {
+        return Ok(FieldValueYaml::Scalar(value));
+    }
+    if let Ok(message) = serde_yaml::from_value::<FormattedMessageYaml>(value.clone()) {
+        return Ok(FieldValueYaml::Formatted(message));
+    }
+    if let Ok(message) = serde_yaml::from_value::<ComponentMessageYaml>(value) {
+        return Ok(FieldValueYaml::Message(message));
+    }
+    Err("field value must be a scalar string, structured message, or !image reference".to_owned())
+}
+
+fn image_scalar_from_yaml_value(value: &Value) -> Result<Option<String>, String> {
+    let Value::Tagged(tagged) = value else {
+        return Ok(None);
+    };
+    if tagged.tag != "image" {
+        return Err(format!(
+            "unsupported YAML tag {} in field value",
+            tagged.tag
+        ));
+    }
+    let Value::String(media_id) = &tagged.value else {
+        return Err("!image value must be a scalar string".to_owned());
+    };
+    if media_id.is_empty() {
+        return Err("!image value must not be empty".to_owned());
+    }
+    Ok(Some(media_id.clone()))
 }
 
 #[derive(Deserialize)]

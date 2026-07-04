@@ -441,6 +441,75 @@ notes:
 }
 
 #[test]
+fn parses_formats_and_round_trips_image_values_in_overlay_field_positions() {
+    let overlay = canonical_yaml::overlay_from_str(
+        r#"id: overlay.extension.images
+kind: extension
+field_additions:
+  note-type.country:
+    fields:
+      field.map: Map
+    values:
+      note.finland:
+        field.map: !image media.map.finland
+field_fills:
+  note.iceland:
+    field.flag:
+      - !image media.flag.iceland.blur
+      - !image media.flag.iceland
+notes:
+  note.norway:
+    intent: merge
+    fields:
+      field.flag:
+        intent: replace
+        value: !image media.flag.norway
+        expected_base:
+          value: old raw flag
+"#,
+    )
+    .expect("overlay image values parse");
+
+    assert_eq!(
+        overlay.note_changes[&sid("note.finland")].fields[&sid("field.map")]
+            .images
+            .as_ref()
+            .unwrap()[0]
+            .media_id,
+        sid("media.map.finland")
+    );
+    assert_eq!(
+        overlay.note_changes[&sid("note.iceland")].fields[&sid("field.flag")]
+            .images
+            .as_ref()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        overlay.note_changes[&sid("note.norway")].fields[&sid("field.flag")]
+            .images
+            .as_ref()
+            .unwrap()[0]
+            .media_id,
+        sid("media.flag.norway")
+    );
+
+    let formatted = canonical_yaml::overlay_to_string(&overlay);
+    assert!(formatted.contains("field.map: !image media.map.finland\n"));
+    assert!(formatted.contains(
+        "field.flag:\n      - !image media.flag.iceland.blur\n      - !image media.flag.iceland\n"
+    ));
+    assert!(formatted.contains("value: !image media.flag.norway\n"));
+    let reparsed = canonical_yaml::overlay_from_str(&formatted).expect("formatted overlay parses");
+    assert_eq!(reparsed, overlay);
+    assert_eq!(
+        canonical_yaml::overlay_format_str(&formatted).expect("overlay formats twice"),
+        formatted
+    );
+}
+
+#[test]
 fn formatter_orders_translation_dictionary_sections_deterministically() {
     let formatted = canonical_yaml::overlay_format_str(
         r#"id: overlay.translation.de

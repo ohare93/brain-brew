@@ -219,6 +219,7 @@ fn media_deck() -> CanonicalDeck {
             (sid("field.flag"), "<img src=\"flags/fi.png\">".to_owned()),
         ]),
         field_messages: BTreeMap::new(),
+        field_images: BTreeMap::new(),
         tags: BTreeSet::new(),
         adapter_ids: AdapterIds::new(),
     };

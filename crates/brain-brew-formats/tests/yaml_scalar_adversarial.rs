@@ -155,6 +155,7 @@ fn canonical_deck_with_value(value: &str) -> CanonicalDeck {
         variables: BTreeMap::new(),
         fields: BTreeMap::from([(sid("field.value"), value.to_owned())]),
         field_messages: BTreeMap::new(),
+        field_images: BTreeMap::new(),
         tags: BTreeSet::new(),
         adapter_ids: AdapterIds::new(),
     };

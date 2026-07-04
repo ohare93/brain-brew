@@ -801,6 +801,7 @@ fn ug_regression_field_definition_changes_flow_to_crowdanki_for_every_target() {
                 intent: ChangeIntent::Add,
                 value: Some(finland_value.clone()),
                 message: None,
+                images: None,
                 expected_base: None,
             },
         );
@@ -1054,6 +1055,7 @@ fn ug_regression_note_changes_flow_to_crowdanki_for_every_target() {
                 intent: ChangeIntent::Override,
                 value: Some(new_value.clone()),
                 message: None,
+                images: None,
                 expected_base: Some(ExpectedBase::Value(current_value)),
             },
         );
@@ -1088,6 +1090,7 @@ fn ug_regression_note_changes_flow_to_crowdanki_for_every_target() {
                 intent: ChangeIntent::Override,
                 value: Some("${regression.country}".to_owned()),
                 message: None,
+                images: None,
                 expected_base: Some(ExpectedBase::Value(current_value)),
             },
         );
@@ -1202,6 +1205,7 @@ fn ug_regression_note_changes_flow_to_crowdanki_for_every_target() {
             variables: BTreeMap::new(),
             fields,
             field_messages: BTreeMap::new(),
+            field_images: BTreeMap::new(),
             tags: BTreeSet::from(["ZZZ::Regression".to_owned()]),
             adapter_ids,
         };

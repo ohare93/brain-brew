@@ -284,6 +284,7 @@ impl IncludeResolver {
                 let included = self.read_include(&include_path, yaml_path, include_stack)?;
                 *value = Value::String(included);
             }
+            Value::Tagged(tagged) if tagged.tag == "image" => {}
             Value::Tagged(tagged) => {
                 return Err(IncludeError::new(
                     &self.source_path,
