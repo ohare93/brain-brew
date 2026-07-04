@@ -909,6 +909,50 @@ fn workbench_optional_metadata_progress_and_apply_are_separate_from_main_fields(
 }
 
 #[test]
+fn workbench_apply_rejects_invalid_rendered_description_content() {
+    let dir = temp_dir("workbench-content-validation");
+    write_workbench_optional_metadata_workspace(&dir);
+    let original_overlay = fs::read_to_string(dir.join("da.yaml")).unwrap();
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let request = serde_json::json!({
+        "language": "da",
+        "edits": [{
+            "kind": "translation",
+            "path": "deck.description",
+            "source": "A geography deck fixture.",
+            "value": "<p>unterminated",
+            "mode": "direct"
+        }]
+    });
+    let preview = post_json(&server.url("/api/workbench/apply-preview"), request.clone());
+    assert_eq!(preview["validation"]["ok"], false);
+    let errors = preview["validation"]["errors"].as_array().unwrap();
+    assert!(errors.iter().any(|error| {
+        error
+            .as_str()
+            .unwrap()
+            .contains("deck.description:1: unclosed HTML tag <p>")
+    }));
+
+    let error = post_json_error(&server.url("/api/workbench/apply"), request);
+    assert_eq!(error.0, 500);
+    assert!(error.1.contains("validation failed"));
+    assert_eq!(
+        fs::read_to_string(dir.join("da.yaml")).unwrap(),
+        original_overlay
+    );
+}
+
+#[test]
 fn workbench_comparison_pane_summarizes_note_source_string_and_card_context() {
     let dir = temp_dir("workbench-comparison-pane");
     write_workbench_repeated_source_multi_language_workspace(&dir);
@@ -2816,6 +2860,40 @@ fn verify_checks_all_manifest_targets() {
     let out = stdout(&output);
     assert!(out.contains("✓"));
     assert!(out.contains("verified 1 target"));
+}
+
+#[test]
+fn verify_checks_rendered_html_and_css_content_with_escape_hatch() {
+    let dir = temp_dir("verify-content-validation");
+    write_manifest_workspace(&dir);
+    fs::write(
+        dir.join("deck.yaml"),
+        SAMPLE_CANONICAL_YAML.replace(
+            "    styling: |\n      .card { font-family: sans-serif; }\n",
+            "    styling: |\n      .card { color: red;\n",
+        ),
+    )
+    .unwrap();
+
+    let failed = run([
+        "verify",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+    assert!(!failed.status.success());
+    let err = stderr(&failed);
+    assert!(err.contains("content validation failed for target patched-via-dependency"));
+    assert!(err.contains("note_types.note-type.country.styling:1: unmatched '{'"));
+
+    let skipped = run([
+        "verify",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+        "--skip-content-validation",
+    ]);
+    assert!(skipped.status.success(), "stderr: {}", stderr(&skipped));
 }
 
 #[test]

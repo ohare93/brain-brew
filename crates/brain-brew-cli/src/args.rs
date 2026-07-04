@@ -20,6 +20,7 @@ pub(crate) struct VerifyArgs {
     pub(crate) include_paths: Vec<PathBuf>,
     pub(crate) package_roots: Vec<PathBuf>,
     pub(crate) translation_coverage: Option<TranslationCoveragePolicy>,
+    pub(crate) skip_content_validation: bool,
 }
 
 pub(crate) struct ExportArgs {
@@ -161,6 +162,7 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
     let mut include_paths = Vec::new();
     let mut package_roots = Vec::new();
     let mut translation_coverage = None;
+    let mut skip_content_validation = false;
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -210,6 +212,10 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
                 translation_coverage = Some(parse_translation_coverage_policy(policy)?);
                 index += 2;
             }
+            "--skip-content-validation" => {
+                skip_content_validation = true;
+                index += 1;
+            }
             other => return Err(format!("unexpected verify argument {other:?}")),
         }
     }
@@ -224,6 +230,7 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
         include_paths,
         package_roots,
         translation_coverage,
+        skip_content_validation,
     })
 }
 

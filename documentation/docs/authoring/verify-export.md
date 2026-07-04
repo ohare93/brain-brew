@@ -27,12 +27,30 @@ Verification checks:
 5. dependency expansion;
 6. target composition;
 7. Canonical Deck validation;
-8. translation coverage policy, when configured or passed with `--translation-coverage`;
-9. stale translations, warning by default and failing under strict translation coverage;
-10. media references always, plus media file existence and SHA-256 hashes when `--media-root` is passed;
-11. configured CrowdAnki golden checks.
+8. rendered content validation for deck descriptions, card-template HTML fragments, and note-type CSS styling;
+9. translation coverage policy, when configured or passed with `--translation-coverage`;
+10. stale translations, warning by default and failing under strict translation coverage;
+11. media references always, plus media file existence and SHA-256 hashes when `--media-root` is passed;
+12. configured CrowdAnki golden checks.
 
 > **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.
+
+## Verify shipped HTML and CSS content
+
+`verify` validates the content Anki renders after target composition and source-variable rendering:
+
+- deck descriptions and card-template question/answer formats are checked as lightweight HTML fragments;
+- note-type `styling` is checked for balanced CSS braces, parentheses, brackets, comments, and strings.
+
+The HTML check is structural, not spec-grade: it balances tags while tolerating Anki mustache such as `{{Field}}` and `{{cloze:Text}}`, void elements such as `<br>` and `<img>`, and arbitrary entities. It does not lint attributes, CSS properties, semantics, links, or external references.
+
+Escape hatch: if legacy Anki content renders correctly but triggers a false positive, run:
+
+```bash
+brainbrew verify --manifest brainbrew.yaml --target legacy-target --skip-content-validation
+```
+
+Prefer fixing the source when possible; the flag skips only this HTML/CSS structural sub-check.
 
 ## Verify media
 

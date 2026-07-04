@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use brain_brew_core::{CanonicalDeck, Overlay, TranslationCoverageCategory};
+use brain_brew_core::{CanonicalDeck, Overlay, TranslationCoverageCategory, validate_deck_content};
 use brain_brew_formats::{crowdanki, manifest};
 
 use crate::args::parse_verify_args;
@@ -59,6 +59,9 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         verify_translation_coverage_policy(&plan, policy)?;
         let deck = plan.compose()?;
         deck.validate().map_err(|error| error.to_string())?;
+        if !verify_args.skip_content_validation {
+            verify_deck_content(target, &deck)?;
+        }
         if let Some(media_root) = &media_root {
             validate_media_assets(&deck, media_root)?;
         } else {
@@ -77,6 +80,20 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         &details,
     );
     Ok(())
+}
+
+fn verify_deck_content(target: &str, deck: &CanonicalDeck) -> Result<(), String> {
+    let rendered = deck
+        .render_variables()
+        .map_err(|error| format!("content validation failed for target {target}: {error}"))?;
+    let report = validate_deck_content(&rendered);
+    if report.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "content validation failed for target {target}: {report}"
+        ))
+    }
 }
 
 fn verify_translation_coverage_policy(

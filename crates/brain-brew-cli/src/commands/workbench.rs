@@ -16,6 +16,7 @@ use axum::{Json, Router};
 use brain_brew_core::{
     CanonicalDeck, CardTemplate, Note, NoteType, Overlay, OverlayKind, StableId, StaleTranslation,
     TranslationCoverageCategory, TranslationCoverageEntry, TranslationDictionary,
+    validate_deck_content,
 };
 use brain_brew_formats::canonical_yaml;
 use brain_brew_formats::manifest::{
@@ -4799,10 +4800,28 @@ fn validate_modified_base_and_overlay(
     modified_overlay: &Overlay,
 ) -> ApplyValidation {
     match context_with_modified_base_and_overlay(context, modified_base.clone(), modified_overlay) {
-        Ok(_) => ApplyValidation {
-            ok: true,
-            errors: Vec::new(),
-        },
+        Ok(updated_context) => {
+            let mut errors = Vec::new();
+            match updated_context.target_deck.render_variables() {
+                Ok(rendered) => {
+                    let report = validate_deck_content(&rendered);
+                    if !report.is_empty() {
+                        errors.push(format!(
+                            "content validation failed for target {}: {report}",
+                            updated_context.selection.target_id
+                        ));
+                    }
+                }
+                Err(error) => errors.push(format!(
+                    "content validation failed for target {}: {error}",
+                    updated_context.selection.target_id
+                )),
+            }
+            ApplyValidation {
+                ok: errors.is_empty(),
+                errors,
+            }
+        }
         Err(error) => ApplyValidation {
             ok: false,
             errors: vec![error],

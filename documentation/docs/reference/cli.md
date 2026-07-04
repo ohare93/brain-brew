@@ -114,9 +114,10 @@ Starts the local Deck Workbench server on `127.0.0.1`, serving the browser UI pl
 ```bash
 brainbrew verify --manifest brainbrew.yaml --all-targets
 brainbrew verify --manifest brainbrew.yaml --all-targets --media-root media/
+brainbrew verify --manifest brainbrew.yaml --target legacy-target --skip-content-validation
 ```
 
-Runs the workspace verification gate. Referenced-but-undeclared media is always an error; declared-but-unreferenced media is a warning. With `--media-root`, missing files, empty hashes, and stale hashes are errors. Stale translation records warn by default and fail when the target or command uses strict translation coverage (`translation_coverage: strict` or `--translation-coverage strict`).
+Runs the workspace verification gate. Rendered deck descriptions and card templates are checked as lightweight HTML fragments, and note-type styling is checked for balanced CSS structure; `--skip-content-validation` is the escape hatch for legacy Anki content that renders correctly despite a false positive. Referenced-but-undeclared media is always an error; declared-but-unreferenced media is a warning. With `--media-root`, missing files, empty hashes, and stale hashes are errors. Stale translation records warn by default and fail when the target or command uses strict translation coverage (`translation_coverage: strict` or `--translation-coverage strict`).
 
 ## `lock`
 
