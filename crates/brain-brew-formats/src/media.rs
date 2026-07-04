@@ -4,6 +4,38 @@ use std::fmt;
 use brain_brew_core::{CanonicalDeck, DeckPath};
 use sha2::{Digest, Sha256};
 
+/// Extract paths from a whole-field sequence of strict Anki image tags.
+///
+/// Accepted syntax matches the CrowdAnki import and source migration contract:
+/// `<img src="PATH" />` repeated one or more times with optional ASCII whitespace
+/// around the whole value and between tags. Any other attributes, quote style,
+/// non-self-closing tag, mixed content, empty path, or unsafe path character makes
+/// the whole value non-strict.
+pub fn strict_image_tag_paths(value: &str) -> Option<Vec<String>> {
+    let mut rest = trim_ascii_whitespace(value);
+    if rest.is_empty() {
+        return None;
+    }
+
+    let mut paths = Vec::new();
+    loop {
+        let after_prefix = rest.strip_prefix("<img src=\"")?;
+        let quote_index = after_prefix.find('"')?;
+        let path = &after_prefix[..quote_index];
+        if path.is_empty() || path.contains(['"', '<', '>', '\r', '\n']) {
+            return None;
+        }
+        let after_quote = &after_prefix[quote_index + 1..];
+        let after_tag = after_quote.strip_prefix(" />")?;
+        paths.push(path.to_owned());
+
+        rest = trim_start_ascii_whitespace(after_tag);
+        if rest.is_empty() {
+            return Some(paths);
+        }
+    }
+}
+
 /// Extract Anki-compatible media paths used by note fields and card templates.
 pub fn referenced_paths(deck: &CanonicalDeck) -> BTreeSet<String> {
     let mut paths = BTreeSet::new();
@@ -167,6 +199,14 @@ pub fn validate_references(deck: &CanonicalDeck) -> Result<(), MediaValidationRe
             errors: report.errors,
         })
     }
+}
+
+fn trim_ascii_whitespace(value: &str) -> &str {
+    value.trim_matches(|ch: char| ch.is_ascii_whitespace())
+}
+
+fn trim_start_ascii_whitespace(value: &str) -> &str {
+    value.trim_start_matches(|ch: char| ch.is_ascii_whitespace())
 }
 
 fn extract_from_text(text: &str, paths: &mut BTreeSet<String>) {

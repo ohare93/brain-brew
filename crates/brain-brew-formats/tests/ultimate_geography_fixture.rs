@@ -320,10 +320,14 @@ fn ultimate_geography_hardcore_extension_builds_on_main_deck_without_erasing_bas
         english.notes[&sid("note.hardcore-anguilla")].fields[&sid("field.capital")],
         "The Valley"
     );
+    let anguilla_map_images = &english.notes[&sid("note.anguilla")].field_images[&sid("field.map")];
     assert_eq!(
-        english.notes[&sid("note.anguilla")].fields[&sid("field.map")],
-        "<img src=\"ug-map-anguilla.png\" />",
-        "Hardcore companion notes no longer overwrite the main deck's existing map card"
+        anguilla_map_images
+            .iter()
+            .map(|image| image.media_id.clone())
+            .collect::<Vec<_>>(),
+        vec![sid("media.ug-map-anguilla-png")],
+        "Hardcore companion notes no longer overwrite the main deck's existing structured map card"
     );
     assert!(
         english.notes[&sid("note.hardcore-anguilla")]
@@ -1335,13 +1339,24 @@ fn ug_regression_media_changes_flow_to_crowdanki_for_every_target() {
                 expected_base: Some(ExpectedBase::EntityPresent),
             },
         );
-        MutationExpectation::new(
-            overlay,
-            vec![expected_json(
-                &format!("/media_files/{media_index}"),
-                new_path,
-            )],
-        )
+        let mut expected = vec![expected_json(
+            &format!("/media_files/{media_index}"),
+            new_path.clone(),
+        )];
+        for path in json_string_paths_containing(baseline_json, &media.path) {
+            if !path.starts_with("/notes/") {
+                continue;
+            }
+            let original = baseline_json
+                .pointer(&path)
+                .and_then(serde_json::Value::as_str)
+                .expect("path came from a JSON string value");
+            expected.push(expected_json(
+                &path,
+                original.replace(&media.path, &new_path),
+            ));
+        }
+        MutationExpectation::new(overlay, expected)
     });
 }
 
@@ -1501,6 +1516,50 @@ fn collect_json_diff_paths(
 
 fn json_pointer_token(token: &str) -> String {
     token.replace('~', "~0").replace('/', "~1")
+}
+
+fn json_string_paths_containing(value: &serde_json::Value, needle: &str) -> Vec<String> {
+    let mut paths = Vec::new();
+    collect_json_string_paths_containing(value, needle, "", &mut paths);
+    paths
+}
+
+fn collect_json_string_paths_containing(
+    value: &serde_json::Value,
+    needle: &str,
+    path: &str,
+    paths: &mut Vec<String>,
+) {
+    match value {
+        serde_json::Value::String(text) if text.contains(needle) => {
+            paths.push(if path.is_empty() {
+                "/".to_owned()
+            } else {
+                path.to_owned()
+            });
+        }
+        serde_json::Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                collect_json_string_paths_containing(
+                    item,
+                    needle,
+                    &format!("{path}/{index}"),
+                    paths,
+                );
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for (key, item) in map {
+                collect_json_string_paths_containing(
+                    item,
+                    needle,
+                    &format!("{path}/{}", json_pointer_token(key)),
+                    paths,
+                );
+            }
+        }
+        _ => {}
+    }
 }
 
 fn expected_json(path: &str, value: impl Into<serde_json::Value>) -> ExpectedJsonValue {

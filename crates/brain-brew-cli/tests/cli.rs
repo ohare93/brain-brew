@@ -4426,6 +4426,117 @@ fn media_hash_updates_source_hashes_and_preserves_includes() {
 }
 
 #[test]
+fn media_images_to_refs_converts_strict_fields_and_reports_skips() {
+    let dir = temp_dir("media-images-to-refs");
+    fs::write(
+        dir.join("deck.yaml"),
+        r#"deck:
+  id: deck.media-migration
+  name: Media Migration
+  description: Strict image migration fixture.
+  adapter_ids: {}
+note_types:
+  note-type.country:
+    name: Country
+    field_order:
+      - field.country
+      - field.flag
+      - field.map
+    fields:
+      field.country:
+        name: Country
+      field.flag:
+        name: Flag
+      field.map:
+        name: Map
+    card_template_order: []
+    card_templates: {}
+    styling: ''
+    adapter_ids: {}
+notes:
+  note.finland:
+    note_type_id: note-type.country
+    fields:
+      field.country: 'mixed <img src="flags/fi.png" /> text'
+      field.flag: '<img src="flags/fi.png" />'
+      field.map: '<img src="maps/fi.png" />'
+    tags: []
+    adapter_ids: {}
+media:
+  media.flags-fi-png:
+    path: flags/fi.png
+    sha256: ''
+  media.flags-fi-copy-png:
+    path: flags/fi.png
+    sha256: ''
+  media.maps-fi-png:
+    path: maps/fi.png
+    sha256: ''
+tombstones: []
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("overlay.yaml"),
+        r#"id: overlay.patch.images
+kind: patch
+field_fills:
+  note.finland:
+    field.flag: '<img src="flags/missing.png" />'
+    field.map: '<img src="maps/fi.png" />'
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.patch.images:
+    file: overlay.yaml
+    kind: patch
+targets:
+  patched:
+    overlays:
+      - overlay.patch.images
+"#,
+    )
+    .unwrap();
+
+    let output = run([
+        "media",
+        "images-to-refs",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("converted fields: 2"), "{out}");
+    assert!(out.contains("skipped non-strict image fields: 1"), "{out}");
+    assert!(out.contains("skipped no media match: 1"), "{out}");
+    assert!(out.contains("skipped ambiguous media path: 1"), "{out}");
+    let deck = fs::read_to_string(dir.join("deck.yaml")).unwrap();
+    assert!(
+        deck.contains("field.map: !image media.maps-fi-png\n"),
+        "{deck}"
+    );
+    assert!(
+        deck.contains("field.flag: '<img src=\"flags/fi.png\" />'"),
+        "{deck}"
+    );
+    let overlay = fs::read_to_string(dir.join("overlay.yaml")).unwrap();
+    assert!(
+        overlay.contains("field.map: !image media.maps-fi-png\n"),
+        "{overlay}"
+    );
+    assert!(
+        overlay.contains("field.flag: '<img src=\"flags/missing.png\" />'"),
+        "{overlay}"
+    );
+}
+
+#[test]
 fn fmt_and_media_hash_preserve_image_tags_as_structured_yaml() {
     let dir = temp_dir("structured-image-fmt-hash");
     let deck_path = dir.join("deck.yaml");

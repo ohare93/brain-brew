@@ -30,6 +30,7 @@ const sidebars = {
         'authoring/translations',
         'authoring/extensions',
         'authoring/field-fills',
+        'authoring/media',
         'authoring/packages-locking',
         'authoring/verify-export',
         'authoring/diff-explain',

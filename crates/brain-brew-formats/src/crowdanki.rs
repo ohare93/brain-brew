@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use crate::media;
 use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, MediaReference,
     Note, NoteType, StableId, ValidationReport, VariableRenderReport,
@@ -1144,7 +1145,7 @@ fn reverse_map_strict_image_fields(
             .fields
             .get(&field_id)
             .expect("field id came from note field map");
-        let Some(paths) = strict_image_tag_paths(value) else {
+        let Some(paths) = media::strict_image_tag_paths(value) else {
             continue;
         };
 
@@ -1164,31 +1165,6 @@ fn reverse_map_strict_image_fields(
 
         note.fields.insert(field_id.clone(), String::new());
         note.field_images.insert(field_id, images);
-    }
-}
-
-fn strict_image_tag_paths(value: &str) -> Option<Vec<String>> {
-    let mut rest = trim_ascii_whitespace(value);
-    if rest.is_empty() {
-        return None;
-    }
-
-    let mut paths = Vec::new();
-    loop {
-        let after_prefix = rest.strip_prefix("<img src=\"")?;
-        let quote_index = after_prefix.find('"')?;
-        let path = &after_prefix[..quote_index];
-        if path.is_empty() || path.contains(['"', '<', '>', '\r', '\n']) {
-            return None;
-        }
-        let after_quote = &after_prefix[quote_index + 1..];
-        let after_tag = after_quote.strip_prefix(" />")?;
-        paths.push(path.to_owned());
-
-        rest = trim_start_ascii_whitespace(after_tag);
-        if rest.is_empty() {
-            return Some(paths);
-        }
     }
 }
 
@@ -1224,14 +1200,6 @@ fn duplicate_paths(paths: &[String]) -> BTreeSet<String> {
         }
     }
     duplicates
-}
-
-fn trim_ascii_whitespace(value: &str) -> &str {
-    value.trim_matches(|ch: char| ch.is_ascii_whitespace())
-}
-
-fn trim_start_ascii_whitespace(value: &str) -> &str {
-    value.trim_start_matches(|ch: char| ch.is_ascii_whitespace())
 }
 
 fn prefixed_stable_id(prefix: &str, source: &str) -> Result<StableId, CrowdAnkiError> {

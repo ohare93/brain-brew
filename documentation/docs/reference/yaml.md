@@ -53,6 +53,26 @@ kind: patch       # corrections or adjustments
 kind: personal    # learner/local source content
 ```
 
+## Structured image fields
+
+Image-only note fields may reference declared media by stable ID instead of embedding raw `<img>` HTML:
+
+```yaml
+media:
+  media.flag.finland:
+    path: flags/fi.svg
+    sha256: 7b2b...
+notes:
+  note.finland:
+    fields:
+      field.flag: !image media.flag.finland
+      field.comparison:
+        - !image media.flag.finland.blur
+        - !image media.flag.finland
+```
+
+Accepted positions are base note field values, overlay field change `value`, `field_additions` values, and `field_fills` values. A single image emits as scalar `!image <media-stable-id>`; multiple images emit as a non-empty sequence of `!image` tagged scalars. Unknown media IDs fail verification/rendering. Raw HTML remains valid and is required for mixed text plus images, custom attributes, card templates, and styling.
+
 ## Structured field messages
 
 Note fields are usually scalar strings. For genuinely composite text that should reuse existing translations, a field may use an inline `format` with named message variables:
@@ -137,6 +157,8 @@ field_additions:
     values:
       note.france:
         field.population: 68 million
+      note.finland:
+        field.population-map: !image media.map.population.finland
 ```
 
 ## Field fills
@@ -147,6 +169,7 @@ Fills existing blank fields with an expected blank base.
 field_fills:
   note.anguilla:
     field.capital: The Valley
+    field.flag: !image media.flag.anguilla
 ```
 
 ## File includes
