@@ -560,6 +560,7 @@ pub(crate) fn configured_crowdanki_out(
 
 pub(crate) fn manifest_root(path: &Path) -> PathBuf {
     path.parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."))
         .to_path_buf()
 }

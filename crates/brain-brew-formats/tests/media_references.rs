@@ -1,10 +1,17 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, MediaReference,
     Note, NoteType, StableId,
 };
-use brain_brew_formats::media::{self, MediaValidationErrorKind};
+use brain_brew_formats::{
+    canonical_yaml,
+    media::{self, MediaValidationErrorKind},
+    source_includes,
+};
 
 #[test]
 fn extracts_media_references_from_fields_and_templates() {
@@ -119,6 +126,44 @@ fn validation_accepts_declared_media_references() {
 }
 
 #[test]
+fn media_validation_follows_structural_media_include() {
+    let dir = temp_fixture_dir("media-validation-follows-include");
+    fs::write(
+        dir.join("media.yaml"),
+        "media.flags-fi-png:\n  path: flags/fi.png\n  sha256: 14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948\n",
+    )
+    .unwrap();
+    let source = minimal_deck_with_media_include("!image media.flags-fi-png");
+    let resolved =
+        source_includes::resolve_file_includes(&source, &dir.join("deck.yaml"), &dir, &[])
+            .expect("media include resolves into deck source");
+    let deck = canonical_yaml::from_str(&resolved).expect("resolved deck parses");
+    let assets = BTreeMap::from([("flags/fi.png".to_owned(), b"flag-bytes".to_vec())]);
+
+    assert!(media::validate_references(&deck).is_ok());
+    assert!(media::validate_hashes(&deck, &assets).is_ok());
+}
+
+#[test]
+fn include_preserving_formatter_restores_minimal_media_include_idempotently() {
+    let source = minimal_deck_with_media_include("'<img src=\"flags/fi.png\" />'");
+
+    let formatted =
+        source_includes::format_preserving_file_includes(&source, canonical_yaml::format_str)
+            .expect("media include formats");
+
+    assert!(
+        formatted.contains("media: !include media.yaml\n"),
+        "{formatted}"
+    );
+    assert_eq!(
+        source_includes::format_preserving_file_includes(&formatted, canonical_yaml::format_str)
+            .expect("formatted media include is idempotent"),
+        formatted
+    );
+}
+
+#[test]
 fn validation_reports_missing_media_reference_paths() {
     let mut deck = media_deck();
     deck.media.remove(&sid("media.flags-fi-png"));
@@ -221,6 +266,55 @@ fn reports_empty_media_hashes() {
             .any(|error| error.path == "flags/fi.png"
                 && error.message.contains("media.flags-fi-png"))
     );
+}
+
+fn minimal_deck_with_media_include(flag_field: &str) -> String {
+    format!(
+        r#"deck:
+  id: deck.media-include
+  name: Media Include
+  description: ''
+  adapter_ids: {{}}
+note_types:
+  note-type.country:
+    name: Country
+    field_order:
+      - field.flag
+    fields:
+      field.flag:
+        name: Flag
+    card_template_order:
+      - template.country-flag
+    card_templates:
+      template.country-flag:
+        name: Country - Flag
+        question_format: '{{{{Flag}}}}'
+        answer_format: '{{{{FrontSide}}}}'
+        adapter_ids: {{}}
+    styling: ''
+    adapter_ids: {{}}
+notes:
+  note.finland:
+    note_type_id: note-type.country
+    fields:
+      field.flag: {flag_field}
+    tags:
+      - Media
+    adapter_ids: {{}}
+media: !include media.yaml
+tombstones: []
+"#
+    )
+}
+
+fn temp_fixture_dir(name: &str) -> PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("{name}-{unique}"));
+    fs::create_dir_all(&path).unwrap();
+    path
 }
 
 fn media_deck() -> CanonicalDeck {

@@ -24,7 +24,7 @@ pub fn resolve_file_includes(
         source_path: source_path.to_path_buf(),
         yaml_path: String::new(),
         include_path: String::new(),
-        kind: IncludeErrorKind::Parse(error.to_string()),
+        kind: Box::new(IncludeErrorKind::Parse(error.to_string())),
     })?;
     let mut resolver = IncludeResolver::new(source_path, package_root, safe_include_roots)?;
     resolver.resolve_value(&mut value, &mut Vec::new(), &mut Vec::new())?;
@@ -32,7 +32,7 @@ pub fn resolve_file_includes(
         source_path: source_path.to_path_buf(),
         yaml_path: String::new(),
         include_path: String::new(),
-        kind: IncludeErrorKind::Parse(error.to_string()),
+        kind: Box::new(IncludeErrorKind::Parse(error.to_string())),
     })
 }
 
@@ -194,7 +194,7 @@ pub struct IncludeError {
     source_path: PathBuf,
     yaml_path: String,
     include_path: String,
-    kind: IncludeErrorKind,
+    kind: Box<IncludeErrorKind>,
 }
 
 #[derive(Debug)]
@@ -209,6 +209,10 @@ enum IncludeErrorKind {
     },
     Unreadable {
         resolved_path: PathBuf,
+        message: String,
+    },
+    PackageRootUnreadable {
+        package_root: PathBuf,
         message: String,
     },
     Cyclic {
@@ -232,7 +236,7 @@ impl IncludeError {
             source_path: source_path.to_path_buf(),
             yaml_path: yaml_path_display(yaml_path),
             include_path: include_path.into(),
-            kind,
+            kind: Box::new(kind),
         }
     }
 }
@@ -244,7 +248,7 @@ impl fmt::Display for IncludeError {
         } else {
             format!("{}:{}", self.source_path.display(), self.yaml_path)
         };
-        match &self.kind {
+        match self.kind.as_ref() {
             IncludeErrorKind::Parse(error) => {
                 write!(f, "{location}: failed to parse YAML for includes: {error}")
             }
@@ -279,6 +283,14 @@ impl fmt::Display for IncludeError {
                 "{location}: include path {} ({}) could not be read: {message}",
                 self.include_path,
                 resolved_path.display()
+            ),
+            IncludeErrorKind::PackageRootUnreadable {
+                package_root,
+                message,
+            } => write!(
+                f,
+                "{location}: package root {} could not be read: {message}",
+                package_root.display()
             ),
             IncludeErrorKind::Cyclic { chain } => write!(
                 f,
@@ -333,11 +345,11 @@ impl IncludeResolver {
         let package_root = fs::canonicalize(package_root).map_err(|error| IncludeError {
             source_path: source_path.to_path_buf(),
             yaml_path: String::new(),
-            include_path: String::new(),
-            kind: IncludeErrorKind::Unreadable {
-                resolved_path: package_root.to_path_buf(),
+            include_path: package_root.display().to_string(),
+            kind: Box::new(IncludeErrorKind::PackageRootUnreadable {
+                package_root: package_root.to_path_buf(),
                 message: error.to_string(),
-            },
+            }),
         })?;
         let mut allowed_roots = vec![package_root.clone()];
         for root in safe_include_roots {
@@ -436,7 +448,7 @@ impl IncludeResolver {
             source_path: resolved.clone(),
             yaml_path: String::new(),
             include_path: include_path.to_owned(),
-            kind: IncludeErrorKind::Parse(error.to_string()),
+            kind: Box::new(IncludeErrorKind::Parse(error.to_string())),
         })?;
         reject_yaml_tags_in_included_media(&value, &mut Vec::new(), &resolved, include_path)?;
         match value {
