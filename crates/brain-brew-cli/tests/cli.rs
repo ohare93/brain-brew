@@ -3888,6 +3888,225 @@ stale_translations:
 }
 
 #[test]
+fn translations_resolve_confirm_promotes_stale_translation_and_preserves_includes() {
+    let dir = temp_dir("translations-resolve-confirm");
+    write_stale_translation_workspace(&dir, "Helsinki City", STALE_DIRECT_OVERLAY_WITH_INCLUDE);
+    let overlay_path = dir.join("da.yaml");
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--resolve",
+        "confirm",
+        "--old-source",
+        "Helsinki",
+        "--new-source",
+        "Helsinki City",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(stdout(&output).contains("resolved 1 stale translation"));
+    assert_eq!(
+        fs::read_to_string(overlay_path).unwrap(),
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Finland: !include content/flag-target.html
+    Helsinki City: Helsingfors
+"#
+    );
+}
+
+#[test]
+fn translations_resolve_replace_installs_new_translation_and_removes_stale_record() {
+    let dir = temp_dir("translations-resolve-replace");
+    write_stale_translation_workspace(&dir, "Helsinki City", STALE_DIRECT_OVERLAY);
+    let overlay_path = dir.join("da.yaml");
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--resolve",
+        "replace",
+        "--old-source",
+        "Helsinki",
+        "--new-source",
+        "Helsinki City",
+        "--translation",
+        "Helsingfors stad",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_eq!(
+        fs::read_to_string(overlay_path).unwrap(),
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Finland: Finland
+    Helsinki City: Helsingfors stad
+stale_translations:
+  - old_source: Helsinki
+    new_source: Helsinki Old Draft
+    target: Gammelt Helsingfors
+"#
+    );
+}
+
+#[test]
+fn translations_resolve_contextual_stale_translation_preserves_context_key() {
+    let dir = temp_dir("translations-resolve-contextual");
+    write_contextual_stale_translation_workspace(&dir, "Finnish capital", CONTEXTUAL_STALE_OVERLAY);
+    let overlay_path = dir.join("da.yaml");
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--resolve",
+        "confirm",
+        "--old-source",
+        "Shared capital",
+        "--new-source",
+        "Finnish capital",
+        "--stale-context",
+        "notes.note.finland",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_eq!(
+        fs::read_to_string(overlay_path).unwrap(),
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Estonia: Estland
+    Finland: Finland
+  contextual:
+    notes.note:
+      finland:
+        Finnish capital: 'Finsk fælles'
+"#
+    );
+}
+
+#[test]
+fn translations_resolve_confirm_can_batch_promote_many_contextual_stale_records() {
+    let dir = temp_dir("translations-resolve-batch-confirm");
+    write_contextual_stale_translation_workspace(
+        &dir,
+        "Regional capital",
+        BATCH_CONTEXTUAL_STALE_OVERLAY,
+    );
+    let overlay_path = dir.join("da.yaml");
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--resolve",
+        "confirm",
+        "--status",
+        "stale_translation",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(stdout(&output).contains("resolved 2 stale translations"));
+    assert_eq!(
+        fs::read_to_string(overlay_path).unwrap(),
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Estonia: Estland
+    Finland: Finland
+  contextual:
+    notes.note:
+      estonia:
+        Regional capital: 'Estisk fælles'
+      finland:
+        Regional capital: 'Finsk fælles'
+"#
+    );
+}
+
+#[test]
+fn translations_resolve_refuses_non_stale_or_mismatched_current_source() {
+    let dir = temp_dir("translations-resolve-refusals");
+    write_stale_translation_workspace(&dir, "Helsinki City", STALE_DIRECT_OVERLAY);
+
+    let not_stale = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--resolve",
+        "confirm",
+        "--new-source",
+        "Finland",
+    ]);
+    assert!(!not_stale.status.success());
+    assert!(stderr(&not_stale).contains("source \"Finland\" is not stale"));
+
+    let stale_but_not_current = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--resolve",
+        "confirm",
+        "--old-source",
+        "Helsinki",
+        "--new-source",
+        "Helsinki Old Draft",
+    ]);
+    assert!(!stale_but_not_current.status.success());
+    assert!(
+        stderr(&stale_but_not_current).contains("does not match the current base text"),
+        "stderr: {}",
+        stderr(&stale_but_not_current)
+    );
+}
+
+#[test]
+fn translations_interactive_apply_points_stale_rows_to_resolve_flow() {
+    let dir = temp_dir("translations-apply-stale-guidance");
+    write_stale_translation_workspace(&dir, "Helsinki City", STALE_DIRECT_OVERLAY);
+
+    let output = run_with_stdin(
+        [
+            "translations",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--target",
+            "da-standard",
+            "--status",
+            "stale_translation",
+            "--apply",
+            "--interactive",
+        ],
+        "\n\n",
+    );
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(stdout(&output).contains("--resolve confirm"));
+    assert!(stdout(&output).contains("--resolve replace"));
+}
+
+#[test]
 fn export_crowdanki_copies_exact_declared_media_from_media_root_and_checks_hashes() {
     let dir = temp_dir("export-media");
     let deck_path = dir.join("deck.yaml");
@@ -5460,6 +5679,85 @@ translation_profile:
     )
     .unwrap();
 }
+
+fn write_stale_translation_workspace(dir: &Path, current_capital: &str, overlay: &str) {
+    fs::create_dir_all(dir.join("content")).unwrap();
+    fs::write(dir.join("content/flag-target.html"), "Finland").unwrap();
+    let deck = SAMPLE_CANONICAL_YAML
+        .replace(
+            "field.capital: Helsinki",
+            &format!("field.capital: {current_capital}"),
+        )
+        .replace("field.flag: '<img src=\"flags/fi.png\">'", "field.flag: ''");
+    fs::write(dir.join("deck.yaml"), deck).unwrap();
+    write_workbench_manifest_and_overlay(dir, overlay);
+}
+
+fn write_contextual_stale_translation_workspace(dir: &Path, current_capital: &str, overlay: &str) {
+    write_workbench_repeated_source_deck(dir);
+    let deck_path = dir.join("deck.yaml");
+    let deck = fs::read_to_string(&deck_path).unwrap().replace(
+        "field.capital: Shared capital",
+        &format!("field.capital: {current_capital}"),
+    );
+    fs::write(deck_path, deck).unwrap();
+    write_workbench_manifest_and_overlay(dir, overlay);
+}
+
+const STALE_DIRECT_OVERLAY: &str = r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Finland: Finland
+stale_translations:
+  - old_source: Helsinki
+    new_source: Helsinki City
+    target: Helsingfors
+  - old_source: Helsinki
+    new_source: Helsinki Old Draft
+    target: Gammelt Helsingfors
+"#;
+
+const STALE_DIRECT_OVERLAY_WITH_INCLUDE: &str = r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Finland: !include content/flag-target.html
+stale_translations:
+  - old_source: Helsinki
+    new_source: Helsinki City
+    target: Helsingfors
+"#;
+
+const CONTEXTUAL_STALE_OVERLAY: &str = r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Estonia: Estland
+    Finland: Finland
+stale_translations:
+  - old_source: Shared capital
+    new_source: Finnish capital
+    target: Finsk fælles
+    context: notes.note.finland
+"#;
+
+const BATCH_CONTEXTUAL_STALE_OVERLAY: &str = r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Estonia: Estland
+    Finland: Finland
+stale_translations:
+  - old_source: Shared capital
+    new_source: Regional capital
+    target: Finsk fælles
+    context: notes.note.finland
+  - old_source: Shared capital
+    new_source: Regional capital
+    target: Estisk fælles
+    context: notes.note.estonia
+"#;
 
 fn write_translation_workspace(dir: &Path) {
     let deck = SAMPLE_CANONICAL_YAML

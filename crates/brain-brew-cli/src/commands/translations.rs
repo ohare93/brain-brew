@@ -11,6 +11,7 @@ use brain_brew_core::{
 };
 use brain_brew_formats::manifest::FederatedDeckManifest;
 use brain_brew_formats::yaml_scalar::scalar as yaml_scalar;
+use brain_brew_formats::{canonical_yaml, source_includes};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use serde_json::json;
 
@@ -44,6 +45,30 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     }
 
     let reports = collect_translation_reports(&args)?;
+
+    if args.resolve_action.is_some() {
+        let applied = resolve_stale_translations(&args, &reports)?;
+        if args.json_output {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({ "resolved": applied }))
+                    .expect("stale resolution JSON serializes")
+            );
+        } else {
+            let total = applied.values().sum::<usize>();
+            let noun = if total == 1 {
+                "translation"
+            } else {
+                "translations"
+            };
+            let details = applied
+                .iter()
+                .map(|(file, count)| (file.as_str(), count.to_string()))
+                .collect::<Vec<_>>();
+            output::print_success(format!("resolved {total} stale {noun}"), &details);
+        }
+        return Ok(());
+    }
 
     let mut edits_by_file = BTreeMap::<PathBuf, OverlayEdits>::new();
     if args.apply {
@@ -126,6 +151,11 @@ struct TranslationArgs {
     source: Option<String>,
     duplicates: bool,
     status: Option<String>,
+    resolve_action: Option<StaleResolveAction>,
+    old_source: Option<String>,
+    new_source: Option<String>,
+    stale_context: Option<String>,
+    replacement_translation: Option<String>,
 }
 
 fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
@@ -149,6 +179,11 @@ fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
         source: None,
         duplicates: false,
         status: None,
+        resolve_action: None,
+        old_source: None,
+        new_source: None,
+        stale_context: None,
+        replacement_translation: None,
     };
     let mut index = 0;
     while index < args.len() {
@@ -259,6 +294,41 @@ fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
                 parsed.status = Some(status.clone());
                 index += 2;
             }
+            "--resolve" => {
+                let Some(action) = args.get(index + 1) else {
+                    return Err("--resolve requires confirm or replace".to_owned());
+                };
+                parsed.resolve_action = Some(parse_stale_resolve_action(action)?);
+                index += 2;
+            }
+            "--old-source" => {
+                let Some(source) = args.get(index + 1) else {
+                    return Err("--old-source requires source text".to_owned());
+                };
+                parsed.old_source = Some(source.clone());
+                index += 2;
+            }
+            "--new-source" => {
+                let Some(source) = args.get(index + 1) else {
+                    return Err("--new-source requires source text".to_owned());
+                };
+                parsed.new_source = Some(source.clone());
+                index += 2;
+            }
+            "--stale-context" => {
+                let Some(context) = args.get(index + 1) else {
+                    return Err("--stale-context requires a dictionary context path".to_owned());
+                };
+                parsed.stale_context = Some(context.clone());
+                index += 2;
+            }
+            "--translation" => {
+                let Some(translation) = args.get(index + 1) else {
+                    return Err("--translation requires translated text".to_owned());
+                };
+                parsed.replacement_translation = Some(translation.clone());
+                index += 2;
+            }
             "--interactive" => {
                 parsed.interactive = Some(true);
                 index += 1;
@@ -282,7 +352,50 @@ fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
     if parsed.summary && parsed.context {
         return Err("choose --summary or --context, not both".to_owned());
     }
+    if parsed.resolve_action.is_some() {
+        if parsed.apply {
+            return Err("choose --resolve or --apply, not both".to_owned());
+        }
+        if parsed.summary || parsed.context {
+            return Err("choose --resolve or reporting views, not both".to_owned());
+        }
+        if parsed.resolve_action == Some(StaleResolveAction::Replace)
+            && parsed.replacement_translation.is_none()
+        {
+            return Err("--resolve replace requires --translation".to_owned());
+        }
+        if parsed.resolve_action == Some(StaleResolveAction::Confirm)
+            && parsed.replacement_translation.is_some()
+        {
+            return Err("--translation is only valid with --resolve replace".to_owned());
+        }
+    } else if parsed.old_source.is_some()
+        || parsed.new_source.is_some()
+        || parsed.stale_context.is_some()
+        || parsed.replacement_translation.is_some()
+    {
+        return Err(
+            "--old-source, --new-source, --stale-context, and --translation require --resolve"
+                .to_owned(),
+        );
+    }
     Ok(parsed)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StaleResolveAction {
+    Confirm,
+    Replace,
+}
+
+fn parse_stale_resolve_action(value: &str) -> Result<StaleResolveAction, String> {
+    match value {
+        "confirm" => Ok(StaleResolveAction::Confirm),
+        "replace" => Ok(StaleResolveAction::Replace),
+        other => Err(format!(
+            "invalid stale translation resolve action {other:?}; expected confirm or replace"
+        )),
+    }
 }
 
 fn should_use_interactive(args: &TranslationArgs) -> bool {
@@ -958,6 +1071,199 @@ impl OverlayEdits {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct StaleResolution {
+    old_source: String,
+    new_source: String,
+    context: Option<String>,
+    replacement: Option<String>,
+}
+
+fn resolve_stale_translations(
+    args: &TranslationArgs,
+    reports: &[ScopedTranslationReport],
+) -> Result<BTreeMap<String, usize>, String> {
+    let action = args
+        .resolve_action
+        .expect("resolve action checked before resolving stale translations");
+    let mut resolutions_by_file = BTreeMap::<PathBuf, BTreeSet<StaleResolution>>::new();
+    let mut stale_record_matched_filter = false;
+    let mut non_stale_source_match = None::<String>;
+
+    for report in reports {
+        for entry in &report.report.entries {
+            if !entry_matches_stale_resolution_filter(entry, args) {
+                if entry.category != TranslationCoverageCategory::StaleTranslation
+                    && args
+                        .new_source
+                        .as_ref()
+                        .is_some_and(|source| source == &entry.source)
+                    && non_stale_source_match.is_none()
+                {
+                    non_stale_source_match = Some(entry.source.clone());
+                }
+                continue;
+            }
+
+            if entry.category != TranslationCoverageCategory::StaleTranslation {
+                non_stale_source_match.get_or_insert_with(|| entry.source.clone());
+                continue;
+            }
+
+            stale_record_matched_filter = true;
+            if entry.path.starts_with("translations.stale_translations.") {
+                continue;
+            }
+
+            let old_source = entry.old_source.clone().ok_or_else(|| {
+                format!(
+                    "stale translation at {} is missing old_source; refusing to resolve",
+                    entry.path
+                )
+            })?;
+            resolutions_by_file
+                .entry(report.overlay_path.clone())
+                .or_default()
+                .insert(StaleResolution {
+                    old_source,
+                    new_source: entry.source.clone(),
+                    context: entry.context.clone(),
+                    replacement: args.replacement_translation.clone(),
+                });
+        }
+    }
+
+    if resolutions_by_file.is_empty() {
+        if stale_record_matched_filter {
+            return Err(stale_resolution_mismatched_current_source_error(args));
+        }
+        if let Some(source) = non_stale_source_match {
+            return Err(format!(
+                "source {source:?} is not stale; refusing to resolve"
+            ));
+        }
+        return Err(stale_resolution_no_match_error(args));
+    }
+
+    let mut applied = BTreeMap::new();
+    for (path, resolutions) in resolutions_by_file {
+        let count = apply_stale_resolutions_to_overlay(&path, action, &resolutions)?;
+        if count > 0 {
+            applied.insert(path.display().to_string(), count);
+        }
+    }
+    Ok(applied)
+}
+
+fn entry_matches_stale_resolution_filter(
+    entry: &TranslationCoverageEntry,
+    args: &TranslationArgs,
+) -> bool {
+    if let Some(old_source) = &args.old_source
+        && entry.old_source.as_deref() != Some(old_source.as_str())
+    {
+        return false;
+    }
+    if let Some(new_source) = &args.new_source
+        && entry.source != *new_source
+    {
+        return false;
+    }
+    if let Some(context) = &args.stale_context
+        && entry.context.as_deref() != Some(context.as_str())
+    {
+        return false;
+    }
+    true
+}
+
+fn stale_resolution_mismatched_current_source_error(args: &TranslationArgs) -> String {
+    let mut parts = Vec::new();
+    if let Some(old_source) = &args.old_source {
+        parts.push(format!("old_source={old_source:?}"));
+    }
+    if let Some(new_source) = &args.new_source {
+        parts.push(format!("new_source={new_source:?}"));
+    }
+    if let Some(context) = &args.stale_context {
+        parts.push(format!("context={context:?}"));
+    }
+    if parts.is_empty() {
+        "matched stale translation record does not match the current base text; refusing to resolve"
+            .to_owned()
+    } else {
+        format!(
+            "stale translation {} does not match the current base text; refusing to resolve",
+            parts.join(" ")
+        )
+    }
+}
+
+fn stale_resolution_no_match_error(args: &TranslationArgs) -> String {
+    if let Some(new_source) = &args.new_source {
+        format!("no stale translation matched new_source={new_source:?}")
+    } else {
+        "no stale translations matched the selected target and scope".to_owned()
+    }
+}
+
+fn apply_stale_resolutions_to_overlay(
+    path: &Path,
+    action: StaleResolveAction,
+    resolutions: &BTreeSet<StaleResolution>,
+) -> Result<usize, String> {
+    if resolutions.is_empty() {
+        return Ok(0);
+    }
+    let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let output = source_includes::format_preserving_file_includes(&input, |source| {
+        let mut overlay =
+            canonical_yaml::overlay_from_str(source).map_err(|error| error.to_string())?;
+        let translations = overlay
+            .translations
+            .as_mut()
+            .ok_or_else(|| format!("{} has no translations dictionary", path.display()))?;
+        for resolution in resolutions {
+            let record = translations
+                .resolve_stale_translation(
+                    &resolution.old_source,
+                    &resolution.new_source,
+                    resolution.context.as_deref(),
+                )
+                .ok_or_else(|| {
+                    format!(
+                        "stale translation old_source={:?} new_source={:?} context={:?} was not found in {}",
+                        resolution.old_source,
+                        resolution.new_source,
+                        resolution.context,
+                        path.display()
+                    )
+                })?;
+            if action == StaleResolveAction::Replace {
+                let replacement = resolution
+                    .replacement
+                    .as_ref()
+                    .expect("replace action requires replacement translation")
+                    .clone();
+                if let Some(context) = record.context {
+                    translations
+                        .contextual
+                        .entry(context)
+                        .or_default()
+                        .insert(record.new_source, replacement);
+                } else {
+                    translations.direct.insert(record.new_source, replacement);
+                }
+            }
+        }
+        Ok::<_, String>(canonical_yaml::overlay_to_string(&overlay))
+    })?;
+    if output != input {
+        fs::write(path, output).map_err(|error| format!("{}: {error}", path.display()))?;
+    }
+    Ok(resolutions.len())
+}
+
 fn direct_stub_edits_from_reports(
     reports: &[ScopedTranslationReport],
     full: bool,
@@ -1095,7 +1401,7 @@ fn prompt_selective_apply<R: Read, W: Write>(
             }
             _ => {
                 ui.message(&format!(
-                    "{} at {} is stale/invalid; no safe automatic rewrite is applied, skipping.",
+                    "{} at {} is stale/invalid; no safe automatic rewrite is applied, skipping. Use `brainbrew translations --resolve confirm` when the existing translation is still correct, or `brainbrew translations --resolve replace --translation <text>` to retire the stale record with a new translation.",
                     entry.category.as_str(),
                     entry.path
                 ))?;
