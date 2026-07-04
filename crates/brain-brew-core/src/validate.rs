@@ -211,6 +211,10 @@ impl CanonicalDeck {
                 ));
             }
 
+            if self.tombstones.contains(id) {
+                continue;
+            }
+
             let Some(note_type) = self.note_types.get(&note.note_type_id) else {
                 errors.push(ValidationError::new(
                     ValidationErrorKind::MissingNoteType,

@@ -6,7 +6,7 @@ use brain_brew_core::{
     FieldDefinitionChange, FieldImageReference, MediaChange, MediaReference, MessageComponent,
     Note, NoteChange, NoteType, NoteTypeChange, Overlay, OverlayKind, PropertyChange, StableId,
     StaleTranslation, StructuredMessage, TagChange, TargetAdaptation, TranslationCoverageCategory,
-    TranslationDictionary,
+    TranslationDictionary, ValidationErrorKind,
 };
 
 fn target_adaptation(
@@ -184,8 +184,16 @@ fn replace_field_succeeds_when_expected_base_matches_current_value() {
 #[test]
 fn ordered_overlay_stack_reports_conflicts_without_explicit_override() {
     let base = ug_style_deck();
-    let first = overlay_replacing_capital(ChangeIntent::Merge, None, "Helsingfors");
-    let second = overlay_replacing_capital(ChangeIntent::Merge, None, "Helsinki, Helsingfors");
+    let first = overlay_replacing_capital(
+        ChangeIntent::Replace,
+        Some(ExpectedBase::Value("Helsinki".to_owned())),
+        "Helsingfors",
+    );
+    let second = overlay_replacing_capital(
+        ChangeIntent::Replace,
+        Some(ExpectedBase::Value("Helsingfors".to_owned())),
+        "Helsinki, Helsingfors",
+    );
 
     let report = base
         .compose(&[first, second])
@@ -203,7 +211,11 @@ fn ordered_overlay_stack_reports_conflicts_without_explicit_override() {
 #[test]
 fn later_override_can_intentionally_replace_an_earlier_overlay_change() {
     let base = ug_style_deck();
-    let first = overlay_replacing_capital(ChangeIntent::Merge, None, "Helsingfors");
+    let first = overlay_replacing_capital(
+        ChangeIntent::Replace,
+        Some(ExpectedBase::Value("Helsinki".to_owned())),
+        "Helsingfors",
+    );
     let second = overlay_replacing_capital(
         ChangeIntent::Override,
         Some(ExpectedBase::Value("Helsingfors".to_owned())),
@@ -1997,6 +2009,702 @@ fn remove_overlay_records_a_tombstone_without_erasing_the_entity_from_resolved_d
     assert!(resolved.tombstones.contains(&sid("note.finland")));
 }
 
+#[test]
+fn tombstoned_notes_do_not_block_note_type_removal_and_validate_accepts_result() {
+    let base = ug_style_deck();
+    let tombstone_note = Overlay {
+        id: sid("overlay.patch.tombstone-finland"),
+        kind: OverlayKind::Patch,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::from([(
+            sid("note.finland"),
+            NoteChange {
+                intent: ChangeIntent::Remove,
+                note: None,
+                variables: BTreeMap::new(),
+                fields: BTreeMap::new(),
+                tags: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: Some(ExpectedBase::EntityPresent),
+            },
+        )]),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+    let remove_type = Overlay {
+        id: sid("overlay.patch.remove-country-type"),
+        kind: OverlayKind::Patch,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::from([(
+            sid("note-type.country"),
+            NoteTypeChange {
+                intent: ChangeIntent::Remove,
+                note_type: None,
+                name: None,
+                variables: BTreeMap::new(),
+                styling: None,
+                fields: BTreeMap::new(),
+                card_templates: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: Some(ExpectedBase::EntityPresent),
+            },
+        )]),
+        media_changes: BTreeMap::new(),
+    };
+
+    let resolved = base
+        .compose(&[tombstone_note, remove_type])
+        .expect("tombstoned references do not block note-type removal");
+
+    assert!(!resolved.note_types.contains_key(&sid("note-type.country")));
+    assert!(resolved.notes.contains_key(&sid("note.finland")));
+    assert!(resolved.tombstones.contains(&sid("note.finland")));
+    resolved
+        .validate()
+        .expect("tombstoned notes may retain a now-missing note type");
+}
+
+#[test]
+fn non_tombstoned_note_still_blocks_note_type_removal_and_validation() {
+    let base = ug_style_deck();
+    let report = base
+        .compose(&[Overlay {
+            id: sid("overlay.patch.remove-country-type"),
+            kind: OverlayKind::Patch,
+            translations: None,
+            deck_change: None,
+            note_changes: BTreeMap::new(),
+            note_type_changes: BTreeMap::from([(
+                sid("note-type.country"),
+                NoteTypeChange {
+                    intent: ChangeIntent::Remove,
+                    note_type: None,
+                    name: None,
+                    variables: BTreeMap::new(),
+                    styling: None,
+                    fields: BTreeMap::new(),
+                    card_templates: BTreeMap::new(),
+                    adapter_ids: BTreeMap::new(),
+                    expected_base: Some(ExpectedBase::EntityPresent),
+                },
+            )]),
+            media_changes: BTreeMap::new(),
+        }])
+        .expect_err("live note references still block note-type removal");
+
+    assert!(report.has_kind(ComposeErrorKind::ValidationFailed));
+    assert!(report.errors.iter().any(|error| {
+        error
+            .message
+            .contains("cannot remove note type note-type.country while notes still reference it")
+    }));
+
+    let mut invalid = ug_style_deck();
+    invalid.note_types.remove(&sid("note-type.country"));
+    let validation = invalid
+        .validate()
+        .expect_err("live missing note type reference fails validation");
+    assert!(validation.has_kind(ValidationErrorKind::MissingNoteType));
+}
+
+#[test]
+fn full_note_body_is_only_valid_with_add_intent() {
+    for intent in [
+        ChangeIntent::Merge,
+        ChangeIntent::Replace,
+        ChangeIntent::Override,
+    ] {
+        let overlay = Overlay {
+            id: sid("overlay.patch.full-note-body"),
+            kind: OverlayKind::Patch,
+            translations: None,
+            deck_change: None,
+            note_changes: BTreeMap::from([(
+                sid("note.finland"),
+                NoteChange {
+                    intent,
+                    note: Some(sweden_note()),
+                    variables: BTreeMap::new(),
+                    fields: BTreeMap::new(),
+                    tags: BTreeMap::new(),
+                    adapter_ids: BTreeMap::new(),
+                    expected_base: expected_base_for(intent),
+                },
+            )]),
+            note_type_changes: BTreeMap::new(),
+            media_changes: BTreeMap::new(),
+        };
+
+        let report = ug_style_deck()
+            .compose(&[overlay])
+            .expect_err("non-add note bodies are rejected");
+
+        assert!(report.has_kind(ComposeErrorKind::ValidationFailed));
+        assert!(report.errors.iter().any(|error| {
+            error.message
+                == "a full entity body is only valid with intent `add`; use add, or express edits as field/sub-changes"
+        }));
+    }
+}
+
+#[test]
+fn full_note_type_body_is_only_valid_with_add_intent() {
+    let note_type_body = ug_style_deck().note_types[&sid("note-type.country")].clone();
+
+    for intent in [
+        ChangeIntent::Merge,
+        ChangeIntent::Replace,
+        ChangeIntent::Override,
+    ] {
+        let overlay = Overlay {
+            id: sid("overlay.patch.full-note-type-body"),
+            kind: OverlayKind::Patch,
+            translations: None,
+            deck_change: None,
+            note_changes: BTreeMap::new(),
+            note_type_changes: BTreeMap::from([(
+                sid("note-type.country"),
+                NoteTypeChange {
+                    intent,
+                    note_type: Some(note_type_body.clone()),
+                    name: None,
+                    variables: BTreeMap::new(),
+                    styling: None,
+                    fields: BTreeMap::new(),
+                    card_templates: BTreeMap::new(),
+                    adapter_ids: BTreeMap::new(),
+                    expected_base: expected_base_for(intent),
+                },
+            )]),
+            media_changes: BTreeMap::new(),
+        };
+
+        let report = ug_style_deck()
+            .compose(&[overlay])
+            .expect_err("non-add note-type bodies are rejected");
+
+        assert!(report.has_kind(ComposeErrorKind::ValidationFailed));
+        assert!(report.errors.iter().any(|error| {
+            error.message
+                == "a full entity body is only valid with intent `add`; use add, or express edits as field/sub-changes"
+        }));
+    }
+}
+
+#[test]
+fn field_level_merge_only_fills_blank_values() {
+    let mut base = ug_style_deck();
+    base.notes
+        .get_mut(&sid("note.finland"))
+        .unwrap()
+        .fields
+        .insert(sid("field.flag"), String::new());
+
+    let resolved = base
+        .compose(&[overlay_with_field_change(
+            "overlay.patch.fill-flag",
+            sid("field.flag"),
+            FieldChange {
+                intent: ChangeIntent::Merge,
+                value: Some("<img src=\"fi-new.png\">".to_owned()),
+                message: None,
+                images: None,
+                expected_base: None,
+            },
+        )])
+        .expect("merge fills blank field");
+
+    assert_eq!(
+        resolved.notes[&sid("note.finland")].fields[&sid("field.flag")],
+        "<img src=\"fi-new.png\">"
+    );
+}
+
+#[test]
+fn field_level_merge_rejects_non_blank_values_and_replace_with_expected_base_overwrites() {
+    let report = ug_style_deck()
+        .compose(&[overlay_with_field_change(
+            "overlay.patch.merge-capital",
+            sid("field.capital"),
+            FieldChange {
+                intent: ChangeIntent::Merge,
+                value: Some("Helsingfors".to_owned()),
+                message: None,
+                images: None,
+                expected_base: None,
+            },
+        )])
+        .expect_err("merge must not overwrite non-blank field");
+
+    assert!(report.has_kind(ComposeErrorKind::ExpectedBaseMismatch));
+    assert!(report.errors.iter().any(|error| {
+        error.path == "notes.note.finland.fields.field.capital"
+            && error.message.contains("may only fill a blank value")
+    }));
+
+    let resolved = ug_style_deck()
+        .compose(&[overlay_with_field_change(
+            "overlay.patch.replace-capital",
+            sid("field.capital"),
+            FieldChange {
+                intent: ChangeIntent::Replace,
+                value: Some("Helsingfors".to_owned()),
+                message: None,
+                images: None,
+                expected_base: Some(ExpectedBase::Value("Helsinki".to_owned())),
+            },
+        )])
+        .expect("replace with expected_base can overwrite deliberately");
+
+    assert_eq!(
+        resolved.notes[&sid("note.finland")].fields[&sid("field.capital")],
+        "Helsingfors"
+    );
+}
+
+#[test]
+fn field_level_merge_rejects_non_blank_for_structured_messages_and_images() {
+    for change in [
+        FieldChange {
+            intent: ChangeIntent::Merge,
+            value: None,
+            message: Some(StructuredMessage {
+                components: vec![MessageComponent::Text("structured".to_owned())],
+                format: None,
+                variables: BTreeMap::new(),
+            }),
+            images: None,
+            expected_base: None,
+        },
+        FieldChange {
+            intent: ChangeIntent::Merge,
+            value: None,
+            message: None,
+            images: Some(vec![FieldImageReference {
+                media_id: sid("media.flag.finland"),
+            }]),
+            expected_base: None,
+        },
+    ] {
+        let report = ug_style_deck()
+            .compose(&[overlay_with_field_change(
+                "overlay.patch.merge-structured-nonblank",
+                sid("field.flag"),
+                change,
+            )])
+            .expect_err("merge payloads cannot overwrite non-blank field values");
+
+        assert!(report.has_kind(ComposeErrorKind::ExpectedBaseMismatch));
+    }
+}
+
+#[test]
+fn missing_field_definition_rejects_merge_replace_and_override() {
+    for intent in [
+        ChangeIntent::Merge,
+        ChangeIntent::Replace,
+        ChangeIntent::Override,
+    ] {
+        let overlay = Overlay {
+            id: sid("overlay.patch.missing-field-definition"),
+            kind: OverlayKind::Patch,
+            translations: None,
+            deck_change: None,
+            note_changes: BTreeMap::new(),
+            note_type_changes: BTreeMap::from([(
+                sid("note-type.country"),
+                NoteTypeChange {
+                    intent: ChangeIntent::Merge,
+                    note_type: None,
+                    name: None,
+                    variables: BTreeMap::new(),
+                    styling: None,
+                    fields: BTreeMap::from([(
+                        sid("field.population"),
+                        FieldDefinitionChange {
+                            intent,
+                            field: Some(FieldDefinition {
+                                id: sid("field.population"),
+                                name: "Population".to_owned(),
+                            }),
+                            expected_base: expected_base_for(intent),
+                        },
+                    )]),
+                    card_templates: BTreeMap::new(),
+                    adapter_ids: BTreeMap::new(),
+                    expected_base: None,
+                },
+            )]),
+            media_changes: BTreeMap::new(),
+        };
+
+        let report = ug_style_deck()
+            .compose(&[overlay])
+            .expect_err("non-add field definition changes require an existing target");
+
+        assert!(report.has_kind(ComposeErrorKind::MissingOverlayTarget));
+        assert!(
+            report.errors.iter().any(|error| {
+                error.path == "note_types.note-type.country.fields.field.population"
+            })
+        );
+    }
+}
+
+#[test]
+fn field_add_fills_blank_but_rejects_non_blank_existing_values() {
+    let mut base = ug_style_deck();
+    base.notes
+        .get_mut(&sid("note.finland"))
+        .unwrap()
+        .fields
+        .insert(sid("field.flag"), String::new());
+
+    let filled = base
+        .compose(&[overlay_with_field_change(
+            "overlay.patch.add-blank-flag",
+            sid("field.flag"),
+            FieldChange {
+                intent: ChangeIntent::Add,
+                value: Some("filled flag".to_owned()),
+                message: None,
+                images: None,
+                expected_base: None,
+            },
+        )])
+        .expect("add fills an existing blank field value");
+    assert_eq!(
+        filled.notes[&sid("note.finland")].fields[&sid("field.flag")],
+        "filled flag"
+    );
+
+    let report = ug_style_deck()
+        .compose(&[overlay_with_field_change(
+            "overlay.patch.add-nonblank-capital",
+            sid("field.capital"),
+            FieldChange {
+                intent: ChangeIntent::Add,
+                value: Some("Helsingfors".to_owned()),
+                message: None,
+                images: None,
+                expected_base: None,
+            },
+        )])
+        .expect_err("add cannot overwrite non-blank field value");
+
+    assert!(report.has_kind(ComposeErrorKind::AlreadyExists));
+}
+
+#[test]
+fn note_add_rejects_payload_id_mismatch() {
+    let report = ug_style_deck()
+        .compose(&[Overlay {
+            id: sid("overlay.extension.bad-note-payload"),
+            kind: OverlayKind::Extension,
+            translations: None,
+            deck_change: None,
+            note_changes: BTreeMap::from([(
+                sid("note.denmark"),
+                NoteChange {
+                    intent: ChangeIntent::Add,
+                    note: Some(sweden_note()),
+                    variables: BTreeMap::new(),
+                    fields: BTreeMap::new(),
+                    tags: BTreeMap::new(),
+                    adapter_ids: BTreeMap::new(),
+                    expected_base: None,
+                },
+            )]),
+            note_type_changes: BTreeMap::new(),
+            media_changes: BTreeMap::new(),
+        }])
+        .expect_err("mismatched note payload id fails validation");
+
+    assert!(report.has_kind(ComposeErrorKind::ValidationFailed));
+    assert!(report.errors.iter().any(|error| {
+        error
+            .message
+            .contains("note payload id note.sweden does not match target note.denmark")
+    }));
+}
+
+#[test]
+fn destructive_operation_matrix_covers_core_change_families() {
+    let mut base = ug_style_deck();
+    base.variables
+        .insert("deck.locale".to_owned(), "en".to_owned());
+
+    let mut remove_field_definition = field_definition_overlay(
+        ChangeIntent::Remove,
+        None,
+        Some(ExpectedBase::EntityPresent),
+    );
+    remove_field_definition.note_changes = BTreeMap::from([(
+        sid("note.finland"),
+        NoteChange {
+            intent: ChangeIntent::Merge,
+            note: None,
+            variables: BTreeMap::new(),
+            fields: BTreeMap::from([(
+                sid("field.flag"),
+                FieldChange {
+                    intent: ChangeIntent::Remove,
+                    value: None,
+                    message: None,
+                    images: None,
+                    expected_base: Some(ExpectedBase::EntityPresent),
+                },
+            )]),
+            tags: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            expected_base: None,
+        },
+    )]);
+    let field_removed = base
+        .compose(&[remove_field_definition])
+        .expect("field definition remove composes when note values are removed too");
+    assert!(
+        !field_removed.note_types[&sid("note-type.country")]
+            .fields
+            .iter()
+            .any(|field| field.id == sid("field.flag"))
+    );
+
+    let field_replaced = base
+        .compose(&[field_definition_overlay(
+            ChangeIntent::Replace,
+            Some(FieldDefinition {
+                id: sid("field.flag"),
+                name: "Flag image".to_owned(),
+            }),
+            Some(ExpectedBase::EntityPresent),
+        )])
+        .expect("field definition replace composes");
+    assert_eq!(
+        field_replaced.note_types[&sid("note-type.country")].fields[2].name,
+        "Flag image"
+    );
+
+    let template_removed = base
+        .compose(&[card_template_overlay(
+            ChangeIntent::Remove,
+            None,
+            Some(ExpectedBase::EntityPresent),
+        )])
+        .expect("card template remove composes");
+    assert!(
+        template_removed.note_types[&sid("note-type.country")]
+            .card_templates
+            .is_empty()
+    );
+
+    let template_replaced = base
+        .compose(&[card_template_overlay(
+            ChangeIntent::Replace,
+            Some(CardTemplate {
+                id: sid("template.country-to-capital"),
+                name: "Country - Capital updated".to_owned(),
+                variables: BTreeMap::new(),
+                question_format: "{{Country}}?".to_owned(),
+                answer_format: "{{Capital}}".to_owned(),
+                adapter_ids: AdapterIds::new(),
+            }),
+            Some(ExpectedBase::EntityPresent),
+        )])
+        .expect("card template replace composes");
+    assert_eq!(
+        template_replaced.note_types[&sid("note-type.country")].card_templates[0].name,
+        "Country - Capital updated"
+    );
+
+    let media_removed = base
+        .compose(&[media_overlay(
+            ChangeIntent::Remove,
+            None,
+            Some(ExpectedBase::EntityPresent),
+        )])
+        .expect("media remove composes");
+    assert!(!media_removed.media.contains_key(&sid("media.flag.finland")));
+
+    let media_replaced = base
+        .compose(&[media_overlay(
+            ChangeIntent::Replace,
+            Some(MediaReference {
+                id: sid("media.flag.finland"),
+                path: "flags/fi-new.png".to_owned(),
+                sha256: "fedcba".to_owned(),
+            }),
+            Some(ExpectedBase::EntityPresent),
+        )])
+        .expect("media replace composes");
+    assert_eq!(
+        media_replaced.media[&sid("media.flag.finland")].path,
+        "flags/fi-new.png"
+    );
+
+    let name_removed = base
+        .compose(&[deck_name_overlay(
+            ChangeIntent::Remove,
+            None,
+            Some(ExpectedBase::EntityPresent),
+        )])
+        .expect("string property remove composes");
+    assert!(name_removed.name.is_empty());
+
+    let name_replaced = base
+        .compose(&[deck_name_overlay(
+            ChangeIntent::Replace,
+            Some("Ultimate Geography v2"),
+            Some(ExpectedBase::Value("Ultimate Geography".to_owned())),
+        )])
+        .expect("string property replace composes");
+    assert_eq!(name_replaced.name, "Ultimate Geography v2");
+
+    let variable_removed = base
+        .compose(&[deck_variable_overlay(
+            ChangeIntent::Remove,
+            None,
+            Some(ExpectedBase::EntityPresent),
+        )])
+        .expect("variable remove composes");
+    assert!(!variable_removed.variables.contains_key("deck.locale"));
+
+    let variable_replaced = base
+        .compose(&[deck_variable_overlay(
+            ChangeIntent::Replace,
+            Some("fi"),
+            Some(ExpectedBase::Value("en".to_owned())),
+        )])
+        .expect("variable replace composes");
+    assert_eq!(variable_replaced.variables["deck.locale"], "fi");
+}
+
+#[test]
+fn merge_and_override_variants_compose_where_supported() {
+    let mut base = ug_style_deck();
+    base.variables
+        .insert("deck.locale".to_owned(), "en".to_owned());
+
+    let field_merged = base
+        .compose(&[field_definition_overlay(
+            ChangeIntent::Merge,
+            Some(FieldDefinition {
+                id: sid("field.flag"),
+                name: "Flag merged".to_owned(),
+            }),
+            None,
+        )])
+        .expect("field definition merge composes on existing field");
+    assert_eq!(
+        field_merged.note_types[&sid("note-type.country")].fields[2].name,
+        "Flag merged"
+    );
+
+    let template_merged = base
+        .compose(&[card_template_overlay(
+            ChangeIntent::Merge,
+            Some(CardTemplate {
+                id: sid("template.country-to-capital"),
+                name: "Country - Capital merged".to_owned(),
+                variables: BTreeMap::new(),
+                question_format: "{{Country}}?".to_owned(),
+                answer_format: "{{Capital}}".to_owned(),
+                adapter_ids: AdapterIds::new(),
+            }),
+            None,
+        )])
+        .expect("card template merge composes");
+    assert_eq!(
+        template_merged.note_types[&sid("note-type.country")].card_templates[0].name,
+        "Country - Capital merged"
+    );
+
+    let media_merged = base
+        .compose(&[media_overlay(
+            ChangeIntent::Merge,
+            Some(MediaReference {
+                id: sid("media.flag.finland"),
+                path: "flags/fi-merge.png".to_owned(),
+                sha256: "merge".to_owned(),
+            }),
+            None,
+        )])
+        .expect("media merge composes");
+    assert_eq!(
+        media_merged.media[&sid("media.flag.finland")].path,
+        "flags/fi-merge.png"
+    );
+
+    let name_merged = base
+        .compose(&[deck_name_overlay(
+            ChangeIntent::Merge,
+            Some("Merged name"),
+            None,
+        )])
+        .expect("string property merge composes");
+    assert_eq!(name_merged.name, "Merged name");
+
+    let variable_merged = base
+        .compose(&[deck_variable_overlay(ChangeIntent::Merge, Some("sv"), None)])
+        .expect("variable merge composes");
+    assert_eq!(variable_merged.variables["deck.locale"], "sv");
+
+    let overridden = base
+        .compose(&[
+            deck_name_overlay(ChangeIntent::Merge, Some("First name"), None),
+            deck_name_overlay(
+                ChangeIntent::Override,
+                Some("Override name"),
+                Some(ExpectedBase::Value("First name".to_owned())),
+            ),
+        ])
+        .expect("override chain composes");
+    assert_eq!(overridden.name, "Override name");
+}
+
+#[test]
+fn add_guards_cover_already_exists_and_payload_id_mismatch_paths() {
+    let already_exists_cases = [
+        already_existing_note_type_overlay(),
+        already_existing_note_overlay(),
+        already_existing_card_template_overlay(),
+        already_existing_field_definition_overlay(),
+        already_existing_media_overlay(),
+    ];
+    for overlay in already_exists_cases {
+        let report = ug_style_deck()
+            .compose(&[overlay])
+            .expect_err("duplicate add fails");
+        assert!(report.has_kind(ComposeErrorKind::AlreadyExists));
+    }
+
+    let payload_mismatch_cases = [
+        mismatched_note_type_payload_overlay(),
+        mismatched_note_payload_overlay(),
+        mismatched_card_template_payload_overlay(),
+        mismatched_field_definition_payload_overlay(),
+        mismatched_media_payload_overlay(),
+    ];
+    for overlay in payload_mismatch_cases {
+        let report = ug_style_deck()
+            .compose(&[overlay])
+            .expect_err("payload id mismatch fails");
+        assert!(report.has_kind(ComposeErrorKind::ValidationFailed));
+    }
+}
+
+#[test]
+fn empty_stack_returns_the_base_deck_unchanged() {
+    let base = ug_style_deck();
+
+    let resolved = base.compose(&[]).expect("empty overlay stack composes");
+
+    assert_eq!(resolved, base);
+}
+
 fn overlay_replacing_capital(
     intent: ChangeIntent,
     expected_base: Option<ExpectedBase>,
@@ -2248,6 +2956,455 @@ fn sweden_note() -> Note {
         field_images: BTreeMap::new(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: AdapterIds::new(),
+    }
+}
+
+fn expected_base_for(intent: ChangeIntent) -> Option<ExpectedBase> {
+    match intent {
+        ChangeIntent::Replace | ChangeIntent::Remove | ChangeIntent::Override => {
+            Some(ExpectedBase::EntityPresent)
+        }
+        ChangeIntent::Add | ChangeIntent::Merge => None,
+    }
+}
+
+fn overlay_with_field_change(id: &str, field_id: StableId, change: FieldChange) -> Overlay {
+    Overlay {
+        id: sid(id),
+        kind: OverlayKind::Patch,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::from([(
+            sid("note.finland"),
+            NoteChange {
+                intent: ChangeIntent::Merge,
+                note: None,
+                variables: BTreeMap::new(),
+                fields: BTreeMap::from([(field_id, change)]),
+                tags: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: None,
+            },
+        )]),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    }
+}
+
+fn field_definition_overlay(
+    intent: ChangeIntent,
+    field: Option<FieldDefinition>,
+    expected_base: Option<ExpectedBase>,
+) -> Overlay {
+    Overlay {
+        id: sid("overlay.patch.field-definition"),
+        kind: OverlayKind::Patch,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::from([(
+            sid("note-type.country"),
+            NoteTypeChange {
+                intent: ChangeIntent::Merge,
+                note_type: None,
+                name: None,
+                variables: BTreeMap::new(),
+                styling: None,
+                fields: BTreeMap::from([(
+                    sid("field.flag"),
+                    FieldDefinitionChange {
+                        intent,
+                        field,
+                        expected_base,
+                    },
+                )]),
+                card_templates: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: None,
+            },
+        )]),
+        media_changes: BTreeMap::new(),
+    }
+}
+
+fn card_template_overlay(
+    intent: ChangeIntent,
+    template: Option<CardTemplate>,
+    expected_base: Option<ExpectedBase>,
+) -> Overlay {
+    Overlay {
+        id: sid("overlay.patch.card-template"),
+        kind: OverlayKind::Patch,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::from([(
+            sid("note-type.country"),
+            NoteTypeChange {
+                intent: ChangeIntent::Merge,
+                note_type: None,
+                name: None,
+                variables: BTreeMap::new(),
+                styling: None,
+                fields: BTreeMap::new(),
+                card_templates: BTreeMap::from([(
+                    sid("template.country-to-capital"),
+                    CardTemplateChange {
+                        intent,
+                        template,
+                        insert_after: None,
+                        name: None,
+                        variables: BTreeMap::new(),
+                        question_format: None,
+                        answer_format: None,
+                        adapter_ids: BTreeMap::new(),
+                        expected_base,
+                    },
+                )]),
+                adapter_ids: BTreeMap::new(),
+                expected_base: None,
+            },
+        )]),
+        media_changes: BTreeMap::new(),
+    }
+}
+
+fn media_overlay(
+    intent: ChangeIntent,
+    media: Option<MediaReference>,
+    expected_base: Option<ExpectedBase>,
+) -> Overlay {
+    Overlay {
+        id: sid("overlay.patch.media"),
+        kind: OverlayKind::Patch,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::from([(
+            sid("media.flag.finland"),
+            MediaChange {
+                intent,
+                media,
+                expected_base,
+            },
+        )]),
+    }
+}
+
+fn deck_name_overlay(
+    intent: ChangeIntent,
+    value: Option<&str>,
+    expected_base: Option<ExpectedBase>,
+) -> Overlay {
+    Overlay {
+        id: sid("overlay.patch.deck-name"),
+        kind: OverlayKind::Patch,
+        translations: None,
+        deck_change: Some(DeckChange {
+            name: Some(PropertyChange {
+                intent,
+                value: value.map(str::to_owned),
+                expected_base,
+            }),
+            description: None,
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+        }),
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    }
+}
+
+fn deck_variable_overlay(
+    intent: ChangeIntent,
+    value: Option<&str>,
+    expected_base: Option<ExpectedBase>,
+) -> Overlay {
+    Overlay {
+        id: sid("overlay.patch.deck-variable"),
+        kind: OverlayKind::Patch,
+        translations: None,
+        deck_change: Some(DeckChange {
+            name: None,
+            description: None,
+            variables: BTreeMap::from([(
+                "deck.locale".to_owned(),
+                PropertyChange {
+                    intent,
+                    value: value.map(str::to_owned),
+                    expected_base,
+                },
+            )]),
+            adapter_ids: BTreeMap::new(),
+        }),
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    }
+}
+
+fn already_existing_note_type_overlay() -> Overlay {
+    let note_type = ug_style_deck().note_types[&sid("note-type.country")].clone();
+    Overlay {
+        id: sid("overlay.extension.duplicate-note-type"),
+        kind: OverlayKind::Extension,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::from([(
+            sid("note-type.country"),
+            NoteTypeChange {
+                intent: ChangeIntent::Add,
+                note_type: Some(note_type),
+                name: None,
+                variables: BTreeMap::new(),
+                styling: None,
+                fields: BTreeMap::new(),
+                card_templates: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: None,
+            },
+        )]),
+        media_changes: BTreeMap::new(),
+    }
+}
+
+fn already_existing_note_overlay() -> Overlay {
+    Overlay {
+        id: sid("overlay.extension.duplicate-note"),
+        kind: OverlayKind::Extension,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::from([(
+            sid("note.finland"),
+            NoteChange {
+                intent: ChangeIntent::Add,
+                note: Some(ug_style_deck().notes[&sid("note.finland")].clone()),
+                variables: BTreeMap::new(),
+                fields: BTreeMap::new(),
+                tags: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: None,
+            },
+        )]),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    }
+}
+
+fn already_existing_card_template_overlay() -> Overlay {
+    card_template_add_overlay(
+        sid("template.country-to-capital"),
+        CardTemplate {
+            id: sid("template.country-to-capital"),
+            name: "Duplicate".to_owned(),
+            variables: BTreeMap::new(),
+            question_format: "{{Country}}".to_owned(),
+            answer_format: "{{Capital}}".to_owned(),
+            adapter_ids: AdapterIds::new(),
+        },
+    )
+}
+
+fn already_existing_field_definition_overlay() -> Overlay {
+    field_definition_add_overlay(
+        sid("field.flag"),
+        FieldDefinition {
+            id: sid("field.flag"),
+            name: "Flag duplicate".to_owned(),
+        },
+    )
+}
+
+fn already_existing_media_overlay() -> Overlay {
+    Overlay {
+        id: sid("overlay.extension.duplicate-media"),
+        kind: OverlayKind::Extension,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::from([(
+            sid("media.flag.finland"),
+            MediaChange {
+                intent: ChangeIntent::Add,
+                media: Some(MediaReference {
+                    id: sid("media.flag.finland"),
+                    path: "flags/fi.png".to_owned(),
+                    sha256: "0123456789abcdef".to_owned(),
+                }),
+                expected_base: None,
+            },
+        )]),
+    }
+}
+
+fn mismatched_note_type_payload_overlay() -> Overlay {
+    let mut note_type = ug_style_deck().note_types[&sid("note-type.country")].clone();
+    note_type.id = sid("note-type.other");
+    Overlay {
+        id: sid("overlay.extension.bad-note-type-payload"),
+        kind: OverlayKind::Extension,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::from([(
+            sid("note-type.region"),
+            NoteTypeChange {
+                intent: ChangeIntent::Add,
+                note_type: Some(note_type),
+                name: None,
+                variables: BTreeMap::new(),
+                styling: None,
+                fields: BTreeMap::new(),
+                card_templates: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: None,
+            },
+        )]),
+        media_changes: BTreeMap::new(),
+    }
+}
+
+fn mismatched_note_payload_overlay() -> Overlay {
+    Overlay {
+        id: sid("overlay.extension.bad-note-payload"),
+        kind: OverlayKind::Extension,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::from([(
+            sid("note.denmark"),
+            NoteChange {
+                intent: ChangeIntent::Add,
+                note: Some(sweden_note()),
+                variables: BTreeMap::new(),
+                fields: BTreeMap::new(),
+                tags: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: None,
+            },
+        )]),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    }
+}
+
+fn mismatched_card_template_payload_overlay() -> Overlay {
+    card_template_add_overlay(
+        sid("template.country-to-flag"),
+        CardTemplate {
+            id: sid("template.other"),
+            name: "Country - Flag".to_owned(),
+            variables: BTreeMap::new(),
+            question_format: "{{Country}}".to_owned(),
+            answer_format: "{{Flag}}".to_owned(),
+            adapter_ids: AdapterIds::new(),
+        },
+    )
+}
+
+fn mismatched_field_definition_payload_overlay() -> Overlay {
+    field_definition_add_overlay(
+        sid("field.population"),
+        FieldDefinition {
+            id: sid("field.other"),
+            name: "Population".to_owned(),
+        },
+    )
+}
+
+fn mismatched_media_payload_overlay() -> Overlay {
+    Overlay {
+        id: sid("overlay.extension.bad-media-payload"),
+        kind: OverlayKind::Extension,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::from([(
+            sid("media.flag.sweden"),
+            MediaChange {
+                intent: ChangeIntent::Add,
+                media: Some(MediaReference {
+                    id: sid("media.flag.other"),
+                    path: "flags/se.png".to_owned(),
+                    sha256: "abcdef".to_owned(),
+                }),
+                expected_base: None,
+            },
+        )]),
+    }
+}
+
+fn card_template_add_overlay(template_id: StableId, template: CardTemplate) -> Overlay {
+    Overlay {
+        id: sid("overlay.extension.card-template-add"),
+        kind: OverlayKind::Extension,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::from([(
+            sid("note-type.country"),
+            NoteTypeChange {
+                intent: ChangeIntent::Merge,
+                note_type: None,
+                name: None,
+                variables: BTreeMap::new(),
+                styling: None,
+                fields: BTreeMap::new(),
+                card_templates: BTreeMap::from([(
+                    template_id,
+                    CardTemplateChange {
+                        intent: ChangeIntent::Add,
+                        template: Some(template),
+                        insert_after: None,
+                        name: None,
+                        variables: BTreeMap::new(),
+                        question_format: None,
+                        answer_format: None,
+                        adapter_ids: BTreeMap::new(),
+                        expected_base: None,
+                    },
+                )]),
+                adapter_ids: BTreeMap::new(),
+                expected_base: None,
+            },
+        )]),
+        media_changes: BTreeMap::new(),
+    }
+}
+
+fn field_definition_add_overlay(field_id: StableId, field: FieldDefinition) -> Overlay {
+    Overlay {
+        id: sid("overlay.extension.field-definition-add"),
+        kind: OverlayKind::Extension,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::from([(
+            sid("note-type.country"),
+            NoteTypeChange {
+                intent: ChangeIntent::Merge,
+                note_type: None,
+                name: None,
+                variables: BTreeMap::new(),
+                styling: None,
+                fields: BTreeMap::from([(
+                    field_id,
+                    FieldDefinitionChange {
+                        intent: ChangeIntent::Add,
+                        field: Some(field),
+                        expected_base: None,
+                    },
+                )]),
+                card_templates: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: None,
+            },
+        )]),
+        media_changes: BTreeMap::new(),
     }
 }
 

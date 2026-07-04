@@ -271,11 +271,9 @@ fn apply_note_type_remove(
         ));
         return;
     }
-    if resolved
-        .notes
-        .values()
-        .any(|note| &note.note_type_id == note_type_id)
-    {
+    if resolved.notes.iter().any(|(note_id, note)| {
+        &note.note_type_id == note_type_id && !resolved.tombstones.contains(note_id)
+    }) {
         errors.push(ComposeError::new(
             ComposeErrorKind::ValidationFailed,
             path,
@@ -304,6 +302,15 @@ fn apply_note_type_change(
     errors: &mut Vec<ComposeError>,
 ) -> Vec<(StableId, StableId)> {
     let mut added_fields = Vec::new();
+    let path = note_type_path(note_type_id);
+    if change.note_type.is_some() {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::ValidationFailed,
+            path,
+            "a full entity body is only valid with intent `add`; use add, or express edits as field/sub-changes".to_owned(),
+        ));
+        return added_fields;
+    }
     if requires_expected_base(change.intent)
         && !has_expected_base(&change.expected_base, note_type_path(note_type_id), errors)
     {
@@ -890,9 +897,16 @@ fn apply_field_definition_change(
             if let Some(index) = existing_index {
                 note_type.fields[index] = field.clone();
                 false
-            } else {
+            } else if change.intent == ChangeIntent::Add {
                 note_type.fields.push(field.clone());
-                change.intent == ChangeIntent::Add
+                true
+            } else {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::MissingOverlayTarget,
+                    path,
+                    format!("field {field_id} does not exist on note type {note_type_id}"),
+                ));
+                false
             }
         }
     }
@@ -928,6 +942,17 @@ fn apply_note_add(
         ));
         return;
     };
+    if &note.id != note_id {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::ValidationFailed,
+            path,
+            format!(
+                "note payload id {} does not match target {note_id}",
+                note.id
+            ),
+        ));
+        return;
+    }
 
     resolved.notes.insert(note_id.clone(), note.clone());
     resolved.tombstones.remove(note_id);
@@ -941,6 +966,15 @@ fn apply_note_merge(
     changed_paths: &mut BTreeMap<String, StableId>,
     errors: &mut Vec<ComposeError>,
 ) {
+    let path = note_path(note_id);
+    if change.note.is_some() {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::ValidationFailed,
+            path,
+            "a full entity body is only valid with intent `add`; use add, or express edits as field/sub-changes".to_owned(),
+        ));
+        return;
+    }
     if requires_expected_base(change.intent)
         && !has_expected_base(&change.expected_base, note_path(note_id), errors)
     {
@@ -1116,12 +1150,24 @@ fn apply_field_change(
         }
     }
 
+    let current_value = note.fields.get(field_id).map(String::as_str).unwrap_or("");
+
     match change.intent {
-        ChangeIntent::Add if note.fields.contains_key(field_id) => {
+        ChangeIntent::Add if !current_value.is_empty() => {
             errors.push(ComposeError::new(
                 ComposeErrorKind::AlreadyExists,
                 path,
-                format!("field {field_id} already exists on note {note_id}"),
+                format!("field {field_id} already has a non-blank value on note {note_id}"),
+            ));
+        }
+        ChangeIntent::Merge if !current_value.is_empty() => {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::ExpectedBaseMismatch,
+                path,
+                format!(
+                    "field-level merge may only fill a blank value; found {:?}",
+                    current_value
+                ),
             ));
         }
         ChangeIntent::Remove => {
