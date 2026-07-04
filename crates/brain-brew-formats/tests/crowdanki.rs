@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
-    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, MediaReference, Note, NoteType,
-    StableId,
+    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, MediaReference,
+    Note, NoteType, StableId,
 };
 use brain_brew_formats::crowdanki;
 
@@ -31,6 +31,34 @@ fn import_export_round_trip_is_semantically_equal_when_suggested_ids_match_sourc
         .expect("exported CrowdAnki imports");
 
     assert!(original.semantic_diff(&imported).is_empty());
+}
+
+#[test]
+fn export_is_byte_identical_for_structured_image_and_equivalent_raw_img_field() {
+    let mut raw = ug_style_deck();
+    raw.notes
+        .get_mut(&sid("note.finland"))
+        .unwrap()
+        .fields
+        .insert(sid("field.flag"), "<img src=\"flags/fi.png\" />".to_owned());
+    let mut structured = ug_style_deck();
+    let note = structured.notes.get_mut(&sid("note.finland")).unwrap();
+    note.fields.insert(sid("field.flag"), String::new());
+    note.field_images.insert(
+        sid("field.flag"),
+        vec![FieldImageReference {
+            media_id: sid("media.flags-fi-png"),
+        }],
+    );
+
+    let raw_json = crowdanki::export_deck(&raw)
+        .expect("raw image field exports")
+        .deck_json;
+    let structured_json = crowdanki::export_deck(&structured)
+        .expect("structured image field exports")
+        .deck_json;
+
+    assert_eq!(structured_json, raw_json);
 }
 
 #[test]

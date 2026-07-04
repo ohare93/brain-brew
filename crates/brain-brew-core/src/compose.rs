@@ -1597,7 +1597,13 @@ fn requires_expected_base(intent: ChangeIntent) -> bool {
 fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, VariableRenderReport> {
     let mut rendered = deck.clone();
     let mut errors = Vec::new();
+    let mut image_errors = Vec::new();
     let deck_variables = rendered.variables.clone();
+    let media_paths = rendered
+        .media
+        .iter()
+        .map(|(id, media)| (id.clone(), media.path.clone()))
+        .collect::<BTreeMap<_, _>>();
 
     render_string_with_variables(
         &mut rendered.name,
@@ -1699,10 +1705,11 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
                 &mut errors,
             );
         }
+        render_image_fields(note_id, note, &media_paths, &mut image_errors);
     }
 
     if errors.is_empty() {
-        let mut validation_errors = Vec::new();
+        let mut validation_errors = image_errors;
         resolve_structured_messages_with_validation_errors(&mut rendered, &mut validation_errors);
         if validation_errors.is_empty() {
             Ok(rendered)
@@ -1717,6 +1724,39 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
             errors,
             validation_errors: Vec::new(),
         })
+    }
+}
+
+fn render_image_fields(
+    note_id: &StableId,
+    note: &mut Note,
+    media_paths: &BTreeMap<StableId, String>,
+    errors: &mut Vec<ValidationError>,
+) {
+    let image_fields = note.field_images.clone();
+    for (field_id, images) in image_fields {
+        let path = note_field_path(note_id, &field_id);
+        let mut rendered = String::new();
+        let mut field_has_error = false;
+        for image in images {
+            let Some(media_path) = media_paths.get(&image.media_id) else {
+                errors.push(ValidationError::new(
+                    ValidationErrorKind::UnknownMediaReference,
+                    path.clone(),
+                    format!(
+                        "unknown media id \"{}\" referenced in field {path}",
+                        image.media_id
+                    ),
+                ));
+                field_has_error = true;
+                continue;
+            };
+            rendered.push_str(&format!("<img src=\"{media_path}\" />"));
+        }
+        if !field_has_error {
+            note.fields.insert(field_id.clone(), rendered);
+            note.field_images.remove(&field_id);
+        }
     }
 }
 

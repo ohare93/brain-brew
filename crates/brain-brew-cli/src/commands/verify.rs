@@ -59,13 +59,13 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         verify_translation_coverage_policy(&plan, policy)?;
         let deck = plan.compose()?;
         deck.validate().map_err(|error| error.to_string())?;
-        if !verify_args.skip_content_validation {
-            verify_deck_content(target, &deck)?;
-        }
         if let Some(media_root) = &media_root {
             validate_media_assets(&deck, media_root)?;
         } else {
             validate_media_references(&deck)?;
+        }
+        if !verify_args.skip_content_validation {
+            verify_deck_content(target, &deck)?;
         }
         verify_configured_exports(&root, &manifest, target, &deck)?;
     }

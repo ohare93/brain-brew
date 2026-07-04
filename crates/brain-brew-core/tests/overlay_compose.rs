@@ -1071,6 +1071,86 @@ fn render_variables_resolves_structured_message_field_refs_after_correct_substit
 }
 
 #[test]
+fn render_variables_lowers_structured_images_to_exact_img_html() {
+    let mut deck = ug_style_deck();
+    let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
+    note.fields.insert(sid("field.flag"), String::new());
+    note.field_images.insert(
+        sid("field.flag"),
+        vec![FieldImageReference {
+            media_id: sid("media.flag.finland"),
+        }],
+    );
+
+    let rendered = deck
+        .render_variables()
+        .expect("declared structured image renders");
+
+    let rendered_note = &rendered.notes[&sid("note.finland")];
+    assert_eq!(
+        rendered_note.fields[&sid("field.flag")],
+        "<img src=\"flags/fi.png\" />"
+    );
+    assert!(!rendered_note.field_images.contains_key(&sid("field.flag")));
+}
+
+#[test]
+fn render_variables_lowers_multi_image_fields_without_separators() {
+    let mut deck = ug_style_deck();
+    deck.media.insert(
+        sid("media.flag.finland.blur"),
+        MediaReference {
+            id: sid("media.flag.finland.blur"),
+            path: "flags/fi-blur.png".to_owned(),
+            sha256: "abcdef".to_owned(),
+        },
+    );
+    let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
+    note.fields.insert(sid("field.flag"), String::new());
+    note.field_images.insert(
+        sid("field.flag"),
+        vec![
+            FieldImageReference {
+                media_id: sid("media.flag.finland.blur"),
+            },
+            FieldImageReference {
+                media_id: sid("media.flag.finland"),
+            },
+        ],
+    );
+
+    let rendered = deck
+        .render_variables()
+        .expect("declared structured images render");
+
+    assert_eq!(
+        rendered.notes[&sid("note.finland")].fields[&sid("field.flag")],
+        "<img src=\"flags/fi-blur.png\" /><img src=\"flags/fi.png\" />"
+    );
+}
+
+#[test]
+fn render_variables_reports_unknown_structured_image_media_id_with_field_path() {
+    let mut deck = ug_style_deck();
+    let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
+    note.fields.insert(sid("field.flag"), String::new());
+    note.field_images.insert(
+        sid("field.flag"),
+        vec![FieldImageReference {
+            media_id: sid("media.flag.missing"),
+        }],
+    );
+
+    let report = deck
+        .render_variables()
+        .expect_err("unknown structured image id must fail rendering");
+
+    let output = report.to_string();
+    assert!(output.contains("unknown media id \"media.flag.missing\""));
+    assert!(output.contains("notes.note.finland.fields.field.flag"));
+}
+
+#[test]
 fn translation_dictionary_resolves_structured_message_components() {
     let base = ug_style_deck_with_flag_similarity_message();
     let overlay = Overlay {

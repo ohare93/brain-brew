@@ -1398,4 +1398,5 @@ pub enum ValidationErrorKind {
     InvalidMessageReference,
     InvalidStableId,
     ConflictingFieldRepresentation,
+    UnknownMediaReference,
 }

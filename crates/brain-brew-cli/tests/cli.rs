@@ -4236,6 +4236,98 @@ fn verify_fails_on_referenced_but_undeclared_media_without_media_root() {
 }
 
 #[test]
+fn verify_accepts_declared_structured_image_media_id() {
+    let dir = temp_dir("verify-structured-image");
+    fs::write(
+        dir.join("deck.yaml"),
+        structured_media_yaml("media.flags-fi-png"),
+    )
+    .unwrap();
+    fs::write(dir.join("brainbrew.yaml"), SIMPLE_MEDIA_MANIFEST_YAML).unwrap();
+
+    let output = run([
+        "verify",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+}
+
+#[test]
+fn verify_reports_unknown_structured_image_media_id() {
+    let dir = temp_dir("verify-unknown-structured-image");
+    fs::write(
+        dir.join("deck.yaml"),
+        structured_media_yaml("media.flags-missing"),
+    )
+    .unwrap();
+    fs::write(dir.join("brainbrew.yaml"), SIMPLE_MEDIA_MANIFEST_YAML).unwrap();
+
+    let output = run([
+        "verify",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+
+    let err = stderr(&output);
+    assert!(!output.status.success());
+    assert!(
+        err.contains("unknown media id `media.flags-missing`"),
+        "{err}"
+    );
+    assert!(
+        err.contains("field `notes.note.finland.fields.field.flag`"),
+        "{err}"
+    );
+}
+
+#[test]
+fn verify_accepts_structured_image_added_by_overlay() {
+    let dir = temp_dir("verify-overlay-structured-image");
+    fs::write(
+        dir.join("deck.yaml"),
+        MEDIA_CANONICAL_YAML.replace("field.flag: '<img src=\"flags/fi.png\">'", "field.flag: ''"),
+    )
+    .unwrap();
+    fs::write(
+        dir.join("flag-overlay.yaml"),
+        r#"id: overlay.patch.flag
+kind: patch
+field_fills:
+  note.finland:
+    field.flag: !image media.flags-fi-png
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.patch.flag:
+    file: flag-overlay.yaml
+    kind: patch
+targets:
+  patched:
+    overlays:
+      - overlay.patch.flag
+"#,
+    )
+    .unwrap();
+
+    let output = run([
+        "verify",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+}
+
+#[test]
 fn verify_checks_media_root_hashes() {
     let dir = temp_dir("verify-media");
     fs::write(dir.join("deck.yaml"), MEDIA_CANONICAL_YAML).unwrap();
@@ -4328,6 +4420,49 @@ fn media_hash_updates_source_hashes_and_preserves_includes() {
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let source = fs::read_to_string(dir.join("deck.yaml")).unwrap();
     assert!(source.contains("description: !include content/description.md"));
+    assert!(
+        source.contains("sha256: 14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948")
+    );
+}
+
+#[test]
+fn fmt_and_media_hash_preserve_image_tags_as_structured_yaml() {
+    let dir = temp_dir("structured-image-fmt-hash");
+    let deck_path = dir.join("deck.yaml");
+    fs::create_dir_all(dir.join("media/flags")).unwrap();
+    fs::write(dir.join("media/flags/fi.png"), b"flag-bytes").unwrap();
+    fs::write(&deck_path, structured_media_yaml("media.flags-fi-png")).unwrap();
+    fs::write(dir.join("brainbrew.yaml"), SIMPLE_MEDIA_MANIFEST_YAML).unwrap();
+
+    let fmt_output = run(["fmt", deck_path.to_str().unwrap()]);
+    assert!(
+        fmt_output.status.success(),
+        "stderr: {}",
+        stderr(&fmt_output)
+    );
+    assert!(
+        fs::read_to_string(&deck_path)
+            .unwrap()
+            .contains("field.flag: !image media.flags-fi-png\n")
+    );
+
+    let hash_output = run([
+        "media",
+        "hash",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+        "--media-root",
+        dir.join("media").to_str().unwrap(),
+    ]);
+
+    assert!(
+        hash_output.status.success(),
+        "stderr: {}",
+        stderr(&hash_output)
+    );
+    let source = fs::read_to_string(deck_path).unwrap();
+    assert!(source.contains("field.flag: !image media.flags-fi-png\n"));
     assert!(
         source.contains("sha256: 14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948")
     );
@@ -6147,6 +6282,13 @@ fn include_directives(input: &str) -> Vec<String> {
         .filter(|line| line.contains("!include"))
         .map(|line| line.trim().to_owned())
         .collect()
+}
+
+fn structured_media_yaml(media_id: &str) -> String {
+    MEDIA_CANONICAL_YAML.replace(
+        "field.flag: '<img src=\"flags/fi.png\">'",
+        &format!("field.flag: !image {media_id}"),
+    )
 }
 
 fn stdout(output: &std::process::Output) -> String {

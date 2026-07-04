@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use brain_brew_core::CanonicalDeck;
+use brain_brew_core::{CanonicalDeck, DeckPath};
 use sha2::{Digest, Sha256};
 
 /// Extract Anki-compatible media paths used by note fields and card templates.
@@ -11,6 +11,13 @@ pub fn referenced_paths(deck: &CanonicalDeck) -> BTreeSet<String> {
     for note in deck.notes.values() {
         for value in note.fields.values() {
             paths.extend(extract_media_references_from_rendered_field(value));
+        }
+        for images in note.field_images.values() {
+            for image in images {
+                if let Some(media) = deck.media.get(&image.media_id) {
+                    paths.insert(media.path.clone());
+                }
+            }
         }
     }
 
@@ -102,7 +109,7 @@ pub fn reference_report(deck: &CanonicalDeck) -> MediaReferenceReport {
         .values()
         .map(|media| media.path.clone())
         .collect::<BTreeSet<_>>();
-    let mut errors = Vec::new();
+    let mut errors = structured_image_reference_errors(deck);
     let mut warnings = Vec::new();
 
     for path in used.difference(&declared) {
@@ -122,6 +129,32 @@ pub fn reference_report(deck: &CanonicalDeck) -> MediaReferenceReport {
     }
 
     MediaReferenceReport { errors, warnings }
+}
+
+fn structured_image_reference_errors(deck: &CanonicalDeck) -> Vec<MediaValidationError> {
+    let mut errors = Vec::new();
+    for (note_id, note) in &deck.notes {
+        for (field_id, images) in &note.field_images {
+            let field_path = DeckPath::NoteField {
+                note_id: note_id.clone(),
+                field_id: field_id.clone(),
+            }
+            .to_string();
+            for image in images {
+                if !deck.media.contains_key(&image.media_id) {
+                    errors.push(MediaValidationError {
+                        kind: MediaValidationErrorKind::UnknownMediaId,
+                        path: field_path.clone(),
+                        message: format!(
+                            "unknown media id `{}` referenced in field `{field_path}`",
+                            image.media_id
+                        ),
+                    });
+                }
+            }
+        }
+    }
+    errors
 }
 
 /// Validate that every used media path is declared.
@@ -274,6 +307,7 @@ pub struct MediaValidationError {
 pub enum MediaValidationErrorKind {
     MissingReference,
     UnusedReference,
+    UnknownMediaId,
     MissingAsset,
     EmptyHash,
     HashMismatch,
