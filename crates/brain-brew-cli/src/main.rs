@@ -16,10 +16,12 @@ fn main() {
     let args = env::args().skip(1).collect::<Vec<_>>();
     let json_error_output = json_error_output_requested(&args);
     if let Err(error) = run(&args) {
-        if json_error_output {
-            output::print_json_error(&error);
-        } else {
-            output::print_error(&error);
+        if error != output::JSON_ERROR_ALREADY_PRINTED {
+            if json_error_output {
+                output::print_json_error(&error);
+            } else {
+                output::print_error(&error);
+            }
         }
         process::exit(1);
     }

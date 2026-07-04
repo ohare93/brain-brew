@@ -2,7 +2,7 @@ use serde_json::json;
 
 use crate::args::{parse_manifest_target_args, split_json_flag};
 use crate::io::plan_manifest_target_with_packages;
-use crate::output::{one_line, package_json, semantic_kind_name};
+use crate::output::{self, one_line, package_json, semantic_kind_name};
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     let (json_output, rest) = split_json_flag(args);
@@ -87,12 +87,33 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             Ok(())
         }
         Err(report) => {
-            if !json_output {
+            if json_output {
+                let errors = report
+                    .errors
+                    .iter()
+                    .map(|error| {
+                        json!({
+                            "kind": format!("{:?}", error.kind),
+                            "path": error.path,
+                            "message": error.message,
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                output::print_json_error_value(json!({
+                    "message": "target composition failed",
+                    "errors": errors,
+                    "package": plan.package.as_ref().map(package_json),
+                    "target": plan.target,
+                    "base": plan.base_label,
+                    "overlay_stack": overlay_stack,
+                }));
+                Err(output::JSON_ERROR_ALREADY_PRINTED.to_owned())
+            } else {
                 for error in report.errors {
                     eprintln!("{:?} {}: {}", error.kind, error.path, error.message);
                 }
+                Err("target composition failed".to_owned())
             }
-            Err("target composition failed".to_owned())
         }
     }
 }

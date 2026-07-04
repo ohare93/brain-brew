@@ -1,11 +1,14 @@
 use std::path::Path;
 
-use brain_brew_core::ValidationReport;
+use brain_brew_core::{ComposeReport, ValidationReport};
 use serde_json::json;
 
 use crate::args::{parse_manifest_target_args, split_json_flag};
 use crate::help;
-use crate::io::{read_and_compose_deck, read_and_compose_manifest_target_with_packages};
+use crate::io::{
+    plan_manifest_target_with_packages, read_and_compose_deck,
+    read_and_compose_manifest_target_with_packages, read_deck_and_overlays,
+};
 use crate::output;
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
@@ -15,12 +18,30 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     {
         let (json_output, rest) = split_json_flag(args);
         let manifest_args = parse_manifest_target_args(&rest)?;
-        let deck = read_and_compose_manifest_target_with_packages(
-            &manifest_args.manifest_path,
-            &manifest_args.target,
-            &manifest_args.include_paths,
-            &manifest_args.package_roots,
-        )?;
+        let deck = if json_output {
+            let plan = plan_manifest_target_with_packages(
+                &manifest_args.manifest_path,
+                &manifest_args.target,
+                &manifest_args.include_paths,
+                &manifest_args.package_roots,
+            )?;
+            let overlays = plan
+                .overlays
+                .iter()
+                .map(|(_, overlay)| overlay.clone())
+                .collect::<Vec<_>>();
+            match plan.base.compose(&overlays) {
+                Ok(deck) => deck,
+                Err(report) => return report_json_compose_failure(report, "invalid deck"),
+            }
+        } else {
+            read_and_compose_manifest_target_with_packages(
+                &manifest_args.manifest_path,
+                &manifest_args.target,
+                &manifest_args.include_paths,
+                &manifest_args.package_roots,
+            )?
+        };
         let mut details = vec![
             (
                 "manifest",
@@ -68,7 +89,19 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         ));
     };
 
-    let deck = read_and_compose_deck(Path::new(&deck_path), &overlay_paths)?;
+    let deck = if json_output {
+        let (base, overlays) = read_deck_and_overlays(Path::new(&deck_path), &overlay_paths)?;
+        let overlays = overlays
+            .into_iter()
+            .map(|(_, overlay)| overlay)
+            .collect::<Vec<_>>();
+        match base.compose(&overlays) {
+            Ok(deck) => deck,
+            Err(report) => return report_json_compose_failure(report, "invalid deck"),
+        }
+    } else {
+        read_and_compose_deck(Path::new(&deck_path), &overlay_paths)?
+    };
     let mut details = vec![("source", deck_path.clone())];
     if !overlay_paths.is_empty() {
         details.push(("overlays", overlay_paths.len().to_string()));
@@ -102,10 +135,50 @@ fn report_validation(
             Ok(())
         }
         Err(report) => {
-            if !json_output {
+            if json_output {
+                report_json_validation_failure(report, "invalid deck")
+            } else {
                 eprintln!("{report}");
+                Err("invalid deck".to_owned())
             }
-            Err("invalid deck".to_owned())
         }
     }
+}
+
+fn report_json_validation_failure(report: ValidationReport, message: &str) -> Result<(), String> {
+    let errors = report
+        .errors
+        .iter()
+        .map(|error| {
+            json!({
+                "kind": format!("{:?}", error.kind),
+                "path": error.path,
+                "message": error.message,
+            })
+        })
+        .collect::<Vec<_>>();
+    report_json_errors(message, errors)
+}
+
+fn report_json_compose_failure(report: ComposeReport, message: &str) -> Result<(), String> {
+    let errors = report
+        .errors
+        .iter()
+        .map(|error| {
+            json!({
+                "kind": format!("{:?}", error.kind),
+                "path": error.path,
+                "message": error.message,
+            })
+        })
+        .collect::<Vec<_>>();
+    report_json_errors(message, errors)
+}
+
+fn report_json_errors(message: &str, errors: Vec<serde_json::Value>) -> Result<(), String> {
+    output::print_json_error_value(json!({
+        "message": message,
+        "errors": errors,
+    }));
+    Err(output::JSON_ERROR_ALREADY_PRINTED.to_owned())
 }

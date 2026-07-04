@@ -3,7 +3,9 @@ use std::io::{self, IsTerminal};
 
 use brain_brew_core::{CanonicalDeck, SemanticChangeKind, SemanticDiff};
 use brain_brew_formats::manifest;
-use serde_json::json;
+use serde_json::{Value, json};
+
+pub(crate) const JSON_ERROR_ALREADY_PRINTED: &str = "__brainbrew_json_error_already_printed";
 
 pub(crate) fn print_json_diff(diff: &SemanticDiff) {
     let changes = diff
@@ -52,9 +54,13 @@ pub(crate) fn print_error(message: &str) {
 }
 
 pub(crate) fn print_json_error(message: &str) {
+    print_json_error_value(json!({"message": message}));
+}
+
+pub(crate) fn print_json_error_value(error: Value) {
     println!(
         "{}",
-        serde_json::to_string_pretty(&json!({"error": {"message": message}})).unwrap()
+        serde_json::to_string_pretty(&json!({"error": error})).unwrap()
     );
 }
 

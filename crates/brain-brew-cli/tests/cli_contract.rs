@@ -68,15 +68,9 @@ fn validate_stdout_stderr_contract_covers_human_and_json_success_and_error() {
     let dir = temp_dir("validate-matrix");
     write_workspace(&dir);
     let deck = dir.join("deck.yaml");
-    let invalid = dir.join("invalid.yaml");
-    fs::write(
-        &invalid,
-        SAMPLE_CANONICAL_YAML.replace(
-            "note_type_id: note-type.country",
-            "note_type_id: note-type.missing",
-        ),
-    )
-    .expect("invalid deck fixture is written");
+    let invalid_overlay = dir.join("invalid-overlay.yaml");
+    fs::write(&invalid_overlay, INVALID_NOTE_OVERLAY_YAML)
+        .expect("invalid overlay fixture is written");
 
     let human_success = run(["validate", deck.to_str().unwrap()]);
     assert!(
@@ -97,11 +91,28 @@ fn validate_stdout_stderr_contract_covers_human_and_json_success_and_error() {
     let json: serde_json::Value = serde_json::from_slice(&json_success.stdout).unwrap();
     assert_eq!(json["status"], "valid");
 
-    let human_error = run(["validate", invalid.to_str().unwrap()]);
-    assert_human_error(&human_error, "notes.note.finland.note_type_id");
+    let human_error = run([
+        "validate",
+        deck.to_str().unwrap(),
+        "--overlay",
+        invalid_overlay.to_str().unwrap(),
+    ]);
+    assert_human_error(&human_error, "notes.note.invalid.note_type_id");
 
-    let json_error = run(["validate", invalid.to_str().unwrap(), "--json"]);
-    assert_json_error(&json_error, "notes.note.finland.note_type_id");
+    let json_error = run([
+        "validate",
+        deck.to_str().unwrap(),
+        "--overlay",
+        invalid_overlay.to_str().unwrap(),
+        "--json",
+    ]);
+    assert_json_error(&json_error, "invalid deck");
+    let json: serde_json::Value = serde_json::from_slice(&json_error.stdout).unwrap();
+    assert_eq!(json["error"]["errors"][0]["kind"], "ValidationFailed");
+    assert_eq!(
+        json["error"]["errors"][0]["path"],
+        "notes.note.invalid.note_type_id"
+    );
 }
 
 #[test]
@@ -361,6 +372,17 @@ overlays: {}
 targets:
   base:
     overlays: []
+"#;
+
+const INVALID_NOTE_OVERLAY_YAML: &str = r#"id: overlay.extension.invalid-note
+kind: extension
+notes:
+  note.invalid:
+    intent: add
+    note:
+      note_type_id: note-type.missing
+      fields: {}
+      tags: []
 "#;
 
 const SAMPLE_CANONICAL_YAML: &str = r#"deck:
