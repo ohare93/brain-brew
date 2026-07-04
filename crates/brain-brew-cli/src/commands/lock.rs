@@ -42,8 +42,9 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
 
 fn update(args: &[String]) -> Result<(), String> {
     let args = parse_lock_update_args(args)?;
-    let requested = args.source.to_requested_source()?;
-    let fetched = fetch_source(&requested, None)?;
+    let fetch_requested = args.source.to_fetch_source()?;
+    let fetched = fetch_source(&fetch_requested, None)?;
+    let requested = args.source.to_requested_source(&args.lock_path)?;
     let package_manifest = fetched.source_path.join(&args.package_manifest);
     let manifest = read_manifest(&package_manifest)?;
     let package = manifest.package.as_ref().ok_or_else(|| {
@@ -94,7 +95,7 @@ fn verify(args: &[String]) -> Result<(), String> {
     let args = parse_lock_verify_args(args)?;
     let lock = read_lock(&args.lock_path)?;
     for (package_id, package) in &lock.packages {
-        let fetched = fetch_locked_source(&args.lock_path, package_id, &package.locked)?;
+        let fetched = fetch_locked_source_for_verify(&args.lock_path, package_id, &package.locked)?;
         if let Some(expected_hash) = &package.locked.nar_hash
             && &fetched.nar_hash != expected_hash
         {
@@ -137,10 +138,26 @@ enum UpdateSource {
 }
 
 impl UpdateSource {
-    fn to_requested_source(&self) -> Result<RequestedSource, String> {
+    fn to_fetch_source(&self) -> Result<RequestedSource, String> {
         match self {
             Self::Path(path) => {
                 let path = canonicalize_for_lock(path)?;
+                Ok(RequestedSource {
+                    source_type: "path".to_owned(),
+                    url: None,
+                    path: Some(path.display().to_string()),
+                    reference: None,
+                    rev: None,
+                })
+            }
+            _ => self.to_requested_source(Path::new(".")),
+        }
+    }
+
+    fn to_requested_source(&self, lock_path: &Path) -> Result<RequestedSource, String> {
+        match self {
+            Self::Path(path) => {
+                let path = path_for_lock(path, lock_path)?;
                 Ok(RequestedSource {
                     source_type: "path".to_owned(),
                     url: None,
@@ -388,8 +405,38 @@ pub(crate) fn fetch_locked_source(
     package_id: &str,
     source: &LockedSource,
 ) -> Result<FetchedSource, String> {
+    fetch_locked_source_with_mode(lock_path, package_id, source, FetchLockedMode::UseCache)
+}
+
+fn fetch_locked_source_for_verify(
+    lock_path: &Path,
+    package_id: &str,
+    source: &LockedSource,
+) -> Result<FetchedSource, String> {
+    fetch_locked_source_with_mode(
+        lock_path,
+        package_id,
+        source,
+        FetchLockedMode::VerifyLivePath,
+    )
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FetchLockedMode {
+    UseCache,
+    VerifyLivePath,
+}
+
+fn fetch_locked_source_with_mode(
+    lock_path: &Path,
+    package_id: &str,
+    source: &LockedSource,
+    mode: FetchLockedMode,
+) -> Result<FetchedSource, String> {
     let expected_hash = source.nar_hash.as_deref();
-    if let Some(cached) = cached_source(expected_hash)? {
+    if !(mode == FetchLockedMode::VerifyLivePath && source.source_type == "path")
+        && let Some(cached) = cached_source(expected_hash)?
+    {
         return Ok(cached);
     }
 
@@ -627,9 +674,7 @@ struct GithubRepo {
 
 impl GithubRepo {
     fn parse(url: &str) -> Option<Self> {
-        let path = url
-            .strip_prefix("https://github.com/")
-            .or_else(|| url.strip_prefix("http://github.com/"))?;
+        let path = url.strip_prefix("https://github.com/")?;
         let mut parts = path.trim_end_matches('/').split('/');
         let owner = parts.next()?.to_owned();
         let name = parts.next()?.trim_end_matches(".git").to_owned();
@@ -819,9 +864,44 @@ fn copy_symlink(source: &Path, destination: &Path) -> Result<(), String> {
     })
 }
 
+fn path_for_lock(path: &Path, lock_path: &Path) -> Result<PathBuf, String> {
+    let canonical_path = canonicalize_for_lock(path)?;
+    let lock_parent = lock_path.parent().unwrap_or_else(|| Path::new("."));
+    let canonical_lock_parent = canonicalize_for_lock(lock_parent)?;
+    Ok(relative_path_between(&canonical_lock_parent, &canonical_path).unwrap_or(canonical_path))
+}
+
 fn canonicalize_for_lock(path: &Path) -> Result<PathBuf, String> {
     path.canonicalize()
         .map_err(|error| format!("{}: {error}", path.display()))
+}
+
+fn relative_path_between(base: &Path, target: &Path) -> Option<PathBuf> {
+    let base_components = base.components().collect::<Vec<_>>();
+    let target_components = target.components().collect::<Vec<_>>();
+    let common_len = base_components
+        .iter()
+        .zip(&target_components)
+        .take_while(|(base, target)| base == target)
+        .count();
+    if common_len == 0 {
+        return None;
+    }
+
+    let mut relative = PathBuf::new();
+    for component in &base_components[common_len..] {
+        match component {
+            std::path::Component::Normal(_) => relative.push(".."),
+            _ => return None,
+        }
+    }
+    for component in &target_components[common_len..] {
+        relative.push(component.as_os_str());
+    }
+    if relative.as_os_str().is_empty() {
+        relative.push(".");
+    }
+    Some(relative)
 }
 
 fn lock_relative_path(lock_path: &Path, path: &str) -> PathBuf {
@@ -882,4 +962,137 @@ fn cache_root() -> PathBuf {
         return PathBuf::from(home).join(".cache").join("brainbrew");
     }
     env::temp_dir().join("brainbrew-cache")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn github_repo_parses_only_plain_github_https_repo_urls() {
+        let repo = GithubRepo::parse("https://github.com/anki-geo/ultimate-geography.git")
+            .expect("GitHub HTTPS repo URL parses");
+        assert_eq!(repo.owner, "anki-geo");
+        assert_eq!(repo.name, "ultimate-geography");
+
+        assert!(GithubRepo::parse("http://github.com/anki-geo/ultimate-geography.git").is_none());
+        assert!(
+            GithubRepo::parse("https://github.com/anki-geo/ultimate-geography/tree/main").is_none()
+        );
+        assert!(GithubRepo::parse("https://example.com/anki-geo/ultimate-geography.git").is_none());
+    }
+
+    #[test]
+    fn github_repo_builds_codeload_and_percent_encoded_api_urls() {
+        let repo = GithubRepo {
+            owner: "anki geo".to_owned(),
+            name: "ultimate/geography".to_owned(),
+        };
+
+        assert_eq!(
+            repo.codeload_tarball_url("abc123"),
+            "https://codeload.github.com/anki geo/ultimate/geography/tar.gz/abc123"
+        );
+        assert_eq!(
+            repo.commit_api_url("feature/deck lock"),
+            "https://api.github.com/repos/anki geo/ultimate/geography/commits/feature%2Fdeck%20lock"
+        );
+    }
+
+    #[test]
+    fn non_github_git_url_reports_native_locking_error() {
+        let source = RequestedSource {
+            source_type: "git".to_owned(),
+            url: Some("https://example.com/anki-geo/ultimate-geography.git".to_owned()),
+            path: None,
+            reference: None,
+            rev: Some("abc123".to_owned()),
+        };
+
+        let error = fetch_git_source(&source, Some("sha256-example"))
+            .expect_err("non-GitHub URL is rejected before fetch");
+        assert!(error.contains("native git locking currently supports GitHub HTTPS URLs"));
+    }
+
+    #[test]
+    fn should_skip_source_entry_filters_vcs_build_and_nix_result_paths() {
+        for name in [
+            ".git",
+            ".jj",
+            ".hg",
+            ".svn",
+            "target",
+            "result",
+            "result-doc",
+        ] {
+            assert!(should_skip_source_entry(name), "{name} should be skipped");
+        }
+        for name in ["deck.yaml", "results", "target-notes", ".github"] {
+            assert!(!should_skip_source_entry(name), "{name} should be included");
+        }
+    }
+
+    #[test]
+    fn relative_path_between_sibling_checkout_paths_uses_dot_dot() {
+        let base = Path::new("/workspace/consumer");
+        let target = Path::new("/workspace/package");
+
+        assert_eq!(
+            relative_path_between(base, target).unwrap(),
+            PathBuf::from("../package")
+        );
+    }
+
+    #[test]
+    fn verify_locked_manifest_metadata_reports_version_mismatch() {
+        let dir = TempDir::new().expect("temp dir");
+        let manifest_path = dir.path().join("brainbrew.yaml");
+        fs::write(
+            &manifest_path,
+            r#"package:
+  id: anki-geo.ultimate-geography
+  version: 0.2.0
+base: deck.yaml
+overlays: {}
+targets: {}
+"#,
+        )
+        .expect("write manifest");
+        let package = LockedPackage {
+            manifest: "brainbrew.yaml".to_owned(),
+            package: LockedPackageMetadata {
+                version: "0.1.0".to_owned(),
+            },
+            original: None,
+            locked: LockedSource {
+                source_type: "path".to_owned(),
+                url: None,
+                path: Some(".".to_owned()),
+                reference: None,
+                rev: None,
+                nar_hash: None,
+            },
+        };
+
+        let error = verify_locked_manifest_metadata(
+            "anki-geo.ultimate-geography",
+            &package,
+            &manifest_path,
+        )
+        .expect_err("version mismatch is rejected");
+        assert!(error.contains("version mismatch"));
+    }
+
+    #[test]
+    fn read_lock_reports_missing_and_corrupt_lock_files() {
+        let dir = TempDir::new().expect("temp dir");
+        let missing = dir.path().join("missing.lock");
+        let missing_error = read_lock(&missing).expect_err("missing lock file is rejected");
+        assert!(missing_error.contains("missing.lock"));
+
+        let corrupt = dir.path().join("brainbrew.lock");
+        fs::write(&corrupt, "version: [\n").expect("write corrupt lock");
+        let corrupt_error = read_lock(&corrupt).expect_err("corrupt lock file is rejected");
+        assert!(corrupt_error.contains("failed to parse lock YAML"));
+    }
 }

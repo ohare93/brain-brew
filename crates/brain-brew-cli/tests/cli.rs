@@ -2321,7 +2321,8 @@ fn lock_update_and_verify_path_package_without_nix() {
     let lock_source = fs::read_to_string(&lock_path).unwrap();
     assert!(lock_source.contains("original:\n      type: path"));
     assert!(lock_source.contains("locked:\n      type: path"));
-    assert!(lock_source.contains(&format!("path: {}", ug.canonicalize().unwrap().display())));
+    assert!(lock_source.contains("path: ../ultimate-geography"));
+    assert!(!lock_source.contains(&ug.canonicalize().unwrap().display().to_string()));
     assert!(!lock_source.contains("/nix/store/"));
     assert!(lock_source.contains("nar_hash: 'sha256-"));
 

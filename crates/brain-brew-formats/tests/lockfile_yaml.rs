@@ -63,3 +63,53 @@ unknown: true
 
     assert!(error.to_string().contains("unknown field `unknown`"));
 }
+
+#[test]
+fn rejects_unsupported_lock_version() {
+    let error = lockfile::from_str(
+        r#"
+version: 2
+packages: {}
+"#,
+    )
+    .expect_err("unsupported versions are rejected");
+
+    assert!(matches!(
+        error,
+        lockfile::LockfileError::UnsupportedVersion(2)
+    ));
+    assert_eq!(error.to_string(), "unsupported federation lock version 2");
+}
+
+#[test]
+fn rejects_package_missing_locked_source() {
+    let error = lockfile::from_str(
+        r#"
+version: 1
+packages:
+  anki-geo.ultimate-geography:
+    manifest: brainbrew.yaml
+    package:
+      version: 0.1.0
+"#,
+    )
+    .expect_err("missing locked source is rejected");
+
+    assert!(matches!(
+        error,
+        lockfile::LockfileError::MissingLockedSource(ref package)
+            if package == "anki-geo.ultimate-geography"
+    ));
+    assert_eq!(
+        error.to_string(),
+        "locked package anki-geo.ultimate-geography must include a locked source"
+    );
+}
+
+#[test]
+fn reports_corrupt_lock_yaml_as_parse_error() {
+    let error = lockfile::from_str("version: [\n").expect_err("corrupt lock YAML is rejected");
+
+    assert!(matches!(error, lockfile::LockfileError::Parse(_)));
+    assert!(error.to_string().contains("failed to parse lock YAML"));
+}
