@@ -20,6 +20,29 @@ notes:
 
 `!image` uses the media stable ID, not the file path. If `flags/france.svg` is later renamed, update only the `media:` declaration's `path`; field references remain stable.
 
+## Hoisting large media maps
+
+Deck files may keep the top-level media declaration in a separate media-map file:
+
+```yaml
+media: !include media.yaml
+```
+
+The included file is not a full deck or overlay. Its root value is exactly the mapping that would normally live under `media:`:
+
+```yaml
+media.flag.france:
+  path: flags/france.svg
+  sha256: 7b2b...
+media.map.france:
+  path: maps/france.png
+  sha256: a91c...
+```
+
+This structural include is deliberately narrow: `media: !include <file>` is supported only for the top-level `media:` key in deck files. It is not supported in overlay files, and `!include` is not a general mapping splice elsewhere. `brainbrew fmt media.yaml` canonicalizes the standalone media map, while formatting the deck preserves `media: !include media.yaml`. `brainbrew media hash` follows the include and writes refreshed `sha256` values back to the included media file.
+
+A CrowdAnki import that rewrites a deck emits an ordinary deck file and re-inlines the `media:` block; it does not preserve a previously hoisted media include.
+
 ## Single and multi-image fields
 
 Use a scalar tag for one image:

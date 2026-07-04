@@ -24,7 +24,8 @@ Important rules:
 - entity maps are keyed by stable ID;
 - note type field/template order is explicit;
 - `adapter_ids` preserve external identities;
-- scalar content fields may use `!include package/relative/path` as an authoring convenience.
+- scalar content fields may use `!include package/relative/path` as an authoring convenience;
+- deck files may use the single structural include `media: !include <media-map.yaml>` for the top-level media map.
 
 ## Overlay file
 
@@ -199,7 +200,23 @@ deck:
       value: !include content/base-description.md
 ```
 
-Include paths are deterministic and package-root-relative: under a manifest workflow they are resolved relative to the directory containing `brainbrew.yaml`. A path may not escape that package root unless the manifest declares an explicit safe include root. Formatting a file that uses `!include` materializes the included scalar content into canonical YAML.
+Deck files also support one structural include form for large media declarations:
+
+```yaml
+media: !include media.yaml
+```
+
+The included file is a standalone media map whose root is the normal `media:` mapping contents, with stable IDs at column 0:
+
+```yaml
+media.flag.france:
+  path: flags/france.svg
+  sha256: 7b2b...
+```
+
+This whitelist applies only to top-level `media:` in deck files. It is not supported in overlay files or any other mapping position. Formatting a deck that uses the structural include preserves `media: !include media.yaml`; format the included file itself with `brainbrew fmt media.yaml`. `brainbrew media hash` follows the include and writes hashes into the media-map file. A CrowdAnki import that rewrites the deck re-inlines `media:` instead of preserving the include.
+
+Include paths are deterministic and package-root-relative: under a manifest workflow they are resolved relative to the directory containing `brainbrew.yaml`. A path may not escape that package root unless the manifest declares an explicit safe include root. Formatting a file that uses scalar `!include` materializes the included scalar content into canonical YAML.
 
 ## Manifest file
 

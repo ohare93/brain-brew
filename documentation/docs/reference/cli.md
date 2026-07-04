@@ -20,12 +20,13 @@ Lists build targets and package metadata.
 
 ```bash
 brainbrew fmt deck.yaml
+brainbrew fmt media.yaml
 brainbrew fmt overlays/languages/de.yaml
 brainbrew fmt brainbrew.yaml
 brainbrew fmt brainbrew.lock
 ```
 
-Canonicalizes supported source files.
+Canonicalizes supported source files. Standalone media-map files used by `media: !include media.yaml` are formatted as root media mappings; formatting a deck with a hoisted media map preserves the `media: !include ...` line.
 
 ## `validate`
 
@@ -59,7 +60,7 @@ brainbrew media hash --manifest brainbrew.yaml --all-targets --media-root media/
 brainbrew media hash --manifest brainbrew.yaml --target en-standard --media-root media/
 ```
 
-Computes SHA-256 values for declared media files and writes missing/stale hashes back to deck or overlay source YAML with include-preserving canonical formatting.
+Computes SHA-256 values for declared media files and writes missing/stale hashes back to deck or overlay source YAML with include-preserving canonical formatting. If a deck uses `media: !include media.yaml`, the command follows the include and writes updated hashes to the included media-map file.
 
 ## `import crowdanki`
 
@@ -67,7 +68,7 @@ Computes SHA-256 values for declared media files and writes missing/stale hashes
 brainbrew import crowdanki build/crowdanki/en-standard --out deck.yaml
 ```
 
-Imports a CrowdAnki folder into Canonical Deck YAML.
+Imports a CrowdAnki folder into Canonical Deck YAML. Import writes a complete deck file and re-inlines the `media:` block; it does not preserve a previously hoisted `media: !include ...` source layout.
 
 ## `diff`
 
