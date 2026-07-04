@@ -9,6 +9,7 @@ pub mod crowdanki;
 pub mod lockfile;
 pub mod manifest;
 pub mod media;
+pub mod media_map;
 pub mod source_includes;
 pub mod yaml_scalar;
 

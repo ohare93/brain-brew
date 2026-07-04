@@ -562,9 +562,7 @@ fn image_field_sequence_canonicalizes_singletons_and_emits_block_sequences() {
 
 #[test]
 fn include_resolver_passes_image_tags_through_when_includes_are_present() {
-    let dir = std::env::temp_dir().join(format!("brain-brew-image-include-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("create temp dir");
+    let dir = temp_fixture_dir("brain-brew-image-include");
     std::fs::write(dir.join("capital.txt"), "Helsinki").expect("write include");
     let source = image_deck_yaml("field.flag: !image media.flag.finland")
         .replace("description: ''", "description: !include capital.txt");
@@ -583,6 +581,125 @@ fn include_resolver_passes_image_tags_through_when_includes_are_present() {
         deck.notes[&sid("note.finland")]
             .field_images
             .contains_key(&sid("field.flag"))
+    );
+}
+
+#[test]
+fn top_level_media_include_resolves_to_the_same_deck_as_inline_media() {
+    let dir = temp_fixture_dir("brain-brew-media-include-resolve");
+    let inline = image_deck_yaml("field.flag: !image media.flag.finland");
+    std::fs::write(dir.join("media.yaml"), image_media_map_yaml()).expect("write media include");
+    let source = deck_with_media_include(&inline, "media.yaml");
+
+    let resolved =
+        source_includes::resolve_file_includes(&source, &dir.join("deck.yaml"), &dir, &[])
+            .expect("media include resolves");
+
+    let resolved_deck = canonical_yaml::from_str(&resolved).expect("resolved deck parses");
+    let inline_deck = canonical_yaml::from_str(&inline).expect("inline deck parses");
+    assert_eq!(resolved_deck, inline_deck);
+}
+
+#[test]
+fn format_preserving_file_includes_round_trips_media_and_scalar_includes() {
+    let inline = image_deck_yaml("field.flag: !image media.flag.finland");
+    let source = deck_with_media_include(&inline, "media.yaml")
+        .replace("description: ''", "description: !include description.html");
+
+    // This exercises the ADR-0016 §7 strip-and-restore path's load-bearing
+    // assumption: canonical_yaml::to_string validates !image stable-ID syntax,
+    // but does not require referenced media IDs to exist while media is stripped.
+    // If validation grows that existence check, media includes must be spliced for parse.
+    let formatted =
+        source_includes::format_preserving_file_includes(&source, canonical_yaml::format_str)
+            .expect("media include formats without materializing files");
+
+    assert!(formatted.contains("description: !include description.html\n"));
+    assert!(formatted.contains("media: !include media.yaml\n"));
+    assert_eq!(
+        source_includes::format_preserving_file_includes(&formatted, canonical_yaml::format_str)
+            .expect("formatted media include formats idempotently"),
+        formatted
+    );
+}
+
+#[test]
+fn include_under_media_entries_still_rejects_non_whitelisted_structural_positions() {
+    let dir = temp_fixture_dir("brain-brew-media-include-reject-entry");
+    std::fs::write(dir.join("path.txt"), "flags/fi.png").expect("write scalar include");
+    let source = image_deck_yaml("field.flag: '<img src=\"fi.png\">'")
+        .replace("path: flags/fi.png", "path: !include path.txt");
+
+    let error = source_includes::resolve_file_includes(&source, &dir.join("deck.yaml"), &dir, &[])
+        .expect_err("media entry includes are not whitelisted");
+
+    assert!(
+        error
+            .to_string()
+            .contains("is only valid for scalar content fields"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
+fn media_include_rejects_non_mapping_file_root_with_deck_and_include_paths() {
+    let dir = temp_fixture_dir("brain-brew-media-include-reject-root");
+    std::fs::write(dir.join("media.yaml"), "- not-a-map\n").expect("write bad media include");
+    let inline = image_deck_yaml("field.flag: '<img src=\"fi.png\">'");
+    let source = deck_with_media_include(&inline, "media.yaml");
+
+    let error = source_includes::resolve_file_includes(&source, &dir.join("deck.yaml"), &dir, &[])
+        .expect_err("media include root must be mapping");
+    let message = error.to_string();
+
+    assert!(
+        message.contains("deck.yaml:media"),
+        "unexpected error: {message}"
+    );
+    assert!(
+        message.contains("media.yaml"),
+        "unexpected error: {message}"
+    );
+    assert!(message.contains("mapping"), "unexpected error: {message}");
+}
+
+#[test]
+fn media_include_rejects_yaml_tags_inside_included_file() {
+    let dir = temp_fixture_dir("brain-brew-media-include-reject-tags");
+    std::fs::write(
+        dir.join("media.yaml"),
+        "media.flag.finland:\n  path: !include path.txt\n  sha256: hash-fi\n",
+    )
+    .expect("write tagged media include");
+    let inline = image_deck_yaml("field.flag: '<img src=\"fi.png\">'");
+    let source = deck_with_media_include(&inline, "media.yaml");
+
+    let error = source_includes::resolve_file_includes(&source, &dir.join("deck.yaml"), &dir, &[])
+        .expect_err("media include tags are rejected");
+    let message = error.to_string();
+
+    assert!(
+        message.contains("media.yaml:media.flag.finland.path"),
+        "unexpected error: {message}"
+    );
+    assert!(
+        message.contains("unsupported YAML tag"),
+        "unexpected error: {message}"
+    );
+}
+
+#[test]
+fn media_include_missing_file_uses_existing_unreadable_error() {
+    let dir = temp_fixture_dir("brain-brew-media-include-missing");
+    let inline = image_deck_yaml("field.flag: '<img src=\"fi.png\">'");
+    let source = deck_with_media_include(&inline, "missing-media.yaml");
+
+    let error = source_includes::resolve_file_includes(&source, &dir.join("deck.yaml"), &dir, &[])
+        .expect_err("missing media include fails");
+
+    assert!(
+        error.to_string().contains("could not be read"),
+        "unexpected error: {error}"
     );
 }
 
@@ -648,6 +765,31 @@ media:
 tombstones: []
 "#;
 
+fn temp_fixture_dir(prefix: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!(
+        "{prefix}-{}-{:?}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock after epoch")
+            .as_nanos()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    dir
+}
+
+fn deck_with_media_include(inline: &str, include_path: &str) -> String {
+    inline.replace(
+        "media:\n  media.flag.finland:\n    path: flags/fi.png\n    sha256: hash-fi\n  media.flag.finland.blur:\n    path: flags/fi-blur.png\n    sha256: hash-fi-blur\n",
+        &format!("media: !include {include_path}\n"),
+    )
+}
+
+fn image_media_map_yaml() -> &'static str {
+    "media.flag.finland:\n  path: flags/fi.png\n  sha256: hash-fi\nmedia.flag.finland.blur:\n  path: flags/fi-blur.png\n  sha256: hash-fi-blur\n"
+}
+
 fn image_deck_yaml(flag_field_yaml: &str) -> String {
     format!(
         r#"deck:
@@ -669,8 +811,14 @@ note_types:
         name: Capital
       field.flag:
         name: Flag
-    card_template_order: []
-    card_templates: {{}}
+    card_template_order:
+      - template.country
+    card_templates:
+      template.country:
+        name: Country
+        question_format: '{{{{Country}}}}'
+        answer_format: '{{{{FrontSide}}}}<hr id=answer>{{{{Capital}}}}'
+        adapter_ids: {{}}
     styling: ''
     adapter_ids: {{}}
 notes:
@@ -680,7 +828,8 @@ notes:
       field.country: Finland
       field.capital: Helsinki
       {flag_field_yaml}
-    tags: []
+    tags:
+      - Europe
     adapter_ids: {{}}
 media:
   media.flag.finland:

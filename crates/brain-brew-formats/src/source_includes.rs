@@ -36,6 +36,16 @@ pub fn resolve_file_includes(
     })
 }
 
+/// Resolve an include target with the same package-root and safe-root checks used by file includes.
+pub fn resolve_include_target(
+    include_path: &str,
+    package_root: &Path,
+    safe_include_roots: &[PathBuf],
+) -> Result<PathBuf, IncludeError> {
+    let resolver = IncludeResolver::new(package_root, package_root, safe_include_roots)?;
+    resolver.resolve_include_path(include_path, &[])
+}
+
 /// Format a raw YAML source file without materializing `!include` tagged scalars.
 ///
 /// The domain formatter still owns canonical ordering and scalar emission. Include
@@ -55,10 +65,15 @@ where
     }
 
     let mut value = serde_yaml::from_str::<Value>(input).map_err(|error| error.to_string())?;
+    // ADR-0016 §7 deliberately whitelists only top-level `media: !include` as a
+    // structural include. The formatter strips that key so CanonicalDeckYaml's
+    // default empty media map can parse, then restores the directive after emit.
+    let media_include = strip_top_level_media_include(&mut value)?;
     let mut replacements = Vec::new();
     replace_includes_with_sentinels(input, &mut value, &mut replacements)?;
     let source_with_sentinels = serde_yaml::to_string(&value).map_err(|error| error.to_string())?;
     let mut formatted = format(&source_with_sentinels).map_err(|error| error.to_string())?;
+    formatted = restore_top_level_media_include(formatted, media_include)?;
     for replacement in replacements {
         formatted = formatted.replace(&replacement.sentinel, &replacement.directive);
     }
@@ -68,6 +83,64 @@ where
 struct IncludeReplacement {
     sentinel: String,
     directive: String,
+}
+
+struct MediaIncludeReplacement {
+    directive: String,
+}
+
+fn strip_top_level_media_include(
+    value: &mut Value,
+) -> Result<Option<MediaIncludeReplacement>, String> {
+    let Value::Mapping(mapping) = value else {
+        return Ok(None);
+    };
+    let media_key = Value::String("media".to_owned());
+    let Some(media_value) = mapping.get(&media_key) else {
+        return Ok(None);
+    };
+    let Value::Tagged(tagged) = media_value else {
+        return Ok(None);
+    };
+    if tagged.tag != "include" {
+        return Ok(None);
+    }
+    let Value::String(path) = &tagged.value else {
+        return Err("!include path must be a scalar string".to_owned());
+    };
+    let directive = format!("media: !include {}", yaml_scalar::scalar(path));
+    mapping.remove(&media_key);
+    Ok(Some(MediaIncludeReplacement { directive }))
+}
+
+fn restore_top_level_media_include(
+    formatted: String,
+    media_include: Option<MediaIncludeReplacement>,
+) -> Result<String, String> {
+    let Some(media_include) = media_include else {
+        return Ok(formatted);
+    };
+    let placeholder = "media: {}\n";
+    let count = formatted
+        .split_inclusive('\n')
+        .filter(|line| *line == placeholder)
+        .count();
+    if count != 1 {
+        return Err(format!(
+            "expected exactly one top-level `media: {{}}` line to restore `{}`, found {count}",
+            media_include.directive
+        ));
+    }
+    let mut restored = String::with_capacity(formatted.len() + media_include.directive.len());
+    for line in formatted.split_inclusive('\n') {
+        if line == placeholder {
+            restored.push_str(&media_include.directive);
+            restored.push('\n');
+        } else {
+            restored.push_str(line);
+        }
+    }
+    Ok(restored)
 }
 
 fn replace_includes_with_sentinels(
@@ -142,6 +215,10 @@ enum IncludeErrorKind {
         chain: Vec<String>,
     },
     InvalidNestedDirective(String),
+    StructuralIncludeRootNotMapping {
+        resolved_path: PathBuf,
+        found: &'static str,
+    },
 }
 
 impl IncludeError {
@@ -214,11 +291,32 @@ impl fmt::Display for IncludeError {
                 "{location}: invalid nested include directive in {}: {message}",
                 self.include_path
             ),
+            IncludeErrorKind::StructuralIncludeRootNotMapping {
+                resolved_path,
+                found,
+            } => write!(
+                f,
+                "{location}: structural media include {} ({}) must have a mapping root, found {found}",
+                self.include_path,
+                resolved_path.display()
+            ),
         }
     }
 }
 
 impl std::error::Error for IncludeError {}
+
+enum StructuralIncludeKind {
+    MediaMap,
+}
+
+fn structural_include_kind(path: &[String]) -> Option<StructuralIncludeKind> {
+    // ADR-0016 §7 makes this a deliberate whitelist, not general YAML AST splicing.
+    match path {
+        [segment] if segment == "media" => Some(StructuralIncludeKind::MediaMap),
+        _ => None,
+    }
+}
 
 struct IncludeResolver {
     source_path: PathBuf,
@@ -273,6 +371,11 @@ impl IncludeResolver {
                         ));
                     }
                 };
+                if let Some(StructuralIncludeKind::MediaMap) = structural_include_kind(yaml_path) {
+                    let included = self.read_media_map_include(&include_path, yaml_path)?;
+                    *value = included;
+                    return Ok(());
+                }
                 if !is_scalar_content_path(yaml_path) {
                     return Err(IncludeError::new(
                         &self.source_path,
@@ -310,6 +413,44 @@ impl IncludeResolver {
             Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
         }
         Ok(())
+    }
+
+    fn read_media_map_include(
+        &self,
+        include_path: &str,
+        yaml_path: &[String],
+    ) -> Result<Value, IncludeError> {
+        let resolved = self.resolve_include_path(include_path, yaml_path)?;
+        let content = fs::read_to_string(&resolved).map_err(|error| {
+            IncludeError::new(
+                &self.source_path,
+                yaml_path,
+                include_path,
+                IncludeErrorKind::Unreadable {
+                    resolved_path: resolved.clone(),
+                    message: error.to_string(),
+                },
+            )
+        })?;
+        let value = serde_yaml::from_str::<Value>(&content).map_err(|error| IncludeError {
+            source_path: resolved.clone(),
+            yaml_path: String::new(),
+            include_path: include_path.to_owned(),
+            kind: IncludeErrorKind::Parse(error.to_string()),
+        })?;
+        reject_yaml_tags_in_included_media(&value, &mut Vec::new(), &resolved, include_path)?;
+        match value {
+            Value::Mapping(_) => Ok(value),
+            other => Err(IncludeError::new(
+                &self.source_path,
+                yaml_path,
+                include_path,
+                IncludeErrorKind::StructuralIncludeRootNotMapping {
+                    resolved_path: resolved,
+                    found: value_kind(&other),
+                },
+            )),
+        }
     }
 
     fn read_include(
@@ -417,6 +558,52 @@ impl IncludeResolver {
 struct IncludeStackEntry {
     include_path: String,
     resolved_path: PathBuf,
+}
+
+fn reject_yaml_tags_in_included_media(
+    value: &Value,
+    yaml_path: &mut Vec<String>,
+    source_path: &Path,
+    include_path: &str,
+) -> Result<(), IncludeError> {
+    match value {
+        Value::Tagged(tagged) => Err(IncludeError::new(
+            source_path,
+            yaml_path,
+            include_path,
+            IncludeErrorKind::UnsupportedTag(tagged.tag.to_string()),
+        )),
+        Value::Mapping(mapping) => {
+            for (key, item) in mapping {
+                reject_yaml_tags_in_included_media(key, yaml_path, source_path, include_path)?;
+                yaml_path.push(path_segment(key));
+                reject_yaml_tags_in_included_media(item, yaml_path, source_path, include_path)?;
+                yaml_path.pop();
+            }
+            Ok(())
+        }
+        Value::Sequence(sequence) => {
+            for (index, item) in sequence.iter().enumerate() {
+                yaml_path.push(format!("[{index}]"));
+                reject_yaml_tags_in_included_media(item, yaml_path, source_path, include_path)?;
+                yaml_path.pop();
+            }
+            Ok(())
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => Ok(()),
+    }
+}
+
+fn value_kind(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "null",
+        Value::Bool(_) => "boolean",
+        Value::Number(_) => "number",
+        Value::String(_) => "scalar",
+        Value::Sequence(_) => "sequence",
+        Value::Mapping(_) => "mapping",
+        Value::Tagged(_) => "tagged value",
+    }
 }
 
 fn nested_include_directive(content: &str) -> Result<Option<String>, String> {
