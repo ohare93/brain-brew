@@ -578,6 +578,30 @@ translations:
 }
 
 #[test]
+fn rejects_duplicate_top_level_target_adaptation_paths() {
+    let error = canonical_yaml::overlay_from_str(
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  target_adaptations:
+    notes.note.finland.fields.field.capital:
+      expected_source: Helsinki
+      target: Helsingfors
+target_adaptations:
+  notes.note.finland.fields.field.capital:
+    expected_source: Helsinki
+    target: Helsingfors
+"#,
+    )
+    .expect_err("duplicate target adaptation path is rejected");
+
+    assert_eq!(
+        error.to_string(),
+        "invalid translation dictionary: top-level target adaptation notes.note.finland.fields.field.capital duplicates translations target_adaptations entry"
+    );
+}
+
+#[test]
 fn parses_metadata_and_adapter_id_overlay_changes() {
     let overlay = canonical_yaml::overlay_from_str(
         r#"id: overlay.translation.de

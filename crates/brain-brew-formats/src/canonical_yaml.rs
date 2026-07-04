@@ -12,7 +12,10 @@ use brain_brew_core::{
 use serde::{Deserialize, Deserializer};
 use serde_yaml::Value;
 
-use crate::yaml_scalar::{scalar as yaml_scalar, write_multiline_or_scalar};
+use crate::yaml_scalar::{
+    is_emittable_key as is_emittable_yaml_key, key as yaml_key, scalar as yaml_scalar,
+    write_multiline_or_scalar,
+};
 
 const UG_TARGET_ADDITION_REASON: &str = "target addition from upstream UG";
 
@@ -21,13 +24,16 @@ pub fn from_str(input: &str) -> Result<CanonicalDeck, CanonicalYamlError> {
     let file: CanonicalDeckYaml = serde_yaml::from_str(input).map_err(CanonicalYamlError::Parse)?;
     let deck = file.into_deck()?;
     deck.validate().map_err(CanonicalYamlError::Validation)?;
+    validate_deck_yaml_keys(&deck)?;
     Ok(deck)
 }
 
 /// Parse a sparse overlay YAML file.
 pub fn overlay_from_str(input: &str) -> Result<Overlay, CanonicalYamlError> {
     let file: OverlayYaml = serde_yaml::from_str(input).map_err(CanonicalYamlError::Parse)?;
-    file.into_overlay()
+    let overlay = file.into_overlay()?;
+    validate_overlay_yaml_keys(&overlay)?;
+    Ok(overlay)
 }
 
 /// Parse and re-emit a CanonicalDeck YAML file using deterministic formatting.
@@ -45,6 +51,7 @@ pub fn overlay_format_str(input: &str) -> Result<String, CanonicalYamlError> {
 /// Emit a CanonicalDeck as deterministic canonical YAML.
 pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
     deck.validate().map_err(CanonicalYamlError::Validation)?;
+    validate_deck_yaml_keys(deck)?;
 
     let mut out = String::new();
     writeln!(out, "deck:").expect("writing to a string cannot fail");
@@ -56,7 +63,7 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
 
     writeln!(out, "note_types:").expect("writing to a string cannot fail");
     for (id, note_type) in &deck.note_types {
-        writeln!(out, "  {id}:").expect("writing to a string cannot fail");
+        writeln!(out, "  {}:", emitted_key(id.as_str())).expect("writing to a string cannot fail");
         writeln!(out, "    name: {}", yaml_scalar(&note_type.name))
             .expect("writing to a string cannot fail");
         write_variables(&mut out, "    ", &note_type.variables);
@@ -71,7 +78,8 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
             .map(|field| (&field.id, field))
             .collect::<BTreeMap<_, _>>();
         for (field_id, field) in fields_by_id {
-            writeln!(out, "      {field_id}:").expect("writing to a string cannot fail");
+            writeln!(out, "      {}:", emitted_key(field_id.as_str()))
+                .expect("writing to a string cannot fail");
             writeln!(out, "        name: {}", yaml_scalar(&field.name))
                 .expect("writing to a string cannot fail");
         }
@@ -86,7 +94,8 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
             .map(|template| (&template.id, template))
             .collect::<BTreeMap<_, _>>();
         for (template_id, template) in templates_by_id {
-            writeln!(out, "      {template_id}:").expect("writing to a string cannot fail");
+            writeln!(out, "      {}:", emitted_key(template_id.as_str()))
+                .expect("writing to a string cannot fail");
             writeln!(out, "        name: {}", yaml_scalar(&template.name))
                 .expect("writing to a string cannot fail");
             write_variables(&mut out, "        ", &template.variables);
@@ -113,7 +122,8 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
     } else {
         writeln!(out, "notes:").expect("writing to a string cannot fail");
         for (id, note) in &deck.notes {
-            writeln!(out, "  {id}:").expect("writing to a string cannot fail");
+            writeln!(out, "  {}:", emitted_key(id.as_str()))
+                .expect("writing to a string cannot fail");
             writeln!(out, "    note_type_id: {}", note.note_type_id)
                 .expect("writing to a string cannot fail");
             write_variables(&mut out, "    ", &note.variables);
@@ -124,8 +134,13 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
                 } else if let Some(images) = note.field_images.get(field_id) {
                     write_image_field_value(&mut out, "      ", field_id, images);
                 } else {
-                    writeln!(out, "      {field_id}: {}", yaml_scalar(value))
-                        .expect("writing to a string cannot fail");
+                    writeln!(
+                        out,
+                        "      {}: {}",
+                        emitted_key(field_id.as_str()),
+                        yaml_scalar(value)
+                    )
+                    .expect("writing to a string cannot fail");
                 }
             }
             writeln!(out, "    tags:").expect("writing to a string cannot fail");
@@ -142,7 +157,8 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
     } else {
         writeln!(out, "media:").expect("writing to a string cannot fail");
         for (id, media) in &deck.media {
-            writeln!(out, "  {id}:").expect("writing to a string cannot fail");
+            writeln!(out, "  {}:", emitted_key(id.as_str()))
+                .expect("writing to a string cannot fail");
             writeln!(out, "    path: {}", yaml_scalar(&media.path))
                 .expect("writing to a string cannot fail");
             writeln!(out, "    sha256: {}", yaml_scalar(&media.sha256))
@@ -215,7 +231,8 @@ pub fn overlay_to_string(overlay: &Overlay) -> String {
     if !note_type_changes.is_empty() {
         writeln!(out, "note_types:").expect("writing to a string cannot fail");
         for (id, change) in &note_type_changes {
-            writeln!(out, "  {id}:").expect("writing to a string cannot fail");
+            writeln!(out, "  {}:", emitted_key(id.as_str()))
+                .expect("writing to a string cannot fail");
             writeln!(out, "    intent: {}", change_intent_name(change.intent))
                 .expect("writing to a string cannot fail");
             if let Some(expected_base) = &change.expected_base {
@@ -235,7 +252,8 @@ pub fn overlay_to_string(overlay: &Overlay) -> String {
             if !change.fields.is_empty() {
                 writeln!(out, "    fields:").expect("writing to a string cannot fail");
                 for (field_id, field_change) in &change.fields {
-                    writeln!(out, "      {field_id}:").expect("writing to a string cannot fail");
+                    writeln!(out, "      {}:", emitted_key(field_id.as_str()))
+                        .expect("writing to a string cannot fail");
                     writeln!(
                         out,
                         "        intent: {}",
@@ -254,7 +272,8 @@ pub fn overlay_to_string(overlay: &Overlay) -> String {
             if !change.card_templates.is_empty() {
                 writeln!(out, "    card_templates:").expect("writing to a string cannot fail");
                 for (template_id, template_change) in &change.card_templates {
-                    writeln!(out, "      {template_id}:").expect("writing to a string cannot fail");
+                    writeln!(out, "      {}:", emitted_key(template_id.as_str()))
+                        .expect("writing to a string cannot fail");
                     writeln!(
                         out,
                         "        intent: {}",
@@ -303,7 +322,8 @@ pub fn overlay_to_string(overlay: &Overlay) -> String {
     if !note_changes.is_empty() {
         writeln!(out, "notes:").expect("writing to a string cannot fail");
         for (id, change) in &note_changes {
-            writeln!(out, "  {id}:").expect("writing to a string cannot fail");
+            writeln!(out, "  {}:", emitted_key(id.as_str()))
+                .expect("writing to a string cannot fail");
             writeln!(out, "    intent: {}", change_intent_name(change.intent))
                 .expect("writing to a string cannot fail");
             if let Some(expected_base) = &change.expected_base {
@@ -323,7 +343,7 @@ pub fn overlay_to_string(overlay: &Overlay) -> String {
             if !change.tags.is_empty() {
                 writeln!(out, "    tags:").expect("writing to a string cannot fail");
                 for (tag, tag_change) in &change.tags {
-                    writeln!(out, "      {}:", yaml_scalar(tag))
+                    writeln!(out, "      {}:", emitted_key(tag))
                         .expect("writing to a string cannot fail");
                     writeln!(
                         out,
@@ -343,7 +363,8 @@ pub fn overlay_to_string(overlay: &Overlay) -> String {
     if !overlay.media_changes.is_empty() {
         writeln!(out, "media:").expect("writing to a string cannot fail");
         for (id, change) in &overlay.media_changes {
-            writeln!(out, "  {id}:").expect("writing to a string cannot fail");
+            writeln!(out, "  {}:", emitted_key(id.as_str()))
+                .expect("writing to a string cannot fail");
             writeln!(out, "    intent: {}", change_intent_name(change.intent))
                 .expect("writing to a string cannot fail");
             if let Some(media) = &change.media {
@@ -561,16 +582,23 @@ fn write_field_additions(
 ) {
     writeln!(out, "field_additions:").expect("writing to a string cannot fail");
     for (note_type_id, additions) in field_additions {
-        writeln!(out, "  {note_type_id}:").expect("writing to a string cannot fail");
+        writeln!(out, "  {}:", emitted_key(note_type_id.as_str()))
+            .expect("writing to a string cannot fail");
         writeln!(out, "    fields:").expect("writing to a string cannot fail");
         for (field_id, name) in &additions.fields {
-            writeln!(out, "      {field_id}: {}", yaml_scalar(name))
-                .expect("writing to a string cannot fail");
+            writeln!(
+                out,
+                "      {}: {}",
+                emitted_key(field_id.as_str()),
+                yaml_scalar(name)
+            )
+            .expect("writing to a string cannot fail");
         }
         if !additions.values.is_empty() {
             writeln!(out, "    values:").expect("writing to a string cannot fail");
             for (note_id, values) in &additions.values {
-                writeln!(out, "      {note_id}:").expect("writing to a string cannot fail");
+                writeln!(out, "      {}:", emitted_key(note_id.as_str()))
+                    .expect("writing to a string cannot fail");
                 for (field_id, value) in values {
                     write_field_value_for_format(out, "        ", field_id, value);
                 }
@@ -585,7 +613,8 @@ fn write_field_fills(
 ) {
     writeln!(out, "field_fills:").expect("writing to a string cannot fail");
     for (note_id, fields) in field_fills {
-        writeln!(out, "  {note_id}:").expect("writing to a string cannot fail");
+        writeln!(out, "  {}:", emitted_key(note_id.as_str()))
+            .expect("writing to a string cannot fail");
         for (field_id, value) in fields {
             write_field_value_for_format(out, "    ", field_id, value);
         }
@@ -600,8 +629,13 @@ fn write_field_value_for_format(
 ) {
     match value {
         FieldValueForFormat::Scalar(value) => {
-            writeln!(out, "{indent}{field_id}: {}", yaml_scalar(value))
-                .expect("writing to a string cannot fail");
+            writeln!(
+                out,
+                "{indent}{}: {}",
+                emitted_key(field_id.as_str()),
+                yaml_scalar(value)
+            )
+            .expect("writing to a string cannot fail");
         }
         FieldValueForFormat::Message(message) => {
             write_structured_message_field(out, indent, field_id, message);
@@ -655,14 +689,15 @@ fn write_translation_dictionary(
     if !target_additions.is_empty() {
         writeln!(out, "  target_additions:").expect("writing to a string cannot fail");
         for (path, target) in target_additions {
-            writeln!(out, "    {}: {}", yaml_scalar(path), yaml_scalar(target))
+            writeln!(out, "    {}: {}", emitted_key(path), yaml_scalar(target))
                 .expect("writing to a string cannot fail");
         }
     }
     if !translations.variables.is_empty() {
         writeln!(out, "  variables:").expect("writing to a string cannot fail");
         for (variable_key, replacements) in &translations.variables {
-            writeln!(out, "    {variable_key}:").expect("writing to a string cannot fail");
+            writeln!(out, "    {}:", emitted_key(variable_key))
+                .expect("writing to a string cannot fail");
             for (source, translated) in replacements {
                 writeln!(
                     out,
@@ -677,7 +712,8 @@ fn write_translation_dictionary(
     if !translations.adapter_ids.is_empty() {
         writeln!(out, "  adapter_ids:").expect("writing to a string cannot fail");
         for (adapter_key, replacements) in &translations.adapter_ids {
-            writeln!(out, "    {adapter_key}:").expect("writing to a string cannot fail");
+            writeln!(out, "    {}:", emitted_key(adapter_key))
+                .expect("writing to a string cannot fail");
             for (source, translated) in replacements {
                 writeln!(
                     out,
@@ -717,7 +753,7 @@ fn write_target_adaptations(
     }
     writeln!(out, "target_adaptations:").expect("writing to a string cannot fail");
     for (path, adaptation) in target_adaptations {
-        writeln!(out, "  {}:", yaml_scalar(path)).expect("writing to a string cannot fail");
+        writeln!(out, "  {}:", emitted_key(path)).expect("writing to a string cannot fail");
         writeln!(
             out,
             "    expected_source: {}",
@@ -770,6 +806,10 @@ fn translation_dictionary_is_empty(translations: &TranslationDictionary) -> bool
         && translations.adapter_ids.is_empty()
 }
 
+fn emitted_key(value: &str) -> String {
+    yaml_key(value).expect("emitted YAML key was not prevalidated")
+}
+
 #[derive(Default)]
 struct ContextualFormatNode {
     translations: BTreeMap<String, String>,
@@ -818,7 +858,7 @@ fn write_contextual_nodes(
     nodes: &BTreeMap<String, ContextualFormatNode>,
 ) {
     for (key, node) in nodes {
-        writeln!(out, "{indent}{}:", yaml_scalar(key)).expect("writing to a string cannot fail");
+        writeln!(out, "{indent}{}:", emitted_key(key)).expect("writing to a string cannot fail");
         let child_indent = format!("{indent}  ");
         for (source, translated) in &node.translations {
             writeln!(
@@ -860,7 +900,7 @@ fn write_property_changes(
     if changes.is_empty() {
         return;
     }
-    writeln!(out, "{indent}{key}:").expect("writing to a string cannot fail");
+    writeln!(out, "{indent}{}:", emitted_key(key)).expect("writing to a string cannot fail");
     for (change_key, change) in changes {
         write_property_change(out, &format!("{indent}  "), change_key, change);
     }
@@ -874,13 +914,18 @@ fn write_adapter_ids(out: &mut String, indent: &str, adapter_ids: &AdapterIds) {
 
     writeln!(out, "{indent}adapter_ids:").expect("writing to a string cannot fail");
     for (key, value) in adapter_ids.iter() {
-        writeln!(out, "{indent}  {key}: {}", yaml_scalar(value))
-            .expect("writing to a string cannot fail");
+        writeln!(
+            out,
+            "{indent}  {}: {}",
+            emitted_key(key),
+            yaml_scalar(value)
+        )
+        .expect("writing to a string cannot fail");
     }
 }
 
 fn write_property_change(out: &mut String, indent: &str, key: &str, change: &PropertyChange) {
-    writeln!(out, "{indent}{key}:").expect("writing to a string cannot fail");
+    writeln!(out, "{indent}{}:", emitted_key(key)).expect("writing to a string cannot fail");
     writeln!(
         out,
         "{indent}  intent: {}",
@@ -905,7 +950,7 @@ fn write_adapter_id_changes(
     }
     writeln!(out, "{indent}adapter_ids:").expect("writing to a string cannot fail");
     for (key, change) in adapter_ids {
-        writeln!(out, "{indent}  {key}:").expect("writing to a string cannot fail");
+        writeln!(out, "{indent}  {}:", emitted_key(key)).expect("writing to a string cannot fail");
         writeln!(
             out,
             "{indent}    intent: {}",
@@ -922,7 +967,8 @@ fn write_adapter_id_changes(
 }
 
 fn write_field_change(out: &mut String, indent: &str, field_id: &StableId, change: &FieldChange) {
-    writeln!(out, "{indent}{field_id}:").expect("writing to a string cannot fail");
+    writeln!(out, "{indent}{}:", emitted_key(field_id.as_str()))
+        .expect("writing to a string cannot fail");
     writeln!(
         out,
         "{indent}  intent: {}",
@@ -982,7 +1028,8 @@ fn write_note_type_payload(out: &mut String, indent: &str, note_type: &NoteType)
         .map(|field| (&field.id, field))
         .collect::<BTreeMap<_, _>>();
     for (field_id, field) in fields_by_id {
-        writeln!(out, "{indent}  {field_id}:").expect("writing to a string cannot fail");
+        writeln!(out, "{indent}  {}:", emitted_key(field_id.as_str()))
+            .expect("writing to a string cannot fail");
         writeln!(out, "{indent}    name: {}", yaml_scalar(&field.name))
             .expect("writing to a string cannot fail");
     }
@@ -997,7 +1044,8 @@ fn write_note_type_payload(out: &mut String, indent: &str, note_type: &NoteType)
         .map(|template| (&template.id, template))
         .collect::<BTreeMap<_, _>>();
     for (template_id, template) in templates_by_id {
-        writeln!(out, "{indent}  {template_id}:").expect("writing to a string cannot fail");
+        writeln!(out, "{indent}  {}:", emitted_key(template_id.as_str()))
+            .expect("writing to a string cannot fail");
         writeln!(out, "{indent}    name: {}", yaml_scalar(&template.name))
             .expect("writing to a string cannot fail");
         write_variables(out, &format!("{indent}    "), &template.variables);
@@ -1030,8 +1078,13 @@ fn write_note_payload(out: &mut String, indent: &str, note: &Note) {
         } else if let Some(images) = note.field_images.get(field_id) {
             write_image_field_value(out, &format!("{indent}  "), field_id, images);
         } else {
-            writeln!(out, "{indent}  {field_id}: {}", yaml_scalar(value))
-                .expect("writing to a string cannot fail");
+            writeln!(
+                out,
+                "{indent}  {}: {}",
+                emitted_key(field_id.as_str()),
+                yaml_scalar(value)
+            )
+            .expect("writing to a string cannot fail");
         }
     }
     writeln!(out, "{indent}tags:").expect("writing to a string cannot fail");
@@ -1051,13 +1104,15 @@ fn write_image_field_value(
         [image] => {
             writeln!(
                 out,
-                "{indent}{field_id}: !image {}",
+                "{indent}{}: !image {}",
+                emitted_key(field_id.as_str()),
                 yaml_scalar(image.media_id.as_str())
             )
             .expect("writing to a string cannot fail");
         }
         _ => {
-            writeln!(out, "{indent}{field_id}:").expect("writing to a string cannot fail");
+            writeln!(out, "{indent}{}:", emitted_key(field_id.as_str()))
+                .expect("writing to a string cannot fail");
             for image in images {
                 writeln!(
                     out,
@@ -1076,7 +1131,8 @@ fn write_structured_message_field(
     field_id: &StableId,
     message: &StructuredMessage,
 ) {
-    writeln!(out, "{indent}{field_id}:").expect("writing to a string cannot fail");
+    writeln!(out, "{indent}{}:", emitted_key(field_id.as_str()))
+        .expect("writing to a string cannot fail");
     write_structured_message_value(out, &format!("{indent}  "), message);
 }
 
@@ -1086,7 +1142,8 @@ fn write_structured_message_value(out: &mut String, indent: &str, message: &Stru
             .expect("writing to a string cannot fail");
         writeln!(out, "{indent}variables:").expect("writing to a string cannot fail");
         for (name, component) in &message.variables {
-            writeln!(out, "{indent}  {name}:").expect("writing to a string cannot fail");
+            writeln!(out, "{indent}  {}:", emitted_key(name))
+                .expect("writing to a string cannot fail");
             write_message_component(out, &format!("{indent}    "), component, false);
         }
     } else {
@@ -1179,6 +1236,7 @@ pub enum CanonicalYamlError {
     MissingOrderedEntity { section: &'static str, id: String },
     UnorderedEntity { section: &'static str, id: String },
     Validation(ValidationReport),
+    UnemittableYamlKey { section: &'static str, key: String },
 }
 
 impl fmt::Display for CanonicalYamlError {
@@ -1204,6 +1262,10 @@ impl fmt::Display for CanonicalYamlError {
                 write!(f, "{section} entity {id} is missing from its order array")
             }
             Self::Validation(report) => write!(f, "canonical deck validation failed: {report}"),
+            Self::UnemittableYamlKey { section, key } => write!(
+                f,
+                "canonical YAML {section} key {key:?} cannot be emitted safely"
+            ),
         }
     }
 }
@@ -1213,6 +1275,131 @@ impl std::error::Error for CanonicalYamlError {}
 impl From<InvalidStableId> for CanonicalYamlError {
     fn from(error: InvalidStableId) -> Self {
         Self::StableId(error)
+    }
+}
+
+fn validate_deck_yaml_keys(deck: &CanonicalDeck) -> Result<(), CanonicalYamlError> {
+    validate_string_keys("deck.variables", deck.variables.keys())?;
+    validate_adapter_id_keys("deck.adapter_ids", &deck.adapter_ids)?;
+    for note_type in deck.note_types.values() {
+        validate_string_keys("note_type.variables", note_type.variables.keys())?;
+        validate_adapter_id_keys("note_type.adapter_ids", &note_type.adapter_ids)?;
+        for template in &note_type.card_templates {
+            validate_string_keys("card_template.variables", template.variables.keys())?;
+            validate_adapter_id_keys("card_template.adapter_ids", &template.adapter_ids)?;
+        }
+    }
+    for note in deck.notes.values() {
+        validate_string_keys("note.variables", note.variables.keys())?;
+        validate_adapter_id_keys("note.adapter_ids", &note.adapter_ids)?;
+        for message in note.field_messages.values() {
+            validate_structured_message_keys(message)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_overlay_yaml_keys(overlay: &Overlay) -> Result<(), CanonicalYamlError> {
+    if let Some(translations) = &overlay.translations {
+        validate_translation_dictionary_keys(translations)?;
+    }
+    if let Some(deck_change) = &overlay.deck_change {
+        validate_string_keys("deck.variables", deck_change.variables.keys())?;
+        validate_string_keys("deck.adapter_ids", deck_change.adapter_ids.keys())?;
+    }
+    for change in overlay.note_type_changes.values() {
+        if let Some(note_type) = &change.note_type {
+            validate_deck_note_type_payload_keys(note_type)?;
+        }
+        validate_string_keys("note_type.variables", change.variables.keys())?;
+        for template_change in change.card_templates.values() {
+            if let Some(template) = &template_change.template {
+                validate_string_keys("card_template.variables", template.variables.keys())?;
+                validate_adapter_id_keys("card_template.adapter_ids", &template.adapter_ids)?;
+            }
+            validate_string_keys("card_template.variables", template_change.variables.keys())?;
+            validate_string_keys(
+                "card_template.adapter_ids",
+                template_change.adapter_ids.keys(),
+            )?;
+        }
+        validate_string_keys("note_type.adapter_ids", change.adapter_ids.keys())?;
+    }
+    for change in overlay.note_changes.values() {
+        if let Some(note) = &change.note {
+            validate_string_keys("note.variables", note.variables.keys())?;
+            validate_adapter_id_keys("note.adapter_ids", &note.adapter_ids)?;
+            for message in note.field_messages.values() {
+                validate_structured_message_keys(message)?;
+            }
+        }
+        validate_string_keys("note.variables", change.variables.keys())?;
+        validate_string_keys("note.tags", change.tags.keys())?;
+        validate_string_keys("note.adapter_ids", change.adapter_ids.keys())?;
+        for field_change in change.fields.values() {
+            if let Some(message) = &field_change.message {
+                validate_structured_message_keys(message)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_deck_note_type_payload_keys(note_type: &NoteType) -> Result<(), CanonicalYamlError> {
+    validate_string_keys("note_type.variables", note_type.variables.keys())?;
+    validate_adapter_id_keys("note_type.adapter_ids", &note_type.adapter_ids)?;
+    for template in &note_type.card_templates {
+        validate_string_keys("card_template.variables", template.variables.keys())?;
+        validate_adapter_id_keys("card_template.adapter_ids", &template.adapter_ids)?;
+    }
+    Ok(())
+}
+
+fn validate_translation_dictionary_keys(
+    translations: &TranslationDictionary,
+) -> Result<(), CanonicalYamlError> {
+    validate_string_keys("translations.contextual", translations.contextual.keys())?;
+    validate_string_keys(
+        "translations.target_adaptations",
+        translations.target_adaptations.keys(),
+    )?;
+    validate_string_keys("translations.variables", translations.variables.keys())?;
+    validate_string_keys("translations.adapter_ids", translations.adapter_ids.keys())?;
+    Ok(())
+}
+
+fn validate_structured_message_keys(message: &StructuredMessage) -> Result<(), CanonicalYamlError> {
+    validate_string_keys("message.variables", message.variables.keys())
+}
+
+fn validate_adapter_id_keys(
+    section: &'static str,
+    adapter_ids: &AdapterIds,
+) -> Result<(), CanonicalYamlError> {
+    validate_string_keys(section, adapter_ids.iter().map(|(key, _)| key))
+}
+
+fn validate_string_keys<K>(
+    section: &'static str,
+    keys: impl IntoIterator<Item = K>,
+) -> Result<(), CanonicalYamlError>
+where
+    K: AsRef<str>,
+{
+    for key in keys {
+        validate_yaml_key(section, key.as_ref())?;
+    }
+    Ok(())
+}
+
+fn validate_yaml_key(section: &'static str, key: &str) -> Result<(), CanonicalYamlError> {
+    if is_emittable_yaml_key(key) {
+        Ok(())
+    } else {
+        Err(CanonicalYamlError::UnemittableYamlKey {
+            section,
+            key: key.to_owned(),
+        })
     }
 }
 
@@ -1277,9 +1464,15 @@ impl OverlayYaml {
             .transpose()?
             .unwrap_or_default();
         for (path, adaptation) in self.target_adaptations {
-            translations
+            if translations
                 .target_adaptations
-                .insert(path, adaptation.into_target_adaptation());
+                .insert(path.clone(), adaptation.into_target_adaptation())
+                .is_some()
+            {
+                return Err(CanonicalYamlError::InvalidTranslationDictionary(format!(
+                    "top-level target adaptation {path} duplicates translations target_adaptations entry"
+                )));
+            }
         }
         translations.stale_translations.extend(
             self.stale_translations

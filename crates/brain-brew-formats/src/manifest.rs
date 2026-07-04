@@ -3,7 +3,9 @@ use std::fmt;
 
 use serde::Deserialize;
 
-use crate::yaml_scalar::scalar as yaml_scalar;
+use crate::yaml_scalar::{
+    is_emittable_key as is_emittable_yaml_key, key as yaml_key, scalar as yaml_scalar,
+};
 
 /// Public manifest for a Federated Deck workspace.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -41,6 +43,9 @@ impl FederatedDeckManifest {
     }
 
     fn validate_language_catalog(&self) -> Result<(), ManifestError> {
+        self.validate_emittable_yaml_keys()?;
+        self.validate_translation_profile()?;
+
         for (code, language) in &self.languages {
             if language.source && !language.translation_overlays.is_empty() {
                 return Err(ManifestError::SourceLanguageHasTranslationOverlays(
@@ -80,6 +85,37 @@ impl FederatedDeckManifest {
                         kind: kind.clone(),
                     });
                 }
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_emittable_yaml_keys(&self) -> Result<(), ManifestError> {
+        validate_map_keys("overlays", self.overlays.keys())?;
+        validate_map_keys("targets", self.targets.keys())?;
+        validate_map_keys("languages", self.languages.keys())?;
+        for language in self.languages.values() {
+            validate_map_keys(
+                "languages.translation_overlays",
+                language.translation_overlays.keys(),
+            )?;
+            validate_map_keys("languages.targets", language.targets.keys())?;
+        }
+        Ok(())
+    }
+
+    fn validate_translation_profile(&self) -> Result<(), ManifestError> {
+        let mut category_keys = BTreeSet::new();
+        for category in &self.translation_profile.metadata_categories {
+            if !category_keys.insert(category.key.clone()) {
+                return Err(ManifestError::DuplicateMetadataCategoryKey(
+                    category.key.clone(),
+                ));
+            }
+        }
+        for key in &self.translation_profile.metadata_category_order {
+            if !category_keys.contains(key) {
+                return Err(ManifestError::UnknownMetadataCategoryOrderKey(key.clone()));
             }
         }
         Ok(())
@@ -275,7 +311,7 @@ pub fn to_string(manifest: &FederatedDeckManifest) -> String {
     } else {
         out.push_str("overlays:\n");
         for (id, overlay) in &manifest.overlays {
-            out.push_str(&format!("  {id}:\n"));
+            out.push_str(&format!("  {}:\n", emitted_key(id)));
             out.push_str(&format!("    file: {}\n", yaml_scalar(&overlay.file)));
             if let Some(kind) = &overlay.kind {
                 out.push_str(&format!("    kind: {}\n", yaml_scalar(kind)));
@@ -294,7 +330,7 @@ pub fn to_string(manifest: &FederatedDeckManifest) -> String {
     } else {
         out.push_str("targets:\n");
         for (id, target) in &manifest.targets {
-            out.push_str(&format!("  {id}:\n"));
+            out.push_str(&format!("  {}:\n", emitted_key(id)));
             if let Some(extends) = &target.extends {
                 out.push_str(&format!("    extends: {}\n", yaml_scalar(extends)));
             }
@@ -315,7 +351,14 @@ pub fn to_string(manifest: &FederatedDeckManifest) -> String {
             if !target.exports.is_empty() {
                 out.push_str("    exports:\n");
                 if let Some(export) = &target.exports.crowdanki {
-                    out.push_str("      crowdanki:\n");
+                    if export.out.is_none()
+                        && export.golden.is_none()
+                        && export.golden_allowlist.is_empty()
+                    {
+                        out.push_str("      crowdanki: {}\n");
+                    } else {
+                        out.push_str("      crowdanki:\n");
+                    }
                     if let Some(path) = &export.out {
                         out.push_str(&format!("        out: {}\n", yaml_scalar(path)));
                     }
@@ -336,7 +379,7 @@ pub fn to_string(manifest: &FederatedDeckManifest) -> String {
     if !manifest.languages.is_empty() {
         out.push_str("languages:\n");
         for (code, language) in &manifest.languages {
-            out.push_str(&format!("  {code}:\n"));
+            out.push_str(&format!("  {}:\n", emitted_key(code)));
             out.push_str(&format!(
                 "    display_name: {}\n",
                 yaml_scalar(&language.display_name)
@@ -347,7 +390,11 @@ pub fn to_string(manifest: &FederatedDeckManifest) -> String {
             if !language.translation_overlays.is_empty() {
                 out.push_str("    translation_overlays:\n");
                 for (label, overlay) in &language.translation_overlays {
-                    out.push_str(&format!("      {label}: {}\n", yaml_scalar(overlay)));
+                    out.push_str(&format!(
+                        "      {}: {}\n",
+                        emitted_key(label),
+                        yaml_scalar(overlay)
+                    ));
                 }
             }
             out.push_str(&format!(
@@ -359,7 +406,11 @@ pub fn to_string(manifest: &FederatedDeckManifest) -> String {
             } else {
                 out.push_str("    targets:\n");
                 for (label, target) in &language.targets {
-                    out.push_str(&format!("      {label}: {}\n", yaml_scalar(target)));
+                    out.push_str(&format!(
+                        "      {}: {}\n",
+                        emitted_key(label),
+                        yaml_scalar(target)
+                    ));
                 }
             }
         }
@@ -425,6 +476,29 @@ fn translation_coverage_policy_name(policy: TranslationCoveragePolicy) -> &'stat
     }
 }
 
+fn emitted_key(value: &str) -> String {
+    yaml_key(value).expect("manifest key was not prevalidated")
+}
+
+fn validate_map_keys<K>(
+    section: &'static str,
+    keys: impl IntoIterator<Item = K>,
+) -> Result<(), ManifestError>
+where
+    K: AsRef<str>,
+{
+    for key in keys {
+        let key = key.as_ref();
+        if !is_emittable_yaml_key(key) {
+            return Err(ManifestError::UnemittableYamlKey {
+                section,
+                key: key.to_owned(),
+            });
+        }
+    }
+    Ok(())
+}
+
 fn parse_translation_coverage_policy(
     value: &str,
 ) -> Result<TranslationCoveragePolicy, ManifestError> {
@@ -464,6 +538,12 @@ pub enum ManifestError {
         label: String,
         overlay: String,
         kind: String,
+    },
+    DuplicateMetadataCategoryKey(String),
+    UnknownMetadataCategoryOrderKey(String),
+    UnemittableYamlKey {
+        section: &'static str,
+        key: String,
     },
 }
 
@@ -522,6 +602,19 @@ impl fmt::Display for ManifestError {
                 f,
                 "manifest language {language:?} translation overlay {label:?} references overlay {overlay:?} with kind {kind:?}; expected translation"
             ),
+            Self::DuplicateMetadataCategoryKey(key) => {
+                write!(
+                    f,
+                    "manifest translation profile metadata category key {key:?} is duplicated"
+                )
+            }
+            Self::UnknownMetadataCategoryOrderKey(key) => write!(
+                f,
+                "manifest translation profile metadata_category_order references unknown category key {key:?}"
+            ),
+            Self::UnemittableYamlKey { section, key } => {
+                write!(f, "manifest {section} key {key:?} cannot be emitted safely")
+            }
         }
     }
 }

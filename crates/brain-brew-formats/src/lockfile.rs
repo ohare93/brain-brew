@@ -3,7 +3,9 @@ use std::fmt;
 
 use serde::Deserialize;
 
-use crate::yaml_scalar::scalar as yaml_scalar;
+use crate::yaml_scalar::{
+    is_emittable_key as is_emittable_yaml_key, key as yaml_key, scalar as yaml_scalar,
+};
 
 /// Reproducible source lock for a set of Federated Deck package inputs.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -59,7 +61,7 @@ pub fn to_string(lock: &FederationLock) -> String {
     }
     out.push_str("packages:\n");
     for (id, package) in &lock.packages {
-        out.push_str(&format!("  {id}:\n"));
+        out.push_str(&format!("  {}:\n", emitted_key(id)));
         out.push_str(&format!(
             "    manifest: {}\n",
             yaml_scalar(&package.manifest)
@@ -77,6 +79,21 @@ pub fn to_string(lock: &FederationLock) -> String {
         write_source(&mut out, "      ", &package.locked);
     }
     out
+}
+
+fn emitted_key(value: &str) -> String {
+    yaml_key(value).expect("lockfile key was not prevalidated")
+}
+
+fn validate_yaml_key(section: &'static str, key: &str) -> Result<(), LockfileError> {
+    if is_emittable_yaml_key(key) {
+        Ok(())
+    } else {
+        Err(LockfileError::UnemittableYamlKey {
+            section,
+            key: key.to_owned(),
+        })
+    }
 }
 
 fn write_source(out: &mut String, indent: &str, source: &LockedSource) {
@@ -106,6 +123,7 @@ pub enum LockfileError {
     Parse(serde_yaml::Error),
     UnsupportedVersion(u32),
     MissingLockedSource(String),
+    UnemittableYamlKey { section: &'static str, key: String },
 }
 
 impl fmt::Display for LockfileError {
@@ -117,6 +135,9 @@ impl fmt::Display for LockfileError {
             }
             Self::MissingLockedSource(package) => {
                 write!(f, "locked package {package} must include a locked source")
+            }
+            Self::UnemittableYamlKey { section, key } => {
+                write!(f, "lockfile {section} key {key:?} cannot be emitted safely")
             }
         }
     }
@@ -140,7 +161,10 @@ impl FederationLockYaml {
         let packages = self
             .packages
             .into_iter()
-            .map(|(id, package)| Ok((id.clone(), package.into_locked_package(id)?)))
+            .map(|(id, package)| {
+                validate_yaml_key("packages", &id)?;
+                Ok((id.clone(), package.into_locked_package(id)?))
+            })
             .collect::<Result<_, LockfileError>>()?;
         Ok(FederationLock {
             version: self.version,

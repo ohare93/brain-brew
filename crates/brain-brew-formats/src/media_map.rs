@@ -4,7 +4,7 @@ use std::fmt::{self, Write as _};
 use brain_brew_core::{InvalidStableId, MediaReference, StableId};
 use serde::Deserialize;
 
-use crate::yaml_scalar::scalar as yaml_scalar;
+use crate::yaml_scalar::{key as yaml_key, scalar as yaml_scalar};
 
 /// Parse a standalone media-map source file.
 ///
@@ -35,7 +35,12 @@ pub fn to_string(media: &BTreeMap<StableId, MediaReference>) -> String {
 
     let mut out = String::new();
     for (id, media) in media {
-        writeln!(out, "{id}:").expect("writing to a string cannot fail");
+        writeln!(
+            out,
+            "{}:",
+            yaml_key(id.as_str()).expect("stable id is an emittable key")
+        )
+        .expect("writing to a string cannot fail");
         writeln!(out, "  path: {}", yaml_scalar(&media.path))
             .expect("writing to a string cannot fail");
         writeln!(out, "  sha256: {}", yaml_scalar(&media.sha256))

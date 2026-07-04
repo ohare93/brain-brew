@@ -619,6 +619,186 @@ unknown: true
 }
 
 #[test]
+fn rejects_unknown_fields_at_nested_manifest_levels() {
+    let cases = [
+        (
+            "package",
+            r#"
+package:
+  id: pkg
+  version: 1
+  unknown: true
+base: deck.yaml
+"#,
+        ),
+        (
+            "overlay",
+            r#"
+base: deck.yaml
+overlays:
+  overlay.translation.da:
+    file: overlays/da.yaml
+    unknown: true
+"#,
+        ),
+        (
+            "target",
+            r#"
+base: deck.yaml
+targets:
+  da:
+    overlays: []
+    unknown: true
+"#,
+        ),
+        (
+            "exports",
+            r#"
+base: deck.yaml
+targets:
+  da:
+    overlays: []
+    exports:
+      unknown: true
+"#,
+        ),
+        (
+            "crowdanki",
+            r#"
+base: deck.yaml
+targets:
+  da:
+    overlays: []
+    exports:
+      crowdanki:
+        unknown: true
+"#,
+        ),
+        (
+            "language",
+            r#"
+base: deck.yaml
+targets:
+  da:
+    overlays: []
+languages:
+  da:
+    display_name: Danish
+    primary_target: standard
+    targets:
+      standard: da
+    unknown: true
+"#,
+        ),
+        (
+            "translation_profile",
+            r#"
+base: deck.yaml
+translation_profile:
+  unknown: true
+"#,
+        ),
+        (
+            "metadata_category",
+            r#"
+base: deck.yaml
+translation_profile:
+  metadata_categories:
+    - key: deck
+      label: Deck
+      unknown: true
+"#,
+        ),
+    ];
+
+    for (case, yaml) in cases {
+        let error =
+            manifest::from_str(yaml).expect_err(&format!("{case}: unknown nested field rejected"));
+        assert!(
+            error.to_string().contains("unknown field `unknown`"),
+            "{case}: {error}"
+        );
+    }
+}
+
+#[test]
+fn reports_manifest_shape_and_validation_errors() {
+    let missing = manifest::from_str("targets: {}\n").expect_err("missing base is reported");
+    assert!(missing.to_string().contains("missing field `base`"));
+
+    let wrong_type = manifest::from_str("base: []\n").expect_err("wrong base type is reported");
+    assert!(wrong_type.to_string().contains("invalid type"));
+
+    let duplicate = manifest::from_str("base: one\nbase: two\n")
+        .expect_err("duplicate keys are rejected by strict YAML parsing");
+    assert!(duplicate.to_string().contains("duplicate"));
+
+    let invalid_policy = manifest::from_str(
+        r#"
+base: deck.yaml
+targets:
+  release:
+    overlays: []
+    translation_coverage: aggressive
+"#,
+    )
+    .expect_err("invalid translation coverage policy is rejected");
+    assert_eq!(
+        invalid_policy.to_string(),
+        "invalid translation coverage policy \"aggressive\"; expected lenient or strict"
+    );
+}
+
+#[test]
+fn validates_translation_profile_category_references() {
+    let error = manifest::from_str(
+        r#"
+base: deck.yaml
+translation_profile:
+  metadata_categories:
+    - key: deck
+      label: Deck
+      paths: [deck.name]
+  metadata_category_order: [deck, missing]
+"#,
+    )
+    .expect_err("unknown metadata category order references are rejected");
+
+    assert_eq!(
+        error.to_string(),
+        "manifest translation profile metadata_category_order references unknown category key \"missing\""
+    );
+}
+
+#[test]
+fn formats_empty_crowdanki_export_stably() {
+    let formatted = manifest::format_str(
+        r#"
+base: deck.yaml
+targets:
+  en:
+    overlays: []
+    exports:
+      crowdanki: {}
+"#,
+    )
+    .expect("manifest formats");
+
+    assert_eq!(
+        formatted,
+        r#"base: deck.yaml
+overlays: {}
+targets:
+  en:
+    overlays: []
+    exports:
+      crowdanki: {}
+"#
+    );
+    assert_eq!(manifest::format_str(&formatted).unwrap(), formatted);
+}
+
+#[test]
 fn reports_missing_overlay_references() {
     let manifest = manifest::from_str(
         r#"

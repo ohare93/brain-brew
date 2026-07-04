@@ -16,13 +16,30 @@ pub fn scalar(value: &str) -> String {
     }
 }
 
+/// Emit one YAML mapping key.
+///
+/// Quoted scalars can represent most hostile key text, but physical line-break
+/// characters make single-line hand-rolled mappings too easy to corrupt. Callers
+/// with fallible parse/validation paths should reject those keys before emit.
+pub fn key(value: &str) -> Option<String> {
+    is_emittable_key(value).then(|| scalar(value))
+}
+
+/// Return whether a key can be emitted by the hand-rolled single-line mapping writers.
+pub fn is_emittable_key(value: &str) -> bool {
+    !value.contains(['\n', '\r'])
+}
+
 /// Write `key: value` using a block scalar for multiline values and `scalar` otherwise.
 ///
 /// An explicit `2` indentation indicator is added when YAML auto-detection would
 /// corrupt a value whose first content line starts with whitespace. Chomp
-/// indicators preserve the exact trailing-newline shape.
+/// indicators preserve the exact trailing-newline shape. Block scalars are used
+/// only for text that YAML will not reinterpret as line separators or controls;
+/// unsafe multiline text falls back to double-quoted escapes.
 pub fn write_multiline_or_scalar(out: &mut String, indent: &str, key: &str, value: &str) {
-    if value.contains('\n') && !value.starts_with('\n') {
+    let key = self::key(key).expect("emitted YAML key was not prevalidated");
+    if can_emit_block_scalar(value) {
         let chomp = match trailing_newline_count(value) {
             0 => "-",
             1 => "",
@@ -77,9 +94,12 @@ fn parses_as_same_string(value: &str) -> bool {
 }
 
 fn needs_double_quoted_scalar(value: &str) -> bool {
-    value
-        .chars()
-        .any(|ch| matches!(ch, '\0'..='\u{1f}' | '\u{7f}'))
+    value.chars().any(|ch| {
+        matches!(
+            ch,
+            '\0'..='\u{1f}' | '\u{7f}' | '\u{85}' | '\u{2028}' | '\u{2029}'
+        )
+    })
 }
 
 fn single_quoted_scalar(value: &str) -> String {
@@ -100,6 +120,9 @@ fn double_quoted_scalar(value: &str) -> String {
             '\u{0c}' => out.push_str("\\f"),
             '\r' => out.push_str("\\r"),
             '\u{1b}' => out.push_str("\\e"),
+            '\u{85}' => out.push_str("\\N"),
+            '\u{2028}' => out.push_str("\\L"),
+            '\u{2029}' => out.push_str("\\P"),
             '"' => out.push_str("\\\""),
             '\\' => out.push_str("\\\\"),
             '\u{01}'..='\u{06}' | '\u{0e}'..='\u{1a}' | '\u{1c}'..='\u{1f}' | '\u{7f}' => {
@@ -110,6 +133,18 @@ fn double_quoted_scalar(value: &str) -> String {
     }
     out.push('"');
     out
+}
+
+fn can_emit_block_scalar(value: &str) -> bool {
+    value.contains('\n') && !value.starts_with('\n') && value.chars().all(is_block_safe_char)
+}
+
+fn is_block_safe_char(ch: char) -> bool {
+    ch == '\n'
+        || !matches!(
+            ch,
+            '\0'..='\u{1f}' | '\u{7f}' | '\u{85}' | '\u{2028}' | '\u{2029}'
+        )
 }
 
 fn needs_explicit_block_indent(value: &str) -> bool {
