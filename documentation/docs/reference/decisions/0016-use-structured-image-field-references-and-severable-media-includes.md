@@ -1,7 +1,7 @@
 # ADR-016: Use Structured Image Field References and Severable Media Includes
 
 **Date**: 2026-07-04  
-**Status**: Proposed  
+**Status**: Accepted  
 **Deciders**: Project Lead
 
 ## Context

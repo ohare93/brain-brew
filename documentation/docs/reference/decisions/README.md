@@ -23,7 +23,7 @@ The ADRs are written in hindsight around the decisions that still shape the Rust
 | [0013](0013-use-stale-translation-records-for-source-text-changes.md) | Use Stale Translations for Source Text Changes | Accepted | 2026-06-23 |
 | [0014](0014-require-workbench-api-and-browser-e2e-tests.md) | Require Workbench API and Browser E2E Tests | Accepted | 2026-06-23 |
 | [0015](0015-use-lazy-single-work-item-workbench-editing.md) | Use Lazy Single-Work-Item Workbench Editing | Accepted | 2026-06-24 |
-| [0016](0016-use-structured-image-field-references-and-severable-media-includes.md) | Use Structured Image Field References and Severable Media Includes | Proposed | 2026-07-04 |
+| [0016](0016-use-structured-image-field-references-and-severable-media-includes.md) | Use Structured Image Field References and Severable Media Includes | Accepted | 2026-07-04 |
 
 ## Process
 
