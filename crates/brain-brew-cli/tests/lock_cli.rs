@@ -86,9 +86,56 @@ fn path_locks_are_lock_relative_and_verify_after_relocating_pair() {
     assert!(stdout(&verify).contains("verified 1 locked package"));
 }
 
+#[test]
+fn lock_update_with_default_lock_path_writes_relative_path() {
+    let root = temp_dir("lock-default-path");
+    let package = root.join("package");
+    let consumer = root.join("consumer");
+    fs::create_dir_all(&package).unwrap();
+    fs::create_dir_all(&consumer).unwrap();
+    write_package(&package, "0.1.0", "default lock path source");
+    let cache = root.join("cache");
+
+    let update = run_with_cache_current_dir(
+        [
+            "lock",
+            "update",
+            "--package",
+            "anki-geo.ultimate-geography",
+            "--path",
+            "../package",
+        ],
+        &cache,
+        &consumer,
+    );
+    assert!(update.status.success(), "stderr: {}", stderr(&update));
+
+    let lock_path = consumer.join("brainbrew.lock");
+    let lock_source = fs::read_to_string(&lock_path).unwrap();
+    assert!(lock_source.contains("path: ../package"), "{lock_source}");
+    assert!(
+        !lock_source.contains(&root.display().to_string()),
+        "{lock_source}"
+    );
+    assert!(!lock_source.contains(&package.canonicalize().unwrap().display().to_string()));
+}
+
 fn run_with_cache<const N: usize>(args: [&str; N], cache: &Path) -> Output {
     Command::new(env!("CARGO_BIN_EXE_brainbrew"))
         .args(args)
+        .env("BRAINBREW_CACHE_DIR", cache)
+        .output()
+        .expect("command runs")
+}
+
+fn run_with_cache_current_dir<const N: usize>(
+    args: [&str; N],
+    cache: &Path,
+    current_dir: &Path,
+) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_brainbrew"))
+        .args(args)
+        .current_dir(current_dir)
         .env("BRAINBREW_CACHE_DIR", cache)
         .output()
         .expect("command runs")

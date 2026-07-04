@@ -674,7 +674,9 @@ struct GithubRepo {
 
 impl GithubRepo {
     fn parse(url: &str) -> Option<Self> {
-        let path = url.strip_prefix("https://github.com/")?;
+        let path = url
+            .strip_prefix("https://github.com/")
+            .or_else(|| url.strip_prefix("http://github.com/"))?;
         let mut parts = path.trim_end_matches('/').split('/');
         let owner = parts.next()?.to_owned();
         let name = parts.next()?.trim_end_matches(".git").to_owned();
@@ -866,7 +868,10 @@ fn copy_symlink(source: &Path, destination: &Path) -> Result<(), String> {
 
 fn path_for_lock(path: &Path, lock_path: &Path) -> Result<PathBuf, String> {
     let canonical_path = canonicalize_for_lock(path)?;
-    let lock_parent = lock_path.parent().unwrap_or_else(|| Path::new("."));
+    let lock_parent = lock_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
     let canonical_lock_parent = canonicalize_for_lock(lock_parent)?;
     Ok(relative_path_between(&canonical_lock_parent, &canonical_path).unwrap_or(canonical_path))
 }
@@ -969,13 +974,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn github_repo_parses_only_plain_github_https_repo_urls() {
+    fn github_repo_parses_only_plain_github_repo_urls() {
         let repo = GithubRepo::parse("https://github.com/anki-geo/ultimate-geography.git")
             .expect("GitHub HTTPS repo URL parses");
         assert_eq!(repo.owner, "anki-geo");
         assert_eq!(repo.name, "ultimate-geography");
 
-        assert!(GithubRepo::parse("http://github.com/anki-geo/ultimate-geography.git").is_none());
+        let http_repo = GithubRepo::parse("http://github.com/anki-geo/ultimate-geography")
+            .expect("GitHub HTTP repo URL parses");
+        assert_eq!(http_repo.owner, "anki-geo");
+        assert_eq!(http_repo.name, "ultimate-geography");
+
         assert!(
             GithubRepo::parse("https://github.com/anki-geo/ultimate-geography/tree/main").is_none()
         );
