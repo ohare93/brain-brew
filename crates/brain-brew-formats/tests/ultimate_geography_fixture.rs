@@ -8,7 +8,9 @@ use brain_brew_formats::core::{
     Note, NoteChange, NoteTypeChange, Overlay, OverlayKind, PropertyChange, StableId, TagChange,
     TranslationDictionary,
 };
-use brain_brew_formats::{canonical_yaml, crowdanki, lockfile, manifest, media, source_includes};
+use brain_brew_formats::{
+    canonical_yaml, crowdanki, lockfile, manifest, media, media_map, source_includes,
+};
 
 #[test]
 fn ultimate_geography_fixture_uses_file_includes_for_large_source_text() {
@@ -201,6 +203,14 @@ fn ultimate_geography_fixture_formatting_is_byte_idempotent() {
         assert_eq!(twice, once, "{deck_file} formatting is byte-idempotent");
     }
 
+    let media_source = fs::read_to_string(root.join("media.yaml")).unwrap();
+    let media_once = media_map::format_str(&media_source).expect("media.yaml formats");
+    let media_twice = media_map::format_str(&media_once).expect("media.yaml formats twice");
+    assert_eq!(
+        media_twice, media_once,
+        "media.yaml formatting is byte-idempotent"
+    );
+
     let mut overlay_files = Vec::new();
     collect_yaml_files(&root.join("overlays"), &mut overlay_files);
     overlay_files.sort();
@@ -245,6 +255,46 @@ version: 1
 }
 
 #[test]
+fn ultimate_geography_media_map_declares_expected_entry_count() {
+    let root = fixture_root();
+    let source = fs::read_to_string(root.join("media.yaml")).unwrap();
+    let media = media_map::from_str(&source).expect("media.yaml parses as media map");
+    assert_eq!(media.len(), 546, "media.yaml declares every UG media asset");
+}
+
+#[test]
+fn ultimate_geography_hoisted_media_map_matches_inline_media_block() {
+    let root = fixture_root();
+    let deck_path = root.join("deck.yaml");
+    let deck_source = fs::read_to_string(&deck_path).unwrap();
+    let media_source = fs::read_to_string(root.join("media.yaml")).unwrap();
+    let include_line = "media: !include media.yaml\n";
+    assert!(
+        deck_source.contains(include_line),
+        "deck.yaml should keep media as a structural include"
+    );
+
+    let inline_media = media_source
+        .lines()
+        .map(|line| format!("  {line}\n"))
+        .collect::<String>();
+    let inline_source = deck_source.replace(include_line, &format!("media:\n{inline_media}"));
+
+    let resolved_include =
+        source_includes::resolve_file_includes(&deck_source, &deck_path, &root, &[])
+            .expect("hoisted deck media include resolves");
+    let resolved_inline =
+        source_includes::resolve_file_includes(&inline_source, &deck_path, &root, &[])
+            .expect("textually re-inlined deck resolves");
+    let hoisted = canonical_yaml::from_str(&resolved_include).expect("hoisted deck parses");
+    let inlined = canonical_yaml::from_str(&resolved_inline).expect("re-inlined deck parses");
+    assert_eq!(
+        hoisted, inlined,
+        "hoisted media map should be equivalent to the original inline media block"
+    );
+}
+
+#[test]
 fn ultimate_geography_fixture_yaml_sources_are_checked_in_canonical() {
     let root = fixture_root();
     let mut yaml_files = Vec::new();
@@ -259,6 +309,9 @@ fn ultimate_geography_fixture_yaml_sources_are_checked_in_canonical() {
         {
             manifest::format_str(&source)
                 .unwrap_or_else(|error| panic!("{} manifest formats: {error}", path.display()))
+        } else if path.file_name().and_then(|name| name.to_str()) == Some("media.yaml") {
+            media_map::format_str(&source)
+                .unwrap_or_else(|error| panic!("{} media map formats: {error}", path.display()))
         } else if path.starts_with(root.join("overlays")) {
             source_includes::format_preserving_file_includes(
                 &source,
