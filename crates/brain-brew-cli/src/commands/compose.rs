@@ -56,6 +56,9 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             "usage: brainbrew compose <deck.yaml> [--overlay overlay.yaml ...] [--out resolved.yaml]",
         ));
     }
+    if args[0].starts_with('-') {
+        return Err(format!("unexpected argument {:?}", args[0]));
+    }
     let deck_path = Path::new(&args[0]);
     let (overlay_paths, out_path) = parse_overlay_and_optional_out(&args[1..])?;
     let (base, overlays) = read_deck_and_overlays(deck_path, &overlay_paths)?;

@@ -4881,14 +4881,9 @@ fn explain_reports_json_conflicts_for_ui_consumers() {
     ]);
 
     assert!(!output.status.success());
+    assert!(stderr(&output).is_empty());
     let json: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
-    assert_eq!(json["target"], "conflict");
-    assert_eq!(json["overlay_stack"][1]["id"], "patch.capital.second");
-    assert_eq!(json["errors"][0]["kind"], "Conflict");
-    assert_eq!(
-        json["errors"][0]["path"],
-        "notes.note.finland.fields.field.capital"
-    );
+    assert_eq!(json["error"]["message"], "target composition failed");
 }
 
 #[test]

@@ -102,24 +102,7 @@ fn report_validation(
             Ok(())
         }
         Err(report) => {
-            if json_output {
-                let errors = report
-                    .errors
-                    .iter()
-                    .map(|error| {
-                        json!({
-                            "kind": format!("{:?}", error.kind),
-                            "path": error.path,
-                            "message": error.message,
-                        })
-                    })
-                    .collect::<Vec<_>>();
-                eprintln!(
-                    "{}",
-                    serde_json::to_string_pretty(&json!({"status": "invalid", "errors": errors}))
-                        .unwrap()
-                );
-            } else {
+            if !json_output {
                 eprintln!("{report}");
             }
             Err("invalid deck".to_owned())

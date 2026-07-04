@@ -51,6 +51,13 @@ pub(crate) fn print_error(message: &str) {
     eprintln!("{}", error_text(message));
 }
 
+pub(crate) fn print_json_error(message: &str) {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json!({"error": {"message": message}})).unwrap()
+    );
+}
+
 pub(crate) fn deck_stats(deck: &CanonicalDeck) -> Vec<(&'static str, String)> {
     vec![
         ("deck", deck.name.clone()),

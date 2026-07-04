@@ -328,7 +328,7 @@ pub(crate) fn parse_diff_overlay_args(args: &[String]) -> Result<DiffOverlayArgs
                 paths.push(PathBuf::from(other));
                 index += 1;
             }
-            other => return Err(format!("unexpected diff --as-overlay argument {other:?}")),
+            other => return Err(format!("unexpected argument {other:?}")),
         }
     }
     if paths.len() != 2 {

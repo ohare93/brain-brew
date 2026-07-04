@@ -18,6 +18,9 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     }
 
     let (json_output, paths) = split_json_flag(args);
+    if let Some(arg) = paths.iter().find(|arg| arg.starts_with('-')) {
+        return Err(format!("unexpected argument {arg:?}"));
+    }
     if paths.len() != 2 {
         return Err("usage: brainbrew diff <left.yaml> <right.yaml> [--json]".to_owned());
     }

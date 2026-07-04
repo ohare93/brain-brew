@@ -13,14 +13,19 @@ mod overlay_draft;
 mod package_resolver;
 
 fn main() {
-    if let Err(error) = run() {
-        output::print_error(&error);
+    let args = env::args().skip(1).collect::<Vec<_>>();
+    let json_error_output = json_error_output_requested(&args);
+    if let Err(error) = run(&args) {
+        if json_error_output {
+            output::print_json_error(&error);
+        } else {
+            output::print_error(&error);
+        }
         process::exit(1);
     }
 }
 
-fn run() -> Result<(), String> {
-    let args = env::args().skip(1).collect::<Vec<_>>();
+fn run(args: &[String]) -> Result<(), String> {
     let Some(command) = args.first().map(String::as_str) else {
         print_usage();
         return Ok(());
@@ -28,13 +33,15 @@ fn run() -> Result<(), String> {
 
     let command = canonical_command(command);
 
-    if args
-        .get(1)
-        .is_some_and(|arg| arg == "--help" || arg == "-h")
-        && let Some(command_help) = help::command(command)
-    {
-        print!("{command_help}");
-        return Ok(());
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        if command == "--help" || command == "-h" {
+            print_usage();
+            return Ok(());
+        }
+        if let Some(command_help) = help::command(command) {
+            print!("{command_help}");
+            return Ok(());
+        }
     }
 
     match command {
@@ -68,6 +75,14 @@ fn canonical_command(command: &str) -> &str {
         "translate" | "translation" => "translations",
         other => other,
     }
+}
+
+fn json_error_output_requested(args: &[String]) -> bool {
+    let Some(command) = args.first().map(|command| canonical_command(command)) else {
+        return false;
+    };
+    matches!(command, "validate" | "explain" | "diff" | "targets")
+        && args.iter().any(|arg| arg == "--json")
 }
 
 fn unknown_command_error(command: &str) -> String {

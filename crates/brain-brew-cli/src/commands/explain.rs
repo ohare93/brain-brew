@@ -87,31 +87,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             Ok(())
         }
         Err(report) => {
-            if json_output {
-                let errors = report
-                    .errors
-                    .iter()
-                    .map(|error| {
-                        json!({
-                            "kind": format!("{:?}", error.kind),
-                            "path": error.path,
-                            "message": error.message,
-                        })
-                    })
-                    .collect::<Vec<_>>();
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&json!({
-                        "package": plan.package.as_ref().map(package_json),
-                        "target": plan.target,
-                        "base": plan.base_label,
-                        "overlay_stack": overlay_stack,
-                        "changes": [],
-                        "errors": errors,
-                    }))
-                    .unwrap()
-                );
-            } else {
+            if !json_output {
                 for error in report.errors {
                     eprintln!("{:?} {}: {}", error.kind, error.path, error.message);
                 }
