@@ -4,7 +4,7 @@ use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, MediaReference,
     Note, NoteType, StableId,
 };
-use brain_brew_formats::crowdanki;
+use brain_brew_formats::{canonical_yaml, crowdanki};
 
 #[test]
 fn exports_deterministic_crowdanki_json_preserving_adapter_identities() {
@@ -59,6 +59,150 @@ fn export_is_byte_identical_for_structured_image_and_equivalent_raw_img_field() 
         .deck_json;
 
     assert_eq!(structured_json, raw_json);
+}
+
+#[test]
+fn import_emits_strict_image_fields_as_structured_references() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["media_files"] = serde_json::json!(["flags/fi.png", "maps/fi.png"]);
+    deck_json["notes"][0]["fields"] = serde_json::json!([
+        "Finland",
+        "<img src=\"flags/fi.png\" />",
+        "<img src=\"flags/fi.png\" />\t\n <img src=\"maps/fi.png\" />"
+    ]);
+
+    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect("strict image fields import");
+    let note = imported.notes.get(&sid("note.finland")).unwrap();
+
+    assert_eq!(note.fields.get(&sid("field.capital")).unwrap(), "");
+    assert_eq!(note.fields.get(&sid("field.flag")).unwrap(), "");
+    assert_eq!(
+        note.field_images.get(&sid("field.capital")).unwrap(),
+        &vec![FieldImageReference {
+            media_id: sid("media.flags-fi-png"),
+        }]
+    );
+    assert_eq!(
+        note.field_images.get(&sid("field.flag")).unwrap(),
+        &vec![
+            FieldImageReference {
+                media_id: sid("media.flags-fi-png"),
+            },
+            FieldImageReference {
+                media_id: sid("media.maps-fi-png"),
+            },
+        ]
+    );
+
+    let yaml = canonical_yaml::to_string(&imported).expect("imported deck emits YAML");
+    assert!(
+        yaml.contains("      field.capital: !image media.flags-fi-png\n"),
+        "{yaml}"
+    );
+    assert!(
+        yaml.contains(
+            "      field.flag:\n        - !image media.flags-fi-png\n        - !image media.maps-fi-png\n"
+        ),
+        "{yaml}"
+    );
+}
+
+#[test]
+fn import_keeps_non_strict_or_ambiguous_image_html_as_raw_fields() {
+    let cases = [
+        ("Extra Attribute", "<img src=\"x.png\" alt=\"y\" />"),
+        ("Single Quoted Src", "<img src='x.png' />"),
+        ("Non Self Closing", "<img src=\"x.png\">"),
+        ("Surrounding Text", "before <img src=\"x.png\" />"),
+        ("Missing Declaration", "<img src=\"missing.png\" />"),
+        ("Duplicate Path", "<img src=\"dup.png\" />"),
+    ];
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["media_files"] = serde_json::json!(["x.png", "dup.png", "dup.png"]);
+    deck_json["notes"] = serde_json::Value::Array(
+        cases
+            .iter()
+            .enumerate()
+            .map(|(index, (label, value))| {
+                serde_json::json!({
+                    "__type__": "Note",
+                    "data": "",
+                    "fields": [label, format!("Capital {index}"), value],
+                    "flags": 0,
+                    "guid": format!("negative-{index}"),
+                    "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    "tags": []
+                })
+            })
+            .collect(),
+    );
+
+    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect("non-strict image fields import as raw HTML");
+    let yaml = canonical_yaml::to_string(&imported).expect("imported deck emits YAML");
+
+    assert!(!yaml.contains("!image"), "{yaml}");
+    for (label, expected_value) in cases {
+        let note_id = sid(&format!("note.{}", slug_for_test(label)));
+        let note = imported.notes.get(&note_id).unwrap();
+        assert_eq!(note.fields.get(&sid("field.flag")).unwrap(), expected_value);
+        assert!(!note.field_images.contains_key(&sid("field.flag")));
+    }
+    assert!(
+        yaml.contains("field.flag: '<img src=\"x.png\" alt=\"y\" />'"),
+        "{yaml}"
+    );
+    assert!(
+        yaml.contains("field.flag: '<img src=\"dup.png\" />'"),
+        "{yaml}"
+    );
+}
+
+#[test]
+fn structured_image_fields_survive_crowdanki_export_import_round_trip() {
+    let mut original = ug_style_deck();
+    original.adapter_ids.insert(
+        "crowdanki:deck_config_uuid",
+        "deck.ultimate-geography:deck-config",
+    );
+    original
+        .adapter_ids
+        .insert("crowdanki:deck_config_name", "Ultimate Geography");
+    original.media.insert(
+        sid("media.maps-fi-png"),
+        MediaReference {
+            id: sid("media.maps-fi-png"),
+            path: "maps/fi.png".to_owned(),
+            sha256: String::new(),
+        },
+    );
+    let note = original.notes.get_mut(&sid("note.finland")).unwrap();
+    note.fields.insert(sid("field.capital"), String::new());
+    note.field_images.insert(
+        sid("field.capital"),
+        vec![FieldImageReference {
+            media_id: sid("media.flags-fi-png"),
+        }],
+    );
+    note.fields.insert(sid("field.flag"), String::new());
+    note.field_images.insert(
+        sid("field.flag"),
+        vec![
+            FieldImageReference {
+                media_id: sid("media.flags-fi-png"),
+            },
+            FieldImageReference {
+                media_id: sid("media.maps-fi-png"),
+            },
+        ],
+    );
+
+    let export = crowdanki::export_deck(&original).expect("structured deck exports");
+    let imported = crowdanki::import_deck_accept_suggested_ids(&export.deck_json)
+        .expect("exported CrowdAnki re-imports");
+
+    assert!(original.semantic_diff(&imported).is_empty());
 }
 
 #[test]
@@ -558,4 +702,16 @@ fn expected_crowdanki_json_value() -> serde_json::Value {
 
 fn sid(value: &str) -> StableId {
     StableId::new(value).expect("test stable id is valid")
+}
+
+fn slug_for_test(source: &str) -> String {
+    source
+        .chars()
+        .flat_map(char::to_lowercase)
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
 }
