@@ -329,6 +329,358 @@ fn importing_note_models_with_duplicate_crowdanki_uuid_fails_closed() {
 }
 
 #[test]
+fn importing_media_files_with_colliding_suggested_stable_ids_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["media_files"] = serde_json::json!(["foo/bar.png", "foo_bar.png"]);
+
+    let message = import_error_message(&deck_json, "colliding media stable IDs fail closed");
+
+    assert!(message.contains("media.foo-bar-png"), "{message}");
+    assert!(message.contains("foo/bar.png"), "{message}");
+    assert!(message.contains("foo_bar.png"), "{message}");
+    assert!(
+        message.contains("import_deck_accept_suggested_ids"),
+        "{message}"
+    );
+}
+
+#[test]
+fn importing_exact_duplicate_media_files_is_tolerated() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["media_files"] = serde_json::json!(["flags/fi.png", "flags/fi.png"]);
+
+    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect("exact duplicate media entries are deduplicated");
+
+    assert_eq!(imported.media.len(), 1);
+    assert_eq!(
+        imported.media.get(&sid("media.flags-fi-png")).unwrap().path,
+        "flags/fi.png"
+    );
+}
+
+#[test]
+fn importing_child_decks_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["children"] = serde_json::json!([{ "name": "Child" }]);
+
+    assert_import_error_contains(
+        &deck_json,
+        "child decks",
+        &["child decks", "not modeled yet"],
+    );
+}
+
+#[test]
+fn importing_non_default_deck_scheduling_header_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["dyn"] = serde_json::json!(1);
+    deck_json["extendNew"] = serde_json::json!(11);
+    deck_json["extendRev"] = serde_json::json!(51);
+
+    assert_import_error_contains(
+        &deck_json,
+        "non-default deck scheduling header",
+        &[
+            "non-default deck scheduling header",
+            "dyn=1",
+            "extendNew=11",
+            "extendRev=51",
+        ],
+    );
+}
+
+#[test]
+fn importing_cloze_note_model_type_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["note_models"][0]["type"] = serde_json::json!(1);
+
+    assert_import_error_contains(
+        &deck_json,
+        "cloze note model type",
+        &["only standard note models are supported", "type 1"],
+    );
+}
+
+#[test]
+fn importing_note_model_req_or_vers_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["note_models"][0]["req"] = serde_json::json!([[0, "all", [0]]]);
+    deck_json["note_models"][0]["vers"] = serde_json::json!([1]);
+
+    assert_import_error_contains(
+        &deck_json,
+        "note model req/vers",
+        &[
+            "note model Country",
+            "non-default CrowdAnki options",
+            "not modeled yet",
+        ],
+    );
+}
+
+#[test]
+fn importing_note_model_sort_field_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["note_models"][0]["sortf"] = serde_json::json!(1);
+
+    assert_import_error_contains(
+        &deck_json,
+        "note model sort field",
+        &["note model Country", "non-default CrowdAnki options"],
+    );
+}
+
+#[test]
+fn importing_note_model_latex_svg_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["note_models"][0]["latexsvg"] = serde_json::json!(true);
+
+    assert_import_error_contains(
+        &deck_json,
+        "note model latexsvg",
+        &["note model Country", "non-default CrowdAnki options"],
+    );
+}
+
+#[test]
+fn importing_note_model_tags_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["note_models"][0]["tags"] = serde_json::json!(["model-tag"]);
+
+    assert_import_error_contains(
+        &deck_json,
+        "note model tags",
+        &["note model Country", "non-default CrowdAnki options"],
+    );
+}
+
+#[test]
+fn importing_field_font_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["note_models"][0]["flds"][0]["font"] = serde_json::json!("Helvetica");
+
+    assert_import_error_contains(
+        &deck_json,
+        "field font",
+        &["field Country", "non-default CrowdAnki options"],
+    );
+}
+
+#[test]
+fn importing_field_size_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["note_models"][0]["flds"][0]["size"] = serde_json::json!(21);
+
+    assert_import_error_contains(
+        &deck_json,
+        "field size",
+        &["field Country", "non-default CrowdAnki options"],
+    );
+}
+
+#[test]
+fn importing_field_rtl_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["note_models"][0]["flds"][0]["rtl"] = serde_json::json!(true);
+
+    assert_import_error_contains(
+        &deck_json,
+        "field rtl",
+        &["field Country", "non-default CrowdAnki options"],
+    );
+}
+
+#[test]
+fn importing_field_sticky_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["note_models"][0]["flds"][0]["sticky"] = serde_json::json!(true);
+
+    assert_import_error_contains(
+        &deck_json,
+        "field sticky",
+        &["field Country", "non-default CrowdAnki options"],
+    );
+}
+
+#[test]
+fn importing_field_media_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["note_models"][0]["flds"][0]["media"] = serde_json::json!(["x.png"]);
+
+    assert_import_error_contains(
+        &deck_json,
+        "field media",
+        &["field Country", "non-default CrowdAnki options"],
+    );
+}
+
+#[test]
+fn importing_field_ord_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["note_models"][0]["flds"][0]["ord"] = serde_json::json!(1);
+
+    assert_import_error_contains(
+        &deck_json,
+        "field ord",
+        &["field Country", "non-default CrowdAnki options"],
+    );
+}
+
+#[test]
+fn importing_note_data_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["notes"][0]["data"] = serde_json::json!("opaque");
+
+    assert_import_error_contains(
+        &deck_json,
+        "note data",
+        &["note ug-finland-guid", "non-default data/flags"],
+    );
+}
+
+#[test]
+fn importing_note_flags_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["notes"][0]["flags"] = serde_json::json!(1);
+
+    assert_import_error_contains(
+        &deck_json,
+        "note flags",
+        &["note ug-finland-guid", "non-default data/flags"],
+    );
+}
+
+#[test]
+fn importing_note_field_count_mismatch_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["notes"][0]["fields"] = serde_json::json!(["Finland", "Helsinki"]);
+
+    assert_import_error_contains(
+        &deck_json,
+        "note field-count mismatch",
+        &[
+            "note ug-finland-guid has 2 fields",
+            "note type note-type.country has 3 fields",
+        ],
+    );
+}
+
+#[test]
+fn importing_note_with_unknown_note_model_uuid_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["notes"][0]["note_model_uuid"] = serde_json::json!("missing-model-uuid");
+
+    assert_import_error_contains(
+        &deck_json,
+        "unknown note_model_uuid",
+        &[
+            "note references missing note_model_uuid",
+            "missing-model-uuid",
+        ],
+    );
+}
+
+#[test]
+fn importing_unknown_fields_fails_closed_with_json_error() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["unexpected"] = serde_json::json!(true);
+
+    let message = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect_err("unknown fields fail closed")
+        .to_string();
+
+    assert!(message.contains("CrowdAnki JSON error"), "{message}");
+    assert!(message.contains("unknown field"), "{message}");
+    assert!(message.contains("unexpected"), "{message}");
+}
+
+#[test]
+fn importing_non_default_deck_configurations_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["deck_configurations"][0]["new"]["perDay"] = serde_json::json!(999);
+
+    assert_import_error_contains(
+        &deck_json,
+        "non-default deck configurations",
+        &["non-default deck configurations", "not modeled yet"],
+    );
+}
+
+#[test]
+fn importing_malformed_json_returns_crowdanki_error() {
+    let message = crowdanki::import_deck_accept_suggested_ids("{ not json")
+        .expect_err("malformed JSON fails cleanly")
+        .to_string();
+
+    assert!(message.contains("CrowdAnki JSON error"), "{message}");
+}
+
+#[test]
+fn importing_template_bafmt_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["note_models"][0]["tmpls"][0]["bafmt"] = serde_json::json!("browser answer");
+
+    assert_import_error_contains(
+        &deck_json,
+        "template bafmt",
+        &[
+            "card template Country - Capital",
+            "non-default browser options",
+        ],
+    );
+}
+
+#[test]
+fn importing_template_bqfmt_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["note_models"][0]["tmpls"][0]["bqfmt"] = serde_json::json!("browser question");
+
+    assert_import_error_contains(
+        &deck_json,
+        "template bqfmt",
+        &[
+            "card template Country - Capital",
+            "non-default browser options",
+        ],
+    );
+}
+
+#[test]
+fn importing_template_deck_override_did_fails_closed() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["note_models"][0]["tmpls"][0]["did"] = serde_json::json!(12345);
+
+    assert_import_error_contains(
+        &deck_json,
+        "template did",
+        &[
+            "card template Country - Capital",
+            "non-default browser options",
+        ],
+    );
+}
+
+#[test]
+fn crowdanki_parity_comparator_matches_reordered_media_files_as_multiset() {
+    let expected: serde_json::Value = serde_json::json!({
+        "media_files": ["a.png", "b.png", "a.png"],
+        "name": "Deck"
+    });
+    let actual: serde_json::Value = serde_json::json!({
+        "media_files": ["b.png", "a.png", "a.png"],
+        "name": "Deck"
+    });
+
+    crowdanki::compare_deck_json_values(
+        &expected,
+        &actual,
+        &crowdanki::CrowdAnkiParityOptions::default(),
+    )
+    .expect("media_files may reorder without a parity difference, with duplicate counts preserved");
+}
+
+#[test]
 fn crowdanki_parity_comparator_accepts_exact_match() {
     let expected: serde_json::Value = serde_json::json!({
         "name": "Deck",
@@ -698,6 +1050,19 @@ fn ug_style_deck() -> CanonicalDeck {
 
 fn expected_crowdanki_json_value() -> serde_json::Value {
     serde_json::from_str(EXPECTED_CROWDANKI_JSON).expect("fixture JSON is valid")
+}
+
+fn import_error_message(deck_json: &serde_json::Value, label: &str) -> String {
+    crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect_err(label)
+        .to_string()
+}
+
+fn assert_import_error_contains(deck_json: &serde_json::Value, label: &str, needles: &[&str]) {
+    let message = import_error_message(deck_json, label);
+    for needle in needles {
+        assert!(message.contains(needle), "expected {needle:?} in {message}");
+    }
 }
 
 fn sid(value: &str) -> StableId {

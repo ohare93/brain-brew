@@ -365,6 +365,10 @@ fn compare_json_array_by_identity(
     options: &CrowdAnkiParityOptions,
     differences: &mut Vec<CrowdAnkiParityDifference>,
 ) -> bool {
+    if path == "$.media_files" {
+        return compare_json_string_array_as_multiset(expected, actual, path, options, differences);
+    }
+
     let Some(identity) = array_identity(path) else {
         return false;
     };
@@ -406,6 +410,66 @@ fn compare_json_array_by_identity(
     }
 
     true
+}
+
+fn compare_json_string_array_as_multiset(
+    expected: &[serde_json::Value],
+    actual: &[serde_json::Value],
+    path: &str,
+    options: &CrowdAnkiParityOptions,
+    differences: &mut Vec<CrowdAnkiParityDifference>,
+) -> bool {
+    let Some(expected_counts) = string_array_multiset(expected) else {
+        return false;
+    };
+    let Some(actual_counts) = string_array_multiset(actual) else {
+        return false;
+    };
+
+    let keys = expected_counts
+        .keys()
+        .chain(actual_counts.keys())
+        .collect::<BTreeSet<_>>();
+    for key in keys {
+        let child_path = format!("{path}[path={}]", json_path_label(key));
+        if is_allowed_parity_path(options, &child_path) {
+            continue;
+        }
+        let expected_count = expected_counts.get(key).copied().unwrap_or_default();
+        let actual_count = actual_counts.get(key).copied().unwrap_or_default();
+        match (expected_count, actual_count) {
+            (expected_count, actual_count) if expected_count == actual_count => {}
+            (0, actual_count) => differences.push(CrowdAnkiParityDifference {
+                path: child_path,
+                kind: CrowdAnkiParityDifferenceKind::ExtraActual,
+                expected: None,
+                actual: Some(serde_json::json!(actual_count)),
+            }),
+            (expected_count, 0) => differences.push(CrowdAnkiParityDifference {
+                path: child_path,
+                kind: CrowdAnkiParityDifferenceKind::MissingActual,
+                expected: Some(serde_json::json!(expected_count)),
+                actual: None,
+            }),
+            (expected_count, actual_count) => differences.push(CrowdAnkiParityDifference {
+                path: child_path,
+                kind: CrowdAnkiParityDifferenceKind::LengthMismatch,
+                expected: Some(serde_json::json!(expected_count)),
+                actual: Some(serde_json::json!(actual_count)),
+            }),
+        }
+    }
+
+    true
+}
+
+fn string_array_multiset(values: &[serde_json::Value]) -> Option<BTreeMap<String, usize>> {
+    let mut counts = BTreeMap::new();
+    for value in values {
+        let key = value.as_str()?.to_owned();
+        *counts.entry(key).or_insert(0) += 1;
+    }
+    Some(counts)
 }
 
 #[derive(Clone, Copy)]
@@ -819,21 +883,32 @@ impl CrowdAnkiDeckJson {
         }
 
         let ambiguous_media_file_paths = duplicate_paths(&self.media_files);
-        let media = self
-            .media_files
-            .into_iter()
-            .map(|path| {
-                let id = prefixed_stable_id("media", &path)?;
-                Ok((
-                    id.clone(),
-                    MediaReference {
-                        id,
+        let mut media_sources: BTreeMap<StableId, String> = BTreeMap::new();
+        let mut media = BTreeMap::new();
+        for path in self.media_files {
+            let id = prefixed_stable_id("media", &path)?;
+            if let Some(existing_path) = media_sources.get(&id) {
+                if existing_path != &path {
+                    return Err(CrowdAnkiError::Unsupported(format!(
+                        "CrowdAnki media files {:?} and {:?} both derive suggested stable ID {}; {}",
+                        existing_path,
                         path,
-                        sha256: String::new(),
-                    },
-                ))
-            })
-            .collect::<Result<BTreeMap<_, _>, CrowdAnkiError>>()?;
+                        id,
+                        suggested_id_collision_resolution()
+                    )));
+                }
+                continue;
+            }
+            media_sources.insert(id.clone(), path.clone());
+            media.insert(
+                id.clone(),
+                MediaReference {
+                    id,
+                    path,
+                    sha256: String::new(),
+                },
+            );
+        }
 
         let media_path_lookup = media_path_lookup(&media, &ambiguous_media_file_paths);
         for note in notes.values_mut() {
@@ -1009,8 +1084,11 @@ struct CrowdAnkiTemplateJson {
 
 impl CrowdAnkiTemplateJson {
     fn validate_supported_defaults(&self) -> Result<(), CrowdAnkiError> {
-        if self.bfont.as_deref().unwrap_or_default() != ""
+        if !self.bafmt.is_empty()
+            || self.bfont.as_deref().unwrap_or_default() != ""
+            || !self.bqfmt.is_empty()
             || self.bsize.unwrap_or_default() != 0
+            || self.did.is_some()
             || self.scratch_pad.unwrap_or_default() != 0
         {
             return Err(CrowdAnkiError::Unsupported(format!(
