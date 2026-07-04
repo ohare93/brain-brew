@@ -3348,13 +3348,14 @@ fn translations_default_report_focuses_on_translatable_note_text() {
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let out = stdout(&output);
-    assert!(out.contains("missing text translations: 0"));
+    assert!(out.contains("missing text translations: 43"));
     assert!(out.contains("intentionally unchanged text: 329"));
     assert!(out.contains("hidden structural/media/tag fallbacks:"));
     assert!(out.contains("hint: use --full"));
     assert!(!out.contains("deck.description source="));
     assert!(!out.contains("notes.note.abkhazia.fields.field.flag"));
     assert!(!out.contains("notes.note.abkhazia.fields.field.capital"));
+    assert!(out.contains("notes.note.andorra.fields.field.flag-similarity.message.format"));
 }
 
 #[test]
@@ -3388,6 +3389,7 @@ fn ultimate_geography_language_overlays_have_no_actionable_missing_text() {
                 && path.contains(".fields.")
                 && !path.ends_with(".fields.field.flag")
                 && !path.ends_with(".fields.field.map")
+                && !path.ends_with(".message.format")
                 && !source.trim_start().starts_with("<img");
             if actionable_note_field {
                 missing.push(format!("{target} {overlay} {path} source={source:?}"));

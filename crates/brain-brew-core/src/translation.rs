@@ -42,6 +42,7 @@ fn translation_coverage_report(
         seen_stale_translations: BTreeSet::new(),
         seen_variables: BTreeSet::new(),
         seen_adapter_ids: BTreeSet::new(),
+        source_paths: BTreeMap::new(),
     };
 
     builder.record_string(&deck.name, DeckPath::DeckName.to_string(), None);
@@ -167,6 +168,7 @@ struct TranslationCoverageBuilder<'a> {
     seen_stale_translations: BTreeSet<usize>,
     seen_variables: BTreeSet<(String, String)>,
     seen_adapter_ids: BTreeSet<(String, String)>,
+    source_paths: BTreeMap<String, BTreeSet<String>>,
 }
 
 #[derive(Clone, Copy)]
@@ -421,7 +423,7 @@ impl TranslationCoverageBuilder<'_> {
             TranslationRecordOptions {
                 include_target_adaptation: false,
                 include_variable: false,
-                record_missing: false,
+                record_missing: true,
                 record_ignored: false,
             },
         );
@@ -495,7 +497,7 @@ impl TranslationCoverageBuilder<'_> {
                 context_path,
                 ..
             } => {
-                let source = self.record_seen_source(value, &outcome);
+                let source = self.record_seen_source(value, &path, &outcome);
                 self.entries.push(TranslationCoverageEntry {
                     category: TranslationCoverageCategory::ContextualTranslation,
                     path,
@@ -506,7 +508,7 @@ impl TranslationCoverageBuilder<'_> {
                 });
             }
             TranslationOutcome::Direct { translated } => {
-                let source = self.record_seen_source(value, &outcome);
+                let source = self.record_seen_source(value, &path, &outcome);
                 self.entries.push(TranslationCoverageEntry {
                     category: TranslationCoverageCategory::DirectTranslation,
                     path,
@@ -517,7 +519,7 @@ impl TranslationCoverageBuilder<'_> {
                 });
             }
             TranslationOutcome::NoChange => {
-                let source = self.record_seen_source(value, &outcome);
+                let source = self.record_seen_source(value, &path, &outcome);
                 self.seen_no_change.insert(source.clone());
                 self.entries.push(TranslationCoverageEntry {
                     category: TranslationCoverageCategory::NoChange,
@@ -529,7 +531,7 @@ impl TranslationCoverageBuilder<'_> {
                 });
             }
             TranslationOutcome::Stale { index, record } => {
-                let source = self.record_seen_source(value, &outcome);
+                let source = self.record_seen_source(value, &path, &outcome);
                 self.seen_stale_translations.insert(*index);
                 self.entries.push(TranslationCoverageEntry {
                     category: TranslationCoverageCategory::StaleTranslation,
@@ -541,7 +543,7 @@ impl TranslationCoverageBuilder<'_> {
                 });
             }
             TranslationOutcome::Missing => {
-                let source = self.record_seen_source(value, &outcome);
+                let source = self.record_seen_source(value, &path, &outcome);
                 if record_options.record_missing {
                     self.entries.push(TranslationCoverageEntry {
                         category: TranslationCoverageCategory::UntranslatedFallback,
@@ -556,9 +558,18 @@ impl TranslationCoverageBuilder<'_> {
         }
     }
 
-    fn record_seen_source(&mut self, value: &str, outcome: &TranslationOutcome<'_>) -> String {
+    fn record_seen_source(
+        &mut self,
+        value: &str,
+        path: &str,
+        outcome: &TranslationOutcome<'_>,
+    ) -> String {
         let source = value.to_owned();
         self.seen_sources.insert(source.clone());
+        self.source_paths
+            .entry(source.clone())
+            .or_default()
+            .insert(path.to_owned());
         if outcome.direct_translation().is_some() {
             self.seen_direct.insert(source.clone());
         }
@@ -594,6 +605,36 @@ impl TranslationCoverageBuilder<'_> {
                 context: Some(key.to_owned()),
             });
         }
+    }
+
+    fn shadowing_translation_for_stale(&self, record: &StaleTranslation) -> Option<String> {
+        let paths = self.source_paths.get(&record.new_source)?;
+        paths.iter().find_map(|path| {
+            if record
+                .context
+                .as_deref()
+                .is_some_and(|context| !context_matches_path(context, path))
+            {
+                return None;
+            }
+            match resolve_translation(
+                self.translations,
+                &record.new_source,
+                TranslationResolveOptions {
+                    path,
+                    variable_key: None,
+                    include_target_adaptation: false,
+                    include_variable: false,
+                    include_ignored: false,
+                },
+            ) {
+                TranslationOutcome::Direct { translated }
+                | TranslationOutcome::Contextual { translated, .. }
+                | TranslationOutcome::Variable { translated } => Some(translated.to_owned()),
+                TranslationOutcome::NoChange => Some(record.new_source.clone()),
+                _ => None,
+            }
+        })
     }
 
     fn finish(mut self, overlay_id: StableId) -> TranslationCoverageReport {
@@ -652,12 +693,15 @@ impl TranslationCoverageBuilder<'_> {
         }
         for (index, record) in self.translations.stale_translations.iter().enumerate() {
             if !self.seen_stale_translations.contains(&index) {
+                let translated = self
+                    .shadowing_translation_for_stale(record)
+                    .unwrap_or_else(|| record.target.clone());
                 self.entries.push(TranslationCoverageEntry {
                     category: TranslationCoverageCategory::StaleTranslation,
                     path: format!("translations.stale_translations.{index}"),
                     source: record.new_source.clone(),
                     old_source: Some(record.old_source.clone()),
-                    translated: Some(record.target.clone()),
+                    translated: Some(translated),
                     context: record.context.clone(),
                 });
             }

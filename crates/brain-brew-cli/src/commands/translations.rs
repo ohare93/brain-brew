@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use brain_brew_core::{
     Overlay, OverlayKind, TranslationContextUnit, TranslationContextView,
     TranslationCoverageCategory, TranslationCoverageEntry, TranslationCoverageReport,
-    TranslationMessageContext,
+    TranslationDictionary, TranslationMessageContext,
 };
 use brain_brew_formats::manifest::FederatedDeckManifest;
 use brain_brew_formats::yaml_scalar::scalar as yaml_scalar;
@@ -1091,6 +1091,12 @@ fn resolve_stale_translations(
     let mut non_stale_source_match = None::<String>;
 
     for report in reports {
+        let shadowing_entries = report
+            .report
+            .entries
+            .iter()
+            .filter(|entry| entry_can_shadow_stale_translation(entry))
+            .collect::<Vec<_>>();
         for entry in &report.report.entries {
             if !entry_matches_stale_resolution_filter(entry, args) {
                 if entry.category != TranslationCoverageCategory::StaleTranslation
@@ -1111,7 +1117,10 @@ fn resolve_stale_translations(
             }
 
             stale_record_matched_filter = true;
-            if entry.path.starts_with("translations.stale_translations.") {
+            let shadowed = shadowing_entries
+                .iter()
+                .any(|candidate| entry_shadows_stale_record(candidate, entry));
+            if entry.path.starts_with("translations.stale_translations.") && !shadowed {
                 continue;
             }
 
@@ -1153,6 +1162,38 @@ fn resolve_stale_translations(
         }
     }
     Ok(applied)
+}
+
+fn entry_can_shadow_stale_translation(entry: &TranslationCoverageEntry) -> bool {
+    matches!(
+        entry.category,
+        TranslationCoverageCategory::DirectTranslation
+            | TranslationCoverageCategory::ContextualTranslation
+            | TranslationCoverageCategory::NoChange
+    )
+}
+
+fn entry_shadows_stale_record(
+    candidate: &TranslationCoverageEntry,
+    stale: &TranslationCoverageEntry,
+) -> bool {
+    candidate.source == stale.source
+        && match candidate.category {
+            TranslationCoverageCategory::DirectTranslation
+            | TranslationCoverageCategory::NoChange => true,
+            TranslationCoverageCategory::ContextualTranslation => stale
+                .context
+                .as_deref()
+                .is_none_or(|context| context_matches_path(context, &candidate.path)),
+            _ => false,
+        }
+}
+
+fn context_matches_path(context_path: &str, path: &str) -> bool {
+    path == context_path
+        || path
+            .strip_prefix(context_path)
+            .is_some_and(|suffix| suffix.starts_with('.'))
 }
 
 fn entry_matches_stale_resolution_filter(
@@ -1224,37 +1265,7 @@ fn apply_stale_resolutions_to_overlay(
             .as_mut()
             .ok_or_else(|| format!("{} has no translations dictionary", path.display()))?;
         for resolution in resolutions {
-            let record = translations
-                .resolve_stale_translation(
-                    &resolution.old_source,
-                    &resolution.new_source,
-                    resolution.context.as_deref(),
-                )
-                .ok_or_else(|| {
-                    format!(
-                        "stale translation old_source={:?} new_source={:?} context={:?} was not found in {}",
-                        resolution.old_source,
-                        resolution.new_source,
-                        resolution.context,
-                        path.display()
-                    )
-                })?;
-            if action == StaleResolveAction::Replace {
-                let replacement = resolution
-                    .replacement
-                    .as_ref()
-                    .expect("replace action requires replacement translation")
-                    .clone();
-                if let Some(context) = record.context {
-                    translations
-                        .contextual
-                        .entry(context)
-                        .or_default()
-                        .insert(record.new_source, replacement);
-                } else {
-                    translations.direct.insert(record.new_source, replacement);
-                }
-            }
+            apply_stale_resolution(translations, resolution, action, path)?;
         }
         Ok::<_, String>(canonical_yaml::overlay_to_string(&overlay))
     })?;
@@ -1262,6 +1273,75 @@ fn apply_stale_resolutions_to_overlay(
         fs::write(path, output).map_err(|error| format!("{}: {error}", path.display()))?;
     }
     Ok(resolutions.len())
+}
+
+fn apply_stale_resolution(
+    translations: &mut TranslationDictionary,
+    resolution: &StaleResolution,
+    action: StaleResolveAction,
+    path: &Path,
+) -> Result<(), String> {
+    let position = translations
+        .stale_translations
+        .iter()
+        .position(|record| {
+            record.old_source == resolution.old_source
+                && record.new_source == resolution.new_source
+                && record.context == resolution.context
+        })
+        .ok_or_else(|| {
+            format!(
+                "stale translation old_source={:?} new_source={:?} context={:?} was not found in {}",
+                resolution.old_source,
+                resolution.new_source,
+                resolution.context,
+                path.display()
+            )
+        })?;
+    let shadowed = stale_record_shadowed_by_existing_entry(translations, position);
+    let record = translations.stale_translations.remove(position);
+    if shadowed {
+        return Ok(());
+    }
+
+    let replacement = if action == StaleResolveAction::Replace {
+        resolution
+            .replacement
+            .as_ref()
+            .expect("replace action requires replacement translation")
+            .clone()
+    } else {
+        record.target
+    };
+    if let Some(context) = record.context {
+        translations
+            .contextual
+            .entry(context)
+            .or_default()
+            .insert(record.new_source, replacement);
+    } else {
+        translations.direct.insert(record.new_source, replacement);
+    }
+    Ok(())
+}
+
+fn stale_record_shadowed_by_existing_entry(
+    translations: &TranslationDictionary,
+    stale_index: usize,
+) -> bool {
+    let record = &translations.stale_translations[stale_index];
+    translations.direct.contains_key(&record.new_source)
+        || translations.no_change.contains(&record.new_source)
+        || translations
+            .contextual
+            .iter()
+            .any(|(context, replacements)| {
+                replacements.contains_key(&record.new_source)
+                    && record.context.as_deref().is_none_or(|stale_context| {
+                        context_matches_path(context, stale_context)
+                            || context_matches_path(stale_context, context)
+                    })
+            })
 }
 
 fn direct_stub_edits_from_reports(
@@ -2698,6 +2778,17 @@ fn insert_translation_section(
         );
     };
 
+    if let Some(rewritten) =
+        rewrite_inline_empty_translations_line(input, &spans, translations_index)
+    {
+        return insert_translation_section(
+            &rewritten,
+            section_name,
+            entries,
+            preferred_after_sections,
+        );
+    }
+
     if let Some(section_index) =
         find_translation_section(input, &spans, translations_index, section_name)
     {
@@ -2721,8 +2812,61 @@ fn insert_translation_section(
 fn find_translations_line(input: &str, spans: &[(usize, usize)]) -> Option<usize> {
     spans.iter().position(|(start, end)| {
         let line = &input[*start..*end];
-        line.trim_end() == "translations:"
+        is_translations_header_line(line)
     })
+}
+
+fn is_translations_header_line(line: &str) -> bool {
+    let trimmed = line.trim();
+    trimmed == "translations:"
+        || trimmed
+            .strip_prefix("translations:")
+            .is_some_and(|rest| rest.trim_start().starts_with('#'))
+        || trimmed == "translations: {}"
+        || trimmed
+            .strip_prefix("translations: {}")
+            .is_some_and(|rest| rest.trim_start().starts_with('#'))
+}
+
+fn rewrite_inline_empty_translations_line(
+    input: &str,
+    spans: &[(usize, usize)],
+    translations_index: usize,
+) -> Option<String> {
+    let (start, end) = spans[translations_index];
+    let line = &input[start..end];
+    let trimmed = line.trim();
+    if !(trimmed == "translations: {}"
+        || trimmed
+            .strip_prefix("translations: {}")
+            .is_some_and(|rest| rest.trim_start().starts_with('#')))
+    {
+        return None;
+    }
+
+    let line_without_newline = line.trim_end_matches(['\r', '\n']);
+    let newline = &line[line_without_newline.len()..];
+    let prefix_len = line_without_newline
+        .find("translations:")
+        .expect("translations header line contains key");
+    let prefix = &line_without_newline[..prefix_len];
+    let after_empty = line_without_newline[prefix_len + "translations: {}".len()..].trim_start();
+    let comment = if after_empty.starts_with('#') {
+        after_empty
+    } else {
+        ""
+    };
+    let replacement = if comment.is_empty() {
+        format!("{prefix}translations:{newline}")
+    } else {
+        format!("{prefix}translations: {comment}{newline}")
+    };
+
+    let mut output = String::with_capacity(input.len() + replacement.len());
+    output.push_str(&input[..start]);
+    output.push_str(&replacement);
+    output.push_str(&input[end..]);
+    Some(output)
 }
 
 fn find_translation_section(
