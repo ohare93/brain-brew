@@ -3,8 +3,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use brain_brew_core::{CanonicalDeck, Overlay};
-use brain_brew_formats::{canonical_yaml, lockfile, manifest, source_includes};
+use brain_brew_formats::{canonical_yaml, lockfile, manifest, media_map, source_includes};
 use serde_json::json;
+use serde_yaml::Value;
 
 use crate::commands::lock::locked_package_manifest_paths;
 use crate::output::package_json;
@@ -30,6 +31,10 @@ pub(crate) fn format_source(input: &str) -> Result<String, String> {
     match lockfile::format_str(input) {
         Ok(formatted) => return Ok(formatted),
         Err(error) => errors.push(format!("lockfile: {error}")),
+    }
+    match media_map::format_str(input) {
+        Ok(formatted) => return Ok(formatted),
+        Err(error) => errors.push(format!("media map: {error}")),
     }
     Err(format!(
         "unrecognized Brain Brew source file ({})",
@@ -559,12 +564,12 @@ pub(crate) fn manifest_root(path: &Path) -> PathBuf {
         .to_path_buf()
 }
 
-struct SourceContext {
-    root: PathBuf,
-    include_roots: Vec<PathBuf>,
+pub(crate) struct SourceContext {
+    pub(crate) root: PathBuf,
+    pub(crate) include_roots: Vec<PathBuf>,
 }
 
-fn source_context_for_path(path: &Path) -> Result<SourceContext, String> {
+pub(crate) fn source_context_for_path(path: &Path) -> Result<SourceContext, String> {
     let root = nearest_manifest_root(path).unwrap_or_else(|| manifest_root(path));
     let manifest_path = root.join("brainbrew.yaml");
     let include_roots = if manifest_path.exists() {
@@ -589,7 +594,7 @@ fn nearest_manifest_root(path: &Path) -> Option<PathBuf> {
     }
 }
 
-fn include_roots_from_manifest(
+pub(crate) fn include_roots_from_manifest(
     root: &Path,
     manifest: &manifest::FederatedDeckManifest,
 ) -> Vec<PathBuf> {
@@ -598,6 +603,33 @@ fn include_roots_from_manifest(
         .iter()
         .map(|include_root| root_relative_path(root, Path::new(include_root)))
         .collect()
+}
+
+pub(crate) fn top_level_media_include_path(value: &Value) -> Result<Option<String>, String> {
+    let Some(media_value) = value
+        .as_mapping()
+        .and_then(|mapping| mapping.get(Value::String("media".to_owned())))
+    else {
+        return Ok(None);
+    };
+    let Value::Tagged(tagged) = media_value else {
+        return Ok(None);
+    };
+    if tagged.tag != "include" {
+        return Ok(None);
+    }
+    let Value::String(path) = &tagged.value else {
+        return Err("media !include path must be a scalar string".to_owned());
+    };
+    Ok(Some(path.clone()))
+}
+
+pub(crate) fn resolve_include_target_for_context(
+    include_path: &str,
+    context: &SourceContext,
+) -> Result<PathBuf, String> {
+    source_includes::resolve_include_target(include_path, &context.root, &context.include_roots)
+        .map_err(|error| error.to_string())
 }
 
 fn resolve_source_includes(

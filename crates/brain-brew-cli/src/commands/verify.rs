@@ -2,14 +2,15 @@ use std::fs;
 use std::path::Path;
 
 use brain_brew_core::{CanonicalDeck, Overlay, TranslationCoverageCategory, validate_deck_content};
-use brain_brew_formats::{crowdanki, manifest};
+use brain_brew_formats::{crowdanki, manifest, media_map};
 
 use crate::args::parse_verify_args;
 use crate::help;
 use crate::io::{
-    ManifestTargetPlan, manifest_root, plan_manifest_target_with_packages, read_manifest,
-    root_relative_path, verify_canonical_deck_format, verify_manifest_format,
-    verify_overlay_format,
+    ManifestTargetPlan, SourceContext, include_roots_from_manifest, manifest_root,
+    plan_manifest_target_with_packages, read_manifest, resolve_include_target_for_context,
+    root_relative_path, top_level_media_include_path, verify_canonical_deck_format,
+    verify_manifest_format, verify_overlay_format,
 };
 use crate::media_assets::{validate_media_assets, validate_media_references};
 use crate::output;
@@ -34,7 +35,15 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         ));
     };
 
-    verify_canonical_deck_format(&root.join(&manifest.base))?;
+    let base_deck_path = root.join(&manifest.base);
+    verify_canonical_deck_format(&base_deck_path)?;
+    verify_included_media_map_format(
+        &base_deck_path,
+        &SourceContext {
+            root: root.clone(),
+            include_roots: include_roots_from_manifest(&root, &manifest),
+        },
+    )?;
     let media_root = verify_args
         .media_root
         .as_ref()
@@ -79,6 +88,34 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         format!("verified {} target{suffix}", target_names.len()),
         &details,
     );
+    Ok(())
+}
+
+fn verify_included_media_map_format(
+    deck_path: &Path,
+    context: &SourceContext,
+) -> Result<(), String> {
+    let input = fs::read_to_string(deck_path)
+        .map_err(|error| format!("{}: {error}", deck_path.display()))?;
+    let value = serde_yaml::from_str::<serde_yaml::Value>(&input)
+        .map_err(|error| format!("{}: {error}", deck_path.display()))?;
+    let Some(include_path) = top_level_media_include_path(&value)
+        .map_err(|error| format!("{}: {error}", deck_path.display()))?
+    else {
+        return Ok(());
+    };
+    let media_path = resolve_include_target_for_context(&include_path, context)?;
+    let input = fs::read_to_string(&media_path)
+        .map_err(|error| format!("{}: {error}", media_path.display()))?;
+    media_map::from_str(&input).map_err(|error| format!("{}: {error}", media_path.display()))?;
+    let formatted = media_map::format_str(&input)
+        .map_err(|error| format!("{}: {error}", media_path.display()))?;
+    if formatted != input {
+        return Err(format!(
+            "{} is not in canonical format",
+            media_path.display()
+        ));
+    }
     Ok(())
 }
 

@@ -4328,6 +4328,160 @@ targets:
 }
 
 #[test]
+fn fmt_formats_standalone_media_map_and_preserves_hoisted_deck_include() {
+    let dir = temp_dir("fmt-hoisted-media");
+    let deck_path = dir.join("deck.yaml");
+    let media_path = dir.join("media.yaml");
+    let deck = hoisted_media_deck_yaml("!image media.flags-fi-png", "media.yaml");
+    fs::write(&deck_path, &deck).unwrap();
+    fs::write(
+        &media_path,
+        r#"media.flags-fi-png:
+  sha256: 14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948
+  path: flags/fi.png
+"#,
+    )
+    .unwrap();
+
+    let media_fmt = run(["fmt", media_path.to_str().unwrap()]);
+    assert!(media_fmt.status.success(), "stderr: {}", stderr(&media_fmt));
+    assert_eq!(fs::read_to_string(&media_path).unwrap(), MEDIA_MAP_YAML);
+
+    let media_fmt_again = run(["fmt", media_path.to_str().unwrap()]);
+    assert!(
+        media_fmt_again.status.success(),
+        "stderr: {}",
+        stderr(&media_fmt_again)
+    );
+    assert_eq!(fs::read_to_string(&media_path).unwrap(), MEDIA_MAP_YAML);
+
+    let deck_fmt = run(["fmt", deck_path.to_str().unwrap()]);
+    assert!(deck_fmt.status.success(), "stderr: {}", stderr(&deck_fmt));
+    assert_eq!(fs::read_to_string(&deck_path).unwrap(), deck);
+}
+
+#[test]
+fn verify_accepts_hoisted_media_map_and_rejects_bad_includes() {
+    let accepted = temp_dir("verify-hoisted-media");
+    fs::write(
+        accepted.join("deck.yaml"),
+        hoisted_media_deck_yaml("!image media.flags-fi-png", "media.yaml"),
+    )
+    .unwrap();
+    fs::write(accepted.join("media.yaml"), MEDIA_MAP_YAML).unwrap();
+    fs::write(accepted.join("brainbrew.yaml"), SIMPLE_MEDIA_MANIFEST_YAML).unwrap();
+
+    let output = run([
+        "verify",
+        "--manifest",
+        accepted.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+
+    let missing = temp_dir("verify-hoisted-media-missing");
+    fs::write(
+        missing.join("deck.yaml"),
+        hoisted_media_deck_yaml("!image media.flags-fi-png", "media.yaml"),
+    )
+    .unwrap();
+    fs::write(missing.join("brainbrew.yaml"), SIMPLE_MEDIA_MANIFEST_YAML).unwrap();
+    let output = run([
+        "verify",
+        "--manifest",
+        missing.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("media.yaml"),
+        "{}",
+        stderr(&output)
+    );
+
+    let malformed = temp_dir("verify-hoisted-media-malformed");
+    fs::write(
+        malformed.join("deck.yaml"),
+        hoisted_media_deck_yaml("!image media.flags-fi-png", "media.yaml"),
+    )
+    .unwrap();
+    fs::write(malformed.join("media.yaml"), "[]\n").unwrap();
+    fs::write(malformed.join("brainbrew.yaml"), SIMPLE_MEDIA_MANIFEST_YAML).unwrap();
+    let output = run([
+        "verify",
+        "--manifest",
+        malformed.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("media.yaml"),
+        "{}",
+        stderr(&output)
+    );
+
+    let noncanonical = temp_dir("verify-hoisted-media-noncanonical");
+    fs::write(
+        noncanonical.join("deck.yaml"),
+        hoisted_media_deck_yaml("!image media.flags-fi-png", "media.yaml"),
+    )
+    .unwrap();
+    fs::write(
+        noncanonical.join("media.yaml"),
+        r#"media.flags-fi-png:
+  sha256: 14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948
+  path: flags/fi.png
+"#,
+    )
+    .unwrap();
+    fs::write(
+        noncanonical.join("brainbrew.yaml"),
+        SIMPLE_MEDIA_MANIFEST_YAML,
+    )
+    .unwrap();
+    let output = run([
+        "verify",
+        "--manifest",
+        noncanonical.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("media.yaml"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(
+        stderr(&output).contains("canonical format"),
+        "{}",
+        stderr(&output)
+    );
+
+    let escaped_root = temp_dir("verify-hoisted-media-escape");
+    let package = escaped_root.join("package");
+    fs::create_dir_all(&package).unwrap();
+    fs::write(
+        package.join("deck.yaml"),
+        hoisted_media_deck_yaml("!image media.flags-fi-png", "../media.yaml"),
+    )
+    .unwrap();
+    fs::write(escaped_root.join("media.yaml"), MEDIA_MAP_YAML).unwrap();
+    fs::write(package.join("brainbrew.yaml"), SIMPLE_MEDIA_MANIFEST_YAML).unwrap();
+    let output = run([
+        "verify",
+        "--manifest",
+        package.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("escapes package root"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
 fn verify_checks_media_root_hashes() {
     let dir = temp_dir("verify-media");
     fs::write(dir.join("deck.yaml"), MEDIA_CANONICAL_YAML).unwrap();
@@ -4423,6 +4577,88 @@ fn media_hash_updates_source_hashes_and_preserves_includes() {
     assert!(
         source.contains("sha256: 14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948")
     );
+}
+
+#[test]
+fn media_hash_updates_hoisted_media_map_and_noops_second_run() {
+    let dir = temp_dir("media-hash-hoisted");
+    fs::create_dir_all(dir.join("media/flags")).unwrap();
+    fs::write(dir.join("media/flags/fi.png"), b"flag-bytes").unwrap();
+    let deck = hoisted_media_deck_yaml("!image media.flags-fi-png", "media.yaml");
+    fs::write(dir.join("deck.yaml"), &deck).unwrap();
+    fs::write(
+        dir.join("media.yaml"),
+        MEDIA_MAP_YAML.replace(
+            "14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948",
+            "",
+        ),
+    )
+    .unwrap();
+    fs::write(dir.join("brainbrew.yaml"), SIMPLE_MEDIA_MANIFEST_YAML).unwrap();
+
+    let output = run([
+        "media",
+        "hash",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+        "--media-root",
+        dir.join("media").to_str().unwrap(),
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("files changed: 1"), "{out}");
+    assert!(out.contains("entries changed: 1"), "{out}");
+    assert_eq!(fs::read_to_string(dir.join("deck.yaml")).unwrap(), deck);
+    assert_eq!(
+        fs::read_to_string(dir.join("media.yaml")).unwrap(),
+        MEDIA_MAP_YAML
+    );
+
+    let second = run([
+        "media",
+        "hash",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+        "--media-root",
+        dir.join("media").to_str().unwrap(),
+    ]);
+    assert!(second.status.success(), "stderr: {}", stderr(&second));
+    let out = stdout(&second);
+    assert!(out.contains("files changed: 0"), "{out}");
+    assert!(out.contains("entries changed: 0"), "{out}");
+}
+
+#[test]
+fn media_images_to_refs_uses_hoisted_media_declarations() {
+    let dir = temp_dir("media-images-to-refs-hoisted");
+    fs::write(
+        dir.join("deck.yaml"),
+        hoisted_media_deck_yaml("'<img src=\"flags/fi.png\" />'", "media.yaml"),
+    )
+    .unwrap();
+    fs::write(dir.join("media.yaml"), MEDIA_MAP_YAML).unwrap();
+    fs::write(dir.join("brainbrew.yaml"), SIMPLE_MEDIA_MANIFEST_YAML).unwrap();
+
+    let output = run([
+        "media",
+        "images-to-refs",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("converted fields: 1"), "{out}");
+    let deck = fs::read_to_string(dir.join("deck.yaml")).unwrap();
+    assert!(
+        deck.contains("field.flag: !image media.flags-fi-png\n"),
+        "{deck}"
+    );
+    assert!(deck.contains("media: !include media.yaml\n"), "{deck}");
 }
 
 #[test]
@@ -6402,6 +6638,23 @@ fn structured_media_yaml(media_id: &str) -> String {
     )
 }
 
+fn hoisted_media_deck_yaml(flag_field: &str, include_path: &str) -> String {
+    MEDIA_CANONICAL_YAML
+        .replace(
+            "field.flag: '<img src=\"flags/fi.png\">'",
+            &format!("field.flag: {flag_field}"),
+        )
+        .replace(
+            r#"media:
+  media.flags-fi-png:
+    path: flags/fi.png
+    sha256: 14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948
+tombstones: []
+"#,
+            &format!("media: !include {include_path}\ntombstones: []\n"),
+        )
+}
+
 fn stdout(output: &std::process::Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
@@ -6672,6 +6925,11 @@ media:
     path: flags/fi.png
     sha256: ''
 tombstones: []
+"#;
+
+const MEDIA_MAP_YAML: &str = r#"media.flags-fi-png:
+  path: flags/fi.png
+  sha256: 14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948
 "#;
 
 const MEDIA_CANONICAL_YAML: &str = r#"deck:

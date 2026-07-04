@@ -2,13 +2,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use brain_brew_formats::media;
+use brain_brew_formats::{media, media_map};
 use serde_yaml::{Mapping, Value};
 
 use crate::help;
 use crate::io::{
     format_source_at, manifest_root, plan_manifest_target_with_packages, read_manifest,
-    root_relative_path,
+    resolve_include_target_for_context, root_relative_path, source_context_for_path,
+    top_level_media_include_path,
 };
 use crate::output;
 
@@ -49,15 +50,25 @@ fn run_hash(args: &[String]) -> Result<(), String> {
             fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
         let mut value = serde_yaml::from_str::<Value>(&input)
             .map_err(|error| format!("{}: {error}", path.display()))?;
-        let updates = update_media_hashes_in_value(&mut value, &media_root)?;
+        let (updated_path, updates) =
+            update_media_hashes_for_source(&path, &mut value, &media_root)?;
         if updates == 0 {
             continue;
         }
-        let updated_yaml = serde_yaml::to_string(&value)
-            .map_err(|error| format!("{}: {error}", path.display()))?;
-        let formatted = format_source_at(&path, &updated_yaml)
-            .map_err(|error| format!("{}: {error}", path.display()))?;
-        fs::write(&path, formatted).map_err(|error| format!("{}: {error}", path.display()))?;
+        match updated_path {
+            MediaHashUpdateTarget::Source => {
+                let updated_yaml = serde_yaml::to_string(&value)
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
+                let formatted = format_source_at(&path, &updated_yaml)
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
+                fs::write(&path, formatted)
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
+            }
+            MediaHashUpdateTarget::IncludedMedia(media_path, formatted) => {
+                fs::write(&media_path, formatted)
+                    .map_err(|error| format!("{}: {error}", media_path.display()))?;
+            }
+        }
         changed_entries += updates;
         changed_files += 1;
     }
@@ -288,6 +299,51 @@ fn collect_manifest_source_files(
     Ok((target_names, source_files))
 }
 
+enum MediaHashUpdateTarget {
+    Source,
+    IncludedMedia(PathBuf, String),
+}
+
+fn update_media_hashes_for_source(
+    path: &Path,
+    value: &mut Value,
+    media_root: &Path,
+) -> Result<(MediaHashUpdateTarget, usize), String> {
+    if let Some(include_path) = top_level_media_include_path(value)
+        .map_err(|error| format!("{}: {error}", path.display()))?
+    {
+        let context = source_context_for_path(path)?;
+        let media_path = resolve_include_target_for_context(&include_path, &context)?;
+        let input = fs::read_to_string(&media_path)
+            .map_err(|error| format!("{}: {error}", media_path.display()))?;
+        media_map::from_str(&input)
+            .map_err(|error| format!("{}: {error}", media_path.display()))?;
+        let mut media_value = serde_yaml::from_str::<Value>(&input)
+            .map_err(|error| format!("{}: {error}", media_path.display()))?;
+        let Some(media_entries) = media_value.as_mapping_mut() else {
+            return Err(format!(
+                "{}: media map root must be a mapping",
+                media_path.display()
+            ));
+        };
+        let updates = update_media_hashes_in_mapping(media_entries, media_root)?;
+        if updates == 0 {
+            return Ok((MediaHashUpdateTarget::IncludedMedia(media_path, input), 0));
+        }
+        let updated_yaml = serde_yaml::to_string(&media_value)
+            .map_err(|error| format!("{}: {error}", media_path.display()))?;
+        let formatted = format_source_at(&media_path, &updated_yaml)
+            .map_err(|error| format!("{}: {error}", media_path.display()))?;
+        return Ok((
+            MediaHashUpdateTarget::IncludedMedia(media_path, formatted),
+            updates,
+        ));
+    }
+
+    let updates = update_media_hashes_in_value(value, media_root)?;
+    Ok((MediaHashUpdateTarget::Source, updates))
+}
+
 fn update_media_hashes_in_value(value: &mut Value, media_root: &Path) -> Result<usize, String> {
     let Some(media_entries) = value
         .as_mapping_mut()
@@ -296,7 +352,13 @@ fn update_media_hashes_in_value(value: &mut Value, media_root: &Path) -> Result<
     else {
         return Ok(0);
     };
+    update_media_hashes_in_mapping(media_entries, media_root)
+}
 
+fn update_media_hashes_in_mapping(
+    media_entries: &mut Mapping,
+    media_root: &Path,
+) -> Result<usize, String> {
     let mut updates = 0;
     for (_id, entry) in media_entries {
         let Some(entry) = entry.as_mapping_mut() else {
@@ -337,9 +399,39 @@ fn media_path_lookup_from_sources(
             fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
         let value = serde_yaml::from_str::<Value>(&input)
             .map_err(|error| format!("{}: {error}", path.display()))?;
-        collect_media_paths_from_value(&value, &mut lookup);
+        collect_media_paths_from_source(path, &value, &mut lookup)?;
     }
     Ok(lookup)
+}
+
+fn collect_media_paths_from_source(
+    path: &Path,
+    value: &Value,
+    lookup: &mut BTreeMap<String, Option<String>>,
+) -> Result<(), String> {
+    if let Some(include_path) = top_level_media_include_path(value)
+        .map_err(|error| format!("{}: {error}", path.display()))?
+    {
+        let context = source_context_for_path(path)?;
+        let media_path = resolve_include_target_for_context(&include_path, &context)?;
+        let input = fs::read_to_string(&media_path)
+            .map_err(|error| format!("{}: {error}", media_path.display()))?;
+        media_map::from_str(&input)
+            .map_err(|error| format!("{}: {error}", media_path.display()))?;
+        let media_value = serde_yaml::from_str::<Value>(&input)
+            .map_err(|error| format!("{}: {error}", media_path.display()))?;
+        let Some(media_entries) = media_value.as_mapping() else {
+            return Err(format!(
+                "{}: media map root must be a mapping",
+                media_path.display()
+            ));
+        };
+        collect_media_paths_from_mapping(media_entries, lookup);
+        return Ok(());
+    }
+
+    collect_media_paths_from_value(value, lookup);
+    Ok(())
 }
 
 fn collect_media_paths_from_value(value: &Value, lookup: &mut BTreeMap<String, Option<String>>) {
@@ -350,7 +442,13 @@ fn collect_media_paths_from_value(value: &Value, lookup: &mut BTreeMap<String, O
     else {
         return;
     };
+    collect_media_paths_from_mapping(media_entries, lookup);
+}
 
+fn collect_media_paths_from_mapping(
+    media_entries: &Mapping,
+    lookup: &mut BTreeMap<String, Option<String>>,
+) {
     for (id, entry) in media_entries {
         let (Some(id), Some(entry)) = (id.as_str(), entry.as_mapping()) else {
             continue;
