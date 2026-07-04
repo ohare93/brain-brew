@@ -117,6 +117,110 @@ fn validation_rejects_note_missing_required_field() {
     );
 }
 
+#[test]
+fn validation_rejects_stable_id_with_double_dot() {
+    let mut deck = ug_style_deck();
+    let mut note = deck.notes.remove(&sid("note.finland")).unwrap();
+    note.id = sid("note..finland");
+    deck.notes.insert(note.id.clone(), note);
+
+    let report = deck
+        .validate()
+        .expect_err("double-dot stable id must fail validation");
+
+    assert_invalid_stable_id_error(
+        &report,
+        "note..finland",
+        "contains reserved empty dotted segment '..'",
+    );
+}
+
+#[test]
+fn validation_rejects_stable_ids_with_each_reserved_container_marker() {
+    for marker in [
+        ".fields.",
+        ".card_templates.",
+        ".variables.",
+        ".adapter_ids.",
+        ".tags.",
+        ".message.",
+    ] {
+        let invalid_id = format!("field{marker}country");
+        let mut deck = ug_style_deck();
+        replace_field_id(&mut deck, "field.country", &invalid_id);
+
+        let report = deck
+            .validate()
+            .expect_err(&format!("{marker} stable id must fail validation"));
+
+        assert_invalid_stable_id_error(
+            &report,
+            &invalid_id,
+            &format!("contains reserved DeckPath marker {marker}"),
+        );
+    }
+}
+
+#[test]
+fn validation_rejects_stable_id_with_reserved_property_suffix() {
+    let mut deck = ug_style_deck();
+    let mut media = deck.media.remove(&sid("media.flag.finland")).unwrap();
+    media.id = sid("media.flag.finland.path");
+    deck.media.insert(media.id.clone(), media);
+
+    let report = deck
+        .validate()
+        .expect_err("reserved property suffix stable id must fail validation");
+
+    assert_invalid_stable_id_error(
+        &report,
+        "media.flag.finland.path",
+        "ends with reserved DeckPath property suffix .path",
+    );
+}
+
+#[test]
+fn validation_allows_non_stable_id_variable_key_with_reserved_suffix() {
+    let mut deck = ug_style_deck();
+    deck.note_types
+        .get_mut(&sid("note-type.country"))
+        .unwrap()
+        .variables
+        .insert("note-type.name".to_owned(), "Country".to_owned());
+
+    assert!(deck.validate().is_ok());
+}
+
+fn assert_invalid_stable_id_error(
+    report: &brain_brew_core::ValidationReport,
+    invalid_id: &str,
+    reason: &str,
+) {
+    assert!(report.has_kind(ValidationErrorKind::InvalidStableId));
+    assert!(
+        report.errors.iter().any(|error| {
+            error.kind == ValidationErrorKind::InvalidStableId
+                && error.message.contains(invalid_id)
+                && error.message.contains(reason)
+        }),
+        "missing invalid StableId error for {invalid_id:?} with reason {reason:?}: {report:#?}"
+    );
+}
+
+fn replace_field_id(deck: &mut CanonicalDeck, old_id: &str, new_id: &str) {
+    let note_type = deck.note_types.get_mut(&sid("note-type.country")).unwrap();
+    note_type
+        .fields
+        .iter_mut()
+        .find(|field| field.id == sid(old_id))
+        .unwrap()
+        .id = sid(new_id);
+
+    let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
+    let value = note.fields.remove(&sid(old_id)).unwrap();
+    note.fields.insert(sid(new_id), value);
+}
+
 fn ug_style_deck() -> CanonicalDeck {
     let mut note_type_adapter_ids = AdapterIds::new();
     note_type_adapter_ids.insert("crowdanki:model_id", "1548959259107");

@@ -757,7 +757,7 @@ fn translation_context_unit(
     let note_type = note_type_id
         .as_ref()
         .and_then(|note_type_id| deck.note_types.get(note_type_id));
-    let field_id = field_id_from_translation_path(&entry.path, note_type);
+    let field_id = field_id_from_translation_path(&entry.path);
     let note = note_id.as_ref().and_then(|note_id| deck.notes.get(note_id));
     let field_name = note_type
         .zip(field_id.as_ref())
@@ -844,7 +844,7 @@ fn note_type_id_from_translation_path(path: &str) -> Option<StableId> {
     }
 }
 
-fn field_id_from_translation_path(path: &str, _note_type: Option<&NoteType>) -> Option<StableId> {
+fn field_id_from_translation_path(path: &str) -> Option<StableId> {
     match path.parse().ok()? {
         DeckPath::NoteField { field_id, .. }
         | DeckPath::NoteFieldMessage { field_id, .. }

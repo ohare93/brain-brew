@@ -62,8 +62,16 @@ impl std::error::Error for InvalidStableId {}
 /// Dotted StableIds are intentionally preserved unescaped because current canonical
 /// fixtures already use IDs such as `note.finland` and `field.capital`. The parser
 /// treats the reserved grammar markers (`.fields.`, `.card_templates.`, and known
-/// property suffixes) as separators while keeping ordinary dots inside IDs. This
-/// keeps serialized YAML byte-identical while consolidating path parsing in one place.
+/// property suffixes) as separators while keeping ordinary dots inside IDs. To keep
+/// this printer/parser boundary injective for StableId path segments, deck validation
+/// rejects StableIds containing `..`, reserved container marker substrings
+/// (`.fields.`, `.card_templates.`, `.variables.`, `.adapter_ids.`, `.tags.`,
+/// `.message.`), or reserved property suffixes (`.id`, `.name`, `.styling`,
+/// `.fields`, `.card_templates`, `.variables`, `.adapter_ids`, `.tags`,
+/// `.note_type_id`, `.message`, `.path`, `.sha256`, `.question_format`,
+/// `.answer_format`). Non-StableId map keys and tag strings are exempt from that
+/// StableId-only invariant, so keys such as `note-type.name` remain legal after
+/// the first reserved container split.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DeckPath {
     DeckName,
@@ -1380,4 +1388,5 @@ pub enum ValidationErrorKind {
     DuplicateFieldDefinition,
     DuplicateCardTemplate,
     InvalidMessageReference,
+    InvalidStableId,
 }

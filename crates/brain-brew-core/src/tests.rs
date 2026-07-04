@@ -347,6 +347,20 @@ fn deck_path_documents_unescaped_dot_id_decision() {
 }
 
 #[test]
+fn deck_path_parses_non_stable_id_keys_by_first_container_split() {
+    let path = DeckPath::NoteTypeVariable {
+        note_type_id: sid("note-type.country"),
+        key: "note-type.name".to_owned(),
+    };
+
+    assert_eq!(
+        path.to_string(),
+        "note_types.note-type.country.variables.note-type.name"
+    );
+    assert_eq!(DeckPath::from_str(&path.to_string()).unwrap(), path);
+}
+
+#[test]
 fn glob_matches_table_driven_cases() {
     let cases = [
         ("literal-only match", "abc", "abc", true),

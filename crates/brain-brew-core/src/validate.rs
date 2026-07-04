@@ -7,8 +7,52 @@ impl CanonicalDeck {
     /// Validate strict core invariants that do not require filesystem or format access.
     pub fn validate(&self) -> Result<(), ValidationReport> {
         let mut errors = Vec::new();
+        let mut invalid_stable_id_paths = BTreeSet::new();
 
         for (id, note_type) in &self.note_types {
+            push_invalid_stable_id_error(
+                id,
+                DeckPath::NoteType {
+                    note_type_id: id.clone(),
+                }
+                .to_string(),
+                &mut errors,
+                &mut invalid_stable_id_paths,
+            );
+            push_invalid_stable_id_error(
+                &note_type.id,
+                DeckPath::NoteTypeId {
+                    note_type_id: id.clone(),
+                }
+                .to_string(),
+                &mut errors,
+                &mut invalid_stable_id_paths,
+            );
+            for field in &note_type.fields {
+                push_invalid_stable_id_error(
+                    &field.id,
+                    DeckPath::NoteTypeField {
+                        note_type_id: id.clone(),
+                        field_id: field.id.clone(),
+                    }
+                    .to_string(),
+                    &mut errors,
+                    &mut invalid_stable_id_paths,
+                );
+            }
+            for template in &note_type.card_templates {
+                push_invalid_stable_id_error(
+                    &template.id,
+                    DeckPath::NoteTypeCardTemplate {
+                        note_type_id: id.clone(),
+                        template_id: template.id.clone(),
+                    }
+                    .to_string(),
+                    &mut errors,
+                    &mut invalid_stable_id_paths,
+                );
+            }
+
             if &note_type.id != id {
                 errors.push(ValidationError::new(
                     ValidationErrorKind::MismatchedEntityId,
@@ -48,6 +92,25 @@ impl CanonicalDeck {
         }
 
         for (id, media) in &self.media {
+            push_invalid_stable_id_error(
+                id,
+                DeckPath::Media {
+                    media_id: id.clone(),
+                }
+                .to_string(),
+                &mut errors,
+                &mut invalid_stable_id_paths,
+            );
+            push_invalid_stable_id_error(
+                &media.id,
+                DeckPath::MediaId {
+                    media_id: id.clone(),
+                }
+                .to_string(),
+                &mut errors,
+                &mut invalid_stable_id_paths,
+            );
+
             if &media.id != id {
                 errors.push(ValidationError::new(
                     ValidationErrorKind::MismatchedEntityId,
@@ -61,6 +124,58 @@ impl CanonicalDeck {
         }
 
         for (id, note) in &self.notes {
+            push_invalid_stable_id_error(
+                id,
+                DeckPath::Note {
+                    note_id: id.clone(),
+                }
+                .to_string(),
+                &mut errors,
+                &mut invalid_stable_id_paths,
+            );
+            push_invalid_stable_id_error(
+                &note.id,
+                DeckPath::NoteId {
+                    note_id: id.clone(),
+                }
+                .to_string(),
+                &mut errors,
+                &mut invalid_stable_id_paths,
+            );
+            push_invalid_stable_id_error(
+                &note.note_type_id,
+                DeckPath::NoteNoteTypeId {
+                    note_id: id.clone(),
+                }
+                .to_string(),
+                &mut errors,
+                &mut invalid_stable_id_paths,
+            );
+            for field_id in note.fields.keys() {
+                push_invalid_stable_id_error(
+                    field_id,
+                    DeckPath::NoteField {
+                        note_id: id.clone(),
+                        field_id: field_id.clone(),
+                    }
+                    .to_string(),
+                    &mut errors,
+                    &mut invalid_stable_id_paths,
+                );
+            }
+            for field_id in note.field_messages.keys() {
+                push_invalid_stable_id_error(
+                    field_id,
+                    DeckPath::NoteFieldMessage {
+                        note_id: id.clone(),
+                        field_id: field_id.clone(),
+                    }
+                    .to_string(),
+                    &mut errors,
+                    &mut invalid_stable_id_paths,
+                );
+            }
+
             if &note.id != id {
                 errors.push(ValidationError::new(
                     ValidationErrorKind::MismatchedEntityId,
@@ -143,6 +258,15 @@ impl CanonicalDeck {
             }
         }
 
+        for id in &self.tombstones {
+            push_invalid_stable_id_error(
+                id,
+                DeckPath::Tombstone { id: id.clone() }.to_string(),
+                &mut errors,
+                &mut invalid_stable_id_paths,
+            );
+        }
+
         if errors.is_empty() {
             Ok(())
         } else {
@@ -150,6 +274,75 @@ impl CanonicalDeck {
         }
     }
 }
+
+fn push_invalid_stable_id_error(
+    id: &StableId,
+    path: String,
+    errors: &mut Vec<ValidationError>,
+    seen: &mut BTreeSet<(String, String)>,
+) {
+    let Some(reason) = invalid_stable_id_deck_path_reason(id.as_str()) else {
+        return;
+    };
+    let id_text = id.as_str().to_owned();
+    if !seen.insert((path.clone(), id_text.clone())) {
+        return;
+    }
+
+    errors.push(ValidationError::new(
+        ValidationErrorKind::InvalidStableId,
+        path,
+        format!("stable id {id_text} cannot be used in a DeckPath segment: {reason}"),
+    ));
+}
+
+fn invalid_stable_id_deck_path_reason(id: &str) -> Option<String> {
+    if id.contains("..") {
+        return Some("contains reserved empty dotted segment '..'".to_owned());
+    }
+
+    for marker in RESERVED_CONTAINER_MARKERS {
+        if id.contains(marker) {
+            return Some(format!("contains reserved DeckPath marker {marker}"));
+        }
+    }
+
+    for suffix in RESERVED_PROPERTY_SUFFIXES {
+        if id.ends_with(suffix) {
+            return Some(format!(
+                "ends with reserved DeckPath property suffix {suffix}"
+            ));
+        }
+    }
+
+    None
+}
+
+const RESERVED_CONTAINER_MARKERS: &[&str] = &[
+    ".fields.",
+    ".card_templates.",
+    ".variables.",
+    ".adapter_ids.",
+    ".tags.",
+    ".message.",
+];
+
+const RESERVED_PROPERTY_SUFFIXES: &[&str] = &[
+    ".id",
+    ".name",
+    ".styling",
+    ".fields",
+    ".card_templates",
+    ".variables",
+    ".adapter_ids",
+    ".tags",
+    ".note_type_id",
+    ".message",
+    ".path",
+    ".sha256",
+    ".question_format",
+    ".answer_format",
+];
 
 fn push_duplicate_id_errors<'a>(
     ids: impl Iterator<Item = &'a StableId>,
