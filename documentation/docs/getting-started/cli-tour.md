@@ -4,7 +4,7 @@ title: CLI tour
 
 # CLI tour
 
-The CLI has human-readable output by default and machine-readable JSON where it matters.
+The CLI has human-readable output by default and machine-readable JSON where it matters. Successful commands exit `0`; failures exit non-zero. In human mode, failures write diagnostics to stderr with empty stdout. For `validate --json`, `explain --json`, `diff --json`, and `targets --json`, failures instead write a JSON `{ "error": ... }` envelope to stdout and leave stderr empty; `verify` and `export` keep plain-text stderr failures.
 
 ## List targets
 

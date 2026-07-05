@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- CrowdAnki import now fails closed on additional unsupported or ambiguous data, including `bafmt`/`bqfmt`/`did` fields and media stable-ID collisions, while preserving media-file parity.
+- Canonical YAML emission is safer for block scalars, CRLF-sensitive content, and map keys, with validated/quoted keys and hard failures for un-emittable key text.
+- Overlay field operations are fill-blank-only, and full `note:`/`note_type:` bodies now fail closed unless they are explicit `add` changes.
+- Package verification detects drift in local path sources, and path locks are stored as portable paths relative to `brainbrew.lock`.
+- Translation coverage now surfaces untranslated structured-message `format` glue strings, and stale-translation resolution removes shadowed stale records cleanly.
+- `validate --json`, `explain --json`, `diff --json`, and `targets --json` now emit machine-parseable failure envelopes on stdout with non-zero exits, empty stderr, and structured `error.errors[]` details where available.
+
 ## v1.0.0-alpha.1
 
 Initial Rust-based Brain Brew preview release.

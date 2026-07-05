@@ -23,7 +23,7 @@ Verification checks:
 1. manifest parsing and formatting;
 2. base deck parsing and formatting;
 3. overlay parsing and formatting;
-4. lock-file package resolution and hashes;
+4. lock-file package resolution and hashes, including live re-hashing of local path sources;
 5. dependency expansion;
 6. target composition;
 7. Canonical Deck validation;
@@ -32,6 +32,8 @@ Verification checks:
 10. stale translations, warning by default and failing under strict translation coverage;
 11. media references always, plus media file existence and SHA-256 hashes when `--media-root` is passed;
 12. configured CrowdAnki golden checks.
+
+For path-based package sources, `verify` re-hashes the live source tree instead of trusting only a cached source hash. If a local package source drifts after locking, `verify` reports the hash mismatch so CI catches the change.
 
 > **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.
 

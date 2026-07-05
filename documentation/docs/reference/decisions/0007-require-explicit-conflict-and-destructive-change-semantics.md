@@ -12,7 +12,7 @@ Overlays are powerful enough to replace, remove, merge, or override deck content
 
 Overlay changes must declare their intent, and destructive or conflict-resolving changes must declare the expected base.
 
-Brain Brew supports explicit change intents such as add, merge, replace, remove, and override. Replace, remove, and override require an expected base value or fingerprint. Removals are represented as tombstones. Conflicting overlay changes fail unless a later overlay explicitly resolves the conflict. Field fills may only fill values that are still blank.
+Brain Brew supports explicit change intents such as add, merge, replace, remove, and override. Replace, remove, and override require an expected base value or fingerprint. Removals are represented as tombstones. Conflicting overlay changes fail unless a later overlay explicitly resolves the conflict. Field-level fill operations, including `field_fills` shorthand and field-level `add` or `merge`, may only fill values that are still blank; changing an existing non-blank field requires `replace` with an expected base. A full `note:` or `note_type:` entity body is accepted only with `intent: add`; non-`add` changes must express edits as sparse field or sub-entity changes and fail closed if they carry a full body.
 
 ## Rationale
 
@@ -39,6 +39,6 @@ Brain Brew supports explicit change intents such as add, merge, replace, remove,
 ## Implications
 
 - Composition must carry enough provenance to detect incompatible overlay changes.
-- Validation should fail closed for stale expected bases and non-blank field fills.
+- Validation should fail closed for stale expected bases, non-blank field fills, and non-`add` overlay changes that carry a full entity body.
 - Diffs and CLI reports should show before/after values for destructive changes.
 - Overlay authoring docs should teach change intent as part of the source format.

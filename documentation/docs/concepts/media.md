@@ -54,6 +54,10 @@ brainbrew media hash --manifest brainbrew.yaml --all-targets --media-root media/
 
 The command writes missing or stale SHA-256 values into deck or overlay source YAML through the include-preserving formatter, so `!include`-bearing sources keep their include structure.
 
+## CrowdAnki import
+
+CrowdAnki import suggests stable media IDs from media file paths. If two different media paths would derive the same suggested stable ID, import fails closed and names both paths so the ambiguity can be resolved before accepting suggested IDs. Exact duplicate paths are deduplicated instead of treated as a collision. Use `import_deck_accept_suggested_ids`/`brainbrew import crowdanki --accept-suggested-ids` only after reviewing those suggested IDs.
+
 ## Export media
 
 CrowdAnki export copies declared media into the export folder's `media/` subdirectory when a media root is supplied:

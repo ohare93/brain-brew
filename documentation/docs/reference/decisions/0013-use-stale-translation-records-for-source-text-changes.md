@@ -26,7 +26,7 @@ stale_translations:
 
 During compose/export, a stale translation applies `target` to `new_source` but emits a warning that the translation needs review. Stale translations do not block the main language completion percentage by default. `brainbrew verify` should warn by default and support an optional strict policy that fails when stale translations remain.
 
-When the Deck Workbench applies source-language edits, affected translations default to creating stale translations. Maintainers may explicitly choose to migrate an old source key to the new source key while preserving target text when they know the existing translation is still correct. Resolving a stale translation creates or updates the normal direct/contextual translation for `new_source` and removes the stale translation.
+When the Deck Workbench applies source-language edits, affected translations default to creating stale translations. Maintainers may explicitly choose to migrate an old source key to the new source key while preserving target text when they know the existing translation is still correct. Resolving a stale translation usually creates or updates the normal direct/contextual translation for `new_source` and removes the stale translation. If an existing direct, no-change, or matching contextual entry already shadows the stale record, resolving deletes the superseded stale record without creating or updating another entry.
 
 ## Rationale
 
@@ -53,6 +53,7 @@ When the Deck Workbench applies source-language edits, affected translations def
 ## Implications
 
 - Translation coverage and context reports must include stale translations as warning/review items.
+- Stale-resolution tooling must detect shadowed records and remove only the obsolete stale entry when a current direct, no-change, or matching contextual decision already covers the new source.
 - Workbench Apply preview for source edits must show affected target translations and default them to stale translations.
 - Release workflows can opt into strict stale failure.
 - Documentation must explain the difference between stale translations, missing translations, direct translations, contextual translations, target adaptations, and global no-change decisions.

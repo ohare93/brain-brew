@@ -71,7 +71,7 @@ brainbrew lock update --package pkg.id --tarball https://example.org/pkg.tar.gz
 brainbrew lock update --package pkg.id --git https://github.com/owner/repo.git --ref main
 ```
 
-The CLI computes `nar_hash` in Rust and does not require Nix at runtime.
+The CLI computes `nar_hash` in Rust and does not require Nix at runtime. Path-based locks store portable paths relative to `brainbrew.lock` (for example, `path: ../pkg`) instead of absolute local paths. GitHub inputs should use `https://github.com/...`; `http://github.com/...` is also accepted for compatibility.
 
 ## Review after updates
 

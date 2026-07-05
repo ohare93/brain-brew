@@ -112,7 +112,7 @@ notes:
 
 Message variables mean:
 
-- `format` is inline at the usage site and renders `{variable}` placeholders. It is not required for translation coverage by default, but it can be translated directly or contextually when a target language needs different glue, ordering, spacing, or separators;
+- `format` is inline at the usage site and renders `{variable}` placeholders. If it lacks a translation, coverage records it as an `UntranslatedFallback`; under the default lenient policy that is reported without failing the build, while `translation_coverage: strict` fails the check. Translate `format` directly or contextually when a target language needs different glue, ordering, spacing, or separators;
 - `ref` points at another note field and can reuse that field's existing translation, such as a country-name entry in `translations.direct`;
 - `text` is an editable translatable fragment and appears in translation coverage at a named component path such as `notes.note.finland.fields.field.flag-similarity.message.variables.description_1`;
 - `literal` can still be used for a named non-translatable variable, but punctuation and separators usually belong in `format`.
@@ -144,7 +144,7 @@ The resolved field exported to Anki is still a plain string:
 Island (blå bakgrunn med hvitt kors), Norge (rød bakgrunn med blått kors)
 ```
 
-Strict coverage reports missing and stale entries for each `text` or `ref` component instead of requiring one long key for the whole composite field. The translator context view shows the resolved message plus its components so translators can edit the reusable country names and qualifier fragments separately. If a target language needs a special whole-field wording, add a contextual translation for the full resolved source string at the field or note context; that full override replaces the component-composed output for that target.
+Strict coverage reports missing and stale entries for the `format` glue and for each `text` or `ref` component instead of requiring one long key for the whole composite field. The translator context view shows the resolved message plus its components so translators can edit the glue, reusable country names, and qualifier fragments separately. If a target language needs a special whole-field wording, add a contextual translation for the full resolved source string at the field or note context; that full override replaces the component-composed output for that target.
 
 Coordinate with deck maintainers before migrating existing large fields: structured messages are best for repeated, composite source text where component reuse clearly reduces duplication.
 
@@ -162,7 +162,7 @@ stale_translations:
 
 A stale translation with no `context` acts like a direct translation for `new_source`. A contextual stale translation applies only at or below its context path, using the same context matching rules as `translations.contextual`. `brainbrew compose`, `brainbrew export crowdanki`, and lenient/default `brainbrew verify` emit stale warnings but still apply the target text. A strict translation coverage policy fails while stale translations remain.
 
-Resolving a stale translation moves it into a normal translation entry for `new_source` (`direct` when contextless, `contextual` when context is present) and removes the stale translation.
+Resolving a stale translation usually moves it into a normal translation entry for `new_source` (`direct` when contextless, `contextual` when context is present) and removes the stale translation. If an existing direct, no-change, or matching contextual entry already shadows that stale record, resolving only deletes the superseded stale record; it does not create or update another translation entry.
 
 ## Target adaptations
 

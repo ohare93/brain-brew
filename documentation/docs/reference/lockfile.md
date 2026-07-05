@@ -26,6 +26,17 @@ packages:
       url: https://github.com/anki-geo/ultimate-geography.git
       rev: ccf150a1b21e...
       nar_hash: sha256-...
+  local.example:
+    manifest: brainbrew.yaml
+    package:
+      version: 0.1.0
+    original:
+      type: path
+      path: ../pkg
+    locked:
+      type: path
+      path: ../pkg
+      nar_hash: sha256-...
 ```
 
 ## Fields
@@ -35,6 +46,8 @@ packages:
 - `original`: the maintainer-requested source.
 - `locked`: the immutable source actually used.
 - `locked.nar_hash`: SRI SHA-256 of the source tree's Nix Archive serialization.
+
+Path-based locks store portable paths relative to the directory containing `brainbrew.lock`, not absolute machine-local paths. For example, a package locked from a sibling directory is stored as `path: ../pkg`.
 
 Brain Brew computes `nar_hash` in Rust. The CLI does not require the `nix` command at runtime.
 
@@ -52,14 +65,14 @@ brainbrew lock update --package pkg.id --path ../pkg
 brainbrew lock update --package pkg.id --tarball https://example.org/pkg.tar.gz
 ```
 
-### GitHub HTTPS Git URL
+### GitHub Git URL
 
 ```bash
 brainbrew lock update --package pkg.id --git https://github.com/owner/repo.git --ref main
 brainbrew lock update --package pkg.id --git https://github.com/owner/repo.git --rev abc123
 ```
 
-GitHub inputs resolve through the GitHub API and download the commit tarball.
+Use `https://github.com/...` for new locks. Brain Brew also accepts `http://github.com/...` inputs for existing or scripted source declarations. GitHub inputs resolve through the GitHub API and download the commit tarball.
 
 ## Cache
 

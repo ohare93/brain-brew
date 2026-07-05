@@ -4,7 +4,33 @@ title: CLI reference
 
 # CLI reference
 
-Run `brainbrew --help` or `brainbrew <command> --help` for exact current usage.
+Run `brainbrew --help` or `brainbrew <command> --help` for exact current usage. Unknown commands, unknown options, and unexpected dash-prefixed arguments are rejected instead of ignored.
+
+## Exit and error contract
+
+Commands return exit code `0` on success and a non-zero exit code on failure. Human-readable failures print diagnostics to stderr with empty stdout.
+
+For `validate`, `explain`, `diff`, and `targets`, passing `--json` also opts failures into a machine-readable contract: failures emit a JSON object on stdout, use a non-zero exit code, and leave stderr empty.
+
+```json
+{
+  "error": {
+    "message": "target composition failed",
+    "errors": [
+      {
+        "kind": "ExpectedBaseMismatch",
+        "path": "notes.note.france.fields.field.capital",
+        "message": "field-level merge may only fill a blank value"
+      }
+    ],
+    "target": "de-standard",
+    "base": "deck.yaml",
+    "overlay_stack": []
+  }
+}
+```
+
+When validation or composition details are available, `error.errors[]` contains objects with `kind`, `path`, and `message`. Context such as `overlay_stack`, `target`, and `base` is included where the command can report it, such as `explain --json`. `verify` and `export crowdanki` are not part of this JSON error set; their failures continue to use plain-text stderr.
 
 ## `targets`
 
@@ -32,7 +58,9 @@ Canonicalizes supported source files. Standalone media-map files used by `media:
 
 ```bash
 brainbrew validate deck.yaml
+brainbrew validate deck.yaml --json
 brainbrew validate --manifest brainbrew.yaml --target en-standard
+brainbrew validate --manifest brainbrew.yaml --target en-standard --json
 ```
 
 Validates source or composed target semantics.

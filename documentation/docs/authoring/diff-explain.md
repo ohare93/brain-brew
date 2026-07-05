@@ -20,6 +20,8 @@ For tools and UIs:
 brainbrew explain --manifest brainbrew.yaml --target de-extended --json
 ```
 
+If `explain --json` fails during target composition, it writes `{ "error": ... }` to stdout with a non-zero exit and empty stderr. The envelope includes structured `error.errors[]` entries plus the target, base, and overlay stack when available.
+
 ## Semantic diff
 
 ```bash
@@ -44,7 +46,7 @@ The path uses stable IDs, not row numbers or raw YAML positions.
 brainbrew diff deck.yaml edited.yaml --json
 ```
 
-Use JSON when another tool needs to render or inspect changes.
+Use JSON when another tool needs to render or inspect changes. If `diff --json` fails, it follows the CLI JSON error contract: a non-zero exit, empty stderr, and a `{ "error": ... }` envelope on stdout.
 
 ## Draft an overlay
 

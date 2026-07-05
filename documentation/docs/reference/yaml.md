@@ -22,6 +22,7 @@ Important rules:
 
 - unknown keys fail;
 - entity maps are keyed by stable ID;
+- map keys such as stable IDs, adapter keys, tags, variable names, and target-adaptation paths are validated and quoted when emitted; a key containing a newline or carriage return is rejected as `UnemittableYamlKey`;
 - note type field/template order is explicit;
 - `adapter_ids` preserve external identities;
 - scalar content fields may use `!include package/relative/path` as an authoring convenience;
@@ -145,6 +146,8 @@ stale_translations:
     target: Existing target text needing review.
     context: notes.note.example.fields.field.country-info
 ```
+
+A target-adaptation path may be present in either the top-level `target_adaptations` map or the legacy `translations.target_adaptations` map, but not both. Duplicating the same path in both places is rejected as an invalid translation dictionary.
 
 ## Field additions
 

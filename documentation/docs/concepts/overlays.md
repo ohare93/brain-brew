@@ -92,10 +92,14 @@ Inside overlays, individual changes declare an intent:
 
 | Intent | Meaning |
 | --- | --- |
-| `add` | create a new entity or value |
-| `merge` | update selected properties of an existing entity |
+| `add` | create a new entity, or fill a blank field value; field-level `add` fails with `AlreadyExists` when the field is already non-blank |
+| `merge` | update selected properties or sub-entities of an existing entity; field-level `merge` only fills a blank field value |
 | `replace` | replace a value, requiring an expected base |
 | `remove` | remove an entity/value, requiring an expected base |
 | `override` | intentionally override another overlay, requiring an expected base |
 
-`replace`, `remove`, and `override` require `expected_base` so stale overlays fail loudly.
+`replace`, `remove`, and `override` require `expected_base` so stale overlays fail loudly. To change an existing non-blank field value, use `replace` with `expected_base`; field-level `merge`, `add`, and `fill` operations are for blank-field fills and fail closed when the field already has content.
+
+A full `note:` or `note_type:` body is valid only with `intent: add`. For existing entities, use sparse field or sub-entity changes instead; a non-`add` change carrying a full entity body fails closed with a diagnostic that the full body is only valid with `add`.
+
+A non-`add` field-definition change must target an existing field definition. If the field definition is absent, composition fails with `MissingOverlayTarget` instead of creating it implicitly.
