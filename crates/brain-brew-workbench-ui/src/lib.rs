@@ -259,7 +259,10 @@ pub fn App() -> impl IntoView {
                         ></section>
                     </section>
                 </div>
-                <section id="workbench-apply-box" class="apply-box"></section>
+                <WorkbenchWorkflowPanels pivot=note_pivot />
+                <section id="workbench-apply-box" class="apply-box">
+                    <ApplyBox pivot=note_pivot />
+                </section>
             </article>
         </section>
     }
@@ -703,6 +706,599 @@ fn NoteFieldRow(detail: Value, note: Value, field: Value) -> impl IntoView {
 }
 
 #[cfg(target_arch = "wasm32")]
+#[component]
+fn WorkbenchWorkflowPanels(pivot: RwSignal<Option<Value>>) -> impl IntoView {
+    view! {
+        {move || match pivot.get() {
+            Some(pivot) => view! {
+                <PaneLayoutPanel pivot=pivot.clone() />
+                <NewLanguagePanel pivot=pivot />
+            }.into_any(),
+            None => "".into_any(),
+        }}
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn ApplyBox(pivot: RwSignal<Option<Value>>) -> impl IntoView {
+    let output_text = RwSignal::new(String::new());
+    let validation_ok = RwSignal::new(None::<bool>);
+
+    let run_apply = move |write: bool| {
+        let Some(pivot_value) = pivot.get_untracked() else {
+            output_text.set("Apply failed: note pivot is not loaded".to_owned());
+            validation_ok.set(Some(false));
+            return;
+        };
+        output_text.set(if write {
+            "Applying…".to_owned()
+        } else {
+            "Building apply preview…".to_owned()
+        });
+        validation_ok.set(None);
+        wasm_bindgen_futures::spawn_local(async move {
+            let edits = collect_staged_edits(&pivot_value);
+            let request = serde_json::json!({
+                "language": pivot_value["language"]["code"].as_str().unwrap_or(""),
+                "target": pivot_value["target"]["label"].as_str().unwrap_or(""),
+                "overlay": pivot_value["overlay"]["label"].as_str().unwrap_or(""),
+                "edits": edits,
+            });
+            let endpoint = if write {
+                "/api/workbench/apply"
+            } else {
+                "/api/workbench/apply-preview"
+            };
+            match post_json(endpoint, &request).await {
+                Ok(value) => {
+                    let text =
+                        apply_result_text(if write { "Applied" } else { "Apply preview" }, &value);
+                    let ok = value["validation"]["ok"].as_bool().unwrap_or(false);
+                    output_text.set(text.clone());
+                    validation_ok.set(Some(ok));
+                    if write {
+                        for prefix in active_storage_prefixes(&pivot_value) {
+                            clear_staged_edits(&prefix);
+                        }
+                        if let Ok(updated) = fetch_note_pivot_for_pivot(&pivot_value).await {
+                            publish_note_pivot_panel(&updated);
+                        }
+                        output_text.set(text);
+                        validation_ok.set(Some(true));
+                    }
+                }
+                Err(error) => {
+                    output_text.set(format!("Apply failed: {error}"));
+                    validation_ok.set(Some(false));
+                }
+            }
+        });
+    };
+    let run_preview = run_apply;
+
+    view! {
+        <button id="apply-preview-button" type="button" on:click=move |_| run_preview(false)>Apply preview</button>
+        " "
+        <button id="apply-confirm-button" type="button" on:click=move |_| run_apply(true)>Confirm Apply</button>
+        <pre
+            id="apply-preview-output"
+            data-validation-ok=move || validation_ok.get().map(|ok| ok.to_string()).unwrap_or_default()
+        >{move || output_text.get()}</pre>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn PaneLayoutPanel(pivot: Value) -> impl IntoView {
+    let source_writable = RwSignal::new(false);
+    let target_writable = RwSignal::new(true);
+    let selected_secondary_language = RwSignal::new(first_secondary_language(&pivot));
+    let secondary_state = RwSignal::new(SecondaryPaneState::Empty);
+    let target_label = pivot["target"]["label"].as_str().map(str::to_owned);
+
+    Effect::new(move |_| {
+        apply_pane_writability(source_writable.get(), target_writable.get());
+    });
+
+    let load_secondary = {
+        let target_label = target_label.clone();
+        move |_| {
+            let language = selected_secondary_language.get_untracked();
+            if language.is_empty() {
+                return;
+            }
+            let target = target_label.clone();
+            let selection_generation = current_selection_generation();
+            secondary_state.set(SecondaryPaneState::Loading);
+            wasm_bindgen_futures::spawn_local(async move {
+                match fetch_comparison_pane_query(Some(language), target, Some("base".to_owned()))
+                    .await
+                {
+                    Ok(pane) if is_current_selection_generation(selection_generation) => {
+                        secondary_state.set(SecondaryPaneState::Loaded(pane));
+                    }
+                    Ok(_) => {}
+                    Err(error) if is_current_selection_generation(selection_generation) => {
+                        secondary_state.set(SecondaryPaneState::Error(error));
+                    }
+                    Err(_) => {}
+                }
+            });
+        }
+    };
+
+    let languages = pivot["selection_options"]["languages"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+
+    view! {
+        <section id="pane-layout-panel" class="pane-layout-panel">
+            <h3>Pane layout preset</h3>
+            <label>
+                <input
+                    id="source-pane-writable"
+                    type="checkbox"
+                    checked=move || source_writable.get()
+                    on:change=move |event| source_writable.set(event_checkbox_checked(&event))
+                />
+                " Source pane writable"
+            </label>
+            " "
+            <label>
+                <input
+                    id="target-pane-writable"
+                    type="checkbox"
+                    checked=move || target_writable.get()
+                    on:change=move |event| target_writable.set(event_checkbox_checked(&event))
+                />
+                " Selected target pane writable"
+            </label>
+            " "
+            <label>
+                "Additional target "
+                <select
+                    id="secondary-pane-language-select"
+                    on:change=move |event| selected_secondary_language.set(event_select_value(&event))
+                >
+                    <For
+                        each=move || {
+                            languages
+                                .clone()
+                                .into_iter()
+                                .filter(|language| !language["active"].as_bool().unwrap_or(false))
+                                .collect::<Vec<_>>()
+                        }
+                        key=|language| language["code"].as_str().unwrap_or("").to_owned()
+                        children=move |language| {
+                            let code = language["code"].as_str().unwrap_or("").to_owned();
+                            let label = language["display_name"].as_str().unwrap_or(&code).to_owned();
+                            view! { <option value=code>{label}</option> }
+                        }
+                    />
+                </select>
+            </label>
+            " "
+            <button id="load-secondary-pane" type="button" on:click=load_secondary>Load target pane</button>
+            <div id="secondary-target-pane">
+                {move || match secondary_state.get() {
+                    SecondaryPaneState::Empty => "".into_any(),
+                    SecondaryPaneState::Loading => view! { <p class="workbench-loading">Loading target pane...</p> }.into_any(),
+                    SecondaryPaneState::Error(error) => view! { <p class="workbench-error">{error}</p> }.into_any(),
+                    SecondaryPaneState::Loaded(comparison) => view! { <SecondaryTargetPane comparison=comparison /> }.into_any(),
+                }}
+            </div>
+        </section>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Debug, Default)]
+enum SecondaryPaneState {
+    #[default]
+    Empty,
+    Loading,
+    Error(String),
+    Loaded(Value),
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn SecondaryTargetPane(comparison: Value) -> impl IntoView {
+    let pane = comparison["note_pivot"].clone();
+    let source_strings = comparison["source_string_pivot"]["strings"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let cards_value = comparison["card_pivot"].clone();
+    let cards = cards_value["cards"].as_array().cloned().unwrap_or_default();
+    let selected_card = cards_value
+        .get("selected_card")
+        .filter(|value| !value.is_null())
+        .cloned();
+    let language = pane["language"]["code"].as_str().unwrap_or("").to_owned();
+    let target = pane["target"]["label"].as_str().unwrap_or("").to_owned();
+    let overlay = pane["overlay"]["label"].as_str().unwrap_or("").to_owned();
+    let prefix = storage_prefix_for_parts(&language, &target, &overlay);
+    let display_name = pane["language"]["display_name"]
+        .as_str()
+        .unwrap_or(&language)
+        .to_owned();
+    let fields = pane["notes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|note| note["fields"].as_array().into_iter().flatten())
+        .filter(|field| field["editable"].as_bool().unwrap_or(false))
+        .cloned()
+        .collect::<Vec<_>>();
+    let secondary_writable = RwSignal::new(true);
+    let attr_language = language.clone();
+    let attr_target = target.clone();
+    let attr_overlay = overlay.clone();
+    let row_language = language.clone();
+    let row_target = target.clone();
+    let row_overlay = overlay.clone();
+
+    Effect::new(move |_| {
+        apply_secondary_pane_writability(secondary_writable.get());
+    });
+
+    view! {
+        <section
+            class="workbench-pane secondary-target-pane"
+            data-storage-prefix=prefix
+            data-language=attr_language
+            data-target=attr_target
+            data-overlay=attr_overlay
+        >
+            <h4>{format!("{display_name} target pane")}</h4>
+            <label>
+                <input
+                    id="secondary-pane-writable"
+                    type="checkbox"
+                    checked=move || secondary_writable.get()
+                    on:change=move |event| secondary_writable.set(event_checkbox_checked(&event))
+                />
+                " Pane writable"
+            </label>
+            <table><tbody>
+                <For
+                    each=move || fields.clone()
+                    key=|field| format!("{}::{}", field["path"].as_str().unwrap_or(""), field["source"].as_str().unwrap_or(""))
+                    children=move |field| {
+                        let path = field["path"].as_str().unwrap_or("").to_owned();
+                        let source = field["source"].as_str().unwrap_or("").to_owned();
+                        let id = format!("{}-{}", row_language, id_for_path(&path));
+                        let value = staged_edit_for_pane(&row_language, &row_target, &row_overlay, &path, &source)
+                            .as_ref()
+                            .and_then(|edit| edit["value"].as_str().map(str::to_owned))
+                            .or_else(|| field["target"].as_str().map(str::to_owned))
+                            .unwrap_or_else(|| source.clone());
+                        let field_name = field["field_name"].as_str().unwrap_or("field").to_owned();
+                        let input_id = format!("secondary-translation-input-{id}");
+                        let language = row_language.clone();
+                        let target = row_target.clone();
+                        let overlay = row_overlay.clone();
+                        let input_path = path.clone();
+                        let input_source = source.clone();
+                        view! {
+                            <tr class="secondary-field-row" data-path=path.clone() data-source=source.clone()>
+                                <td>{field_name}</td>
+                                <td>{source.clone()}</td>
+                                <td>
+                                    <input
+                                        id=input_id
+                                        value=value
+                                        data-path=path.clone()
+                                        data-source=source.clone()
+                                        disabled=move || !secondary_writable.get()
+                                        on:input=move |event| {
+                                            stage_secondary_translation(
+                                                &language,
+                                                &target,
+                                                &overlay,
+                                                &input_path,
+                                                &input_source,
+                                                &event_input_value(&event),
+                                            );
+                                        }
+                                    />
+                                </td>
+                            </tr>
+                        }
+                    }
+                />
+            </tbody></table>
+            <section class="comparison-source-strings">
+                <h5>Source String comparison</h5>
+                <ul>
+                    <For
+                        each=move || source_strings.clone()
+                        key=|string| string["source"].as_str().unwrap_or("").to_owned()
+                        children=move |string| {
+                            let source = string["source"].as_str().unwrap_or("").to_owned();
+                            let target_preview = string["target_preview"].as_str().unwrap_or("").to_owned();
+                            let status = string["status"].as_str().unwrap_or("unknown").to_owned();
+                            view! {
+                                <li class="comparison-source-string-row" data-source=source.clone()>
+                                    {format!("{source} → {target_preview} ({status})")}
+                                </li>
+                            }
+                        }
+                    />
+                </ul>
+            </section>
+            <section class="comparison-cards">
+                <h5>Card comparison</h5>
+                <ul>
+                    <For
+                        each=move || cards.clone()
+                        key=|card| card["card_id"].as_str().unwrap_or("").to_owned()
+                        children=move |card| {
+                            let card_id = card["card_id"].as_str().unwrap_or("").to_owned();
+                            let title = card["title"].as_str().unwrap_or("card").to_owned();
+                            let template = card["template_name"].as_str().unwrap_or("template").to_owned();
+                            let status = card["status"].as_str().unwrap_or("unknown").to_owned();
+                            view! {
+                                <li class="comparison-card-row" data-card-id=card_id>
+                                    {format!("{title} · {template} · {status}")}
+                                </li>
+                            }
+                        }
+                    />
+                </ul>
+                {selected_card.map(|card| view! {
+                    <div class="comparison-card-preview" inner_html=preview_html(&card["target_preview"])></div>
+                })}
+            </section>
+        </section>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn NewLanguagePanel(pivot: Value) -> impl IntoView {
+    let languages = pivot["selection_options"]["languages"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let initial_template = languages
+        .iter()
+        .find(|language| language["active"].as_bool().unwrap_or(false))
+        .or_else(|| languages.first())
+        .and_then(|language| language["code"].as_str())
+        .unwrap_or("")
+        .to_owned();
+    let template = RwSignal::new(initial_template);
+    let code = RwSignal::new(String::new());
+    let display_name = RwSignal::new(String::new());
+    let status = RwSignal::new(NewLanguageStatus::Idle);
+
+    let preview = move |_| {
+        status.set(NewLanguageStatus::Loading);
+        let template = non_empty(template.get_untracked());
+        let code = non_empty(code.get_untracked());
+        let display_name = non_empty(display_name.get_untracked());
+        wasm_bindgen_futures::spawn_local(async move {
+            match fetch_new_language_preview(template, code, display_name).await {
+                Ok(value) => status.set(NewLanguageStatus::Preview(value)),
+                Err(error) => {
+                    status.set(NewLanguageStatus::Error(format!("Preview failed: {error}")))
+                }
+            }
+        });
+    };
+
+    let confirm = move |_| {
+        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+            status.set(NewLanguageStatus::Error(
+                "Preview the new language before creating it.".to_owned(),
+            ));
+            return;
+        };
+        let Some(request) = collect_new_language_request(&document) else {
+            status.set(NewLanguageStatus::Error(
+                "Preview the new language before creating it.".to_owned(),
+            ));
+            return;
+        };
+        let code = request["code"].as_str().unwrap_or("").to_owned();
+        let target = request["primary_target"].as_str().unwrap_or("").to_owned();
+        let overlay = request["groups"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|group| group["selected"].as_bool().unwrap_or(false))
+            .and_then(|group| group["label"].as_str())
+            .unwrap_or("base")
+            .to_owned();
+        status.set(NewLanguageStatus::Loading);
+        wasm_bindgen_futures::spawn_local(async move {
+            match post_json("/api/workbench/new-language", &request).await {
+                Ok(value) => {
+                    status.set(NewLanguageStatus::Created(new_language_result_text(
+                        "Created", &value,
+                    )));
+                    let generation = begin_selection_request();
+                    match fetch_note_pivot_query(Some(code), Some(target), Some(overlay), None)
+                        .await
+                    {
+                        Ok(pivot) if is_current_selection_generation(generation) => {
+                            publish_note_pivot_panel(&pivot)
+                        }
+                        Ok(_) => {}
+                        Err(error) if is_current_selection_generation(generation) => {
+                            status.set(NewLanguageStatus::Error(error));
+                        }
+                        Err(_) => {}
+                    }
+                }
+                Err(error) => {
+                    status.set(NewLanguageStatus::Error(format!("Create failed: {error}")))
+                }
+            }
+        });
+    };
+
+    view! {
+        <section id="new-language-panel" class="new-language-panel">
+            <h3>New language scaffold</h3>
+            <label>
+                "Template language "
+                <select id="new-language-template" on:change=move |event| template.set(event_select_value(&event))>
+                    <For
+                        each=move || languages.clone()
+                        key=|language| language["code"].as_str().unwrap_or("").to_owned()
+                        children=move |language| {
+                            let code = language["code"].as_str().unwrap_or("").to_owned();
+                            let label = language["display_name"].as_str().unwrap_or(&code).to_owned();
+                            let selected = language["active"].as_bool().unwrap_or(false);
+                            view! { <option value=code selected=selected>{label}</option> }
+                        }
+                    />
+                </select>
+            </label>
+            <label>"Code "<input id="new-language-code" placeholder="nb" on:input=move |event| code.set(event_input_value(&event)) /></label>
+            <label>"Display name "<input id="new-language-display-name" placeholder="Norwegian Bokmal" on:input=move |event| display_name.set(event_input_value(&event)) /></label>
+            <button id="new-language-preview-button" type="button" on:click=preview>Preview new language</button>
+            " "
+            <button id="new-language-confirm-button" type="button" on:click=confirm>Create language</button>
+            <div
+                id="new-language-preview-output"
+                data-validation-ok=move || matches!(status.get(), NewLanguageStatus::Preview(_)).to_string()
+            >
+                {move || view_new_language_status(status.get())}
+            </div>
+        </section>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Debug, Default)]
+enum NewLanguageStatus {
+    #[default]
+    Idle,
+    Loading,
+    Error(String),
+    Preview(Value),
+    Created(String),
+}
+
+#[cfg(target_arch = "wasm32")]
+fn view_new_language_status(status: NewLanguageStatus) -> AnyView {
+    match status {
+        NewLanguageStatus::Idle => "".into_any(),
+        NewLanguageStatus::Loading => {
+            view! { <p class="workbench-loading">Loading...</p> }.into_any()
+        }
+        NewLanguageStatus::Error(error) => error.into_any(),
+        NewLanguageStatus::Created(text) => text.into_any(),
+        NewLanguageStatus::Preview(value) => {
+            view! { <NewLanguagePreview value=value /> }.into_any()
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn NewLanguagePreview(value: Value) -> impl IntoView {
+    let code = value["language"]["code"].as_str().unwrap_or("").to_owned();
+    let template = value["language"]["template_language"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
+    let primary_target = value["language"]["primary_target"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
+    let affected_files = value["affected_files"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let groups = value["groups"].as_array().cloned().unwrap_or_default();
+    let targets = value["targets"].as_array().cloned().unwrap_or_default();
+    let manifest_yaml = value["manifest_yaml"].as_str().unwrap_or("").to_owned();
+
+    view! {
+        <div class="new-language-preview" data-code=code data-template=template data-primary-target=primary_target>
+            <p>Preview ready. Affected files:</p>
+            <ul>
+                <For
+                    each=move || affected_files.clone()
+                    key=|file| file["path"].as_str().unwrap_or("unknown").to_owned()
+                    children=move |file| view! { <li>{file["path"].as_str().unwrap_or("unknown").to_owned()}</li> }
+                />
+            </ul>
+            <table><tbody>
+                <For
+                    each=move || groups.clone()
+                    key=|group| group["label"].as_str().unwrap_or("").to_owned()
+                    children=move |group| {
+                        let label = group["label"].as_str().unwrap_or("").to_owned();
+                        let template_overlay_id = group["template_overlay_id"].as_str().unwrap_or("").to_owned();
+                        let selected = group["selected"].as_bool().unwrap_or(false);
+                        let overlay_id = group["overlay_id"].as_str().unwrap_or("").to_owned();
+                        let file = group["file"].as_str().unwrap_or("").to_owned();
+                        let checkbox_id = format!("new-language-group-{label}");
+                        view! {
+                            <tr class="new-language-group-row" data-label=label.clone() data-template-overlay-id=template_overlay_id>
+                                <td><label><input class="new-language-group-selected" id=checkbox_id type="checkbox" checked=selected />" "{label.clone()}</label></td>
+                                <td><input class="new-language-group-overlay-id" value=overlay_id /></td>
+                                <td><input class="new-language-group-file" value=file /></td>
+                            </tr>
+                        }
+                    }
+                />
+            </tbody></table>
+            <table><tbody>
+                <For
+                    each=move || targets.clone()
+                    key=|target| target["label"].as_str().unwrap_or("").to_owned()
+                    children=move |target| {
+                        let label = target["label"].as_str().unwrap_or("").to_owned();
+                        let target_id = target["target_id"].as_str().unwrap_or("").to_owned();
+                        view! {
+                            <tr class="new-language-target-row" data-label=label.clone()>
+                                <td>{label.clone()}</td>
+                                <td><input class="new-language-target-id" value=target_id /></td>
+                            </tr>
+                        }
+                    }
+                />
+            </tbody></table>
+            <pre>{manifest_yaml}</pre>
+        </div>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn first_secondary_language(pivot: &Value) -> String {
+    pivot["selection_options"]["languages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|language| !language["active"].as_bool().unwrap_or(false))
+        .and_then(|language| language["code"].as_str())
+        .unwrap_or("")
+        .to_owned()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn non_empty(value: String) -> Option<String> {
+    (!value.is_empty()).then_some(value)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn event_checkbox_checked(event: &web_sys::Event) -> bool {
+    event
+        .target()
+        .and_then(|target| target.dyn_into::<web_sys::HtmlInputElement>().ok())
+        .is_some_and(|input| input.checked())
+}
+
+#[cfg(target_arch = "wasm32")]
 fn event_input_value(event: &web_sys::Event) -> String {
     event
         .target()
@@ -1037,10 +1633,6 @@ fn publish_note_pivot_panel(pivot: &Value) {
     let Some(global_controls) = document.get_element_by_id("workbench-global-controls") else {
         return;
     };
-    let Some(apply_box) = document.get_element_by_id("workbench-apply-box") else {
-        return;
-    };
-
     set_top_level_error(None);
     set_selected_view(WorkbenchView::Notes);
     set_current_note_pivot(pivot);
@@ -1119,8 +1711,6 @@ fn publish_note_pivot_panel(pivot: &Value) {
     }
     chrome_html.push_str("</nav>");
     chrome_html.push_str(&filter_buttons_html(pivot));
-    chrome_html.push_str(&pane_layout_panel_html(pivot));
-    chrome_html.push_str(&new_language_panel_html(pivot));
     global_controls.set_inner_html(&chrome_html);
 
     let first_note = first_note_id(pivot);
@@ -1132,14 +1722,10 @@ fn publish_note_pivot_panel(pivot: &Value) {
         NoteDetailState::Empty
     });
 
-    apply_box.set_inner_html("<button id=\"apply-preview-button\" type=\"button\">Apply preview</button> <button id=\"apply-confirm-button\" type=\"button\">Confirm Apply</button><pre id=\"apply-preview-output\"></pre>");
     reset_lazy_secondary_pivot_panels(&document);
 
     register_control_handlers(pivot);
-    register_pane_layout_handlers(pivot);
-    register_new_language_handlers(pivot);
     register_lazy_pivot_load_handlers(pivot);
-    register_apply_handlers(pivot);
     update_staged_count_for_pivot(pivot);
     if let Some(note_id) = first_note {
         let (language, target, overlay) = pivot_selection_parts(pivot);
@@ -1241,75 +1827,6 @@ fn lazy_secondary_pivot_panel_html(
         escape_html(button_id),
         escape_html(button_label),
     )
-}
-
-#[cfg(target_arch = "wasm32")]
-fn pane_layout_panel_html(pivot: &Value) -> String {
-    let mut html = String::new();
-    html.push_str("<section id=\"pane-layout-panel\" class=\"pane-layout-panel\">");
-    html.push_str("<h3>Pane layout preset</h3>");
-    html.push_str("<label><input id=\"source-pane-writable\" type=\"checkbox\"> Source pane writable</label> ");
-    html.push_str("<label><input id=\"target-pane-writable\" type=\"checkbox\" checked> Selected target pane writable</label> ");
-    html.push_str("<label>Additional target <select id=\"secondary-pane-language-select\">");
-    for language in pivot["selection_options"]["languages"]
-        .as_array()
-        .into_iter()
-        .flatten()
-    {
-        let code = language["code"].as_str().unwrap_or("");
-        if language["active"].as_bool().unwrap_or(false) {
-            continue;
-        }
-        let label = language["display_name"].as_str().unwrap_or(code);
-        html.push_str(&format!(
-            "<option value=\"{}\">{}</option>",
-            escape_html(code),
-            escape_html(label)
-        ));
-    }
-    html.push_str("</select></label> <button id=\"load-secondary-pane\" type=\"button\">Load target pane</button>");
-    html.push_str("<div id=\"secondary-target-pane\"></div>");
-    html.push_str("</section>");
-    html
-}
-
-#[cfg(target_arch = "wasm32")]
-fn new_language_panel_html(pivot: &Value) -> String {
-    let mut html = String::new();
-    html.push_str("<section id=\"new-language-panel\" class=\"new-language-panel\">");
-    html.push_str("<h3>New language scaffold</h3>");
-    html.push_str("<label>Template language <select id=\"new-language-template\">");
-    for language in pivot["selection_options"]["languages"]
-        .as_array()
-        .into_iter()
-        .flatten()
-    {
-        let code = language["code"].as_str().unwrap_or("");
-        let label = language["display_name"].as_str().unwrap_or(code);
-        let selected = if language["active"].as_bool().unwrap_or(false) {
-            " selected"
-        } else {
-            ""
-        };
-        html.push_str(&format!(
-            "<option value=\"{}\"{}>{}</option>",
-            escape_html(code),
-            selected,
-            escape_html(label)
-        ));
-    }
-    html.push_str("</select></label>");
-    html.push_str("<label>Code <input id=\"new-language-code\" placeholder=\"nb\"></label>");
-    html.push_str("<label>Display name <input id=\"new-language-display-name\" placeholder=\"Norwegian Bokmal\"></label>");
-    html.push_str(
-        "<button id=\"new-language-preview-button\" type=\"button\">Preview new language</button> ",
-    );
-    html.push_str(
-        "<button id=\"new-language-confirm-button\" type=\"button\">Create language</button>",
-    );
-    html.push_str("<div id=\"new-language-preview-output\" data-validation-ok=\"false\"></div>");
-    html.push_str("</section>");
-    html
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -3533,35 +4050,6 @@ fn mark_panel_loaded(panel: &web_sys::Element) {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn register_pane_layout_handlers(pivot: &Value) {
-    apply_pane_writability(false, true);
-    attach_pane_writable_toggle("source-pane-writable");
-    attach_pane_writable_toggle("target-pane-writable");
-    attach_secondary_pane_loader(pivot);
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_pane_writable_toggle(element_id: &str) {
-    let element_id = element_id.to_owned();
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-            return;
-        };
-        let source_writable = checkbox_checked(&document, "source-pane-writable");
-        let target_writable = checkbox_checked(&document, "target-pane-writable");
-        apply_pane_writability(source_writable, target_writable);
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id(&element_id))
-    {
-        let _ =
-            element.add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
 fn checkbox_checked(document: &web_sys::Document, element_id: &str) -> bool {
     document
         .get_element_by_id(element_id)
@@ -3586,7 +4074,7 @@ fn apply_pane_writability(source_writable: bool, target_writable: bool) {
     );
     set_controls_disabled(
         &document,
-        "input[id^='translation-input-'], select[id^='translation-mode-'], input[id^='card-translation-input-'], select[id^='card-translation-mode-'], input[id^='optional-translation-input-'], input[id^='source-string-direct-input'], button[id^='source-string-direct-stage'], button[id^='source-string-no-change'], input[id^='source-string-contextual-input-'], button[id^='source-string-contextual-stage-']",
+        "input[id^='translation-input-'], select[id^='translation-mode-'], input[id^='card-translation-input-'], select[id^='card-translation-mode-'], input[id^='optional-translation-input'], input[id^='source-string-direct-input'], button[id^='source-string-direct-stage'], button[id^='source-string-no-change'], input[id^='source-string-contextual-input-'], button[id^='source-string-contextual-stage-']",
         !target_writable,
     );
     set_contenteditable(
@@ -3655,210 +4143,6 @@ fn set_inputs_readonly(document: &web_sys::Document, selector: &str, readonly: b
 }
 
 #[cfg(target_arch = "wasm32")]
-fn attach_secondary_pane_loader(pivot: &Value) {
-    let pivot = pivot.clone();
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-            return;
-        };
-        let Some(language) = selected_value(&document, "secondary-pane-language-select") else {
-            return;
-        };
-        let target = pivot["target"]["label"].as_str().map(str::to_owned);
-        let selection_generation = current_selection_generation();
-        wasm_bindgen_futures::spawn_local(async move {
-            match fetch_comparison_pane_query(Some(language), target, Some("base".to_owned())).await
-            {
-                Ok(pane) if is_current_selection_generation(selection_generation) => {
-                    publish_secondary_target_pane(&pane);
-                }
-                Ok(_) => {}
-                Err(error) if is_current_selection_generation(selection_generation) => {
-                    render_secondary_pane_error(&error);
-                }
-                Err(_) => {}
-            }
-        });
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id("load-secondary-pane"))
-    {
-        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
-fn publish_secondary_target_pane(comparison: &Value) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    let Some(container) = document.get_element_by_id("secondary-target-pane") else {
-        return;
-    };
-    let pane = &comparison["note_pivot"];
-    let source_strings = &comparison["source_string_pivot"];
-    let cards = &comparison["card_pivot"];
-    let language = pane["language"]["code"].as_str().unwrap_or("");
-    let target = pane["target"]["label"].as_str().unwrap_or("");
-    let overlay = pane["overlay"]["label"].as_str().unwrap_or("");
-    let prefix = storage_prefix_for_parts(language, target, overlay);
-    let mut html = format!(
-        "<section class=\"workbench-pane secondary-target-pane\" data-storage-prefix=\"{}\" data-language=\"{}\" data-target=\"{}\" data-overlay=\"{}\"><h4>{} target pane</h4><label><input id=\"secondary-pane-writable\" type=\"checkbox\" checked> Pane writable</label>",
-        escape_html(&prefix),
-        escape_html(language),
-        escape_html(target),
-        escape_html(overlay),
-        escape_html(
-            pane["language"]["display_name"]
-                .as_str()
-                .unwrap_or(language)
-        ),
-    );
-    html.push_str("<table><tbody>");
-    for note in pane["notes"].as_array().into_iter().flatten() {
-        for field in note["fields"].as_array().into_iter().flatten() {
-            if !field["editable"].as_bool().unwrap_or(false) {
-                continue;
-            }
-            let path = field["path"].as_str().unwrap_or("");
-            let source = field["source"].as_str().unwrap_or("");
-            let id = format!("{}-{}", language, id_for_path(path));
-            let staged = staged_edit_for_pane(language, target, overlay, path, source);
-            let value = staged
-                .as_ref()
-                .and_then(|edit| edit["value"].as_str())
-                .or_else(|| field["target"].as_str())
-                .unwrap_or(source);
-            html.push_str(&format!(
-                "<tr class=\"secondary-field-row\" data-path=\"{}\" data-source=\"{}\"><td>{}</td><td>{}</td><td><input id=\"secondary-translation-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\"></td></tr>",
-                escape_html(path),
-                escape_html(source),
-                escape_html(field["field_name"].as_str().unwrap_or("field")),
-                escape_html(source),
-                escape_html(&id),
-                escape_html(value),
-                escape_html(path),
-                escape_html(source),
-            ));
-        }
-    }
-    html.push_str("</tbody></table>");
-    html.push_str(
-        "<section class=\"comparison-source-strings\"><h5>Source String comparison</h5><ul>",
-    );
-    for string in source_strings["strings"].as_array().into_iter().flatten() {
-        html.push_str(&format!(
-            "<li class=\"comparison-source-string-row\" data-source=\"{}\">{} → {} ({})</li>",
-            escape_html(string["source"].as_str().unwrap_or("")),
-            escape_html(string["source"].as_str().unwrap_or("")),
-            escape_html(string["target_preview"].as_str().unwrap_or("")),
-            escape_html(string["status"].as_str().unwrap_or("unknown")),
-        ));
-    }
-    html.push_str("</ul></section>");
-    html.push_str("<section class=\"comparison-cards\"><h5>Card comparison</h5><ul>");
-    for card in cards["cards"].as_array().into_iter().flatten() {
-        html.push_str(&format!(
-            "<li class=\"comparison-card-row\" data-card-id=\"{}\">{} · {} · {}</li>",
-            escape_html(card["card_id"].as_str().unwrap_or("")),
-            escape_html(card["title"].as_str().unwrap_or("card")),
-            escape_html(card["template_name"].as_str().unwrap_or("template")),
-            escape_html(card["status"].as_str().unwrap_or("unknown")),
-        ));
-    }
-    html.push_str("</ul>");
-    if let Some(card) = cards.get("selected_card").filter(|value| !value.is_null()) {
-        html.push_str("<div class=\"comparison-card-preview\">");
-        html.push_str(&preview_html(&card["target_preview"]));
-        html.push_str("</div>");
-    }
-    html.push_str("</section></section>");
-    container.set_inner_html(&html);
-    register_secondary_target_handlers(pane);
-    attach_secondary_writable_handler();
-    let target_writable = checkbox_checked(&document, "target-pane-writable");
-    apply_pane_writability(
-        checkbox_checked(&document, "source-pane-writable"),
-        target_writable,
-    );
-    apply_secondary_pane_writability(checkbox_checked(&document, "secondary-pane-writable"));
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_secondary_writable_handler() {
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-            return;
-        };
-        apply_secondary_pane_writability(checkbox_checked(&document, "secondary-pane-writable"));
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id("secondary-pane-writable"))
-    {
-        let _ =
-            element.add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
-fn render_secondary_pane_error(error: &str) {
-    if let Some(container) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id("secondary-target-pane"))
-    {
-        container.set_inner_html(&format!(
-            "<p class=\"workbench-error\">{}</p>",
-            escape_html(error)
-        ));
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn register_secondary_target_handlers(pane: &Value) {
-    let language = pane["language"]["code"].as_str().unwrap_or("").to_owned();
-    let target = pane["target"]["label"].as_str().unwrap_or("").to_owned();
-    let overlay = pane["overlay"]["label"].as_str().unwrap_or("").to_owned();
-    for note in pane["notes"].as_array().into_iter().flatten() {
-        for field in note["fields"].as_array().into_iter().flatten() {
-            let path = field["path"].as_str().unwrap_or("").to_owned();
-            let source = field["source"].as_str().unwrap_or("").to_owned();
-            let input_id = format!(
-                "secondary-translation-input-{}-{}",
-                language,
-                id_for_path(&path)
-            );
-            let input_id_for_handler = input_id.clone();
-            let language = language.clone();
-            let target = target.clone();
-            let overlay = overlay.clone();
-            let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-                let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-                    return;
-                };
-                let value = document
-                    .get_element_by_id(&input_id_for_handler)
-                    .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-                    .map(|input| input.value())
-                    .unwrap_or_default();
-                stage_secondary_translation(&language, &target, &overlay, &path, &source, &value);
-            }));
-            if let Some(element) = web_sys::window()
-                .and_then(|window| window.document())
-                .and_then(|document| document.get_element_by_id(&input_id))
-            {
-                let _ = element
-                    .add_event_listener_with_callback("input", closure.as_ref().unchecked_ref());
-            }
-            closure.forget();
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
 fn stage_secondary_translation(
     language: &str,
     target: &str,
@@ -3886,6 +4170,7 @@ fn stage_secondary_translation(
         );
         let _ = storage.set_item(&key, &edit.to_string());
     }
+    staging::bump_current();
     let prefixes =
         active_storage_prefixes_for_default(&storage_prefix_for_parts(language, target, overlay));
     update_staged_count_for_prefixes(&prefixes);
@@ -3910,89 +4195,6 @@ fn staged_edit_for_pane(
             storage.get_item(&key).ok().flatten()
         })
         .and_then(|value| serde_json::from_str(&value).ok())
-}
-
-#[cfg(target_arch = "wasm32")]
-fn register_new_language_handlers(_pivot: &Value) {
-    attach_new_language_preview_handler();
-    attach_new_language_confirm_handler();
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_new_language_preview_handler() {
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-            return;
-        };
-        let template = selected_value(&document, "new-language-template");
-        let code = input_value(&document, "new-language-code");
-        let display_name = input_value(&document, "new-language-display-name");
-        wasm_bindgen_futures::spawn_local(async move {
-            let result = fetch_new_language_preview(template, code, display_name).await;
-            render_new_language_preview(result);
-        });
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id("new-language-preview-button"))
-    {
-        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_new_language_confirm_handler() {
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-            return;
-        };
-        let Some(request) = collect_new_language_request(&document) else {
-            render_new_language_status("Preview the new language before creating it.", false);
-            return;
-        };
-        let code = request["code"].as_str().unwrap_or("").to_owned();
-        let target = request["primary_target"].as_str().unwrap_or("").to_owned();
-        let overlay = request["groups"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .find(|group| group["selected"].as_bool().unwrap_or(false))
-            .and_then(|group| group["label"].as_str())
-            .unwrap_or("base")
-            .to_owned();
-        wasm_bindgen_futures::spawn_local(async move {
-            match post_json("/api/workbench/new-language", &request).await {
-                Ok(value) => {
-                    render_new_language_status(&new_language_result_text("Created", &value), true);
-                    let generation = begin_selection_request();
-                    match fetch_note_pivot_query(Some(code), Some(target), Some(overlay), None)
-                        .await
-                    {
-                        Ok(pivot) if is_current_selection_generation(generation) => {
-                            publish_note_pivot_panel(&pivot);
-                        }
-                        Ok(_) => {}
-                        Err(error) if is_current_selection_generation(generation) => {
-                            render_new_language_status(&escape_html(&error), false);
-                        }
-                        Err(_) => {}
-                    }
-                }
-                Err(error) => render_new_language_status(
-                    &escape_html(&format!("Create failed: {error}")),
-                    false,
-                ),
-            }
-        });
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id("new-language-confirm-button"))
-    {
-        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -4139,75 +4341,6 @@ fn input_value(document: &web_sys::Document, element_id: &str) -> Option<String>
         .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
         .map(|input| input.value())
         .filter(|value| !value.is_empty())
-}
-
-#[cfg(target_arch = "wasm32")]
-fn render_new_language_preview(result: Result<Value, String>) {
-    match result {
-        Ok(value) => {
-            let mut html = String::new();
-            html.push_str(&format!(
-                "<div class=\"new-language-preview\" data-code=\"{}\" data-template=\"{}\" data-primary-target=\"{}\">",
-                escape_html(value["language"]["code"].as_str().unwrap_or("")),
-                escape_html(value["language"]["template_language"].as_str().unwrap_or("")),
-                escape_html(value["language"]["primary_target"].as_str().unwrap_or("")),
-            ));
-            html.push_str("<p>Preview ready. Affected files:</p><ul>");
-            for file in value["affected_files"].as_array().into_iter().flatten() {
-                html.push_str(&format!(
-                    "<li>{}</li>",
-                    escape_html(file["path"].as_str().unwrap_or("unknown"))
-                ));
-            }
-            html.push_str("</ul><table><tbody>");
-            for group in value["groups"].as_array().into_iter().flatten() {
-                let label = group["label"].as_str().unwrap_or("");
-                let checked = if group["selected"].as_bool().unwrap_or(false) {
-                    " checked"
-                } else {
-                    ""
-                };
-                html.push_str(&format!(
-                    "<tr class=\"new-language-group-row\" data-label=\"{}\" data-template-overlay-id=\"{}\"><td><label><input class=\"new-language-group-selected\" id=\"new-language-group-{}\" type=\"checkbox\"{}> {}</label></td><td><input class=\"new-language-group-overlay-id\" value=\"{}\"></td><td><input class=\"new-language-group-file\" value=\"{}\"></td></tr>",
-                    escape_html(label),
-                    escape_html(group["template_overlay_id"].as_str().unwrap_or("")),
-                    escape_html(label),
-                    checked,
-                    escape_html(label),
-                    escape_html(group["overlay_id"].as_str().unwrap_or("")),
-                    escape_html(group["file"].as_str().unwrap_or("")),
-                ));
-            }
-            html.push_str("</tbody></table><table><tbody>");
-            for target in value["targets"].as_array().into_iter().flatten() {
-                let label = target["label"].as_str().unwrap_or("");
-                html.push_str(&format!(
-                    "<tr class=\"new-language-target-row\" data-label=\"{}\"><td>{}</td><td><input class=\"new-language-target-id\" value=\"{}\"></td></tr>",
-                    escape_html(label),
-                    escape_html(label),
-                    escape_html(target["target_id"].as_str().unwrap_or("")),
-                ));
-            }
-            html.push_str("</tbody></table><pre>");
-            html.push_str(&escape_html(value["manifest_yaml"].as_str().unwrap_or("")));
-            html.push_str("</pre></div>");
-            render_new_language_status(&html, true);
-        }
-        Err(error) => {
-            render_new_language_status(&escape_html(&format!("Preview failed: {error}")), false)
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn render_new_language_status(html: &str, ok: bool) {
-    if let Some(output) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id("new-language-preview-output"))
-    {
-        output.set_inner_html(html);
-        let _ = output.set_attribute("data-validation-ok", if ok { "true" } else { "false" });
-    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -4587,83 +4720,6 @@ fn refresh_progress_from_dom() {
         progress.set_inner_html(&format!(
             "Main note-field progress: {complete} / {total} complete, {missing} missing, {stale} stale (<span id=\"staged-edit-count\" data-count=\"{staged}\">{staged}</span> staged)"
         ));
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn register_apply_handlers(pivot: &Value) {
-    attach_apply_handler(pivot, "apply-preview-button", false);
-    attach_apply_handler(pivot, "apply-confirm-button", true);
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_apply_handler(pivot: &Value, button_id: &str, write: bool) {
-    let pivot = pivot.clone();
-    let button_id = button_id.to_owned();
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        let pivot = pivot.clone();
-        wasm_bindgen_futures::spawn_local(async move {
-            let edits = collect_staged_edits(&pivot);
-            let request = serde_json::json!({
-                "language": pivot["language"]["code"].as_str().unwrap_or(""),
-                "target": pivot["target"]["label"].as_str().unwrap_or(""),
-                "overlay": pivot["overlay"]["label"].as_str().unwrap_or(""),
-                "edits": edits,
-            });
-            let endpoint = if write {
-                "/api/workbench/apply"
-            } else {
-                "/api/workbench/apply-preview"
-            };
-            let result = post_json(endpoint, &request).await;
-            render_apply_result(&pivot, write, result).await;
-        });
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id(&button_id))
-    {
-        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
-async fn render_apply_result(pivot: &Value, write: bool, result: Result<Value, String>) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    let Some(output) = document.get_element_by_id("apply-preview-output") else {
-        return;
-    };
-    match result {
-        Ok(value) => {
-            output.set_text_content(Some(&apply_result_text(
-                if write { "Applied" } else { "Apply preview" },
-                &value,
-            )));
-            let _ =
-                output.set_attribute("data-validation-ok", &value["validation"]["ok"].to_string());
-            if write {
-                for prefix in active_storage_prefixes(pivot) {
-                    clear_staged_edits(&prefix);
-                }
-                if let Ok(updated) = fetch_note_pivot_for_pivot(pivot).await {
-                    publish_note_pivot_panel(&updated);
-                }
-                if let Some(output) = web_sys::window()
-                    .and_then(|window| window.document())
-                    .and_then(|document| document.get_element_by_id("apply-preview-output"))
-                {
-                    output.set_text_content(Some(&apply_result_text("Applied", &value)));
-                    let _ = output.set_attribute("data-validation-ok", "true");
-                }
-            }
-        }
-        Err(error) => {
-            output.set_text_content(Some(&format!("Apply failed: {error}")));
-            let _ = output.set_attribute("data-validation-ok", "false");
-        }
     }
 }
 
