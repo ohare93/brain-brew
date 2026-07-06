@@ -7,10 +7,12 @@ mod staging;
 use leptos::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
-use std::cell::{Cell, RefCell};
-#[cfg(target_arch = "wasm32")]
 use std::rc::Rc;
+#[cfg(target_arch = "wasm32")]
+use std::sync::OnceLock;
 
+#[cfg(target_arch = "wasm32")]
+use leptos::task::spawn_local;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
 
@@ -18,24 +20,38 @@ use wasm_bindgen::JsCast;
 const STALE_WORKBENCH_REQUEST: &str = "__brainbrew_stale_workbench_request__";
 
 #[cfg(target_arch = "wasm32")]
-thread_local! {
-    static WORKBENCH_SELECTION_GENERATION: Cell<u64> = const { Cell::new(0) };
-    static SELECTED_VIEW_SIGNAL: RefCell<Option<RwSignal<WorkbenchView>>> = const { RefCell::new(None) };
-    static TOP_LEVEL_ERROR_SIGNAL: RefCell<Option<RwSignal<Option<String>>>> = const { RefCell::new(None) };
-    static NOTE_PIVOT_SIGNAL: RefCell<Option<RwSignal<Option<Value>>>> = const { RefCell::new(None) };
-    static SELECTED_NOTE_SIGNAL: RefCell<Option<RwSignal<Option<String>>>> = const { RefCell::new(None) };
-    static NOTE_DETAIL_SIGNAL: RefCell<Option<RwSignal<NoteDetailState>>> = const { RefCell::new(None) };
-    static NOTE_DETAIL_TOKEN_SIGNAL: RefCell<Option<RwSignal<u64>>> = const { RefCell::new(None) };
-    static CARD_LIST_SIGNAL: RefCell<Option<RwSignal<LazyValueState>>> = const { RefCell::new(None) };
-    static SELECTED_CARD_SIGNAL: RefCell<Option<RwSignal<Option<String>>>> = const { RefCell::new(None) };
-    static CARD_DETAIL_SIGNAL: RefCell<Option<RwSignal<DetailValueState>>> = const { RefCell::new(None) };
-    static CARD_DETAIL_TOKEN_SIGNAL: RefCell<Option<RwSignal<u64>>> = const { RefCell::new(None) };
-    static SOURCE_STRING_LIST_SIGNAL: RefCell<Option<RwSignal<LazyValueState>>> = const { RefCell::new(None) };
-    static SELECTED_SOURCE_STRING_SIGNAL: RefCell<Option<RwSignal<Option<String>>>> = const { RefCell::new(None) };
-    static SOURCE_STRING_DETAIL_SIGNAL: RefCell<Option<RwSignal<DetailValueState>>> = const { RefCell::new(None) };
-    static SOURCE_STRING_DETAIL_TOKEN_SIGNAL: RefCell<Option<RwSignal<u64>>> = const { RefCell::new(None) };
-    static OPTIONAL_METADATA_SIGNAL: RefCell<Option<RwSignal<LazyValueState>>> = const { RefCell::new(None) };
-    static CURRENT_NOTE_PIVOT: RefCell<Option<Value>> = const { RefCell::new(None) };
+#[derive(Clone, Copy)]
+struct WorkbenchSignals {
+    selection_generation: RwSignal<u64>,
+    selected_view: RwSignal<WorkbenchView>,
+    top_level_error: RwSignal<Option<String>>,
+    note_pivot: RwSignal<Option<Value>>,
+    selected_note: RwSignal<Option<String>>,
+    note_detail: RwSignal<NoteDetailState>,
+    note_detail_token: RwSignal<u64>,
+    card_list: RwSignal<LazyValueState>,
+    selected_card: RwSignal<Option<String>>,
+    card_detail: RwSignal<DetailValueState>,
+    card_detail_token: RwSignal<u64>,
+    source_string_list: RwSignal<LazyValueState>,
+    selected_source_string: RwSignal<Option<String>>,
+    source_string_detail: RwSignal<DetailValueState>,
+    source_string_detail_token: RwSignal<u64>,
+    optional_metadata: RwSignal<LazyValueState>,
+    current_note_pivot: RwSignal<Option<Value>>,
+}
+
+#[cfg(target_arch = "wasm32")]
+static WORKBENCH_SIGNALS: OnceLock<WorkbenchSignals> = OnceLock::new();
+
+#[cfg(target_arch = "wasm32")]
+fn install_workbench_signals(signals: WorkbenchSignals) {
+    let _ = WORKBENCH_SIGNALS.set(signals);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn workbench_signals() -> Option<&'static WorkbenchSignals> {
+    WORKBENCH_SIGNALS.get()
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -98,16 +114,13 @@ impl WorkbenchView {
     }
 }
 
-/// Leptos CSR root for the workbench chrome. Leptos owns the stable DOM
-/// skeleton (panel, switcher, view sections, and top-level error surface),
-/// while the legacy `publish_*` functions fill only the interior containers
-/// that later migration stages will port component-by-component.
+/// Leptos CSR root for the workbench chrome. Leptos owns the workbench panel,
+/// view switcher, lazy pivot panes, editing controls, and top-level error surface.
 #[cfg(target_arch = "wasm32")]
 #[component]
 pub fn App() -> impl IntoView {
+    let selection_generation = RwSignal::new(0_u64);
     let selected_view = RwSignal::new(WorkbenchView::Notes);
-    let workspace_summary = RwSignal::new(None::<WorkspaceSummary>);
-    let top_level_status = RwSignal::new("loading".to_owned());
     let top_level_error = RwSignal::new(None::<String>);
     let note_pivot = RwSignal::new(None::<Value>);
     let selected_note_id = RwSignal::new(None::<String>);
@@ -122,79 +135,47 @@ pub fn App() -> impl IntoView {
     let source_string_detail = RwSignal::new(DetailValueState::Empty);
     let source_string_detail_token = RwSignal::new(0_u64);
     let optional_metadata = RwSignal::new(LazyValueState::Unloaded);
+    let current_note_pivot = RwSignal::new(None::<Value>);
     staging::provide(staging::Staging::new());
 
-    SELECTED_VIEW_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(selected_view);
-    });
-    TOP_LEVEL_ERROR_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(top_level_error);
-    });
-    NOTE_PIVOT_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(note_pivot);
-    });
-    SELECTED_NOTE_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(selected_note_id);
-    });
-    NOTE_DETAIL_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(note_detail);
-    });
-    NOTE_DETAIL_TOKEN_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(note_detail_token);
-    });
-    CARD_LIST_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(card_list);
-    });
-    SELECTED_CARD_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(selected_card_id);
-    });
-    CARD_DETAIL_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(card_detail);
-    });
-    CARD_DETAIL_TOKEN_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(card_detail_token);
-    });
-    SOURCE_STRING_LIST_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(source_string_list);
-    });
-    SELECTED_SOURCE_STRING_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(selected_source_string);
-    });
-    SOURCE_STRING_DETAIL_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(source_string_detail);
-    });
-    SOURCE_STRING_DETAIL_TOKEN_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(source_string_detail_token);
-    });
-    OPTIONAL_METADATA_SIGNAL.with(|signal| {
-        *signal.borrow_mut() = Some(optional_metadata);
+    install_workbench_signals(WorkbenchSignals {
+        selection_generation,
+        selected_view,
+        top_level_error,
+        note_pivot,
+        selected_note: selected_note_id,
+        note_detail,
+        note_detail_token,
+        card_list,
+        selected_card: selected_card_id,
+        card_detail,
+        card_detail_token,
+        source_string_list,
+        selected_source_string,
+        source_string_detail,
+        source_string_detail_token,
+        optional_metadata,
+        current_note_pivot,
     });
 
     publish_workspace_probe("loading", "Loading workspace metadata…", None);
 
-    wasm_bindgen_futures::spawn_local(async move {
+    spawn_local(async move {
         match fetch_workspace().await {
-            Ok(summary) => {
-                workspace_summary.set(Some(summary.clone()));
-                top_level_status.set("loaded".to_owned());
-                publish_workspace_probe(
-                    "loaded",
-                    "Workspace metadata loaded from /api/workspace.",
-                    Some(&summary),
-                );
-            }
-            Err(error) => {
-                top_level_status.set("error".to_owned());
-                publish_workspace_probe(
-                    "error",
-                    &format!("Unable to load workspace metadata: {error}"),
-                    None,
-                );
-            }
+            Ok(summary) => publish_workspace_probe(
+                "loaded",
+                "Workspace metadata loaded from /api/workspace.",
+                Some(&summary),
+            ),
+            Err(error) => publish_workspace_probe(
+                "error",
+                &format!("Unable to load workspace metadata: {error}"),
+                None,
+            ),
         }
     });
 
-    wasm_bindgen_futures::spawn_local(async {
+    spawn_local(async {
         match fetch_note_pivot().await {
             Ok(pivot) => publish_note_pivot_panel(&pivot),
             Err(error) => {
@@ -206,11 +187,7 @@ pub fn App() -> impl IntoView {
     });
 
     view! {
-        <section
-            id="workbench-dom-panel"
-            data-app-status=move || top_level_status.get()
-            data-workspace-loaded=move || workspace_summary.get().is_some().to_string()
-        >
+        <section id="workbench-dom-panel">
             <section
                 class="workbench-error"
                 hidden=move || top_level_error.get().is_none()
@@ -219,9 +196,7 @@ pub fn App() -> impl IntoView {
                 {move || top_level_error.get().unwrap_or_default()}
             </section>
             <article id="workbench-current-workspace" class="workbench-panel">
-                <section id="workbench-global-controls">
-                    <GlobalControls pivot=note_pivot />
-                </section>
+                <GlobalControls pivot=note_pivot />
                 <nav id="workbench-view-switch" class="workbench-view-switch" aria-label="Workbench views">
                     <button
                         id="view-notes"
@@ -271,7 +246,7 @@ pub fn App() -> impl IntoView {
                         data-view="notes"
                         hidden=move || selected_view.get() != WorkbenchView::Notes
                     >
-                        <div id="note-pivot-panel" class="workbench-view-interior">
+                        <div id="note-pivot-panel">
                             <NotePivotInterior
                                 pivot=note_pivot
                                 selected_note_id=selected_note_id
@@ -1667,7 +1642,7 @@ fn ApplyBox(pivot: RwSignal<Option<Value>>) -> impl IntoView {
             "Building apply preview…".to_owned()
         });
         validation_ok.set(None);
-        wasm_bindgen_futures::spawn_local(async move {
+        spawn_local(async move {
             let edits = collect_staged_edits(&pivot_value);
             let request = serde_json::json!({
                 "language": pivot_value["language"]["code"].as_str().unwrap_or(""),
@@ -1741,7 +1716,7 @@ fn PaneLayoutPanel(pivot: Value) -> impl IntoView {
             let target = target_label.clone();
             let selection_generation = current_selection_generation();
             secondary_state.set(SecondaryPaneState::Loading);
-            wasm_bindgen_futures::spawn_local(async move {
+            spawn_local(async move {
                 match fetch_comparison_pane_query(Some(language), target, Some("base".to_owned()))
                     .await
                 {
@@ -2011,7 +1986,7 @@ fn NewLanguagePanel(pivot: Value) -> impl IntoView {
         let template = non_empty(template.get_untracked());
         let code = non_empty(code.get_untracked());
         let display_name = non_empty(display_name.get_untracked());
-        wasm_bindgen_futures::spawn_local(async move {
+        spawn_local(async move {
             match fetch_new_language_preview(template, code, display_name).await {
                 Ok(value) => status.set(NewLanguageStatus::Preview(value)),
                 Err(error) => {
@@ -2045,7 +2020,7 @@ fn NewLanguagePanel(pivot: Value) -> impl IntoView {
             .unwrap_or("base")
             .to_owned();
         status.set(NewLanguageStatus::Loading);
-        wasm_bindgen_futures::spawn_local(async move {
+        spawn_local(async move {
             match post_json("/api/workbench/new-language", &request).await {
                 Ok(value) => {
                     status.set(NewLanguageStatus::Created(new_language_result_text(
@@ -2442,126 +2417,102 @@ fn open_workbench_view(view: WorkbenchView) {
 
 #[cfg(target_arch = "wasm32")]
 fn set_selected_view(view: WorkbenchView) {
-    SELECTED_VIEW_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            signal.set(view);
-        }
-    });
+    if let Some(signals) = workbench_signals() {
+        signals.selected_view.set(view);
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn set_top_level_error(message: Option<String>) {
-    TOP_LEVEL_ERROR_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            signal.set(message);
-        }
-    });
+    if let Some(signals) = workbench_signals() {
+        signals.top_level_error.set(message);
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn set_note_pivot_state(pivot: Option<Value>) {
-    NOTE_PIVOT_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            signal.set(pivot);
-        }
-    });
+    if let Some(signals) = workbench_signals() {
+        signals.note_pivot.set(pivot);
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn set_selected_note_state(note_id: Option<String>) {
-    SELECTED_NOTE_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            signal.set(note_id);
-        }
-    });
+    if let Some(signals) = workbench_signals() {
+        signals.selected_note.set(note_id);
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn set_note_detail_state(state: NoteDetailState) {
-    NOTE_DETAIL_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            signal.set(state);
-        }
-    });
+    if let Some(signals) = workbench_signals() {
+        signals.note_detail.set(state);
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn set_card_list_state(state: LazyValueState) {
-    CARD_LIST_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            signal.set(state);
-        }
-    });
+    if let Some(signals) = workbench_signals() {
+        signals.card_list.set(state);
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn set_selected_card_state(card_id: Option<String>) {
-    SELECTED_CARD_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            signal.set(card_id);
-        }
-    });
+    if let Some(signals) = workbench_signals() {
+        signals.selected_card.set(card_id);
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn set_card_detail_state(state: DetailValueState) {
-    CARD_DETAIL_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            signal.set(state);
-        }
-    });
+    if let Some(signals) = workbench_signals() {
+        signals.card_detail.set(state);
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn set_source_string_list_state(state: LazyValueState) {
-    SOURCE_STRING_LIST_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            signal.set(state);
-        }
-    });
+    if let Some(signals) = workbench_signals() {
+        signals.source_string_list.set(state);
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn set_selected_source_string_state(source: Option<String>) {
-    SELECTED_SOURCE_STRING_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            signal.set(source);
-        }
-    });
+    if let Some(signals) = workbench_signals() {
+        signals.selected_source_string.set(source);
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn set_source_string_detail_state(state: DetailValueState) {
-    SOURCE_STRING_DETAIL_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            signal.set(state);
-        }
-    });
+    if let Some(signals) = workbench_signals() {
+        signals.source_string_detail.set(state);
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn set_optional_metadata_state(state: LazyValueState) {
-    OPTIONAL_METADATA_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            signal.set(state);
-        }
-    });
+    if let Some(signals) = workbench_signals() {
+        signals.optional_metadata.set(state);
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn set_current_note_pivot(pivot: &Value) {
-    CURRENT_NOTE_PIVOT.with(|current| {
-        *current.borrow_mut() = Some(pivot.clone());
-    });
+    if let Some(signals) = workbench_signals() {
+        signals.current_note_pivot.set(Some(pivot.clone()));
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn maybe_load_current_view(view: WorkbenchView) {
-    CURRENT_NOTE_PIVOT.with(|current| {
-        if let Some(pivot) = current.borrow().as_ref() {
-            maybe_load_view(pivot, view.key());
-        }
-    });
+    if let Some(pivot) =
+        workbench_signals().and_then(|signals| signals.current_note_pivot.get_untracked())
+    {
+        maybe_load_view(&pivot, view.key());
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2706,7 +2657,7 @@ fn load_note_detail_for_parts(
 ) {
     let selection_generation = current_selection_generation();
     let detail_generation = begin_note_detail_request();
-    wasm_bindgen_futures::spawn_local(async move {
+    spawn_local(async move {
         match fetch_note_detail_query(language, target, overlay, note_id).await {
             Ok(detail)
                 if is_current_selection_generation(selection_generation)
@@ -2749,7 +2700,7 @@ fn load_card_list_for_parts(
     content_group: Option<String>,
 ) {
     let selection_generation = current_selection_generation();
-    wasm_bindgen_futures::spawn_local(async move {
+    spawn_local(async move {
         match fetch_card_list_query(
             language.clone(),
             target.clone(),
@@ -2803,7 +2754,7 @@ fn load_card_detail_for_parts(
 ) {
     let selection_generation = current_selection_generation();
     let detail_generation = begin_card_detail_request();
-    wasm_bindgen_futures::spawn_local(async move {
+    spawn_local(async move {
         match fetch_card_pivot_query(language, target, overlay, Some(card), filter, content_group)
             .await
         {
@@ -2834,7 +2785,7 @@ fn load_source_string_list_for_parts(
     status: Option<String>,
 ) {
     let selection_generation = current_selection_generation();
-    wasm_bindgen_futures::spawn_local(async move {
+    spawn_local(async move {
         match fetch_source_string_list_query(
             language.clone(),
             target.clone(),
@@ -2888,7 +2839,7 @@ fn load_source_string_detail_for_parts(
 ) {
     let selection_generation = current_selection_generation();
     let detail_generation = begin_source_string_detail_request();
-    wasm_bindgen_futures::spawn_local(async move {
+    spawn_local(async move {
         match fetch_source_string_pivot_query(
             language,
             target,
@@ -2924,7 +2875,7 @@ fn load_optional_metadata_for_parts(
     overlay: Option<String>,
 ) {
     let selection_generation = current_selection_generation();
-    wasm_bindgen_futures::spawn_local(async move {
+    spawn_local(async move {
         match fetch_optional_metadata_query(language, target, overlay).await {
             Ok(optional) if is_current_selection_generation(selection_generation) => {
                 set_optional_metadata_state(LazyValueState::Loaded(optional));
@@ -2964,25 +2915,19 @@ fn maybe_load_view(pivot: &Value, view: &str) {
 
 #[cfg(target_arch = "wasm32")]
 fn panel_is_unloaded(panel_id: &str) -> bool {
+    let Some(signals) = workbench_signals() else {
+        return false;
+    };
     match panel_id {
-        "card-pivot-panel" => CARD_LIST_SIGNAL.with(|signal| {
-            signal
-                .borrow()
-                .as_ref()
-                .is_none_or(|signal| matches!(signal.get_untracked(), LazyValueState::Unloaded))
-        }),
-        "source-string-pivot-panel" => SOURCE_STRING_LIST_SIGNAL.with(|signal| {
-            signal
-                .borrow()
-                .as_ref()
-                .is_none_or(|signal| matches!(signal.get_untracked(), LazyValueState::Unloaded))
-        }),
-        "optional-metadata-panel" => OPTIONAL_METADATA_SIGNAL.with(|signal| {
-            signal
-                .borrow()
-                .as_ref()
-                .is_none_or(|signal| matches!(signal.get_untracked(), LazyValueState::Unloaded))
-        }),
+        "card-pivot-panel" => matches!(signals.card_list.get_untracked(), LazyValueState::Unloaded),
+        "source-string-pivot-panel" => matches!(
+            signals.source_string_list.get_untracked(),
+            LazyValueState::Unloaded
+        ),
+        "optional-metadata-panel" => matches!(
+            signals.optional_metadata.get_untracked(),
+            LazyValueState::Unloaded
+        ),
         _ => false,
     }
 }
@@ -3057,7 +3002,7 @@ fn set_controls_disabled(document: &web_sys::Document, selector: &str, disabled:
     if let Ok(nodes) = document.query_selector_all(selector) {
         for index in 0..nodes.length() {
             if let Some(node) = nodes.get(index)
-                && let Ok(element) = node.dyn_into::<web_sys::HtmlElement>()
+                && let Ok(element) = node.dyn_into::<web_sys::Element>()
             {
                 let _ = if disabled {
                     element.set_attribute("disabled", "")
@@ -3212,27 +3157,46 @@ fn staged_edit_for_pane(
 }
 
 #[cfg(target_arch = "wasm32")]
-fn next_generation(cell: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
-    cell.with(|generation| {
-        let next = generation.get().saturating_add(1);
-        generation.set(next);
-        next
-    })
-}
-
-#[cfg(target_arch = "wasm32")]
-fn current_generation(cell: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
-    cell.with(Cell::get)
-}
-
-#[cfg(target_arch = "wasm32")]
 fn begin_selection_request() -> u64 {
-    next_generation(&WORKBENCH_SELECTION_GENERATION)
+    if let Some(signals) = workbench_signals() {
+        let next = signals
+            .selection_generation
+            .get_untracked()
+            .saturating_add(1);
+        signals.selection_generation.set(next);
+        next
+    } else {
+        0
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn current_selection_generation() -> u64 {
-    current_generation(&WORKBENCH_SELECTION_GENERATION)
+    workbench_signals()
+        .map(|signals| signals.selection_generation.get_untracked())
+        .unwrap_or(0)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn next_signal_generation(signal: impl FnOnce(&WorkbenchSignals) -> RwSignal<u64>) -> u64 {
+    if let Some(signals) = workbench_signals() {
+        let signal = signal(signals);
+        let next = signal.get_untracked().saturating_add(1);
+        signal.set(next);
+        next
+    } else {
+        0
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn signal_generation_is_current(
+    signal: impl FnOnce(&WorkbenchSignals) -> RwSignal<u64>,
+    generation: u64,
+) -> bool {
+    workbench_signals()
+        .map(|signals| signal(signals).get_untracked() == generation)
+        .unwrap_or(false)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -3242,71 +3206,32 @@ fn is_current_selection_generation(generation: u64) -> bool {
 
 #[cfg(target_arch = "wasm32")]
 fn begin_note_detail_request() -> u64 {
-    NOTE_DETAIL_TOKEN_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            let next = signal.get_untracked().saturating_add(1);
-            signal.set(next);
-            next
-        } else {
-            0
-        }
-    })
+    next_signal_generation(|signals| signals.note_detail_token)
 }
 
 #[cfg(target_arch = "wasm32")]
 fn is_current_note_detail_generation(generation: u64) -> bool {
-    NOTE_DETAIL_TOKEN_SIGNAL.with(|signal| {
-        signal
-            .borrow()
-            .as_ref()
-            .is_some_and(|signal| signal.get_untracked() == generation)
-    })
+    signal_generation_is_current(|signals| signals.note_detail_token, generation)
 }
 
 #[cfg(target_arch = "wasm32")]
 fn begin_card_detail_request() -> u64 {
-    CARD_DETAIL_TOKEN_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            let next = signal.get_untracked().saturating_add(1);
-            signal.set(next);
-            next
-        } else {
-            0
-        }
-    })
+    next_signal_generation(|signals| signals.card_detail_token)
 }
 
 #[cfg(target_arch = "wasm32")]
 fn is_current_card_detail_generation(generation: u64) -> bool {
-    CARD_DETAIL_TOKEN_SIGNAL.with(|signal| {
-        signal
-            .borrow()
-            .as_ref()
-            .is_some_and(|signal| signal.get_untracked() == generation)
-    })
+    signal_generation_is_current(|signals| signals.card_detail_token, generation)
 }
 
 #[cfg(target_arch = "wasm32")]
 fn begin_source_string_detail_request() -> u64 {
-    SOURCE_STRING_DETAIL_TOKEN_SIGNAL.with(|signal| {
-        if let Some(signal) = signal.borrow().as_ref() {
-            let next = signal.get_untracked().saturating_add(1);
-            signal.set(next);
-            next
-        } else {
-            0
-        }
-    })
+    next_signal_generation(|signals| signals.source_string_detail_token)
 }
 
 #[cfg(target_arch = "wasm32")]
 fn is_current_source_string_detail_generation(generation: u64) -> bool {
-    SOURCE_STRING_DETAIL_TOKEN_SIGNAL.with(|signal| {
-        signal
-            .borrow()
-            .as_ref()
-            .is_some_and(|signal| signal.get_untracked() == generation)
-    })
+    signal_generation_is_current(|signals| signals.source_string_detail_token, generation)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -3487,7 +3412,7 @@ fn reload_note_pivot(
     filter: Option<String>,
 ) {
     let generation = begin_selection_request();
-    wasm_bindgen_futures::spawn_local(async move {
+    spawn_local(async move {
         match fetch_note_pivot_query(language, target, overlay, filter).await {
             Ok(pivot) if is_current_selection_generation(generation) => {
                 publish_note_pivot_panel(&pivot)

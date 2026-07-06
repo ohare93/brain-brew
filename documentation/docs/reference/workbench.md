@@ -10,7 +10,7 @@ The Deck Workbench is launched locally:
 brainbrew workbench serve --manifest brainbrew.yaml
 ```
 
-The server binds `127.0.0.1` on an available port by default and serves JSON APIs plus browser UI assets. Release builds embed the checked-in Trunk output from `crates/brain-brew-cli/assets/workbench` in the `brainbrew` binary. For frontend development, build or watch the Iced/WASM UI into a server-readable directory:
+The server binds `127.0.0.1` on an available port by default and serves JSON APIs plus browser UI assets. Release builds embed the checked-in Trunk output from `crates/brain-brew-cli/assets/workbench` in the `brainbrew` binary. For frontend development, build or watch the Leptos/WASM UI into a server-readable directory:
 
 ```bash
 devenv shell workbench-ui-build
@@ -26,7 +26,7 @@ Refresh release-embedded assets after frontend changes:
 devenv shell workbench-ui-embed
 ```
 
-The Iced/WASM source lives in `crates/brain-brew-workbench-ui`. It builds with Trunk for `wasm32-unknown-unknown`, renders the initial sidebar/canvas/inspector app shell, and fetches workspace metadata from `/api/workspace`.
+The Leptos/WASM source lives in `crates/brain-brew-workbench-ui`. It builds with Trunk for `wasm32-unknown-unknown`, renders the Workbench view switcher and lazy pivot/detail panes, and fetches workspace metadata from `/api/workspace`.
 
 The target Workbench interaction model is documented in [ADR-015: Use Lazy Single-Work-Item Workbench Editing](decisions/0015-use-lazy-single-work-item-workbench-editing.md). In short: pivots should be compact paginated navigation lists, editing should happen in one selected item detail pane at a time, multilingual context should be lazy and selected-item scoped, and browser-local staged edits remain unapplied until explicit Apply.
 

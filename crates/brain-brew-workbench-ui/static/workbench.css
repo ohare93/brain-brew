@@ -163,7 +163,6 @@ pre {
 .pivot-filters,
 .card-pivot-filters,
 .source-string-filters,
-.card-filters,
 .source-string-global-edit {
   display: flex;
   flex-wrap: wrap;
@@ -528,8 +527,7 @@ pre {
   padding: 0.8rem;
 }
 
-.workbench-error,
-.error {
+.workbench-error {
   border: 1px solid var(--danger-border);
   border-radius: 0.6rem;
   background: var(--danger-bg);
