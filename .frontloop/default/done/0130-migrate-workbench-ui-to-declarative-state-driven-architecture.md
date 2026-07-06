@@ -3,6 +3,16 @@ title: Migrate Workbench UI to a declarative state-driven architecture
 priority: medium
 ---
 
+## Resolution: promoted to the `workbench-leptos-migration` epic (2026-07-06)
+
+This placeholder is superseded. Per its own guidance ("if it stalls, split into a dedicated epic with the spike as its first task"), it has been promoted to a dedicated epic. The **Phase-0 spike is done**: Iced-on-web renders to a `<canvas>` (wgpu/tiny-skia), emits no DOM, and cannot express Anki HTML/CSS card previews, `contenteditable` editing, or real `<img>` media — which is exactly why the current code bypasses Iced with ~28 raw `set_inner_html`/`web_sys` ops. **Framework chosen: Leptos** (CSR, Rust→WASM DOM), which keeps ADR-0011's "Rust-native type-safe state/update/view" while gaining the DOM.
+
+The work is now tracked as six sequential tasks under `.frontloop/workbench-leptos-migration/` (0010 runtime swap → 0020 skeleton → 0030 notes view → 0040 notes workflows → 0050 card/source-string/metadata views → 0060 purge/CI). The ADR-0011 supersession is deferred to that epic's 0060 (lead owns the ADR record).
+
+Original placeholder text preserved below for reference.
+
+---
+
 ## Goal
 
 Replace the hand-rolled HTML-string/`innerHTML` layer in `crates/brain-brew-workbench-ui` with a real state→view architecture, so the UI renders deterministically from typed state, as ADR-0011 promised. No one uses the workbench yet, so breaking changes are acceptable; correctness and determinism over compatibility.
