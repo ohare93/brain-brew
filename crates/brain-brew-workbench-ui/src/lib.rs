@@ -1,6 +1,7 @@
-use iced::widget::{button, column, container, row, scrollable, text};
-use iced::{Element, Length, Task, Theme};
 use serde_json::Value;
+
+#[cfg(target_arch = "wasm32")]
+use leptos::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 use std::cell::Cell;
@@ -13,11 +14,6 @@ use wasm_bindgen::closure::Closure;
 #[cfg(target_arch = "wasm32")]
 const STALE_WORKBENCH_REQUEST: &str = "__brainbrew_stale_workbench_request__";
 
-#[cfg(not(target_arch = "wasm32"))]
-fn is_stale_workbench_request(_error: &str) -> bool {
-    false
-}
-
 #[cfg(target_arch = "wasm32")]
 thread_local! {
     static WORKBENCH_SELECTION_GENERATION: Cell<u64> = const { Cell::new(0) };
@@ -26,15 +22,45 @@ thread_local! {
     static SOURCE_STRING_DETAIL_GENERATION: Cell<u64> = const { Cell::new(0) };
 }
 
-pub fn run() -> iced::Result {
-    iced::application(WorkbenchApp::new, WorkbenchApp::update, WorkbenchApp::view)
-        .title("Brain Brew Deck Workbench")
-        .theme(theme)
-        .run()
-}
+/// Minimal Leptos CSR root. It renders nothing visible of its own; its only job
+/// is to run, on mount, exactly the bootstrap the former app shell performed
+/// in its constructor plus its first update messages: mark the probe as loading,
+/// then drive the initial `/api/workspace` and note-pivot fetches and publish
+/// their results through the same imperative `publish_*` DOM layer as before.
+#[cfg(target_arch = "wasm32")]
+#[component]
+pub fn App() -> impl IntoView {
+    publish_workspace_probe("loading", "Loading workspace metadata…", None);
 
-fn theme(_state: &WorkbenchApp) -> Theme {
-    Theme::Light
+    wasm_bindgen_futures::spawn_local(async {
+        match fetch_workspace().await {
+            Ok(summary) => {
+                publish_workspace_probe(
+                    "loaded",
+                    "Workspace metadata loaded from /api/workspace.",
+                    Some(&summary),
+                );
+            }
+            Err(error) => {
+                publish_workspace_probe(
+                    "error",
+                    &format!("Unable to load workspace metadata: {error}"),
+                    None,
+                );
+            }
+        }
+    });
+
+    wasm_bindgen_futures::spawn_local(async {
+        match fetch_note_pivot().await {
+            Ok(pivot) => publish_note_pivot_panel(&pivot),
+            Err(error) => {
+                if !is_stale_workbench_request(&error) {
+                    publish_note_pivot_error(&format!("Unable to load note pivot: {error}"));
+                }
+            }
+        }
+    });
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -59,163 +85,6 @@ impl WorkspaceSummary {
             fingerprint_count: value["fingerprints"].as_array().map_or(0, Vec::len),
         }
     }
-}
-
-#[derive(Debug)]
-pub struct WorkbenchApp {
-    workspace: Option<WorkspaceSummary>,
-    note_pivot: Option<Value>,
-    status: String,
-}
-
-#[derive(Clone, Debug)]
-pub enum Message {
-    RefreshWorkspace,
-    WorkspaceLoaded(Result<WorkspaceSummary, String>),
-    NotePivotLoaded(Result<Value, String>),
-}
-
-impl WorkbenchApp {
-    fn new() -> (Self, Task<Message>) {
-        (
-            Self {
-                workspace: None,
-                note_pivot: None,
-                status: "Loading workspace metadata…".to_owned(),
-            },
-            Task::batch([
-                Task::perform(fetch_workspace(), Message::WorkspaceLoaded),
-                Task::perform(fetch_note_pivot(), Message::NotePivotLoaded),
-            ]),
-        )
-    }
-
-    fn update(&mut self, message: Message) -> Task<Message> {
-        match message {
-            Message::RefreshWorkspace => {
-                self.status = "Refreshing workspace metadata…".to_owned();
-                publish_workspace_probe("loading", self.status.as_str(), None);
-                Task::batch([
-                    Task::perform(fetch_workspace(), Message::WorkspaceLoaded),
-                    Task::perform(fetch_note_pivot(), Message::NotePivotLoaded),
-                ])
-            }
-            Message::WorkspaceLoaded(Ok(summary)) => {
-                self.status = "Workspace metadata loaded from /api/workspace.".to_owned();
-                publish_workspace_probe("loaded", self.status.as_str(), Some(&summary));
-                self.workspace = Some(summary);
-                Task::none()
-            }
-            Message::WorkspaceLoaded(Err(error)) => {
-                self.status = format!("Unable to load workspace metadata: {error}");
-                publish_workspace_probe("error", self.status.as_str(), None);
-                Task::none()
-            }
-            Message::NotePivotLoaded(Ok(pivot)) => {
-                self.status = "Note pivot loaded from /api/workbench/note-pivot.".to_owned();
-                publish_note_pivot_panel(&pivot);
-                self.note_pivot = Some(pivot);
-                Task::none()
-            }
-            Message::NotePivotLoaded(Err(error)) if is_stale_workbench_request(&error) => {
-                Task::none()
-            }
-            Message::NotePivotLoaded(Err(error)) => {
-                self.status = format!("Unable to load note pivot: {error}");
-                publish_note_pivot_error(self.status.as_str());
-                Task::none()
-            }
-        }
-    }
-
-    fn view(&self) -> Element<'_, Message> {
-        let summary = self.workspace.as_ref();
-        let manifest = summary
-            .map(|workspace| workspace.manifest.as_str())
-            .unwrap_or("waiting for /api/workspace");
-        let language_count = summary.map_or("—".to_owned(), |workspace| {
-            workspace.language_count.to_string()
-        });
-        let target_count = summary.map_or("—".to_owned(), |workspace| {
-            workspace.target_count.to_string()
-        });
-        let fingerprint_count = summary.map_or("—".to_owned(), |workspace| {
-            workspace.fingerprint_count.to_string()
-        });
-        let note_count = self
-            .note_pivot
-            .as_ref()
-            .and_then(|pivot| pivot["notes"].as_array())
-            .map_or("—".to_owned(), |notes| notes.len().to_string());
-
-        let sidebar = panel(
-            "Languages",
-            column![
-                text("Language dashboard").size(22),
-                text(format!("{language_count} configured language(s)")),
-                text("Target language, target, and overlay controls are available in the browser workbench panel."),
-            ],
-        )
-        .width(Length::Fixed(260.0));
-
-        let canvas = panel(
-            "Deck canvas",
-            column![
-                text("Note pivot").size(28),
-                text(format!(
-                    "{note_count} note(s) loaded for target translation editing."
-                )),
-                text(format!("Manifest: {manifest}")),
-                button("Refresh workspace metadata").on_press(Message::RefreshWorkspace),
-            ],
-        )
-        .width(Length::Fill);
-
-        let inspector = panel(
-            "Inspector",
-            column![
-                text("Pending changes").size(22),
-                text("Browser-local staged edits persist in localStorage until Apply."),
-                text(format!("{target_count} target(s)")),
-                text(format!("{fingerprint_count} watched file fingerprint(s)")),
-            ],
-        )
-        .width(Length::Fixed(300.0));
-
-        container(
-            column![
-                container(
-                    row![
-                        text("Brain Brew Deck Workbench").size(32),
-                        text(self.status.as_str()).size(16),
-                    ]
-                    .spacing(24)
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding(20)
-                .width(Length::Fill),
-                row![sidebar, canvas, inspector]
-                    .spacing(18)
-                    .padding(18)
-                    .height(Length::Fill),
-            ]
-            .height(Length::Fill),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
-    }
-}
-
-fn panel<'a>(
-    title: &'a str,
-    body: iced::widget::Column<'a, Message>,
-) -> iced::widget::Container<'a, Message> {
-    container(scrollable(
-        column![text(title).size(14), body.spacing(12)].spacing(16),
-    ))
-    .padding(18)
-    .height(Length::Fill)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -249,9 +118,6 @@ fn publish_workspace_probe(status: &str, message: &str, workspace: Option<&Works
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn publish_workspace_probe(_status: &str, _message: &str, _workspace: Option<&WorkspaceSummary>) {}
-
 #[cfg(target_arch = "wasm32")]
 fn publish_note_pivot_error(message: &str) {
     if let Some(document) = web_sys::window().and_then(|window| window.document())
@@ -263,9 +129,6 @@ fn publish_note_pivot_error(message: &str) {
         ));
     }
 }
-
-#[cfg(not(target_arch = "wasm32"))]
-fn publish_note_pivot_error(_message: &str) {}
 
 #[cfg(target_arch = "wasm32")]
 fn publish_note_pivot_panel(pivot: &Value) {
@@ -423,9 +286,6 @@ fn publish_note_pivot_panel(pivot: &Value) {
         load_note_detail_for_parts(language, target, overlay, note_id);
     }
 }
-
-#[cfg(not(target_arch = "wasm32"))]
-fn publish_note_pivot_panel(_pivot: &Value) {}
 
 #[cfg(target_arch = "wasm32")]
 fn workbench_view_switch_html() -> String {
@@ -5007,19 +4867,4 @@ fn encode_query_component(input: &str) -> String {
         }
     }
     encoded
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-async fn fetch_workspace() -> Result<WorkspaceSummary, String> {
-    Ok(WorkspaceSummary {
-        manifest: "Run through `brainbrew workbench serve` to fetch /api/workspace".to_owned(),
-        language_count: 0,
-        target_count: 0,
-        fingerprint_count: 0,
-    })
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-async fn fetch_note_pivot() -> Result<Value, String> {
-    Ok(serde_json::json!({"notes": []}))
 }
