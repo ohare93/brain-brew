@@ -4,7 +4,7 @@ use serde_json::Value;
 use leptos::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
@@ -20,21 +20,67 @@ thread_local! {
     static NOTE_DETAIL_GENERATION: Cell<u64> = const { Cell::new(0) };
     static CARD_DETAIL_GENERATION: Cell<u64> = const { Cell::new(0) };
     static SOURCE_STRING_DETAIL_GENERATION: Cell<u64> = const { Cell::new(0) };
+    static SELECTED_VIEW_SIGNAL: RefCell<Option<RwSignal<WorkbenchView>>> = const { RefCell::new(None) };
+    static TOP_LEVEL_ERROR_SIGNAL: RefCell<Option<RwSignal<Option<String>>>> = const { RefCell::new(None) };
+    static CURRENT_NOTE_PIVOT: RefCell<Option<Value>> = const { RefCell::new(None) };
 }
 
-/// Minimal Leptos CSR root. It renders nothing visible of its own; its only job
-/// is to run, on mount, exactly the bootstrap the former app shell performed
-/// in its constructor plus its first update messages: mark the probe as loading,
-/// then drive the initial `/api/workspace` and note-pivot fetches and publish
-/// their results through the same imperative `publish_*` DOM layer as before.
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WorkbenchView {
+    Notes,
+    Cards,
+    SourceStrings,
+    Metadata,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl WorkbenchView {
+    fn key(self) -> &'static str {
+        match self {
+            Self::Notes => "notes",
+            Self::Cards => "cards",
+            Self::SourceStrings => "source-strings",
+            Self::Metadata => "metadata",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Notes => "Notes",
+            Self::Cards => "Cards",
+            Self::SourceStrings => "Source strings",
+            Self::Metadata => "Metadata",
+        }
+    }
+}
+
+/// Leptos CSR root for the workbench chrome. Leptos owns the stable DOM
+/// skeleton (panel, switcher, view sections, and top-level error surface),
+/// while the legacy `publish_*` functions fill only the interior containers
+/// that later migration stages will port component-by-component.
 #[cfg(target_arch = "wasm32")]
 #[component]
 pub fn App() -> impl IntoView {
+    let selected_view = RwSignal::new(WorkbenchView::Notes);
+    let workspace_summary = RwSignal::new(None::<WorkspaceSummary>);
+    let top_level_status = RwSignal::new("loading".to_owned());
+    let top_level_error = RwSignal::new(None::<String>);
+
+    SELECTED_VIEW_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(selected_view);
+    });
+    TOP_LEVEL_ERROR_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(top_level_error);
+    });
+
     publish_workspace_probe("loading", "Loading workspace metadata…", None);
 
-    wasm_bindgen_futures::spawn_local(async {
+    wasm_bindgen_futures::spawn_local(async move {
         match fetch_workspace().await {
             Ok(summary) => {
+                workspace_summary.set(Some(summary.clone()));
+                top_level_status.set("loaded".to_owned());
                 publish_workspace_probe(
                     "loaded",
                     "Workspace metadata loaded from /api/workspace.",
@@ -42,6 +88,7 @@ pub fn App() -> impl IntoView {
                 );
             }
             Err(error) => {
+                top_level_status.set("error".to_owned());
                 publish_workspace_probe(
                     "error",
                     &format!("Unable to load workspace metadata: {error}"),
@@ -59,6 +106,183 @@ pub fn App() -> impl IntoView {
                     publish_note_pivot_error(&format!("Unable to load note pivot: {error}"));
                 }
             }
+        }
+    });
+
+    view! {
+        <section
+            id="workbench-dom-panel"
+            data-app-status=move || top_level_status.get()
+            data-workspace-loaded=move || workspace_summary.get().is_some().to_string()
+        >
+            <section
+                class="workbench-error"
+                hidden=move || top_level_error.get().is_none()
+                aria-live="polite"
+            >
+                {move || top_level_error.get().unwrap_or_default()}
+            </section>
+            <article id="workbench-current-workspace" class="workbench-panel">
+                <section id="workbench-global-controls"></section>
+                <nav id="workbench-view-switch" class="workbench-view-switch" aria-label="Workbench views">
+                    <button
+                        id="view-notes"
+                        class=move || workbench_view_button_class(selected_view.get(), WorkbenchView::Notes)
+                        type="button"
+                        data-view="notes"
+                        aria-current=move || workbench_view_aria_current(selected_view.get(), WorkbenchView::Notes)
+                        on:click=move |_| open_workbench_view(WorkbenchView::Notes)
+                    >
+                        {WorkbenchView::Notes.label()}
+                    </button>
+                    <button
+                        id="view-cards"
+                        class=move || workbench_view_button_class(selected_view.get(), WorkbenchView::Cards)
+                        type="button"
+                        data-view="cards"
+                        aria-current=move || workbench_view_aria_current(selected_view.get(), WorkbenchView::Cards)
+                        on:click=move |_| open_workbench_view(WorkbenchView::Cards)
+                    >
+                        {WorkbenchView::Cards.label()}
+                    </button>
+                    <button
+                        id="view-source-strings"
+                        class=move || workbench_view_button_class(selected_view.get(), WorkbenchView::SourceStrings)
+                        type="button"
+                        data-view="source-strings"
+                        aria-current=move || workbench_view_aria_current(selected_view.get(), WorkbenchView::SourceStrings)
+                        on:click=move |_| open_workbench_view(WorkbenchView::SourceStrings)
+                    >
+                        {WorkbenchView::SourceStrings.label()}
+                    </button>
+                    <button
+                        id="view-metadata"
+                        class=move || workbench_view_button_class(selected_view.get(), WorkbenchView::Metadata)
+                        type="button"
+                        data-view="metadata"
+                        aria-current=move || workbench_view_aria_current(selected_view.get(), WorkbenchView::Metadata)
+                        on:click=move |_| open_workbench_view(WorkbenchView::Metadata)
+                    >
+                        {WorkbenchView::Metadata.label()}
+                    </button>
+                </nav>
+                <div class="workbench-view-stack">
+                    <section
+                        id="view-panel-notes"
+                        class=move || workbench_view_panel_class(selected_view.get(), WorkbenchView::Notes)
+                        data-view="notes"
+                        hidden=move || selected_view.get() != WorkbenchView::Notes
+                    >
+                        <div id="note-pivot-panel" class="workbench-view-interior"></div>
+                    </section>
+                    <section
+                        id="view-panel-cards"
+                        class=move || workbench_view_panel_class(selected_view.get(), WorkbenchView::Cards)
+                        data-view="cards"
+                        hidden=move || selected_view.get() != WorkbenchView::Cards
+                    >
+                        <section
+                            id="card-pivot-panel"
+                            class="card-pivot lazy-pivot-panel"
+                            data-lazy-state="unloaded"
+                            aria-live="polite"
+                            aria-busy="false"
+                        ></section>
+                    </section>
+                    <section
+                        id="view-panel-source-strings"
+                        class=move || workbench_view_panel_class(selected_view.get(), WorkbenchView::SourceStrings)
+                        data-view="source-strings"
+                        hidden=move || selected_view.get() != WorkbenchView::SourceStrings
+                    >
+                        <section
+                            id="source-string-pivot-panel"
+                            class="source-string-pivot lazy-pivot-panel"
+                            data-lazy-state="unloaded"
+                            aria-live="polite"
+                            aria-busy="false"
+                        ></section>
+                    </section>
+                    <section
+                        id="view-panel-metadata"
+                        class=move || workbench_view_panel_class(selected_view.get(), WorkbenchView::Metadata)
+                        data-view="metadata"
+                        hidden=move || selected_view.get() != WorkbenchView::Metadata
+                    >
+                        <section
+                            id="optional-metadata-panel"
+                            class="optional-metadata lazy-pivot-panel"
+                            data-lazy-state="unloaded"
+                            aria-live="polite"
+                            aria-busy="false"
+                        ></section>
+                    </section>
+                </div>
+                <section id="workbench-apply-box" class="apply-box"></section>
+            </article>
+        </section>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn workbench_view_panel_class(current: WorkbenchView, view: WorkbenchView) -> &'static str {
+    if current == view {
+        "workbench-view active"
+    } else {
+        "workbench-view"
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn workbench_view_button_class(current: WorkbenchView, view: WorkbenchView) -> &'static str {
+    if current == view {
+        "workbench-view-button active"
+    } else {
+        "workbench-view-button"
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn workbench_view_aria_current(current: WorkbenchView, view: WorkbenchView) -> &'static str {
+    if current == view { "page" } else { "" }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn open_workbench_view(view: WorkbenchView) {
+    set_selected_view(view);
+    maybe_load_current_view(view);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_selected_view(view: WorkbenchView) {
+    SELECTED_VIEW_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            signal.set(view);
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_top_level_error(message: Option<String>) {
+    TOP_LEVEL_ERROR_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            signal.set(message);
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_current_note_pivot(pivot: &Value) {
+    CURRENT_NOTE_PIVOT.with(|current| {
+        *current.borrow_mut() = Some(pivot.clone());
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn maybe_load_current_view(view: WorkbenchView) {
+    CURRENT_NOTE_PIVOT.with(|current| {
+        if let Some(pivot) = current.borrow().as_ref() {
+            maybe_load_view(pivot, view.key());
         }
     });
 }
@@ -120,14 +344,7 @@ fn publish_workspace_probe(status: &str, message: &str, workspace: Option<&Works
 
 #[cfg(target_arch = "wasm32")]
 fn publish_note_pivot_error(message: &str) {
-    if let Some(document) = web_sys::window().and_then(|window| window.document())
-        && let Some(element) = document.get_element_by_id("workbench-dom-panel")
-    {
-        element.set_inner_html(&format!(
-            "<section class=\"workbench-error\">{}</section>",
-            escape_html(message)
-        ));
-    }
+    set_top_level_error(Some(message.to_owned()));
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -135,32 +352,35 @@ fn publish_note_pivot_panel(pivot: &Value) {
     let Some(document) = web_sys::window().and_then(|window| window.document()) else {
         return;
     };
-    let panel = document
-        .get_element_by_id("workbench-dom-panel")
-        .or_else(|| {
-            let element = document.create_element("section").ok()?;
-            element.set_id("workbench-dom-panel");
-            document.body()?.append_child(&element).ok()?;
-            Some(element)
-        });
-    let Some(panel) = panel else {
+    let Some(workspace_panel) = document.get_element_by_id("workbench-current-workspace") else {
         return;
     };
+    let Some(global_controls) = document.get_element_by_id("workbench-global-controls") else {
+        return;
+    };
+    let Some(note_panel) = document.get_element_by_id("note-pivot-panel") else {
+        return;
+    };
+    let Some(apply_box) = document.get_element_by_id("workbench-apply-box") else {
+        return;
+    };
+
+    set_top_level_error(None);
+    set_selected_view(WorkbenchView::Notes);
+    set_current_note_pivot(pivot);
 
     let language = pivot["language"]["code"].as_str().unwrap_or("");
     let target = pivot["target"]["label"].as_str().unwrap_or("");
     let overlay = pivot["overlay"]["label"].as_str().unwrap_or("");
+    let _ = workspace_panel.set_attribute("data-language", language);
+    let _ = workspace_panel.set_attribute("data-target", target);
+    let _ = workspace_panel.set_attribute("data-overlay", overlay);
+
     let progress = &pivot["progress"];
-    let mut html = String::new();
-    html.push_str(&format!(
-        "<article class=\"workbench-panel\" data-language=\"{}\" data-target=\"{}\" data-overlay=\"{}\">",
-        escape_html(language),
-        escape_html(target),
-        escape_html(overlay),
-    ));
-    html.push_str("<header class=\"workbench-panel__header\">");
-    html.push_str("<h2>Deck Workbench Note pivot</h2>");
-    html.push_str(&select_options_html(
+    let mut chrome_html = String::new();
+    chrome_html.push_str("<header class=\"workbench-panel__header\">");
+    chrome_html.push_str("<h2>Deck Workbench Note pivot</h2>");
+    chrome_html.push_str(&select_options_html(
         "language-select",
         "Language",
         &pivot["selection_options"]["languages"],
@@ -168,7 +388,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
         "display_name",
         language,
     ));
-    html.push_str(&select_options_html(
+    chrome_html.push_str(&select_options_html(
         "target-select",
         "Target",
         &pivot["selection_options"]["targets"],
@@ -176,7 +396,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
         "label",
         target,
     ));
-    html.push_str(&select_options_html(
+    chrome_html.push_str(&select_options_html(
         "overlay-select",
         "Overlay",
         &pivot["selection_options"]["overlays"],
@@ -184,8 +404,8 @@ fn publish_note_pivot_panel(pivot: &Value) {
         "label",
         overlay,
     ));
-    html.push_str("</header>");
-    html.push_str(&format!(
+    chrome_html.push_str("</header>");
+    chrome_html.push_str(&format!(
         "<section id=\"translation-progress\" data-complete=\"{}\" data-total=\"{}\" data-missing=\"{}\" data-stale=\"{}\">Main note-field progress: {} / {} complete, {} missing, {} stale (<span id=\"staged-edit-count\">0</span> staged)</section>",
         progress["complete"].as_u64().unwrap_or(0),
         progress["total"].as_u64().unwrap_or(0),
@@ -197,7 +417,7 @@ fn publish_note_pivot_panel(pivot: &Value) {
         progress["stale"].as_u64().unwrap_or(0),
     ));
     let metadata_progress = &pivot["metadata_progress"];
-    html.push_str(&format!(
+    chrome_html.push_str(&format!(
         "<section id=\"optional-progress\" data-complete=\"{}\" data-total=\"{}\" data-missing=\"{}\" data-stale=\"{}\">Metadata: {} / {} complete, {} missing, {} stale</section>",
         metadata_progress["complete"].as_u64().unwrap_or(0),
         metadata_progress["total"].as_u64().unwrap_or(0),
@@ -208,77 +428,42 @@ fn publish_note_pivot_panel(pivot: &Value) {
         metadata_progress["missing"].as_u64().unwrap_or(0),
         metadata_progress["stale"].as_u64().unwrap_or(0),
     ));
-    html.push_str("<nav class=\"overlay-badges\">");
+    chrome_html.push_str("<nav class=\"overlay-badges\">");
     for badge in pivot["overlay_badges"].as_array().into_iter().flatten() {
         let active = if badge["active"].as_bool().unwrap_or(false) {
             " active"
         } else {
             ""
         };
-        html.push_str(&format!(
+        chrome_html.push_str(&format!(
             "<span class=\"overlay-badge{}\">{}</span>",
             active,
             escape_html(badge["label"].as_str().unwrap_or("overlay"))
         ));
     }
-    html.push_str("</nav>");
-    html.push_str(&filter_buttons_html(pivot));
-    html.push_str(&pane_layout_panel_html(pivot));
-    html.push_str(&new_language_panel_html(pivot));
-    html.push_str(&workbench_view_switch_html());
-    html.push_str("<div class=\"workbench-view-stack\">");
-    html.push_str(
-        "<section id=\"view-panel-notes\" class=\"workbench-view active\" data-view=\"notes\">",
-    );
-    html.push_str(&note_navigation_html(pivot));
+    chrome_html.push_str("</nav>");
+    chrome_html.push_str(&filter_buttons_html(pivot));
+    chrome_html.push_str(&pane_layout_panel_html(pivot));
+    chrome_html.push_str(&new_language_panel_html(pivot));
+    global_controls.set_inner_html(&chrome_html);
+
+    let mut notes_html = String::new();
+    notes_html.push_str(&note_navigation_html(pivot));
     if first_note_id(pivot).is_some() {
-        html.push_str("<section id=\"note-detail-panel\" class=\"note-detail-panel\" aria-live=\"polite\"><p>Loading selected note…</p></section>");
+        notes_html.push_str("<section id=\"note-detail-panel\" class=\"note-detail-panel\" aria-live=\"polite\"><p>Loading selected note…</p></section>");
     } else {
-        html.push_str("<section id=\"note-detail-panel\" class=\"note-detail-panel\"><p>No notes match the active filter.</p></section>");
+        notes_html.push_str("<section id=\"note-detail-panel\" class=\"note-detail-panel\"><p>No notes match the active filter.</p></section>");
     }
-    html.push_str("</section>");
-    html.push_str(
-        "<section id=\"view-panel-cards\" class=\"workbench-view\" data-view=\"cards\" hidden>",
-    );
-    html.push_str(&lazy_secondary_pivot_panel_html(
-        "card-pivot-panel",
-        "card-pivot",
-        "Card pivot",
-        "Cards are loaded on demand so language changes stay responsive.",
-        "load-card-pivot-button",
-        "Load cards",
-    ));
-    html.push_str("</section>");
-    html.push_str("<section id=\"view-panel-source-strings\" class=\"workbench-view\" data-view=\"source-strings\" hidden>");
-    html.push_str(&lazy_secondary_pivot_panel_html(
-        "source-string-pivot-panel",
-        "source-string-pivot",
-        "Source String pivot",
-        "Reusable source strings are loaded only when you need that workflow.",
-        "load-source-string-pivot-button",
-        "Load source strings",
-    ));
-    html.push_str("</section>");
-    html.push_str("<section id=\"view-panel-metadata\" class=\"workbench-view\" data-view=\"metadata\" hidden>");
-    html.push_str(&lazy_secondary_pivot_panel_html(
-        "optional-metadata-panel",
-        "optional-metadata",
-        "Metadata checklist",
-        "Metadata rows are loaded only when you open the checklist.",
-        "load-optional-metadata-button",
-        "Load metadata",
-    ));
-    html.push_str("</section></div>");
-    html.push_str("<section class=\"apply-box\"><button id=\"apply-preview-button\" type=\"button\">Apply preview</button> <button id=\"apply-confirm-button\" type=\"button\">Confirm Apply</button><pre id=\"apply-preview-output\"></pre></section>");
-    html.push_str("</article>");
-    panel.set_inner_html(&html);
+    note_panel.set_inner_html(&notes_html);
+
+    apply_box.set_inner_html("<button id=\"apply-preview-button\" type=\"button\">Apply preview</button> <button id=\"apply-confirm-button\" type=\"button\">Confirm Apply</button><pre id=\"apply-preview-output\"></pre>");
+    reset_lazy_secondary_pivot_panels(&document);
 
     register_control_handlers(pivot);
     register_pane_layout_handlers(pivot);
     register_new_language_handlers(pivot);
     register_note_navigation_handlers(pivot);
     register_lazy_pivot_load_handlers(pivot);
-    register_view_switch_handlers(pivot);
     register_apply_handlers(pivot);
     update_staged_count_for_pivot(pivot);
     if let Some(note_id) = first_note_id(pivot) {
@@ -288,6 +473,63 @@ fn publish_note_pivot_panel(pivot: &Value) {
 }
 
 #[cfg(target_arch = "wasm32")]
+fn reset_lazy_secondary_pivot_panels(document: &web_sys::Document) {
+    reset_lazy_secondary_pivot_panel(
+        document,
+        "card-pivot-panel",
+        "card-pivot lazy-pivot-panel",
+        "Card pivot",
+        "Cards are loaded on demand so language changes stay responsive.",
+        "load-card-pivot-button",
+        "Load cards",
+    );
+    reset_lazy_secondary_pivot_panel(
+        document,
+        "source-string-pivot-panel",
+        "source-string-pivot lazy-pivot-panel",
+        "Source String pivot",
+        "Reusable source strings are loaded only when you need that workflow.",
+        "load-source-string-pivot-button",
+        "Load source strings",
+    );
+    reset_lazy_secondary_pivot_panel(
+        document,
+        "optional-metadata-panel",
+        "optional-metadata lazy-pivot-panel",
+        "Metadata checklist",
+        "Metadata rows are loaded only when you open the checklist.",
+        "load-optional-metadata-button",
+        "Load metadata",
+    );
+}
+
+#[cfg(target_arch = "wasm32")]
+fn reset_lazy_secondary_pivot_panel(
+    document: &web_sys::Document,
+    panel_id: &str,
+    class_name: &str,
+    title: &str,
+    description: &str,
+    button_id: &str,
+    button_label: &str,
+) {
+    let Some(panel) = document.get_element_by_id(panel_id) else {
+        return;
+    };
+    let _ = panel.set_attribute("class", class_name);
+    let _ = panel.set_attribute("data-lazy-state", "unloaded");
+    let _ = panel.set_attribute("aria-live", "polite");
+    let _ = panel.set_attribute("aria-busy", "false");
+    panel.set_inner_html(&lazy_secondary_pivot_panel_html(
+        title,
+        description,
+        button_id,
+        button_label,
+    ));
+}
+
+#[cfg(target_arch = "wasm32")]
+#[allow(dead_code)]
 fn workbench_view_switch_html() -> String {
     let views = [
         ("notes", "Notes"),
@@ -312,17 +554,13 @@ fn workbench_view_switch_html() -> String {
 
 #[cfg(target_arch = "wasm32")]
 fn lazy_secondary_pivot_panel_html(
-    panel_id: &str,
-    class_name: &str,
     title: &str,
     description: &str,
     button_id: &str,
     button_label: &str,
 ) -> String {
     format!(
-        "<section id=\"{}\" class=\"{} lazy-pivot-panel\" data-lazy-state=\"unloaded\" aria-live=\"polite\" aria-busy=\"false\"><h3>{}</h3><p>{}</p><button id=\"{}\" class=\"lazy-pivot-load-button\" type=\"button\">{}</button></section>",
-        escape_html(panel_id),
-        escape_html(class_name),
+        "<h3>{}</h3><p>{}</p><button id=\"{}\" class=\"lazy-pivot-load-button\" type=\"button\">{}</button>",
         escape_html(title),
         escape_html(description),
         escape_html(button_id),
@@ -2677,6 +2915,7 @@ fn register_lazy_pivot_load_handlers(pivot: &Value) {
 }
 
 #[cfg(target_arch = "wasm32")]
+#[allow(dead_code)]
 fn register_view_switch_handlers(pivot: &Value) {
     for view in ["notes", "cards", "source-strings", "metadata"] {
         attach_view_switch_handler(pivot, view);
@@ -2684,6 +2923,7 @@ fn register_view_switch_handlers(pivot: &Value) {
 }
 
 #[cfg(target_arch = "wasm32")]
+#[allow(dead_code)]
 fn attach_view_switch_handler(pivot: &Value, view: &str) {
     let view = view.to_owned();
     let pivot = pivot.clone();
@@ -2696,6 +2936,7 @@ fn attach_view_switch_handler(pivot: &Value, view: &str) {
 }
 
 #[cfg(target_arch = "wasm32")]
+#[allow(dead_code)]
 fn activate_workbench_view(view: &str) {
     let Some(document) = web_sys::window().and_then(|window| window.document()) else {
         return;
