@@ -13,8 +13,6 @@ use std::rc::Rc;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::closure::Closure;
 
 #[cfg(target_arch = "wasm32")]
 const STALE_WORKBENCH_REQUEST: &str = "__brainbrew_stale_workbench_request__";
@@ -22,14 +20,21 @@ const STALE_WORKBENCH_REQUEST: &str = "__brainbrew_stale_workbench_request__";
 #[cfg(target_arch = "wasm32")]
 thread_local! {
     static WORKBENCH_SELECTION_GENERATION: Cell<u64> = const { Cell::new(0) };
-    static CARD_DETAIL_GENERATION: Cell<u64> = const { Cell::new(0) };
-    static SOURCE_STRING_DETAIL_GENERATION: Cell<u64> = const { Cell::new(0) };
     static SELECTED_VIEW_SIGNAL: RefCell<Option<RwSignal<WorkbenchView>>> = const { RefCell::new(None) };
     static TOP_LEVEL_ERROR_SIGNAL: RefCell<Option<RwSignal<Option<String>>>> = const { RefCell::new(None) };
     static NOTE_PIVOT_SIGNAL: RefCell<Option<RwSignal<Option<Value>>>> = const { RefCell::new(None) };
     static SELECTED_NOTE_SIGNAL: RefCell<Option<RwSignal<Option<String>>>> = const { RefCell::new(None) };
     static NOTE_DETAIL_SIGNAL: RefCell<Option<RwSignal<NoteDetailState>>> = const { RefCell::new(None) };
     static NOTE_DETAIL_TOKEN_SIGNAL: RefCell<Option<RwSignal<u64>>> = const { RefCell::new(None) };
+    static CARD_LIST_SIGNAL: RefCell<Option<RwSignal<LazyValueState>>> = const { RefCell::new(None) };
+    static SELECTED_CARD_SIGNAL: RefCell<Option<RwSignal<Option<String>>>> = const { RefCell::new(None) };
+    static CARD_DETAIL_SIGNAL: RefCell<Option<RwSignal<DetailValueState>>> = const { RefCell::new(None) };
+    static CARD_DETAIL_TOKEN_SIGNAL: RefCell<Option<RwSignal<u64>>> = const { RefCell::new(None) };
+    static SOURCE_STRING_LIST_SIGNAL: RefCell<Option<RwSignal<LazyValueState>>> = const { RefCell::new(None) };
+    static SELECTED_SOURCE_STRING_SIGNAL: RefCell<Option<RwSignal<Option<String>>>> = const { RefCell::new(None) };
+    static SOURCE_STRING_DETAIL_SIGNAL: RefCell<Option<RwSignal<DetailValueState>>> = const { RefCell::new(None) };
+    static SOURCE_STRING_DETAIL_TOKEN_SIGNAL: RefCell<Option<RwSignal<u64>>> = const { RefCell::new(None) };
+    static OPTIONAL_METADATA_SIGNAL: RefCell<Option<RwSignal<LazyValueState>>> = const { RefCell::new(None) };
     static CURRENT_NOTE_PIVOT: RefCell<Option<Value>> = const { RefCell::new(None) };
 }
 
@@ -48,6 +53,26 @@ enum NoteDetailState {
     #[default]
     Empty,
     Loading,
+    Error(String),
+    Loaded(Value),
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Debug, Default)]
+enum LazyValueState {
+    #[default]
+    Unloaded,
+    Loading(String),
+    Error(String),
+    Loaded(Value),
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Debug, Default)]
+enum DetailValueState {
+    #[default]
+    Empty,
+    Loading(String),
     Error(String),
     Loaded(Value),
 }
@@ -88,6 +113,15 @@ pub fn App() -> impl IntoView {
     let selected_note_id = RwSignal::new(None::<String>);
     let note_detail = RwSignal::new(NoteDetailState::Empty);
     let note_detail_token = RwSignal::new(0_u64);
+    let card_list = RwSignal::new(LazyValueState::Unloaded);
+    let selected_card_id = RwSignal::new(None::<String>);
+    let card_detail = RwSignal::new(DetailValueState::Empty);
+    let card_detail_token = RwSignal::new(0_u64);
+    let source_string_list = RwSignal::new(LazyValueState::Unloaded);
+    let selected_source_string = RwSignal::new(None::<String>);
+    let source_string_detail = RwSignal::new(DetailValueState::Empty);
+    let source_string_detail_token = RwSignal::new(0_u64);
+    let optional_metadata = RwSignal::new(LazyValueState::Unloaded);
     staging::provide(staging::Staging::new());
 
     SELECTED_VIEW_SIGNAL.with(|signal| {
@@ -107,6 +141,33 @@ pub fn App() -> impl IntoView {
     });
     NOTE_DETAIL_TOKEN_SIGNAL.with(|signal| {
         *signal.borrow_mut() = Some(note_detail_token);
+    });
+    CARD_LIST_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(card_list);
+    });
+    SELECTED_CARD_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(selected_card_id);
+    });
+    CARD_DETAIL_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(card_detail);
+    });
+    CARD_DETAIL_TOKEN_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(card_detail_token);
+    });
+    SOURCE_STRING_LIST_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(source_string_list);
+    });
+    SELECTED_SOURCE_STRING_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(selected_source_string);
+    });
+    SOURCE_STRING_DETAIL_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(source_string_detail);
+    });
+    SOURCE_STRING_DETAIL_TOKEN_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(source_string_detail_token);
+    });
+    OPTIONAL_METADATA_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(optional_metadata);
     });
 
     publish_workspace_probe("loading", "Loading workspace metadata…", None);
@@ -158,7 +219,9 @@ pub fn App() -> impl IntoView {
                 {move || top_level_error.get().unwrap_or_default()}
             </section>
             <article id="workbench-current-workspace" class="workbench-panel">
-                <section id="workbench-global-controls"></section>
+                <section id="workbench-global-controls">
+                    <GlobalControls pivot=note_pivot />
+                </section>
                 <nav id="workbench-view-switch" class="workbench-view-switch" aria-label="Workbench views">
                     <button
                         id="view-notes"
@@ -222,13 +285,11 @@ pub fn App() -> impl IntoView {
                         data-view="cards"
                         hidden=move || selected_view.get() != WorkbenchView::Cards
                     >
-                        <section
-                            id="card-pivot-panel"
-                            class="card-pivot lazy-pivot-panel"
-                            data-lazy-state="unloaded"
-                            aria-live="polite"
-                            aria-busy="false"
-                        ></section>
+                        <CardPivotPanel
+                            state=card_list
+                            selected_card_id=selected_card_id
+                            detail=card_detail
+                        />
                     </section>
                     <section
                         id="view-panel-source-strings"
@@ -236,13 +297,11 @@ pub fn App() -> impl IntoView {
                         data-view="source-strings"
                         hidden=move || selected_view.get() != WorkbenchView::SourceStrings
                     >
-                        <section
-                            id="source-string-pivot-panel"
-                            class="source-string-pivot lazy-pivot-panel"
-                            data-lazy-state="unloaded"
-                            aria-live="polite"
-                            aria-busy="false"
-                        ></section>
+                        <SourceStringPivotPanel
+                            state=source_string_list
+                            selected_source=selected_source_string
+                            detail=source_string_detail
+                        />
                     </section>
                     <section
                         id="view-panel-metadata"
@@ -250,13 +309,7 @@ pub fn App() -> impl IntoView {
                         data-view="metadata"
                         hidden=move || selected_view.get() != WorkbenchView::Metadata
                     >
-                        <section
-                            id="optional-metadata-panel"
-                            class="optional-metadata lazy-pivot-panel"
-                            data-lazy-state="unloaded"
-                            aria-live="polite"
-                            aria-busy="false"
-                        ></section>
+                        <OptionalMetadataPanel state=optional_metadata />
                     </section>
                 </div>
                 <WorkbenchWorkflowPanels pivot=note_pivot />
@@ -289,6 +342,186 @@ fn workbench_view_button_class(current: WorkbenchView, view: WorkbenchView) -> &
 #[cfg(target_arch = "wasm32")]
 fn workbench_view_aria_current(current: WorkbenchView, view: WorkbenchView) -> &'static str {
     if current == view { "page" } else { "" }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn GlobalControls(pivot: RwSignal<Option<Value>>) -> impl IntoView {
+    view! {
+        {move || match pivot.get() {
+            Some(pivot) => view! { <LoadedGlobalControls pivot=pivot /> }.into_any(),
+            None => "".into_any(),
+        }}
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn LoadedGlobalControls(pivot: Value) -> impl IntoView {
+    let language = pivot["language"]["code"].as_str().unwrap_or("").to_owned();
+    let target = pivot["target"]["label"].as_str().unwrap_or("").to_owned();
+    let overlay = pivot["overlay"]["label"].as_str().unwrap_or("").to_owned();
+    let progress = pivot["progress"].clone();
+    let metadata_progress = pivot["metadata_progress"].clone();
+    let badges = pivot["overlay_badges"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let active_filter = pivot["filters"]["active"]
+        .as_str()
+        .unwrap_or("all")
+        .to_owned();
+    let prefixes = active_storage_prefixes(&pivot);
+
+    let effect_language = language.clone();
+    let effect_target = target.clone();
+    let effect_overlay = overlay.clone();
+    Effect::new(move |_| {
+        if let Some(panel) = web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.get_element_by_id("workbench-current-workspace"))
+        {
+            let _ = panel.set_attribute("data-language", &effect_language);
+            let _ = panel.set_attribute("data-target", &effect_target);
+            let _ = panel.set_attribute("data-overlay", &effect_overlay);
+        }
+        update_staged_count_for_prefixes(&prefixes);
+    });
+
+    view! {
+        <header class="workbench-panel__header">
+            <h2>Deck Workbench Note pivot</h2>
+            <SelectionSelect
+                id="language-select".to_owned()
+                label="Language".to_owned()
+                options=pivot["selection_options"]["languages"].clone()
+                value_key="code".to_owned()
+                label_key="display_name".to_owned()
+                fallback=language.clone()
+                on_change=Rc::new(move |value| reload_note_pivot(non_empty(value), None, None, current_active_filter()))
+            />
+            <SelectionSelect
+                id="target-select".to_owned()
+                label="Target".to_owned()
+                options=pivot["selection_options"]["targets"].clone()
+                value_key="label".to_owned()
+                label_key="label".to_owned()
+                fallback=target.clone()
+                on_change=Rc::new(move |_| reload_note_pivot(current_selected_value("language-select"), current_selected_value("target-select"), current_selected_value("overlay-select"), current_active_filter()))
+            />
+            <SelectionSelect
+                id="overlay-select".to_owned()
+                label="Overlay".to_owned()
+                options=pivot["selection_options"]["overlays"].clone()
+                value_key="label".to_owned()
+                label_key="label".to_owned()
+                fallback=overlay.clone()
+                on_change=Rc::new(move |_| reload_note_pivot(current_selected_value("language-select"), current_selected_value("target-select"), current_selected_value("overlay-select"), current_active_filter()))
+            />
+        </header>
+        <section
+            id="translation-progress"
+            data-complete=progress["complete"].as_u64().unwrap_or(0).to_string()
+            data-total=progress["total"].as_u64().unwrap_or(0).to_string()
+            data-missing=progress["missing"].as_u64().unwrap_or(0).to_string()
+            data-stale=progress["stale"].as_u64().unwrap_or(0).to_string()
+        >
+            {format!(
+                "Main note-field progress: {} / {} complete, {} missing, {} stale (",
+                progress["complete"].as_u64().unwrap_or(0),
+                progress["total"].as_u64().unwrap_or(0),
+                progress["missing"].as_u64().unwrap_or(0),
+                progress["stale"].as_u64().unwrap_or(0),
+            )}
+            <span id="staged-edit-count" data-count="0">0</span>
+            " staged)"
+        </section>
+        <section
+            id="optional-progress"
+            data-complete=metadata_progress["complete"].as_u64().unwrap_or(0).to_string()
+            data-total=metadata_progress["total"].as_u64().unwrap_or(0).to_string()
+            data-missing=metadata_progress["missing"].as_u64().unwrap_or(0).to_string()
+            data-stale=metadata_progress["stale"].as_u64().unwrap_or(0).to_string()
+        >
+            {format!(
+                "Metadata: {} / {} complete, {} missing, {} stale",
+                metadata_progress["complete"].as_u64().unwrap_or(0),
+                metadata_progress["total"].as_u64().unwrap_or(0),
+                metadata_progress["missing"].as_u64().unwrap_or(0),
+                metadata_progress["stale"].as_u64().unwrap_or(0),
+            )}
+        </section>
+        <nav class="overlay-badges">
+            <For
+                each=move || badges.clone()
+                key=|badge| badge["label"].as_str().unwrap_or("overlay").to_owned()
+                children=move |badge| {
+                    let class = if badge["active"].as_bool().unwrap_or(false) { "overlay-badge active" } else { "overlay-badge" };
+                    view! { <span class=class>{badge["label"].as_str().unwrap_or("overlay").to_owned()}</span> }
+                }
+            />
+        </nav>
+        <nav class="pivot-filters" aria-label="Note pivot filters">
+            <For
+                each=move || vec![
+                    ("all".to_owned(), "All".to_owned()),
+                    ("missing".to_owned(), "Missing".to_owned()),
+                    ("stale".to_owned(), "Stale".to_owned()),
+                    ("needs_work".to_owned(), "Needs work".to_owned()),
+                ]
+                key=|(filter, _)| filter.clone()
+                children=move |(filter, label)| {
+                    let class = if active_filter == filter { "active" } else { "" };
+                    view! {
+                        <button
+                            type="button"
+                            data-filter=filter.clone()
+                            class=class
+                            on:click=move |_| reload_note_pivot(
+                                current_selected_value("language-select"),
+                                current_selected_value("target-select"),
+                                current_selected_value("overlay-select"),
+                                Some(filter.clone()),
+                            )
+                        >{label}</button>
+                    }
+                }
+            />
+        </nav>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn SelectionSelect(
+    id: String,
+    label: String,
+    options: Value,
+    value_key: String,
+    label_key: String,
+    fallback: String,
+    on_change: Rc<dyn Fn(String)>,
+) -> impl IntoView {
+    let mut rows = options.as_array().cloned().unwrap_or_default();
+    if rows.is_empty() {
+        rows.push(serde_json::json!({ value_key.clone(): fallback.clone(), label_key.clone(): fallback.clone(), "active": true }));
+    }
+    view! {
+        <label>{label}" "
+            <select id=id on:change=move |event| on_change(event_select_value(&event))>
+                <For
+                    each=move || rows.clone()
+                    key={let value_key = value_key.clone(); let fallback = fallback.clone(); move |option| option[&value_key].as_str().unwrap_or(&fallback).to_owned()}
+                    children=move |option| {
+                        let value = option[&value_key].as_str().unwrap_or(&fallback).to_owned();
+                        let option_label = option[&label_key].as_str().unwrap_or(&value).to_owned();
+                        let active = option["active"].as_bool().unwrap_or(false);
+                        view! { <option value=value selected=active>{option_label}</option> }
+                    }
+                />
+            </select>
+        </label>
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -701,6 +934,703 @@ fn NoteFieldRow(detail: Value, note: Value, field: Value) -> impl IntoView {
                     </select>
                 </label>
             </td>
+        </tr>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn CardPivotPanel(
+    state: RwSignal<LazyValueState>,
+    selected_card_id: RwSignal<Option<String>>,
+    detail: RwSignal<DetailValueState>,
+) -> impl IntoView {
+    view! {
+        <section
+            id="card-pivot-panel"
+            class="card-pivot lazy-pivot-panel"
+            data-lazy-state=move || lazy_state_key(&state.get())
+            aria-live="polite"
+            aria-busy=move || lazy_state_busy(&state.get())
+        >
+            {move || match state.get() {
+                LazyValueState::Unloaded => view! {
+                    <h3>Card pivot</h3>
+                    <p>Cards are loaded on demand so language changes stay responsive.</p>
+                    <button id="load-card-pivot-button" class="lazy-pivot-load-button" type="button" on:click=move |_| maybe_load_current_view(WorkbenchView::Cards)>Load cards</button>
+                }.into_any(),
+                LazyValueState::Loading(message) => view! { <p class="workbench-loading">{message}</p> }.into_any(),
+                LazyValueState::Error(error) => view! { <p class="workbench-error">{error}</p> }.into_any(),
+                LazyValueState::Loaded(list) => view! { <LoadedCardList list=list selected_card_id=selected_card_id detail=detail /> }.into_any(),
+            }}
+        </section>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn LoadedCardList(
+    list: Value,
+    selected_card_id: RwSignal<Option<String>>,
+    detail: RwSignal<DetailValueState>,
+) -> impl IntoView {
+    let rows = list["rows"].as_array().cloned().unwrap_or_default();
+    let active_group = list["filters"]["content_group"]
+        .as_str()
+        .unwrap_or("all")
+        .to_owned();
+    let active_filter = list["filters"]["active"]
+        .as_str()
+        .unwrap_or("all")
+        .to_owned();
+    let groups = list["filters"]["content_groups"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let total = list["total"].as_u64().unwrap_or(0);
+    let (language, target, overlay) = pivot_selection_parts(&list);
+
+    view! {
+        <div class="card-pivot-view">
+            <h3>Card pivot</h3>
+            <label>Content group " "
+                <select
+                    id="card-content-group-filter"
+                    on:change={let language = language.clone(); let target = target.clone(); let overlay = overlay.clone(); move |event| {
+                        load_card_list_for_parts(language.clone(), target.clone(), overlay.clone(), current_card_filter(), non_empty(event_select_value(&event)));
+                    }}
+                >
+                    <option value="all" selected=active_group == "all">All groups</option>
+                    <For
+                        each=move || groups.clone()
+                        key=|group| group.as_str().unwrap_or("").to_owned()
+                        children={let active_group = active_group.clone(); move |group| {
+                            let group = group.as_str().unwrap_or("").to_owned();
+                            view! { <option value=group.clone() selected=active_group == group>{group.clone()}</option> }
+                        }}
+                    />
+                </select>
+            </label>
+            <nav class="card-pivot-filters">
+                <For
+                    each=move || vec![
+                        ("all".to_owned(), "All cards".to_owned()),
+                        ("missing".to_owned(), "Missing".to_owned()),
+                        ("stale".to_owned(), "Stale".to_owned()),
+                        ("needs_work".to_owned(), "Needs work".to_owned()),
+                    ]
+                    key=|(filter, _)| filter.clone()
+                    children={let language = language.clone(); let target = target.clone(); let overlay = overlay.clone(); move |(filter, label)| {
+                        let class = if active_filter == filter { "active" } else { "" };
+                        view! {
+                            <button
+                                type="button"
+                                data-filter=filter.clone()
+                                class=class
+                                on:click={let language = language.clone(); let target = target.clone(); let overlay = overlay.clone(); let filter = filter.clone(); move |_| {
+                                    load_card_list_for_parts(language.clone(), target.clone(), overlay.clone(), Some(filter.clone()), current_selected_value("card-content-group-filter"));
+                                }}
+                            >{label}</button>
+                        }
+                    }}
+                />
+            </nav>
+            <p class="navigation-page-summary">{format!("Showing {} of {} card(s).", rows.len(), total)}</p>
+            <div class="card-grid">
+                <ol class="card-list">
+                    <For
+                        each=move || rows.clone()
+                        key=|card| card["card_id"].as_str().unwrap_or("").to_owned()
+                        children={let language = language.clone(); let target = target.clone(); let overlay = overlay.clone(); move |card| {
+                            let card_id = card["card_id"].as_str().unwrap_or("").to_owned();
+                            let title = card["title"].as_str().unwrap_or("card").to_owned();
+                            let template = card["template_name"].as_str().unwrap_or("template").to_owned();
+                            let status = card["status"].as_str().unwrap_or("unknown").to_owned();
+                            view! {
+                                <li>
+                                    <button
+                                        class={let active_card_id = card_id.clone(); move || if selected_card_id.get().as_deref() == Some(active_card_id.as_str()) { "card-row active" } else { "card-row" }}
+                                        type="button"
+                                        data-card-id=card_id.clone()
+                                        on:click={let language = language.clone(); let target = target.clone(); let overlay = overlay.clone(); let card_id = card_id.clone(); move |_| {
+                                            selected_card_id.set(Some(card_id.clone()));
+                                            detail.set(DetailValueState::Loading("Loading selected card…".to_owned()));
+                                            load_card_detail_for_parts(language.clone(), target.clone(), overlay.clone(), card_id.clone(), current_card_filter(), current_selected_value("card-content-group-filter"));
+                                        }}
+                                    >{format!("{title} · {template} · {status}")}</button>
+                                </li>
+                            }
+                        }}
+                    />
+                </ol>
+                <section id="card-detail-panel" class="card-detail-panel">
+                    <CardDetailPanel detail=detail />
+                </section>
+            </div>
+        </div>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn CardDetailPanel(detail: RwSignal<DetailValueState>) -> impl IntoView {
+    view! {
+        {move || match detail.get() {
+            DetailValueState::Empty => view! { <p>Select a card to load its preview and editable fields.</p> }.into_any(),
+            DetailValueState::Loading(message) => view! { <p class="workbench-loading">{message}</p> }.into_any(),
+            DetailValueState::Error(error) => view! { <p class="workbench-error">{error}</p> }.into_any(),
+            DetailValueState::Loaded(pivot) => {
+                if let Some(card) = pivot.get("selected_card").filter(|value| !value.is_null()).cloned() {
+                    view! { <LoadedCardDetail pivot=pivot card=card /> }.into_any()
+                } else {
+                    view! { <p>No cards match the active filters.</p> }.into_any()
+                }
+            }
+        }}
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn LoadedCardDetail(pivot: Value, card: Value) -> impl IntoView {
+    let card_id = card["card_id"].as_str().unwrap_or("").to_owned();
+    let title = card["title"].as_str().unwrap_or("card").to_owned();
+    let template = card["template_name"]
+        .as_str()
+        .unwrap_or("template")
+        .to_owned();
+    let fields = card["fields"].as_array().cloned().unwrap_or_default();
+    let source_preview = preview_html(&card["source_preview"]);
+    let target_preview = preview_html(&card["target_preview"]);
+    let pivot_for_effect = pivot.clone();
+    let pivot_for_inline = pivot.clone();
+
+    Effect::new(move |_| decorate_card_detail_dom(&pivot_for_effect));
+
+    view! {
+        <section class="card-detail" data-card-id=card_id>
+            <h4>{format!("{title}: {template}")}</h4>
+            <div class="preview-grid">
+                <section><h5>Source card</h5><div class="card-source-preview" inner_html=source_preview></div></section>
+                <section><h5>Target card</h5><div class="card-target-preview" inner_html=target_preview on:input=move |event| handle_card_inline_target_input(&pivot_for_inline, event)></div></section>
+            </div>
+            <p class="inline-edit-hint">Click highlighted text in the selected target card to stage a card-specific edit.</p>
+            <details class="field-editor-details">
+                <summary>Advanced card field controls</summary>
+                <table class="card-field-editor"><thead><tr><th>Field</th><th>Source edit</th><th>Target edit</th><th>Status</th><th>Mode</th></tr></thead>
+                    <tbody>
+                        <For
+                            each=move || fields.clone()
+                            key=|field| field["path"].as_str().unwrap_or("").to_owned()
+                            children=move |field| view! { <CardFieldRow pivot=pivot.clone() field=field /> }
+                        />
+                    </tbody>
+                </table>
+            </details>
+        </section>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn CardFieldRow(pivot: Value, field: Value) -> impl IntoView {
+    let prefix = storage_prefix(&pivot);
+    let path = field["path"].as_str().unwrap_or("").to_owned();
+    let source = field["source"].as_str().unwrap_or("").to_owned();
+    let field_id = field["field_id"].as_str().unwrap_or("").to_owned();
+    let id = id_for_path(&path);
+    let field_name = field["field_name"].as_str().unwrap_or("field").to_owned();
+    let editable = field["editable"].as_bool().unwrap_or(false);
+    let source_editable = field["source_editable"].as_bool().unwrap_or(false);
+    let staged = staging::staged_translation_for_parts(&prefix, &path, &source);
+    let staged_source = staging::staged_source_for_parts(&prefix, &path, &source);
+    let source_initial = staged_source
+        .as_ref()
+        .and_then(|edit| edit["value"].as_str())
+        .unwrap_or(&source)
+        .to_owned();
+    let target_initial = staged
+        .as_ref()
+        .and_then(|edit| edit["value"].as_str())
+        .or_else(|| field["target"].as_str())
+        .unwrap_or(&source)
+        .to_owned();
+    let mode_initial = staged
+        .as_ref()
+        .and_then(|edit| edit["mode"].as_str())
+        .unwrap_or("direct")
+        .to_owned();
+    let source_scope_initial = staged_source
+        .as_ref()
+        .and_then(|edit| edit["scope"].as_str())
+        .unwrap_or("field")
+        .to_owned();
+    let source_impact_initial = staged_source
+        .as_ref()
+        .and_then(|edit| edit["impact_action"].as_str())
+        .unwrap_or("stale_translation")
+        .to_owned();
+    let source_value = RwSignal::new(source_initial.clone());
+    let target_value = RwSignal::new(target_initial.clone());
+    let mode_value = RwSignal::new(mode_initial.clone());
+    let source_scope = RwSignal::new(source_scope_initial.clone());
+    let source_impact = RwSignal::new(source_impact_initial.clone());
+    let source_readonly = RwSignal::new(staged_source.is_none());
+    let status_initial = staged
+        .as_ref()
+        .and_then(|edit| edit["mode"].as_str())
+        .map(|mode| format!("staged_{mode}"))
+        .or_else(|| staged_source.as_ref().map(|_| "staged_source".to_owned()))
+        .unwrap_or_else(|| field["status"].as_str().unwrap_or("unknown").to_owned());
+    let status_value = RwSignal::new(status_initial);
+    let source_text_id = format!("card-source-text-{id}");
+    let source_toggle_id = format!("card-source-edit-toggle-{id}");
+    let source_input_id = format!("card-source-input-{id}");
+    let source_scope_id = format!("card-source-scope-{id}");
+    let source_impact_id = format!("card-source-impact-{id}");
+    let target_input_id = format!("card-translation-input-{id}");
+    let target_text_id = format!("card-target-text-{id}");
+    let status_id = format!("card-status-text-{id}");
+    let mode_id = format!("card-translation-mode-{id}");
+
+    let stage_target = Rc::new({
+        let prefix = prefix.clone();
+        let path = path.clone();
+        let source = source.clone();
+        let field_id = field_id.clone();
+        let source_input_id = source_input_id.clone();
+        let target_text_id = target_text_id.clone();
+        let status_id = status_id.clone();
+        move |value: String, mode: String| {
+            let effective_source =
+                effective_source_for_dom(&prefix, &path, &source, &source_input_id);
+            stage_translation_with_optional_context(
+                &prefix,
+                &path,
+                &source,
+                &effective_source,
+                &value,
+                &mode,
+                mode == "contextual",
+            );
+            target_value.set(value.clone());
+            status_value.set(format!("staged_{mode}"));
+            set_element_text(&target_text_id, &value);
+            set_element_text(&status_id, &format!("staged_{mode}"));
+            if let Some(document) = web_sys::window().and_then(|window| window.document()) {
+                update_card_preview_field(&document, "card-target-preview", &field_id, &value);
+                mark_card_preview_field_staged(&document, &field_id, true);
+            }
+            update_staged_count(&prefix);
+        }
+    });
+    let stage_source = Rc::new({
+        let prefix = prefix.clone();
+        let path = path.clone();
+        let source = source.clone();
+        let field_id = field_id.clone();
+        let source_text_id = source_text_id.clone();
+        let status_id = status_id.clone();
+        move |value: String, scope: String, impact: String| {
+            staging::stage_source_edit(&prefix, &path, &source, &value, &scope, &impact);
+            source_value.set(value.clone());
+            source_readonly.set(false);
+            status_value.set("staged_source".to_owned());
+            set_element_text(&source_text_id, &value);
+            set_element_text(&status_id, "staged_source");
+            if let Some(document) = web_sys::window().and_then(|window| window.document()) {
+                update_card_preview_field(&document, "card-source-preview", &field_id, &value);
+            }
+            update_staged_count(&prefix);
+        }
+    });
+
+    view! {
+        <tr class="card-field-row" data-path=path.clone() data-source=source.clone()>
+            <td>{field_name}</td>
+            <td>
+                <span id=source_text_id.clone()>{move || source_value.get()}</span><br/>
+                <button id=source_toggle_id type="button" disabled=!source_editable on:click={let source_input_id = source_input_id.clone(); move |_| { source_readonly.set(false); focus_input(&source_input_id); }}>Edit source</button> " "
+                <input id=source_input_id.clone() value=source_initial readonly=move || source_readonly.get() disabled=!source_editable on:input={let stage_source = stage_source.clone(); move |event| stage_source(event_input_value(&event), source_scope.get_untracked(), source_impact.get_untracked())} />
+                <br/>
+                <select id=source_scope_id disabled=!source_editable on:change={let stage_source = stage_source.clone(); move |event| { let value = event_select_value(&event); source_scope.set(value.clone()); stage_source(source_value.get_untracked(), value, source_impact.get_untracked()); }}>
+                    <option value="field" selected=source_scope_initial == "field">This field only</option>
+                    <option value="all_occurrences" selected=source_scope_initial == "all_occurrences">All occurrences</option>
+                </select> " "
+                <select id=source_impact_id disabled=!source_editable on:change={let stage_source = stage_source.clone(); move |event| { let value = event_select_value(&event); source_impact.set(value.clone()); stage_source(source_value.get_untracked(), source_scope.get_untracked(), value); }}>
+                    <option value="stale_translation" selected=source_impact_initial == "stale_translation">Create stale translation</option>
+                    <option value="migrate_key" selected=source_impact_initial == "migrate_key">Migrate key</option>
+                </select>
+            </td>
+            <td>
+                <input id=target_input_id.clone() value=target_initial readonly=!editable on:input={let stage_target = stage_target.clone(); move |event| stage_target(event_input_value(&event), mode_value.get_untracked())} />
+                <div id=target_text_id>{move || target_value.get()}</div>
+            </td>
+            <td id=status_id>{move || status_value.get()}</td>
+            <td>
+                <select id=mode_id disabled=!editable on:change={let stage_target = stage_target.clone(); move |event| { let value = event_select_value(&event); mode_value.set(value.clone()); stage_target(target_value.get_untracked(), value); }}>
+                    <option value="direct" selected=mode_initial == "direct">Direct</option>
+                    <option value="contextual" selected=mode_initial == "contextual">Contextual</option>
+                    <option value="no_change" selected=mode_initial == "no_change">No change</option>
+                </select>
+            </td>
+        </tr>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn SourceStringPivotPanel(
+    state: RwSignal<LazyValueState>,
+    selected_source: RwSignal<Option<String>>,
+    detail: RwSignal<DetailValueState>,
+) -> impl IntoView {
+    view! {
+        <section
+            id="source-string-pivot-panel"
+            class="source-string-pivot lazy-pivot-panel"
+            data-lazy-state=move || lazy_state_key(&state.get())
+            aria-live="polite"
+            aria-busy=move || lazy_state_busy(&state.get())
+        >
+            {move || match state.get() {
+                LazyValueState::Unloaded => view! {
+                    <h3>Source String pivot</h3>
+                    <p>Reusable source strings are loaded only when you need that workflow.</p>
+                    <button id="load-source-string-pivot-button" class="lazy-pivot-load-button" type="button" on:click=move |_| maybe_load_current_view(WorkbenchView::SourceStrings)>Load source strings</button>
+                }.into_any(),
+                LazyValueState::Loading(message) => view! { <p class="workbench-loading">{message}</p> }.into_any(),
+                LazyValueState::Error(error) => view! { <p class="workbench-error">{error}</p> }.into_any(),
+                LazyValueState::Loaded(list) => view! { <LoadedSourceStringList list=list selected_source=selected_source detail=detail /> }.into_any(),
+            }}
+        </section>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn LoadedSourceStringList(
+    list: Value,
+    selected_source: RwSignal<Option<String>>,
+    detail: RwSignal<DetailValueState>,
+) -> impl IntoView {
+    let rows = list["rows"].as_array().cloned().unwrap_or_default();
+    let active_group = list["filters"]["content_group"]
+        .as_str()
+        .unwrap_or("all")
+        .to_owned();
+    let groups = list["filters"]["content_groups"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let total = list["total"].as_u64().unwrap_or(0);
+    let (language, target, overlay) = pivot_selection_parts(&list);
+    view! {
+        <>
+            <h3>Source String pivot</h3>
+            <div class="source-string-filters"><label>Content group " "
+                <select id="source-string-content-group-filter" on:change={let language = language.clone(); let target = target.clone(); let overlay = overlay.clone(); move |event| load_source_string_list_for_parts(language.clone(), target.clone(), overlay.clone(), non_empty(event_select_value(&event)), None)}>
+                    <option value="all" selected=active_group == "all">All groups</option>
+                    <For each=move || groups.clone() key=|group| group.as_str().unwrap_or("").to_owned() children={let active_group = active_group.clone(); move |group| {
+                        let group = group.as_str().unwrap_or("").to_owned();
+                        view! { <option value=group.clone() selected=active_group == group>{group.clone()}</option> }
+                    }} />
+                </select>
+            </label></div>
+            <p class="navigation-page-summary">{format!("Showing {} of {} source string(s).", rows.len(), total)}</p>
+            <div class="source-string-grid">
+                <ol class="source-string-list">
+                    <For
+                        each=move || rows.clone()
+                        key=|row| row["source"].as_str().unwrap_or("").to_owned()
+                        children={let language = language.clone(); let target = target.clone(); let overlay = overlay.clone(); move |row| {
+                            let source = row["source"].as_str().unwrap_or("").to_owned();
+                            let count = row["occurrence_count"].as_u64().unwrap_or(0);
+                            let status = row["status"].as_str().unwrap_or("unknown").to_owned();
+                            view! {
+                                <li><button
+                                    type="button"
+                                    class={let active_source = source.clone(); move || if selected_source.get().as_deref() == Some(active_source.as_str()) { "source-string-row active" } else { "source-string-row" }}
+                                    data-source=source.clone()
+                                    on:click={let language = language.clone(); let target = target.clone(); let overlay = overlay.clone(); let source = source.clone(); move |_| {
+                                        selected_source.set(Some(source.clone()));
+                                        detail.set(DetailValueState::Loading("Loading selected source string…".to_owned()));
+                                        load_source_string_detail_for_parts(language.clone(), target.clone(), overlay.clone(), source.clone(), current_selected_value("source-string-content-group-filter"), None);
+                                    }}
+                                ><strong>{source.clone()}</strong><br/>{format!("{count} occurrence(s), {status}")}</button></li>
+                            }
+                        }}
+                    />
+                </ol>
+                <section id="source-string-detail-panel" class="source-string-detail">
+                    <SourceStringDetailPanel detail=detail />
+                </section>
+            </div>
+        </>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn SourceStringDetailPanel(detail: RwSignal<DetailValueState>) -> impl IntoView {
+    view! {
+        {move || match detail.get() {
+            DetailValueState::Empty => view! { <p>Select a source string to load occurrences.</p> }.into_any(),
+            DetailValueState::Loading(message) => view! { <p class="workbench-loading">{message}</p> }.into_any(),
+            DetailValueState::Error(error) => view! { <p class="workbench-error">{error}</p> }.into_any(),
+            DetailValueState::Loaded(pivot) => view! { <LoadedSourceStringDetail pivot=pivot /> }.into_any(),
+        }}
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn LoadedSourceStringDetail(pivot: Value) -> impl IntoView {
+    let selected_source = pivot["selected_source"].as_str().unwrap_or("").to_owned();
+    let occurrences = pivot["occurrences"].as_array().cloned().unwrap_or_default();
+    let first = occurrences.first().cloned();
+    let direct_value = first
+        .as_ref()
+        .map(|occurrence| {
+            staging::staged_translation_for_parts(
+                &storage_prefix(&pivot),
+                occurrence["path"].as_str().unwrap_or(""),
+                &selected_source,
+            )
+            .and_then(|edit| edit["value"].as_str().map(str::to_owned))
+            .or_else(|| occurrence["target"].as_str().map(str::to_owned))
+            .unwrap_or_else(|| selected_source.clone())
+        })
+        .unwrap_or_else(|| selected_source.clone());
+    let direct_signal = RwSignal::new(direct_value.clone());
+    let first_path = first
+        .as_ref()
+        .and_then(|occurrence| occurrence["path"].as_str())
+        .unwrap_or("")
+        .to_owned();
+    let prefix = storage_prefix(&pivot);
+
+    let stage_direct = Rc::new({
+        let prefix = prefix.clone();
+        let selected_source = selected_source.clone();
+        let first_path = first_path.clone();
+        move |value: String, mode: String| {
+            stage_translation_with_optional_context(
+                &prefix,
+                &first_path,
+                &selected_source,
+                &selected_source,
+                &value,
+                &mode,
+                false,
+            );
+            direct_signal.set(value.clone());
+            if let Some(document) = web_sys::window().and_then(|window| window.document()) {
+                update_source_string_targets(&document, &selected_source, &value);
+            }
+            update_staged_count(&prefix);
+        }
+    });
+
+    view! {
+        <>
+            <h4>{selected_source.clone()}</h4>
+            {if first.is_some() { view! {
+                <div class="source-string-global-edit">
+                    <label>Reusable translation " "<input id="source-string-direct-input" value=direct_value on:input={let stage_direct = stage_direct.clone(); move |event| stage_direct(event_input_value(&event), "direct".to_owned())} /></label> " "
+                    <button id="source-string-direct-stage" type="button" on:click={let stage_direct = stage_direct.clone(); let direct_source = selected_source.clone(); move |_| stage_direct(current_input_value("source-string-direct-input").unwrap_or_else(|| direct_source.clone()), "direct".to_owned())}> {format!("Stage direct translation for {} occurrence(s)", occurrences.len())}</button> " "
+                    <button id="source-string-no-change" type="button" on:click={let stage_direct = stage_direct.clone(); let no_change_source = selected_source.clone(); move |_| stage_direct(no_change_source.clone(), "no_change".to_owned())}>{"Stage global no-change"}</button>
+                </div>
+            }.into_any() } else { "".into_any() }}
+            <table class="source-string-occurrences"><thead><tr><th>Context</th><th>Source</th><th>Target / contextual override</th><th>Status</th></tr></thead>
+                <tbody>
+                    <For
+                        each=move || occurrences.clone()
+                        key=|occurrence| occurrence["path"].as_str().unwrap_or("").to_owned()
+                        children={let pivot = pivot.clone(); let selected_source = selected_source.clone(); let prefix = prefix.clone(); move |occurrence| view! { <SourceStringOccurrenceRow pivot=pivot.clone() occurrence=occurrence selected_source=selected_source.clone() prefix=prefix.clone() /> }}
+                    />
+                </tbody>
+            </table>
+        </>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn SourceStringOccurrenceRow(
+    pivot: Value,
+    occurrence: Value,
+    selected_source: String,
+    prefix: String,
+) -> impl IntoView {
+    let path = occurrence["path"].as_str().unwrap_or("").to_owned();
+    let id = id_for_path(&path);
+    let source = occurrence["source"]
+        .as_str()
+        .unwrap_or(&selected_source)
+        .to_owned();
+    let initial =
+        staging::staged_translation_for_parts(&storage_prefix(&pivot), &path, &selected_source)
+            .and_then(|edit| edit["value"].as_str().map(str::to_owned))
+            .or_else(|| occurrence["target"].as_str().map(str::to_owned))
+            .unwrap_or_else(|| selected_source.clone());
+    let target_value = RwSignal::new(initial.clone());
+    let input_id = format!("source-string-contextual-input-{id}");
+    let stage_id = format!("source-string-contextual-stage-{id}");
+    let stage_contextual = Rc::new({
+        let prefix = prefix.clone();
+        let path = path.clone();
+        let source = source.clone();
+        move |value: String| {
+            stage_translation_with_optional_context(
+                &prefix,
+                &path,
+                &source,
+                &source,
+                &value,
+                "contextual",
+                true,
+            );
+            target_value.set(value.clone());
+            if let Some(document) = web_sys::window().and_then(|window| window.document()) {
+                update_source_string_contextual_target(&document, &path, &value);
+            }
+            update_staged_count(&prefix);
+        }
+    });
+    view! {
+        <tr class="source-string-occurrence" data-source=selected_source.clone() data-path=path.clone()>
+            <td>{occurrence["friendly_context"].as_str().unwrap_or(&path).to_owned()}<br/><small>{path.clone()}</small></td>
+            <td>{selected_source.clone()}</td>
+            <td>
+                <div
+                    id=input_id.clone()
+                    class="source-string-contextual-input"
+                    contenteditable="true"
+                    role="textbox"
+                    tabindex="0"
+                    data-path=path.clone()
+                    data-source=selected_source.clone()
+                    on:input={let stage_contextual = stage_contextual.clone(); move |event| stage_contextual(event_text_content(&event))}
+                >{initial}</div> " "
+                <button id=stage_id type="button" on:click={let stage_contextual = stage_contextual.clone(); let input_id = input_id.clone(); move |_| stage_contextual(current_text_content(&input_id).unwrap_or_default())}>Contextual override</button>
+                <div class="source-string-target-text">{move || target_value.get()}</div>
+            </td>
+            <td>{occurrence["status"].as_str().unwrap_or("unknown").to_owned()}</td>
+        </tr>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn OptionalMetadataPanel(state: RwSignal<LazyValueState>) -> impl IntoView {
+    view! {
+        <section
+            id="optional-metadata-panel"
+            class="optional-metadata lazy-pivot-panel"
+            data-lazy-state=move || lazy_state_key(&state.get())
+            aria-live="polite"
+            aria-busy=move || lazy_state_busy(&state.get())
+        >
+            {move || match state.get() {
+                LazyValueState::Unloaded => view! {
+                    <h3>Metadata checklist</h3>
+                    <p>Metadata rows are loaded only when you open the checklist.</p>
+                    <button id="load-optional-metadata-button" class="lazy-pivot-load-button" type="button" on:click=move |_| maybe_load_current_view(WorkbenchView::Metadata)>Load metadata</button>
+                }.into_any(),
+                LazyValueState::Loading(message) => view! { <p class="workbench-loading">{message}</p> }.into_any(),
+                LazyValueState::Error(error) => view! { <p class="workbench-error">{error}</p> }.into_any(),
+                LazyValueState::Loaded(optional) => view! { <LoadedOptionalMetadata optional=optional /> }.into_any(),
+            }}
+        </section>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn LoadedOptionalMetadata(optional: Value) -> impl IntoView {
+    let language = optional["language"]["code"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
+    let target = optional["target"]["label"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
+    let overlay = optional["overlay"]["label"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
+    let prefix = storage_prefix_for_parts(&language, &target, &overlay);
+    let progress = optional["metadata_progress"].clone();
+    let items = optional["items"].as_array().cloned().unwrap_or_default();
+    let prefix_for_effect = prefix.clone();
+    Effect::new(move |_| {
+        update_staged_count(&prefix_for_effect);
+        if let Some(document) = web_sys::window().and_then(|window| window.document()) {
+            apply_pane_writability(
+                checkbox_checked(&document, "source-pane-writable"),
+                checkbox_checked(&document, "target-pane-writable"),
+            );
+        }
+    });
+    view! {
+        <section id="optional-metadata-checklist" data-storage-prefix=prefix.clone()>
+            <h3>Metadata checklist</h3>
+            <p>{format!("Main note-field completion is separate. Metadata: {} / {} complete, {} missing, {} stale.", progress["complete"].as_u64().unwrap_or(0), progress["total"].as_u64().unwrap_or(0), progress["missing"].as_u64().unwrap_or(0), progress["stale"].as_u64().unwrap_or(0))}</p>
+            <table><thead><tr><th>Category</th><th>Path</th><th>Source</th><th>Target</th><th>Status</th></tr></thead>
+                <tbody>
+                    <For each=move || items.clone() key=|item| item["path"].as_str().unwrap_or("").to_owned() children={let language = language.clone(); let target = target.clone(); let overlay = overlay.clone(); let prefix = prefix.clone(); move |item| view! { <OptionalMetadataRow item=item language=language.clone() target=target.clone() overlay=overlay.clone() prefix=prefix.clone() /> }} />
+                </tbody>
+            </table>
+        </section>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn OptionalMetadataRow(
+    item: Value,
+    language: String,
+    target: String,
+    overlay: String,
+    prefix: String,
+) -> impl IntoView {
+    let path = item["path"].as_str().unwrap_or("").to_owned();
+    let source = item["source"].as_str().unwrap_or("").to_owned();
+    let id = id_for_path(&path);
+    let staged = staging::staged_translation_for_parts(&prefix, &path, &source);
+    let initial = staged
+        .as_ref()
+        .and_then(|edit| edit["value"].as_str())
+        .or_else(|| item["target"].as_str())
+        .unwrap_or(&source)
+        .to_owned();
+    let status_initial = staged
+        .as_ref()
+        .map(|_| "staged_direct".to_owned())
+        .unwrap_or_else(|| item["status"].as_str().unwrap_or("unknown").to_owned());
+    let status_value = RwSignal::new(status_initial);
+    let warning = item["warning"].as_str().unwrap_or("").to_owned();
+    let input_id = format!("optional-translation-input-{id}");
+    let status_id = format!("optional-status-{id}");
+    let stage_prefix = prefix.clone();
+    let stage_language = language.clone();
+    let stage_target = target.clone();
+    let stage_overlay = overlay.clone();
+    let stage_path = path.clone();
+    let stage_source = source.clone();
+    view! {
+        <tr class="optional-metadata-row" data-path=path.clone() data-source=source.clone()>
+            <td>{item["metadata_category"].as_str().unwrap_or("metadata").to_owned()}</td>
+            <td>{path.clone()}</td>
+            <td>{source.clone()}</td>
+            <td><input id=input_id value=initial data-path=path.clone() data-source=source.clone() on:input=move |event| {
+                stage_metadata_translation(&stage_prefix, &stage_language, &stage_target, &stage_overlay, &stage_path, &stage_source, &event_input_value(&event));
+                status_value.set("staged_direct".to_owned());
+                update_staged_count(&stage_prefix);
+            } /></td>
+            <td id=status_id>{move || format!("{} {}", status_value.get(), warning)}</td>
         </tr>
     }
 }
@@ -1308,6 +2238,15 @@ fn event_input_value(event: &web_sys::Event) -> String {
 }
 
 #[cfg(target_arch = "wasm32")]
+fn event_text_content(event: &web_sys::Event) -> String {
+    event
+        .target()
+        .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+        .and_then(|element| element.text_content())
+        .unwrap_or_default()
+}
+
+#[cfg(target_arch = "wasm32")]
 fn event_select_value(event: &web_sys::Event) -> String {
     event
         .target()
@@ -1547,6 +2486,69 @@ fn set_note_detail_state(state: NoteDetailState) {
 }
 
 #[cfg(target_arch = "wasm32")]
+fn set_card_list_state(state: LazyValueState) {
+    CARD_LIST_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            signal.set(state);
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_selected_card_state(card_id: Option<String>) {
+    SELECTED_CARD_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            signal.set(card_id);
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_card_detail_state(state: DetailValueState) {
+    CARD_DETAIL_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            signal.set(state);
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_source_string_list_state(state: LazyValueState) {
+    SOURCE_STRING_LIST_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            signal.set(state);
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_selected_source_string_state(source: Option<String>) {
+    SELECTED_SOURCE_STRING_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            signal.set(source);
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_source_string_detail_state(state: DetailValueState) {
+    SOURCE_STRING_DETAIL_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            signal.set(state);
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_optional_metadata_state(state: LazyValueState) {
+    OPTIONAL_METADATA_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            signal.set(state);
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
 fn set_current_note_pivot(pivot: &Value) {
     CURRENT_NOTE_PIVOT.with(|current| {
         *current.borrow_mut() = Some(pivot.clone());
@@ -1624,108 +2626,19 @@ fn publish_note_pivot_error(message: &str) {
 
 #[cfg(target_arch = "wasm32")]
 fn publish_note_pivot_panel(pivot: &Value) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    let Some(workspace_panel) = document.get_element_by_id("workbench-current-workspace") else {
-        return;
-    };
-    let Some(global_controls) = document.get_element_by_id("workbench-global-controls") else {
-        return;
-    };
     set_top_level_error(None);
     set_selected_view(WorkbenchView::Notes);
     set_current_note_pivot(pivot);
-
-    let language = pivot["language"]["code"].as_str().unwrap_or("");
-    let target = pivot["target"]["label"].as_str().unwrap_or("");
-    let overlay = pivot["overlay"]["label"].as_str().unwrap_or("");
-    let _ = workspace_panel.set_attribute("data-language", language);
-    let _ = workspace_panel.set_attribute("data-target", target);
-    let _ = workspace_panel.set_attribute("data-overlay", overlay);
-
-    let progress = &pivot["progress"];
-    let mut chrome_html = String::new();
-    chrome_html.push_str("<header class=\"workbench-panel__header\">");
-    chrome_html.push_str("<h2>Deck Workbench Note pivot</h2>");
-    chrome_html.push_str(&select_options_html(
-        "language-select",
-        "Language",
-        &pivot["selection_options"]["languages"],
-        "code",
-        "display_name",
-        language,
-    ));
-    chrome_html.push_str(&select_options_html(
-        "target-select",
-        "Target",
-        &pivot["selection_options"]["targets"],
-        "label",
-        "label",
-        target,
-    ));
-    chrome_html.push_str(&select_options_html(
-        "overlay-select",
-        "Overlay",
-        &pivot["selection_options"]["overlays"],
-        "label",
-        "label",
-        overlay,
-    ));
-    chrome_html.push_str("</header>");
-    chrome_html.push_str(&format!(
-        "<section id=\"translation-progress\" data-complete=\"{}\" data-total=\"{}\" data-missing=\"{}\" data-stale=\"{}\">Main note-field progress: {} / {} complete, {} missing, {} stale (<span id=\"staged-edit-count\">0</span> staged)</section>",
-        progress["complete"].as_u64().unwrap_or(0),
-        progress["total"].as_u64().unwrap_or(0),
-        progress["missing"].as_u64().unwrap_or(0),
-        progress["stale"].as_u64().unwrap_or(0),
-        progress["complete"].as_u64().unwrap_or(0),
-        progress["total"].as_u64().unwrap_or(0),
-        progress["missing"].as_u64().unwrap_or(0),
-        progress["stale"].as_u64().unwrap_or(0),
-    ));
-    let metadata_progress = &pivot["metadata_progress"];
-    chrome_html.push_str(&format!(
-        "<section id=\"optional-progress\" data-complete=\"{}\" data-total=\"{}\" data-missing=\"{}\" data-stale=\"{}\">Metadata: {} / {} complete, {} missing, {} stale</section>",
-        metadata_progress["complete"].as_u64().unwrap_or(0),
-        metadata_progress["total"].as_u64().unwrap_or(0),
-        metadata_progress["missing"].as_u64().unwrap_or(0),
-        metadata_progress["stale"].as_u64().unwrap_or(0),
-        metadata_progress["complete"].as_u64().unwrap_or(0),
-        metadata_progress["total"].as_u64().unwrap_or(0),
-        metadata_progress["missing"].as_u64().unwrap_or(0),
-        metadata_progress["stale"].as_u64().unwrap_or(0),
-    ));
-    chrome_html.push_str("<nav class=\"overlay-badges\">");
-    for badge in pivot["overlay_badges"].as_array().into_iter().flatten() {
-        let active = if badge["active"].as_bool().unwrap_or(false) {
-            " active"
-        } else {
-            ""
-        };
-        chrome_html.push_str(&format!(
-            "<span class=\"overlay-badge{}\">{}</span>",
-            active,
-            escape_html(badge["label"].as_str().unwrap_or("overlay"))
-        ));
-    }
-    chrome_html.push_str("</nav>");
-    chrome_html.push_str(&filter_buttons_html(pivot));
-    global_controls.set_inner_html(&chrome_html);
+    set_note_pivot_state(Some(pivot.clone()));
+    reset_secondary_pivot_states();
 
     let first_note = first_note_id(pivot);
-    set_note_pivot_state(Some(pivot.clone()));
     set_selected_note_state(first_note.clone());
     set_note_detail_state(if first_note.is_some() {
         NoteDetailState::Loading
     } else {
         NoteDetailState::Empty
     });
-
-    reset_lazy_secondary_pivot_panels(&document);
-
-    register_control_handlers(pivot);
-    register_lazy_pivot_load_handlers(pivot);
     update_staged_count_for_pivot(pivot);
     if let Some(note_id) = first_note {
         let (language, target, overlay) = pivot_selection_parts(pivot);
@@ -1734,165 +2647,14 @@ fn publish_note_pivot_panel(pivot: &Value) {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn reset_lazy_secondary_pivot_panels(document: &web_sys::Document) {
-    reset_lazy_secondary_pivot_panel(
-        document,
-        "card-pivot-panel",
-        "card-pivot lazy-pivot-panel",
-        "Card pivot",
-        "Cards are loaded on demand so language changes stay responsive.",
-        "load-card-pivot-button",
-        "Load cards",
-    );
-    reset_lazy_secondary_pivot_panel(
-        document,
-        "source-string-pivot-panel",
-        "source-string-pivot lazy-pivot-panel",
-        "Source String pivot",
-        "Reusable source strings are loaded only when you need that workflow.",
-        "load-source-string-pivot-button",
-        "Load source strings",
-    );
-    reset_lazy_secondary_pivot_panel(
-        document,
-        "optional-metadata-panel",
-        "optional-metadata lazy-pivot-panel",
-        "Metadata checklist",
-        "Metadata rows are loaded only when you open the checklist.",
-        "load-optional-metadata-button",
-        "Load metadata",
-    );
-}
-
-#[cfg(target_arch = "wasm32")]
-fn reset_lazy_secondary_pivot_panel(
-    document: &web_sys::Document,
-    panel_id: &str,
-    class_name: &str,
-    title: &str,
-    description: &str,
-    button_id: &str,
-    button_label: &str,
-) {
-    let Some(panel) = document.get_element_by_id(panel_id) else {
-        return;
-    };
-    let _ = panel.set_attribute("class", class_name);
-    let _ = panel.set_attribute("data-lazy-state", "unloaded");
-    let _ = panel.set_attribute("aria-live", "polite");
-    let _ = panel.set_attribute("aria-busy", "false");
-    panel.set_inner_html(&lazy_secondary_pivot_panel_html(
-        title,
-        description,
-        button_id,
-        button_label,
-    ));
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(dead_code)]
-fn workbench_view_switch_html() -> String {
-    let views = [
-        ("notes", "Notes"),
-        ("cards", "Cards"),
-        ("source-strings", "Source strings"),
-        ("metadata", "Metadata"),
-    ];
-    let mut html = "<nav id=\"workbench-view-switch\" class=\"workbench-view-switch\" aria-label=\"Workbench views\">".to_owned();
-    for (view, label) in views {
-        let active = if view == "notes" { " active" } else { "" };
-        html.push_str(&format!(
-            "<button id=\"view-{}\" class=\"workbench-view-button{}\" type=\"button\" data-view=\"{}\">{}</button>",
-            escape_html(view),
-            active,
-            escape_html(view),
-            escape_html(label),
-        ));
-    }
-    html.push_str("</nav>");
-    html
-}
-
-#[cfg(target_arch = "wasm32")]
-fn lazy_secondary_pivot_panel_html(
-    title: &str,
-    description: &str,
-    button_id: &str,
-    button_label: &str,
-) -> String {
-    format!(
-        "<h3>{}</h3><p>{}</p><button id=\"{}\" class=\"lazy-pivot-load-button\" type=\"button\">{}</button>",
-        escape_html(title),
-        escape_html(description),
-        escape_html(button_id),
-        escape_html(button_label),
-    )
-}
-
-#[cfg(target_arch = "wasm32")]
-fn select_options_html(
-    id: &str,
-    label: &str,
-    options: &Value,
-    value_key: &str,
-    label_key: &str,
-    fallback: &str,
-) -> String {
-    let mut html = format!(
-        "<label>{} <select id=\"{}\">",
-        escape_html(label),
-        escape_html(id)
-    );
-    let mut rendered_any = false;
-    for option in options.as_array().into_iter().flatten() {
-        rendered_any = true;
-        let value = option[value_key].as_str().unwrap_or(fallback);
-        let label = option[label_key].as_str().unwrap_or(value);
-        let selected = if option["active"].as_bool().unwrap_or(false) {
-            " selected"
-        } else {
-            ""
-        };
-        html.push_str(&format!(
-            "<option value=\"{}\"{}>{}</option>",
-            escape_html(value),
-            selected,
-            escape_html(label)
-        ));
-    }
-    if !rendered_any {
-        html.push_str(&format!(
-            "<option value=\"{}\" selected>{}</option>",
-            escape_html(fallback),
-            escape_html(fallback)
-        ));
-    }
-    html.push_str("</select></label>");
-    html
-}
-
-#[cfg(target_arch = "wasm32")]
-fn filter_buttons_html(pivot: &Value) -> String {
-    let active = pivot["filters"]["active"].as_str().unwrap_or("all");
-    let mut html = "<nav class=\"pivot-filters\" aria-label=\"Note pivot filters\">".to_owned();
-    for (filter, label) in [
-        ("all", "All"),
-        ("missing", "Missing"),
-        ("stale", "Stale"),
-        ("needs_work", "Needs work"),
-    ] {
-        let class = if active == filter {
-            " class=\"active\""
-        } else {
-            ""
-        };
-        html.push_str(&format!(
-            "<button type=\"button\" data-filter=\"{}\"{}>{}</button>",
-            filter, class, label
-        ));
-    }
-    html.push_str("</nav>");
-    html
+fn reset_secondary_pivot_states() {
+    set_card_list_state(LazyValueState::Unloaded);
+    set_selected_card_state(None);
+    set_card_detail_state(DetailValueState::Empty);
+    set_source_string_list_state(LazyValueState::Unloaded);
+    set_selected_source_string_state(None);
+    set_source_string_detail_state(DetailValueState::Empty);
+    set_optional_metadata_state(LazyValueState::Unloaded);
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1902,11 +2664,6 @@ fn first_note_id(pivot: &Value) -> Option<String> {
         .and_then(|rows| rows.first())
         .and_then(|row| row["note_id"].as_str())
         .map(str::to_owned)
-}
-
-#[cfg(target_arch = "wasm32")]
-fn selected_attr(current: &str, value: &str) -> &'static str {
-    if current == value { " selected" } else { "" }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1933,1861 +2690,6 @@ fn preview_html(preview: &Value) -> String {
         html.push_str("</div></div>");
     }
     html
-}
-
-#[cfg(target_arch = "wasm32")]
-fn publish_source_string_list_panel(list: &Value) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    let Some(panel) = document.get_element_by_id("source-string-pivot-panel") else {
-        return;
-    };
-    let mut html = String::new();
-    html.push_str("<h3>Source String pivot</h3>");
-    html.push_str("<div class=\"source-string-filters\"><label>Content group <select id=\"source-string-content-group-filter\">");
-    let active_group = list["filters"]["content_group"].as_str().unwrap_or("all");
-    html.push_str(&format!(
-        "<option value=\"all\"{}>All groups</option>",
-        selected_attr(active_group, "all")
-    ));
-    for group in list["filters"]["content_groups"]
-        .as_array()
-        .into_iter()
-        .flatten()
-    {
-        let group = group.as_str().unwrap_or("");
-        html.push_str(&format!(
-            "<option value=\"{}\"{}>{}</option>",
-            escape_html(group),
-            selected_attr(active_group, group),
-            escape_html(group)
-        ));
-    }
-    html.push_str("</select></label></div>");
-    html.push_str(&format!(
-        "<p class=\"navigation-page-summary\">Showing {} of {} source string(s).</p>",
-        list["rows"].as_array().map_or(0, Vec::len),
-        list["total"].as_u64().unwrap_or(0),
-    ));
-    html.push_str("<div class=\"source-string-grid\"><ol class=\"source-string-list\">");
-    for (index, string) in list["rows"].as_array().into_iter().flatten().enumerate() {
-        let source = string["source"].as_str().unwrap_or("");
-        let selected = if index == 0 { " active" } else { "" };
-        html.push_str(&format!(
-            "<li><button type=\"button\" class=\"source-string-row{}\" data-source=\"{}\"><strong>{}</strong><br>{} occurrence(s), {}</button></li>",
-            selected,
-            escape_html(source),
-            escape_html(source),
-            string["occurrence_count"].as_u64().unwrap_or(0),
-            escape_html(string["status"].as_str().unwrap_or("unknown"))
-        ));
-    }
-    html.push_str("</ol><section id=\"source-string-detail-panel\" class=\"source-string-detail\"><p>Select a source string to load occurrences.</p></section></div>");
-    panel.set_inner_html(&html);
-    mark_panel_loaded(&panel);
-    register_source_string_list_handlers(list);
-    if let Some(source) = list["rows"]
-        .as_array()
-        .and_then(|rows| rows.first())
-        .and_then(|row| row["source"].as_str())
-    {
-        let (language, target, overlay) = pivot_selection_parts(list);
-        load_source_string_detail_for_parts(
-            language,
-            target,
-            overlay,
-            source.to_owned(),
-            list["filters"]["content_group"].as_str().map(str::to_owned),
-            list["filters"]["status"].as_str().map(str::to_owned),
-        );
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn publish_source_string_detail_panel(pivot: &Value) {
-    let Some(panel) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id("source-string-detail-panel"))
-    else {
-        return;
-    };
-    let mut html = String::new();
-    let selected_source = pivot["selected_source"].as_str().unwrap_or("");
-    html.push_str(&format!("<h4>{}</h4>", escape_html(selected_source)));
-    if let Some(first_occurrence) = pivot["occurrences"]
-        .as_array()
-        .and_then(|items| items.first())
-    {
-        let direct_value = staged_edit_for(
-            pivot,
-            first_occurrence["path"].as_str().unwrap_or(""),
-            selected_source,
-        )
-        .and_then(|edit| edit["value"].as_str().map(str::to_owned))
-        .or_else(|| first_occurrence["target"].as_str().map(str::to_owned))
-        .unwrap_or_else(|| selected_source.to_owned());
-        html.push_str(&format!(
-            "<div class=\"source-string-global-edit\"><label>Reusable translation <input id=\"source-string-direct-input\" value=\"{}\" /></label> <button id=\"source-string-direct-stage\" type=\"button\">Stage direct translation for {} occurrence(s)</button> <button id=\"source-string-no-change\" type=\"button\">Stage global no-change</button></div>",
-            escape_html(&direct_value),
-            pivot["occurrences"].as_array().map_or(0, Vec::len),
-        ));
-    }
-    html.push_str("<table class=\"source-string-occurrences\"><thead><tr><th>Context</th><th>Source</th><th>Target / contextual override</th><th>Status</th></tr></thead><tbody>");
-    for occurrence in pivot["occurrences"].as_array().into_iter().flatten() {
-        let path = occurrence["path"].as_str().unwrap_or("");
-        let id = id_for_path(path);
-        let target = staged_edit_for(pivot, path, selected_source)
-            .and_then(|edit| edit["value"].as_str().map(str::to_owned))
-            .or_else(|| occurrence["target"].as_str().map(str::to_owned))
-            .unwrap_or_else(|| selected_source.to_owned());
-        html.push_str(&format!(
-            "<tr class=\"source-string-occurrence\" data-source=\"{}\" data-path=\"{}\"><td>{}<br><small>{}</small></td><td>{}</td><td><input id=\"source-string-contextual-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\" /> <button id=\"source-string-contextual-stage-{}\" type=\"button\">Contextual override</button><div class=\"source-string-target-text\">{}</div></td><td>{}</td></tr>",
-            escape_html(selected_source),
-            escape_html(path),
-            escape_html(occurrence["friendly_context"].as_str().unwrap_or(path)),
-            escape_html(path),
-            escape_html(selected_source),
-            id,
-            escape_html(&target),
-            escape_html(path),
-            escape_html(selected_source),
-            id,
-            escape_html(&target),
-            escape_html(occurrence["status"].as_str().unwrap_or("unknown"))
-        ));
-    }
-    html.push_str("</tbody></table>");
-    panel.set_inner_html(&html);
-    register_source_string_detail_handlers(pivot);
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(dead_code)]
-fn publish_source_string_pivot_panel(pivot: &Value) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    let Some(panel) = document.get_element_by_id("source-string-pivot-panel") else {
-        return;
-    };
-    let mut html = String::new();
-    html.push_str("<h3>Source String pivot</h3>");
-    html.push_str("<div class=\"source-string-filters\"><label>Content group <select id=\"source-string-content-group-filter\">");
-    let active_group = pivot["filters"]["content_group"].as_str().unwrap_or("all");
-    html.push_str(&format!(
-        "<option value=\"all\"{}>All groups</option>",
-        selected_attr(active_group, "all")
-    ));
-    for group in pivot["filters"]["content_groups"]
-        .as_array()
-        .into_iter()
-        .flatten()
-    {
-        let group = group.as_str().unwrap_or("");
-        html.push_str(&format!(
-            "<option value=\"{}\"{}>{}</option>",
-            escape_html(group),
-            selected_attr(active_group, group),
-            escape_html(group)
-        ));
-    }
-    html.push_str("</select></label></div>");
-    html.push_str("<div class=\"source-string-grid\"><ol class=\"source-string-list\">");
-    for string in pivot["strings"].as_array().into_iter().flatten() {
-        let source = string["source"].as_str().unwrap_or("");
-        let selected = if string["selected"].as_bool().unwrap_or(false) {
-            " active"
-        } else {
-            ""
-        };
-        html.push_str(&format!(
-            "<li><button type=\"button\" class=\"source-string-row{}\" data-source=\"{}\"><strong>{}</strong><br>{} occurrence(s), {}</button></li>",
-            selected,
-            escape_html(source),
-            escape_html(source),
-            string["occurrence_count"].as_u64().unwrap_or(0),
-            escape_html(string["status"].as_str().unwrap_or("unknown"))
-        ));
-    }
-    html.push_str("</ol><section class=\"source-string-detail\">");
-    let selected_source = pivot["selected_source"].as_str().unwrap_or("");
-    html.push_str(&format!("<h4>{}</h4>", escape_html(selected_source)));
-    if let Some(first_occurrence) = pivot["occurrences"]
-        .as_array()
-        .and_then(|items| items.first())
-    {
-        let direct_value = staged_edit_for(
-            pivot,
-            first_occurrence["path"].as_str().unwrap_or(""),
-            selected_source,
-        )
-        .and_then(|edit| edit["value"].as_str().map(str::to_owned))
-        .or_else(|| first_occurrence["target"].as_str().map(str::to_owned))
-        .unwrap_or_else(|| selected_source.to_owned());
-        html.push_str(&format!(
-            "<div class=\"source-string-global-edit\"><label>Reusable translation <input id=\"source-string-direct-input\" value=\"{}\" /></label> <button id=\"source-string-direct-stage\" type=\"button\">Stage direct translation for {} occurrence(s)</button> <button id=\"source-string-no-change\" type=\"button\">Stage global no-change</button></div>",
-            escape_html(&direct_value),
-            pivot["occurrences"].as_array().map_or(0, Vec::len),
-        ));
-    }
-    html.push_str("<table class=\"source-string-occurrences\"><thead><tr><th>Context</th><th>Source</th><th>Target / contextual override</th><th>Status</th></tr></thead><tbody>");
-    for occurrence in pivot["occurrences"].as_array().into_iter().flatten() {
-        let path = occurrence["path"].as_str().unwrap_or("");
-        let id = id_for_path(path);
-        let target = staged_edit_for(pivot, path, selected_source)
-            .and_then(|edit| edit["value"].as_str().map(str::to_owned))
-            .or_else(|| occurrence["target"].as_str().map(str::to_owned))
-            .unwrap_or_else(|| selected_source.to_owned());
-        html.push_str(&format!(
-            "<tr class=\"source-string-occurrence\" data-source=\"{}\" data-path=\"{}\"><td>{}<br><small>{}</small></td><td>{}</td><td><input id=\"source-string-contextual-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\" /> <button id=\"source-string-contextual-stage-{}\" type=\"button\">Contextual override</button><div class=\"source-string-target-text\">{}</div></td><td>{}</td></tr>",
-            escape_html(selected_source),
-            escape_html(path),
-            escape_html(occurrence["friendly_context"].as_str().unwrap_or(path)),
-            escape_html(path),
-            escape_html(selected_source),
-            id,
-            escape_html(&target),
-            escape_html(path),
-            escape_html(selected_source),
-            id,
-            escape_html(&target),
-            escape_html(occurrence["status"].as_str().unwrap_or("unknown"))
-        ));
-    }
-    html.push_str("</tbody></table></section></div>");
-    panel.set_inner_html(&html);
-    mark_panel_loaded(&panel);
-    register_source_string_handlers(pivot);
-}
-
-#[cfg(target_arch = "wasm32")]
-fn publish_card_list_panel(list: &Value) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    let Some(panel) = document.get_element_by_id("card-pivot-panel") else {
-        return;
-    };
-    let mut html = String::new();
-    html.push_str("<div class=\"card-pivot-view\"><h3>Card pivot</h3>");
-    html.push_str("<label>Content group <select id=\"card-content-group-filter\"><option value=\"all\">All groups</option>");
-    let active_group = list["filters"]["content_group"].as_str().unwrap_or("all");
-    for group in list["filters"]["content_groups"]
-        .as_array()
-        .into_iter()
-        .flatten()
-    {
-        let group = group.as_str().unwrap_or("");
-        html.push_str(&format!(
-            "<option value=\"{}\"{}>{}</option>",
-            escape_html(group),
-            selected_attr(active_group, group),
-            escape_html(group)
-        ));
-    }
-    html.push_str("</select></label>");
-    html.push_str("<nav class=\"card-pivot-filters\">");
-    let active_filter = list["filters"]["active"].as_str().unwrap_or("all");
-    for (filter, label) in [
-        ("all", "All cards"),
-        ("missing", "Missing"),
-        ("stale", "Stale"),
-        ("needs_work", "Needs work"),
-    ] {
-        let class = if active_filter == filter {
-            " class=\"active\""
-        } else {
-            ""
-        };
-        html.push_str(&format!(
-            "<button type=\"button\" data-filter=\"{}\"{}>{}</button>",
-            filter, class, label
-        ));
-    }
-    html.push_str("</nav>");
-    html.push_str(&format!(
-        "<p class=\"navigation-page-summary\">Showing {} of {} card(s).</p>",
-        list["rows"].as_array().map_or(0, Vec::len),
-        list["total"].as_u64().unwrap_or(0),
-    ));
-    html.push_str("<div class=\"card-grid\"><ol class=\"card-list\">");
-    for (index, card) in list["rows"].as_array().into_iter().flatten().enumerate() {
-        let card_id = card["card_id"].as_str().unwrap_or("");
-        let active = if index == 0 { " active" } else { "" };
-        html.push_str(&format!(
-            "<li><button class=\"card-row{}\" type=\"button\" data-card-id=\"{}\">{} · {} · {}</button></li>",
-            active,
-            escape_html(card_id),
-            escape_html(card["title"].as_str().unwrap_or("card")),
-            escape_html(card["template_name"].as_str().unwrap_or("template")),
-            escape_html(card["status"].as_str().unwrap_or("unknown")),
-        ));
-    }
-    html.push_str("</ol><section id=\"card-detail-panel\" class=\"card-detail-panel\"><p>Select a card to load its preview and editable fields.</p></section></div></div>");
-    panel.set_inner_html(&html);
-    mark_panel_loaded(&panel);
-    register_card_list_handlers(list);
-    if let Some(card_id) = list["rows"]
-        .as_array()
-        .and_then(|rows| rows.first())
-        .and_then(|row| row["card_id"].as_str())
-    {
-        let (language, target, overlay) = pivot_selection_parts(list);
-        load_card_detail_for_parts(
-            language,
-            target,
-            overlay,
-            card_id.to_owned(),
-            list["filters"]["active"].as_str().map(str::to_owned),
-            list["filters"]["content_group"].as_str().map(str::to_owned),
-        );
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn publish_card_detail_panel(pivot: &Value) {
-    let Some(panel) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id("card-detail-panel"))
-    else {
-        return;
-    };
-    let mut html = String::new();
-    if let Some(card) = pivot.get("selected_card").filter(|value| !value.is_null()) {
-        html.push_str(&card_detail_html(pivot, card));
-    } else {
-        html.push_str("<p>No cards match the active filters.</p>");
-    }
-    panel.set_inner_html(&html);
-    register_card_detail_handlers(pivot);
-    if let Some(document) = web_sys::window().and_then(|window| window.document()) {
-        apply_pane_writability(
-            checkbox_checked(&document, "source-pane-writable"),
-            checkbox_checked(&document, "target-pane-writable"),
-        );
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn card_detail_html(pivot: &Value, card: &Value) -> String {
-    let mut html = String::new();
-    html.push_str(&format!(
-        "<section class=\"card-detail\" data-card-id=\"{}\"><h4>{}: {}</h4>",
-        escape_html(card["card_id"].as_str().unwrap_or("")),
-        escape_html(card["title"].as_str().unwrap_or("card")),
-        escape_html(card["template_name"].as_str().unwrap_or("template")),
-    ));
-    html.push_str("<div class=\"preview-grid\"><section><h5>Source card</h5><div class=\"card-source-preview\">");
-    html.push_str(&preview_html(&card["source_preview"]));
-    html.push_str(
-        "</div></section><section><h5>Target card</h5><div class=\"card-target-preview\">",
-    );
-    html.push_str(&preview_html(&card["target_preview"]));
-    html.push_str("</div></section></div>");
-    html.push_str("<p class=\"inline-edit-hint\">Click highlighted text in the selected target card to stage a card-specific edit.</p>");
-    html.push_str("<details class=\"field-editor-details\"><summary>Advanced card field controls</summary><table class=\"card-field-editor\"><thead><tr><th>Field</th><th>Source edit</th><th>Target edit</th><th>Status</th><th>Mode</th></tr></thead><tbody>");
-    for field in card["fields"].as_array().into_iter().flatten() {
-        let path = field["path"].as_str().unwrap_or("");
-        let source = field["source"].as_str().unwrap_or("");
-        let id = id_for_path(path);
-        let staged = staged_edit_for(pivot, path, source);
-        let staged_source = staged_source_edit_for(pivot, path, source);
-        let source_value = staged_source
-            .as_ref()
-            .and_then(|edit| edit["value"].as_str())
-            .unwrap_or(source);
-        let value = staged
-            .as_ref()
-            .and_then(|edit| edit["value"].as_str())
-            .or_else(|| field["target"].as_str())
-            .unwrap_or(source);
-        let mode = staged
-            .as_ref()
-            .and_then(|edit| edit["mode"].as_str())
-            .unwrap_or("direct");
-        let source_scope = staged_source
-            .as_ref()
-            .and_then(|edit| edit["scope"].as_str())
-            .unwrap_or("field");
-        let source_impact = staged_source
-            .as_ref()
-            .and_then(|edit| edit["impact_action"].as_str())
-            .unwrap_or("stale_translation");
-        let status = staged
-            .as_ref()
-            .and_then(|edit| edit["mode"].as_str())
-            .map(|mode| format!("staged_{mode}"))
-            .or_else(|| staged_source.as_ref().map(|_| "staged_source".to_owned()))
-            .unwrap_or_else(|| field["status"].as_str().unwrap_or("unknown").to_owned());
-        let editable = field["editable"].as_bool().unwrap_or(false);
-        let source_editable = field["source_editable"].as_bool().unwrap_or(false);
-        html.push_str(&format!(
-            "<tr class=\"card-field-row\" data-path=\"{}\" data-source=\"{}\"><td>{}</td><td><span id=\"card-source-text-{}\">{}</span><br><button id=\"card-source-edit-toggle-{}\" type=\"button\"{}>Edit source</button> <input id=\"card-source-input-{}\" value=\"{}\"{}{}><br><select id=\"card-source-scope-{}\"{}><option value=\"field\"{}>This field only</option><option value=\"all_occurrences\"{}>All occurrences</option></select> <select id=\"card-source-impact-{}\"{}><option value=\"stale_translation\"{}>Create stale translation</option><option value=\"migrate_key\"{}>Migrate key</option></select></td><td><input id=\"card-translation-input-{}\" value=\"{}\"{}><div id=\"card-target-text-{}\">{}</div></td><td id=\"card-status-text-{}\">{}</td><td><select id=\"card-translation-mode-{}\"{}><option value=\"direct\"{}>Direct</option><option value=\"contextual\"{}>Contextual</option><option value=\"no_change\"{}>No change</option></select></td></tr>",
-            escape_html(path),
-            escape_html(source),
-            escape_html(field["field_name"].as_str().unwrap_or("field")),
-            id,
-            escape_html(source_value),
-            id,
-            if source_editable { "" } else { " disabled" },
-            id,
-            escape_html(source_value),
-            if staged_source.is_some() { "" } else { " readonly" },
-            if source_editable { "" } else { " disabled" },
-            id,
-            if source_editable { "" } else { " disabled" },
-            selected_attr(source_scope, "field"),
-            selected_attr(source_scope, "all_occurrences"),
-            id,
-            if source_editable { "" } else { " disabled" },
-            selected_attr(source_impact, "stale_translation"),
-            selected_attr(source_impact, "migrate_key"),
-            id,
-            escape_html(value),
-            if editable { "" } else { " readonly" },
-            id,
-            escape_html(value),
-            id,
-            escape_html(&status),
-            id,
-            if editable { "" } else { " disabled" },
-            selected_attr(mode, "direct"),
-            selected_attr(mode, "contextual"),
-            selected_attr(mode, "no_change"),
-        ));
-    }
-    html.push_str("</tbody></table></details></section>");
-    html
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(dead_code)]
-fn publish_card_pivot_panel(pivot: &Value) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    let Some(panel) = document.get_element_by_id("card-pivot-panel") else {
-        return;
-    };
-    let mut html = String::new();
-    html.push_str("<div class=\"card-pivot-view\"><h3>Card pivot</h3>");
-    html.push_str("<label>Content group <select id=\"card-content-group-filter\"><option value=\"all\">All groups</option>");
-    let active_group = pivot["filters"]["content_group"].as_str().unwrap_or("all");
-    for group in pivot["filters"]["content_groups"]
-        .as_array()
-        .into_iter()
-        .flatten()
-    {
-        let group = group.as_str().unwrap_or("");
-        html.push_str(&format!(
-            "<option value=\"{}\"{}>{}</option>",
-            escape_html(group),
-            selected_attr(active_group, group),
-            escape_html(group)
-        ));
-    }
-    html.push_str("</select></label>");
-    html.push_str("<nav class=\"card-pivot-filters\">");
-    let active_filter = pivot["filters"]["active"].as_str().unwrap_or("all");
-    for (filter, label) in [
-        ("all", "All cards"),
-        ("missing", "Missing"),
-        ("stale", "Stale"),
-        ("needs_work", "Needs work"),
-    ] {
-        let class = if active_filter == filter {
-            " class=\"active\""
-        } else {
-            ""
-        };
-        html.push_str(&format!(
-            "<button type=\"button\" data-filter=\"{}\"{}>{}</button>",
-            filter, class, label
-        ));
-    }
-    html.push_str("</nav><ol class=\"card-list\">");
-    let selected_card_id = pivot["selected_card_id"].as_str().unwrap_or("");
-    for card in pivot["cards"].as_array().into_iter().flatten() {
-        let card_id = card["card_id"].as_str().unwrap_or("");
-        let active = if card_id == selected_card_id {
-            " active"
-        } else {
-            ""
-        };
-        html.push_str(&format!(
-            "<li><button class=\"card-row{}\" type=\"button\" data-card-id=\"{}\">{} · {} · {}</button></li>",
-            active,
-            escape_html(card_id),
-            escape_html(card["title"].as_str().unwrap_or("card")),
-            escape_html(card["template_name"].as_str().unwrap_or("template")),
-            escape_html(card["status"].as_str().unwrap_or("unknown")),
-        ));
-    }
-    html.push_str("</ol>");
-    if let Some(card) = pivot.get("selected_card").filter(|value| !value.is_null()) {
-        html.push_str(&format!(
-            "<section class=\"card-detail\" data-card-id=\"{}\"><h4>{}: {}</h4>",
-            escape_html(card["card_id"].as_str().unwrap_or("")),
-            escape_html(card["title"].as_str().unwrap_or("card")),
-            escape_html(card["template_name"].as_str().unwrap_or("template")),
-        ));
-        html.push_str("<div class=\"preview-grid\"><section><h5>Source card</h5><div class=\"card-source-preview\">");
-        html.push_str(&preview_html(&card["source_preview"]));
-        html.push_str(
-            "</div></section><section><h5>Target card</h5><div class=\"card-target-preview\">",
-        );
-        html.push_str(&preview_html(&card["target_preview"]));
-        html.push_str("</div></section></div>");
-        html.push_str("<table class=\"card-field-editor\"><thead><tr><th>Field</th><th>Source edit</th><th>Target edit</th><th>Status</th><th>Mode</th></tr></thead><tbody>");
-        for field in card["fields"].as_array().into_iter().flatten() {
-            let path = field["path"].as_str().unwrap_or("");
-            let source = field["source"].as_str().unwrap_or("");
-            let id = id_for_path(path);
-            let staged = staged_edit_for(pivot, path, source);
-            let staged_source = staged_source_edit_for(pivot, path, source);
-            let source_value = staged_source
-                .as_ref()
-                .and_then(|edit| edit["value"].as_str())
-                .unwrap_or(source);
-            let value = staged
-                .as_ref()
-                .and_then(|edit| edit["value"].as_str())
-                .or_else(|| field["target"].as_str())
-                .unwrap_or(source);
-            let mode = staged
-                .as_ref()
-                .and_then(|edit| edit["mode"].as_str())
-                .unwrap_or("direct");
-            let source_scope = staged_source
-                .as_ref()
-                .and_then(|edit| edit["scope"].as_str())
-                .unwrap_or("field");
-            let source_impact = staged_source
-                .as_ref()
-                .and_then(|edit| edit["impact_action"].as_str())
-                .unwrap_or("stale_translation");
-            let status = staged
-                .as_ref()
-                .and_then(|edit| edit["mode"].as_str())
-                .map(|mode| format!("staged_{mode}"))
-                .or_else(|| staged_source.as_ref().map(|_| "staged_source".to_owned()))
-                .unwrap_or_else(|| field["status"].as_str().unwrap_or("unknown").to_owned());
-            let editable = field["editable"].as_bool().unwrap_or(false);
-            let source_editable = field["source_editable"].as_bool().unwrap_or(false);
-            html.push_str(&format!(
-                "<tr class=\"card-field-row\" data-path=\"{}\" data-source=\"{}\"><td>{}</td><td><span id=\"card-source-text-{}\">{}</span><br><button id=\"card-source-edit-toggle-{}\" type=\"button\"{}>Edit source</button> <input id=\"card-source-input-{}\" value=\"{}\"{}{}><br><select id=\"card-source-scope-{}\"{}><option value=\"field\"{}>This field only</option><option value=\"all_occurrences\"{}>All occurrences</option></select> <select id=\"card-source-impact-{}\"{}><option value=\"stale_translation\"{}>Create stale translation</option><option value=\"migrate_key\"{}>Migrate key</option></select></td><td><input id=\"card-translation-input-{}\" value=\"{}\"{}><div id=\"card-target-text-{}\">{}</div></td><td id=\"card-status-text-{}\">{}</td><td><select id=\"card-translation-mode-{}\"{}><option value=\"direct\"{}>Direct</option><option value=\"contextual\"{}>Contextual</option><option value=\"no_change\"{}>No change</option></select></td></tr>",
-                escape_html(path),
-                escape_html(source),
-                escape_html(field["field_name"].as_str().unwrap_or("field")),
-                id,
-                escape_html(source_value),
-                id,
-                if source_editable { "" } else { " disabled" },
-                id,
-                escape_html(source_value),
-                if staged_source.is_some() { "" } else { " readonly" },
-                if source_editable { "" } else { " disabled" },
-                id,
-                if source_editable { "" } else { " disabled" },
-                selected_attr(source_scope, "field"),
-                selected_attr(source_scope, "all_occurrences"),
-                id,
-                if source_editable { "" } else { " disabled" },
-                selected_attr(source_impact, "stale_translation"),
-                selected_attr(source_impact, "migrate_key"),
-                id,
-                escape_html(value),
-                if editable { "" } else { " readonly" },
-                id,
-                escape_html(value),
-                id,
-                escape_html(&status),
-                id,
-                if editable { "" } else { " disabled" },
-                selected_attr(mode, "direct"),
-                selected_attr(mode, "contextual"),
-                selected_attr(mode, "no_change"),
-            ));
-        }
-        html.push_str("</tbody></table></section>");
-    } else {
-        html.push_str("<p>No cards match the active filters.</p>");
-    }
-    html.push_str("</div>");
-    panel.set_inner_html(&html);
-    mark_panel_loaded(&panel);
-    register_card_pivot_handlers(pivot);
-}
-
-#[cfg(target_arch = "wasm32")]
-fn register_card_list_handlers(list: &Value) {
-    attach_card_list_filter_handlers(list);
-    for card in list["rows"].as_array().into_iter().flatten() {
-        if let Some(card_id) = card["card_id"].as_str() {
-            attach_card_list_select_handler(list, card_id.to_owned());
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_card_list_filter_handlers(list: &Value) {
-    let (language, target, overlay) = pivot_selection_parts(list);
-    let group_language = language.clone();
-    let group_target = target.clone();
-    let group_overlay = overlay.clone();
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-            return;
-        };
-        load_card_list_for_parts(
-            group_language.clone(),
-            group_target.clone(),
-            group_overlay.clone(),
-            active_card_filter(&document),
-            selected_value(&document, "card-content-group-filter"),
-        );
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id("card-content-group-filter"))
-    {
-        let _ =
-            element.add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-
-    for filter in ["all", "missing", "stale", "needs_work"] {
-        let language = language.clone();
-        let target = target.clone();
-        let overlay = overlay.clone();
-        let filter = filter.to_owned();
-        let selector = format!(".card-pivot-filters button[data-filter=\"{filter}\"]");
-        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-            let group = web_sys::window()
-                .and_then(|window| window.document())
-                .and_then(|document| selected_value(&document, "card-content-group-filter"));
-            load_card_list_for_parts(
-                language.clone(),
-                target.clone(),
-                overlay.clone(),
-                Some(filter.clone()),
-                group,
-            );
-        }));
-        if let Some(element) = web_sys::window()
-            .and_then(|window| window.document())
-            .and_then(|document| document.query_selector(&selector).ok().flatten())
-        {
-            let _ =
-                element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-        }
-        closure.forget();
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_card_list_select_handler(list: &Value, card_id: String) {
-    let (language, target, overlay) = pivot_selection_parts(list);
-    let selector = format!(".card-row[data-card-id=\"{}\"]", css_escape(&card_id));
-    let filter = list["filters"]["active"].as_str().map(str::to_owned);
-    let group = list["filters"]["content_group"].as_str().map(str::to_owned);
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        mark_active_card_row(&card_id);
-        set_panel_loading("card-detail-panel", "Loading selected card…");
-        load_card_detail_for_parts(
-            language.clone(),
-            target.clone(),
-            overlay.clone(),
-            card_id.clone(),
-            filter.clone(),
-            group.clone(),
-        );
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.query_selector(&selector).ok().flatten())
-    {
-        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
-fn mark_active_card_row(card_id: &str) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    if let Ok(nodes) = document.query_selector_all(".card-row.active") {
-        for index in 0..nodes.length() {
-            if let Some(node) = nodes.get(index)
-                && let Ok(element) = node.dyn_into::<web_sys::Element>()
-            {
-                let class_name = element.get_attribute("class").unwrap_or_default();
-                let class_name = class_name
-                    .split_whitespace()
-                    .filter(|class| *class != "active")
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                let _ = element.set_attribute("class", &class_name);
-            }
-        }
-    }
-    let selector = format!(".card-row[data-card-id=\"{}\"]", css_escape(card_id));
-    if let Some(element) = document.query_selector(&selector).ok().flatten() {
-        let class_name = element.get_attribute("class").unwrap_or_default();
-        if !class_name.split_whitespace().any(|class| class == "active") {
-            let class_name = if class_name.is_empty() {
-                "active".to_owned()
-            } else {
-                format!("{class_name} active")
-            };
-            let _ = element.set_attribute("class", &class_name);
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn register_card_detail_handlers(pivot: &Value) {
-    if let Some(card) = pivot.get("selected_card").filter(|value| !value.is_null()) {
-        for field in card["fields"].as_array().into_iter().flatten() {
-            let path = field["path"].as_str().unwrap_or("").to_owned();
-            let source = field["source"].as_str().unwrap_or("").to_owned();
-            let note_id = field["note_id"].as_str().unwrap_or("").to_owned();
-            let field_id = field["field_id"].as_str().unwrap_or("").to_owned();
-            let field_name = field["field_name"].as_str().unwrap_or("field").to_owned();
-            if field["source_editable"].as_bool().unwrap_or(false) {
-                attach_card_source_stage_handler(
-                    pivot,
-                    path.clone(),
-                    source.clone(),
-                    note_id.clone(),
-                    field_id.clone(),
-                );
-            }
-            attach_card_stage_handler(
-                pivot,
-                path.clone(),
-                source.clone(),
-                note_id.clone(),
-                field_id.clone(),
-            );
-            attach_card_inline_target_stage_handler(
-                pivot, path, source, note_id, field_id, field_name,
-            );
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(dead_code)]
-fn register_card_pivot_handlers(pivot: &Value) {
-    attach_card_filter_handlers(pivot);
-    for card in pivot["cards"].as_array().into_iter().flatten() {
-        if let Some(card_id) = card["card_id"].as_str() {
-            attach_card_select_handler(pivot, card_id.to_owned());
-        }
-    }
-    if let Some(card) = pivot.get("selected_card").filter(|value| !value.is_null()) {
-        for field in card["fields"].as_array().into_iter().flatten() {
-            let path = field["path"].as_str().unwrap_or("").to_owned();
-            let source = field["source"].as_str().unwrap_or("").to_owned();
-            let note_id = field["note_id"].as_str().unwrap_or("").to_owned();
-            let field_id = field["field_id"].as_str().unwrap_or("").to_owned();
-            if field["source_editable"].as_bool().unwrap_or(false) {
-                attach_card_source_stage_handler(
-                    pivot,
-                    path.clone(),
-                    source.clone(),
-                    note_id.clone(),
-                    field_id.clone(),
-                );
-            }
-            attach_card_stage_handler(pivot, path, source, note_id, field_id);
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(dead_code)]
-fn attach_card_filter_handlers(pivot: &Value) {
-    let (language, target, overlay) = pivot_selection_parts(pivot);
-    let group_language = language.clone();
-    let group_target = target.clone();
-    let group_overlay = overlay.clone();
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-            return;
-        };
-        load_card_pivot_for_parts(
-            group_language.clone(),
-            group_target.clone(),
-            group_overlay.clone(),
-            None,
-            active_card_filter(&document),
-            selected_value(&document, "card-content-group-filter"),
-        );
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id("card-content-group-filter"))
-    {
-        let _ =
-            element.add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-
-    for filter in ["all", "missing", "stale", "needs_work"] {
-        let language = language.clone();
-        let target = target.clone();
-        let overlay = overlay.clone();
-        let filter = filter.to_owned();
-        let selector = format!(".card-pivot-filters button[data-filter=\"{filter}\"]");
-        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-            let group = web_sys::window()
-                .and_then(|window| window.document())
-                .and_then(|document| selected_value(&document, "card-content-group-filter"));
-            load_card_pivot_for_parts(
-                language.clone(),
-                target.clone(),
-                overlay.clone(),
-                None,
-                Some(filter.clone()),
-                group,
-            );
-        }));
-        if let Some(element) = web_sys::window()
-            .and_then(|window| window.document())
-            .and_then(|document| document.query_selector(&selector).ok().flatten())
-        {
-            let _ =
-                element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-        }
-        closure.forget();
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn active_card_filter(document: &web_sys::Document) -> Option<String> {
-    document
-        .query_selector(".card-pivot-filters button.active")
-        .ok()
-        .flatten()
-        .and_then(|element| element.get_attribute("data-filter"))
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(dead_code)]
-fn attach_card_select_handler(pivot: &Value, card_id: String) {
-    let (language, target, overlay) = pivot_selection_parts(pivot);
-    let selector = format!(".card-row[data-card-id=\"{}\"]", css_escape(&card_id));
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        let document = web_sys::window().and_then(|window| window.document());
-        let filter = document.as_ref().and_then(active_card_filter);
-        let group = document
-            .as_ref()
-            .and_then(|document| selected_value(document, "card-content-group-filter"));
-        load_card_pivot_for_parts(
-            language.clone(),
-            target.clone(),
-            overlay.clone(),
-            Some(card_id.clone()),
-            filter,
-            group,
-        );
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.query_selector(&selector).ok().flatten())
-    {
-        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_card_stage_handler(
-    pivot: &Value,
-    path: String,
-    source: String,
-    _note_id: String,
-    field_id: String,
-) {
-    let id = id_for_path(&path);
-    for element_id in [
-        format!("card-translation-input-{id}"),
-        format!("card-translation-mode-{id}"),
-    ] {
-        let pivot = pivot.clone();
-        let path = path.clone();
-        let source = source.clone();
-        let field_id = field_id.clone();
-        let input_id = format!("card-translation-input-{id}");
-        let mode_id = format!("card-translation-mode-{id}");
-        let source_input_id = format!("card-source-input-{id}");
-        let target_id = format!("card-target-text-{id}");
-        let status_id = format!("card-status-text-{id}");
-        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-                return;
-            };
-            let value = document
-                .get_element_by_id(&input_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-                .map(|input| input.value())
-                .unwrap_or_default();
-            let mode = document
-                .get_element_by_id(&mode_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
-                .map(|select| select.value())
-                .unwrap_or_else(|| "direct".to_owned());
-            let source_key = source_edit_storage_key(&pivot, &path, &source);
-            let effective_source = local_storage()
-                .and_then(|storage| storage.get_item(&source_key).ok().flatten())
-                .and_then(|stored| serde_json::from_str::<Value>(&stored).ok())
-                .and_then(|edit| edit["value"].as_str().map(str::to_owned))
-                .or_else(|| {
-                    document
-                        .get_element_by_id(&source_input_id)
-                        .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-                        .map(|input| input.value())
-                        .filter(|value| value != &source)
-                })
-                .unwrap_or_else(|| source.clone());
-            stage_card_translation(&pivot, &path, &source, &effective_source, &value, &mode);
-            if let Some(target) = document.get_element_by_id(&target_id) {
-                target.set_text_content(Some(&value));
-            }
-            if let Some(status) = document.get_element_by_id(&status_id) {
-                status.set_text_content(Some(&format!("staged_{mode}")));
-            }
-            update_card_preview_field(&document, "card-target-preview", &field_id, &value);
-            mark_card_preview_field_staged(&document, &field_id, true);
-        }));
-        if let Some(element) = web_sys::window()
-            .and_then(|window| window.document())
-            .and_then(|document| document.get_element_by_id(&element_id))
-        {
-            let event = if element_id.starts_with("card-translation-input-") {
-                "input"
-            } else {
-                "change"
-            };
-            let _ =
-                element.add_event_listener_with_callback(event, closure.as_ref().unchecked_ref());
-        }
-        closure.forget();
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_card_inline_target_stage_handler(
-    pivot: &Value,
-    path: String,
-    source: String,
-    _note_id: String,
-    field_id: String,
-    field_name: String,
-) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    let selector = format!(
-        "#card-pivot-panel .card-target-preview [data-preview-field-id=\"{}\"]",
-        css_escape(&field_id),
-    );
-    let Ok(nodes) = document.query_selector_all(&selector) else {
-        return;
-    };
-    let id = id_for_path(&path);
-    let input_id = format!("card-translation-input-{id}");
-    let mode_id = format!("card-translation-mode-{id}");
-    let source_input_id = format!("card-source-input-{id}");
-    let target_id = format!("card-target-text-{id}");
-    let status_id = format!("card-status-text-{id}");
-    let staged = staged_edit_for(pivot, &path, &source).is_some();
-    for index in 0..nodes.length() {
-        let Some(node) = nodes.get(index) else {
-            continue;
-        };
-        let Ok(element) = node.dyn_into::<web_sys::Element>() else {
-            continue;
-        };
-        let class_name = element.get_attribute("class").unwrap_or_default();
-        let class_name = if class_name
-            .split_whitespace()
-            .any(|class| class == "card-inline-target-field")
-        {
-            class_name
-        } else if class_name.is_empty() {
-            "card-inline-target-field".to_owned()
-        } else {
-            format!("{class_name} card-inline-target-field")
-        };
-        let _ = element.set_attribute("class", &class_name);
-        let _ = element.set_attribute("contenteditable", "true");
-        let _ = element.set_attribute("tabindex", "0");
-        let _ = element.set_attribute("role", "textbox");
-        let _ = element.set_attribute(
-            "aria-label",
-            &format!("Edit card target translation for {field_name} inline"),
-        );
-        let _ = element.set_attribute("data-staged", if staged { "true" } else { "false" });
-        let element_for_input = element.clone();
-        let pivot = pivot.clone();
-        let path = path.clone();
-        let source = source.clone();
-        let field_id = field_id.clone();
-        let input_id = input_id.clone();
-        let mode_id = mode_id.clone();
-        let source_input_id = source_input_id.clone();
-        let target_id = target_id.clone();
-        let status_id = status_id.clone();
-        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-                return;
-            };
-            let value = element_for_input.text_content().unwrap_or_default();
-            let mode = document
-                .get_element_by_id(&mode_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
-                .map(|select| select.value())
-                .unwrap_or_else(|| "direct".to_owned());
-            let source_key = source_edit_storage_key(&pivot, &path, &source);
-            let effective_source = local_storage()
-                .and_then(|storage| storage.get_item(&source_key).ok().flatten())
-                .and_then(|stored| serde_json::from_str::<Value>(&stored).ok())
-                .and_then(|edit| edit["value"].as_str().map(str::to_owned))
-                .or_else(|| {
-                    document
-                        .get_element_by_id(&source_input_id)
-                        .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-                        .map(|input| input.value())
-                        .filter(|value| value != &source)
-                })
-                .unwrap_or_else(|| source.clone());
-            stage_card_translation(&pivot, &path, &source, &effective_source, &value, &mode);
-            if let Some(input) = document
-                .get_element_by_id(&input_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-            {
-                input.set_value(&value);
-            }
-            if let Some(target) = document.get_element_by_id(&target_id) {
-                target.set_text_content(Some(&value));
-            }
-            if let Some(status) = document.get_element_by_id(&status_id) {
-                status.set_text_content(Some(&format!("staged_{mode}")));
-            }
-            update_card_preview_field(&document, "card-target-preview", &field_id, &value);
-            mark_card_preview_field_staged(&document, &field_id, true);
-        }));
-        let _ = element.add_event_listener_with_callback("input", closure.as_ref().unchecked_ref());
-        closure.forget();
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_card_source_stage_handler(
-    pivot: &Value,
-    path: String,
-    source: String,
-    _note_id: String,
-    field_id: String,
-) {
-    let id = id_for_path(&path);
-    let input_id = format!("card-source-input-{id}");
-    let toggle_id = format!("card-source-edit-toggle-{id}");
-    let scope_id = format!("card-source-scope-{id}");
-    let impact_id = format!("card-source-impact-{id}");
-    let source_text_id = format!("card-source-text-{id}");
-    let status_id = format!("card-status-text-{id}");
-
-    {
-        let input_id = input_id.clone();
-        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-                return;
-            };
-            if let Some(input) = document
-                .get_element_by_id(&input_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-            {
-                input.set_read_only(false);
-                let _ = input.focus();
-            }
-        }));
-        if let Some(element) = web_sys::window()
-            .and_then(|window| window.document())
-            .and_then(|document| document.get_element_by_id(&toggle_id))
-        {
-            let _ =
-                element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-        }
-        closure.forget();
-    }
-
-    for element_id in [input_id.clone(), scope_id.clone(), impact_id.clone()] {
-        let pivot = pivot.clone();
-        let path = path.clone();
-        let source = source.clone();
-        let field_id = field_id.clone();
-        let input_id = input_id.clone();
-        let scope_id = scope_id.clone();
-        let impact_id = impact_id.clone();
-        let source_text_id = source_text_id.clone();
-        let status_id = status_id.clone();
-        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-                return;
-            };
-            let value = document
-                .get_element_by_id(&input_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-                .map(|input| input.value())
-                .unwrap_or_else(|| source.clone());
-            let scope = document
-                .get_element_by_id(&scope_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
-                .map(|select| select.value())
-                .unwrap_or_else(|| "field".to_owned());
-            let impact = document
-                .get_element_by_id(&impact_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
-                .map(|select| select.value())
-                .unwrap_or_else(|| "stale_translation".to_owned());
-            stage_card_source_edit(&pivot, &path, &source, &value, &scope, &impact);
-            if let Some(source_text) = document.get_element_by_id(&source_text_id) {
-                source_text.set_text_content(Some(&value));
-            }
-            if let Some(status) = document.get_element_by_id(&status_id) {
-                status.set_text_content(Some("staged_source"));
-            }
-            update_card_preview_field(&document, "card-source-preview", &field_id, &value);
-        }));
-        if let Some(element) = web_sys::window()
-            .and_then(|window| window.document())
-            .and_then(|document| document.get_element_by_id(&element_id))
-        {
-            let event = if element_id.starts_with("card-source-input-") {
-                "input"
-            } else {
-                "change"
-            };
-            let _ =
-                element.add_event_listener_with_callback(event, closure.as_ref().unchecked_ref());
-        }
-        closure.forget();
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn stage_card_translation(
-    pivot: &Value,
-    path: &str,
-    storage_source: &str,
-    source: &str,
-    value: &str,
-    mode: &str,
-) {
-    let mut edit = serde_json::json!({
-        "kind": "translation",
-        "path": path,
-        "source": source,
-        "value": value,
-        "mode": mode,
-    });
-    if mode == "contextual" {
-        edit["context_path"] = Value::String(path.to_owned());
-    }
-    if let Some(storage) = local_storage() {
-        let _ = storage.set_item(
-            &edit_storage_key(pivot, path, storage_source),
-            &edit.to_string(),
-        );
-    }
-    update_staged_count_for_pivot(pivot);
-}
-
-#[cfg(target_arch = "wasm32")]
-fn stage_card_source_edit(
-    pivot: &Value,
-    path: &str,
-    source: &str,
-    value: &str,
-    scope: &str,
-    impact: &str,
-) {
-    let edit = serde_json::json!({
-        "kind": "source",
-        "path": path,
-        "source": source,
-        "value": value,
-        "scope": scope,
-        "impact_action": impact,
-    });
-    if let Some(storage) = local_storage() {
-        let _ = storage.set_item(
-            &source_edit_storage_key(pivot, path, source),
-            &edit.to_string(),
-        );
-        if let Some(stored_translation) = storage
-            .get_item(&edit_storage_key(pivot, path, source))
-            .ok()
-            .flatten()
-            && let Ok(mut translation_edit) = serde_json::from_str::<Value>(&stored_translation)
-        {
-            translation_edit["source"] = Value::String(value.to_owned());
-            let _ = storage.set_item(
-                &edit_storage_key(pivot, path, source),
-                &translation_edit.to_string(),
-            );
-        }
-    }
-    update_staged_count_for_pivot(pivot);
-}
-
-#[cfg(target_arch = "wasm32")]
-fn update_card_preview_field(
-    document: &web_sys::Document,
-    preview_class: &str,
-    field_id: &str,
-    value: &str,
-) {
-    let selector = format!(
-        "#card-pivot-panel .{} [data-preview-field-id=\"{}\"]",
-        preview_class, field_id
-    );
-    let Ok(nodes) = document.query_selector_all(&selector) else {
-        return;
-    };
-    let active_element = document.active_element();
-    for index in 0..nodes.length() {
-        if let Some(node) = nodes.get(index)
-            && let Ok(element) = node.dyn_into::<web_sys::Element>()
-        {
-            if active_element.as_ref() == Some(&element) {
-                continue;
-            }
-            element.set_inner_html(value);
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn mark_card_preview_field_staged(document: &web_sys::Document, field_id: &str, staged: bool) {
-    let selector = format!(
-        "#card-pivot-panel .card-target-preview [data-preview-field-id=\"{}\"]",
-        field_id
-    );
-    let Ok(nodes) = document.query_selector_all(&selector) else {
-        return;
-    };
-    for index in 0..nodes.length() {
-        if let Some(node) = nodes.get(index)
-            && let Ok(element) = node.dyn_into::<web_sys::Element>()
-        {
-            let _ = element.set_attribute("data-staged", if staged { "true" } else { "false" });
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn load_card_list_for_parts(
-    language: Option<String>,
-    target: Option<String>,
-    overlay: Option<String>,
-    filter: Option<String>,
-    content_group: Option<String>,
-) {
-    let selection_generation = current_selection_generation();
-    wasm_bindgen_futures::spawn_local(async move {
-        match fetch_card_list_query(
-            language.clone(),
-            target.clone(),
-            overlay.clone(),
-            filter,
-            content_group,
-        )
-        .await
-        {
-            Ok(list) if is_current_selection_generation(selection_generation) => {
-                publish_card_list_panel(&list);
-            }
-            Ok(_) => {}
-            Err(error) if is_current_selection_generation(selection_generation) => {
-                render_panel_error("card-pivot-panel", &error);
-            }
-            Err(_) => {}
-        }
-    });
-}
-
-#[cfg(target_arch = "wasm32")]
-fn load_card_detail_for_parts(
-    language: Option<String>,
-    target: Option<String>,
-    overlay: Option<String>,
-    card: String,
-    filter: Option<String>,
-    content_group: Option<String>,
-) {
-    let selection_generation = current_selection_generation();
-    let detail_generation = begin_card_detail_request();
-    wasm_bindgen_futures::spawn_local(async move {
-        match fetch_card_pivot_query(language, target, overlay, Some(card), filter, content_group)
-            .await
-        {
-            Ok(pivot)
-                if is_current_selection_generation(selection_generation)
-                    && is_current_card_detail_generation(detail_generation) =>
-            {
-                publish_card_detail_panel(&pivot);
-            }
-            Ok(_) => {}
-            Err(error)
-                if is_current_selection_generation(selection_generation)
-                    && is_current_card_detail_generation(detail_generation) =>
-            {
-                render_panel_error("card-detail-panel", &error);
-            }
-            Err(_) => {}
-        }
-    });
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(dead_code)]
-fn load_card_pivot_for_parts(
-    language: Option<String>,
-    target: Option<String>,
-    overlay: Option<String>,
-    card: Option<String>,
-    filter: Option<String>,
-    content_group: Option<String>,
-) {
-    wasm_bindgen_futures::spawn_local(async move {
-        match fetch_card_pivot_query(language, target, overlay, card, filter, content_group).await {
-            Ok(pivot) => publish_card_pivot_panel(&pivot),
-            Err(error) => render_panel_error("card-pivot-panel", &error),
-        }
-    });
-}
-
-#[cfg(target_arch = "wasm32")]
-fn register_source_string_list_handlers(list: &Value) {
-    attach_source_string_list_filter_handler(list);
-    for string in list["rows"].as_array().into_iter().flatten() {
-        let source = string["source"].as_str().unwrap_or("").to_owned();
-        attach_source_string_list_select_handler(list, source);
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_source_string_list_filter_handler(list: &Value) {
-    let (language, target, overlay) = pivot_selection_parts(list);
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-            return;
-        };
-        let content_group = selected_value(&document, "source-string-content-group-filter");
-        load_source_string_list_for_parts(
-            language.clone(),
-            target.clone(),
-            overlay.clone(),
-            content_group,
-            None,
-        );
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id("source-string-content-group-filter"))
-    {
-        let _ =
-            element.add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_source_string_list_select_handler(list: &Value, source: String) {
-    let (language, target, overlay) = pivot_selection_parts(list);
-    let selector = format!(
-        ".source-string-row[data-source=\"{}\"]",
-        css_escape(&source)
-    );
-    let content_group = list["filters"]["content_group"].as_str().map(str::to_owned);
-    let status = list["filters"]["status"].as_str().map(str::to_owned);
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        mark_active_source_string_row(&source);
-        set_panel_loading(
-            "source-string-detail-panel",
-            "Loading selected source string…",
-        );
-        load_source_string_detail_for_parts(
-            language.clone(),
-            target.clone(),
-            overlay.clone(),
-            source.clone(),
-            content_group.clone(),
-            status.clone(),
-        );
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.query_selector(&selector).ok().flatten())
-    {
-        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
-fn mark_active_source_string_row(source: &str) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    if let Ok(nodes) = document.query_selector_all(".source-string-row.active") {
-        for index in 0..nodes.length() {
-            if let Some(node) = nodes.get(index)
-                && let Ok(element) = node.dyn_into::<web_sys::Element>()
-            {
-                let class_name = element.get_attribute("class").unwrap_or_default();
-                let class_name = class_name
-                    .split_whitespace()
-                    .filter(|class| *class != "active")
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                let _ = element.set_attribute("class", &class_name);
-            }
-        }
-    }
-    let selector = format!(".source-string-row[data-source=\"{}\"]", css_escape(source));
-    if let Some(element) = document.query_selector(&selector).ok().flatten() {
-        let class_name = element.get_attribute("class").unwrap_or_default();
-        if !class_name.split_whitespace().any(|class| class == "active") {
-            let class_name = if class_name.is_empty() {
-                "active".to_owned()
-            } else {
-                format!("{class_name} active")
-            };
-            let _ = element.set_attribute("class", &class_name);
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn register_source_string_detail_handlers(pivot: &Value) {
-    attach_source_string_direct_handlers(pivot);
-    for occurrence in pivot["occurrences"].as_array().into_iter().flatten() {
-        let path = occurrence["path"].as_str().unwrap_or("").to_owned();
-        let source = occurrence["source"].as_str().unwrap_or("").to_owned();
-        attach_source_string_contextual_handler(pivot, path, source);
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(dead_code)]
-fn register_source_string_handlers(pivot: &Value) {
-    attach_source_string_filter_handler(pivot);
-    for string in pivot["strings"].as_array().into_iter().flatten() {
-        let source = string["source"].as_str().unwrap_or("").to_owned();
-        attach_source_string_select_handler(pivot, source);
-    }
-    attach_source_string_direct_handlers(pivot);
-    for occurrence in pivot["occurrences"].as_array().into_iter().flatten() {
-        let path = occurrence["path"].as_str().unwrap_or("").to_owned();
-        let source = occurrence["source"].as_str().unwrap_or("").to_owned();
-        attach_source_string_contextual_handler(pivot, path, source);
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(dead_code)]
-fn attach_source_string_filter_handler(pivot: &Value) {
-    let (language, target, overlay) = pivot_selection_parts(pivot);
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-            return;
-        };
-        let content_group = selected_value(&document, "source-string-content-group-filter");
-        load_source_string_pivot_for_parts(
-            language.clone(),
-            target.clone(),
-            overlay.clone(),
-            None,
-            content_group,
-            None,
-        );
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id("source-string-content-group-filter"))
-    {
-        let _ =
-            element.add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(dead_code)]
-fn attach_source_string_select_handler(pivot: &Value, source: String) {
-    let (language, target, overlay) = pivot_selection_parts(pivot);
-    let selector = format!(
-        ".source-string-row[data-source=\"{}\"]",
-        css_escape(&source)
-    );
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        load_source_string_pivot_for_parts(
-            language.clone(),
-            target.clone(),
-            overlay.clone(),
-            Some(source.clone()),
-            None,
-            None,
-        );
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.query_selector(&selector).ok().flatten())
-    {
-        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_source_string_direct_handlers(pivot: &Value) {
-    let Some(first_occurrence) = pivot["occurrences"]
-        .as_array()
-        .and_then(|items| items.first())
-    else {
-        return;
-    };
-    let path = first_occurrence["path"].as_str().unwrap_or("").to_owned();
-    let source = first_occurrence["source"].as_str().unwrap_or("").to_owned();
-    for (element_id, mode) in [
-        ("source-string-direct-input", "direct"),
-        ("source-string-direct-stage", "direct"),
-        ("source-string-no-change", "no_change"),
-    ] {
-        let pivot = pivot.clone();
-        let path = path.clone();
-        let source = source.clone();
-        let mode = mode.to_owned();
-        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-                return;
-            };
-            let value = if mode == "no_change" {
-                source.clone()
-            } else {
-                document
-                    .get_element_by_id("source-string-direct-input")
-                    .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-                    .map(|input| input.value())
-                    .unwrap_or_else(|| source.clone())
-            };
-            stage_source_string_translation(&pivot, &path, &source, &value, &mode);
-            update_source_string_targets(&document, &source, &value);
-        }));
-        if let Some(element) = web_sys::window()
-            .and_then(|window| window.document())
-            .and_then(|document| document.get_element_by_id(element_id))
-        {
-            let event = if element_id == "source-string-direct-input" {
-                "input"
-            } else {
-                "click"
-            };
-            let _ =
-                element.add_event_listener_with_callback(event, closure.as_ref().unchecked_ref());
-        }
-        closure.forget();
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_source_string_contextual_handler(pivot: &Value, path: String, source: String) {
-    let id = id_for_path(&path);
-    for element_id in [
-        format!("source-string-contextual-input-{id}"),
-        format!("source-string-contextual-stage-{id}"),
-    ] {
-        let pivot = pivot.clone();
-        let path = path.clone();
-        let source = source.clone();
-        let input_id = format!("source-string-contextual-input-{id}");
-        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-                return;
-            };
-            let value = document
-                .get_element_by_id(&input_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-                .map(|input| input.value())
-                .unwrap_or_else(|| source.clone());
-            stage_source_string_translation(&pivot, &path, &source, &value, "contextual");
-            update_source_string_contextual_target(&document, &path, &value);
-        }));
-        if let Some(element) = web_sys::window()
-            .and_then(|window| window.document())
-            .and_then(|document| document.get_element_by_id(&element_id))
-        {
-            let event = if element_id.starts_with("source-string-contextual-input-") {
-                "input"
-            } else {
-                "click"
-            };
-            let _ =
-                element.add_event_listener_with_callback(event, closure.as_ref().unchecked_ref());
-        }
-        closure.forget();
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn stage_source_string_translation(
-    pivot: &Value,
-    path: &str,
-    source: &str,
-    value: &str,
-    mode: &str,
-) {
-    let mut edit = serde_json::json!({
-        "kind": "translation",
-        "path": path,
-        "source": source,
-        "value": value,
-        "mode": mode,
-    });
-    if mode == "contextual" {
-        edit["context_path"] = Value::String(path.to_owned());
-    }
-    if let Some(storage) = local_storage() {
-        let _ = storage.set_item(&edit_storage_key(pivot, path, source), &edit.to_string());
-    }
-    update_staged_count_for_pivot(pivot);
-}
-
-#[cfg(target_arch = "wasm32")]
-fn update_source_string_targets(document: &web_sys::Document, source: &str, value: &str) {
-    let selector = format!(
-        ".source-string-occurrence[data-source=\"{}\"] .source-string-target-text",
-        css_escape(source)
-    );
-    if let Ok(nodes) = document.query_selector_all(&selector) {
-        for index in 0..nodes.length() {
-            if let Some(node) = nodes.get(index)
-                && let Ok(element) = node.dyn_into::<web_sys::Element>()
-            {
-                element.set_text_content(Some(value));
-            }
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn update_source_string_contextual_target(document: &web_sys::Document, path: &str, value: &str) {
-    let selector = format!(
-        ".source-string-occurrence[data-path=\"{}\"] .source-string-target-text",
-        css_escape(path)
-    );
-    if let Some(element) = document.query_selector(&selector).ok().flatten() {
-        element.set_text_content(Some(value));
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn load_source_string_list_for_parts(
-    language: Option<String>,
-    target: Option<String>,
-    overlay: Option<String>,
-    content_group: Option<String>,
-    status: Option<String>,
-) {
-    let selection_generation = current_selection_generation();
-    wasm_bindgen_futures::spawn_local(async move {
-        match fetch_source_string_list_query(
-            language.clone(),
-            target.clone(),
-            overlay.clone(),
-            content_group,
-            status,
-        )
-        .await
-        {
-            Ok(list) if is_current_selection_generation(selection_generation) => {
-                publish_source_string_list_panel(&list);
-            }
-            Ok(_) => {}
-            Err(error) if is_current_selection_generation(selection_generation) => {
-                render_panel_error("source-string-pivot-panel", &error);
-            }
-            Err(_) => {}
-        }
-    });
-}
-
-#[cfg(target_arch = "wasm32")]
-fn load_source_string_detail_for_parts(
-    language: Option<String>,
-    target: Option<String>,
-    overlay: Option<String>,
-    source: String,
-    content_group: Option<String>,
-    status: Option<String>,
-) {
-    let selection_generation = current_selection_generation();
-    let detail_generation = begin_source_string_detail_request();
-    wasm_bindgen_futures::spawn_local(async move {
-        match fetch_source_string_pivot_query(
-            language,
-            target,
-            overlay,
-            Some(source),
-            content_group,
-            status,
-        )
-        .await
-        {
-            Ok(source_pivot)
-                if is_current_selection_generation(selection_generation)
-                    && is_current_source_string_detail_generation(detail_generation) =>
-            {
-                publish_source_string_detail_panel(&source_pivot);
-            }
-            Ok(_) => {}
-            Err(error)
-                if is_current_selection_generation(selection_generation)
-                    && is_current_source_string_detail_generation(detail_generation) =>
-            {
-                render_panel_error("source-string-detail-panel", &error);
-            }
-            Err(_) => {}
-        }
-    });
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(dead_code)]
-fn load_source_string_pivot_for_parts(
-    language: Option<String>,
-    target: Option<String>,
-    overlay: Option<String>,
-    source: Option<String>,
-    content_group: Option<String>,
-    status: Option<String>,
-) {
-    wasm_bindgen_futures::spawn_local(async move {
-        match fetch_source_string_pivot_query(
-            language,
-            target,
-            overlay,
-            source,
-            content_group,
-            status,
-        )
-        .await
-        {
-            Ok(source_pivot) => publish_source_string_pivot_panel(&source_pivot),
-            Err(error) => render_panel_error("source-string-pivot-panel", &error),
-        }
-    });
-}
-
-#[cfg(target_arch = "wasm32")]
-fn load_optional_metadata_for_parts(
-    language: Option<String>,
-    target: Option<String>,
-    overlay: Option<String>,
-) {
-    let selection_generation = current_selection_generation();
-    wasm_bindgen_futures::spawn_local(async move {
-        match fetch_optional_metadata_query(language, target, overlay).await {
-            Ok(optional) if is_current_selection_generation(selection_generation) => {
-                publish_optional_metadata_panel(&optional);
-            }
-            Ok(_) => {}
-            Err(error) if is_current_selection_generation(selection_generation) => {
-                if let Some(document) = web_sys::window().and_then(|window| window.document())
-                    && let Some(panel) = document.get_element_by_id("optional-metadata-panel")
-                {
-                    panel.set_inner_html(&format!(
-                        "<p class=\"workbench-error\">{}</p>",
-                        escape_html(&error)
-                    ));
-                }
-            }
-            Err(_) => {}
-        }
-    });
-}
-
-#[cfg(target_arch = "wasm32")]
-fn publish_optional_metadata_panel(optional: &Value) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    let Some(panel) = document.get_element_by_id("optional-metadata-panel") else {
-        return;
-    };
-    let language = optional["language"]["code"].as_str().unwrap_or("");
-    let target = optional["target"]["label"].as_str().unwrap_or("");
-    let overlay = optional["overlay"]["label"].as_str().unwrap_or("");
-    let prefix = storage_prefix_for_parts(language, target, overlay);
-    let progress = &optional["metadata_progress"];
-    let mut html = format!(
-        "<section id=\"optional-metadata-checklist\" data-storage-prefix=\"{}\"><h3>Metadata checklist</h3><p>Main note-field completion is separate. Metadata: {} / {} complete, {} missing, {} stale.</p>",
-        escape_html(&prefix),
-        progress["complete"].as_u64().unwrap_or(0),
-        progress["total"].as_u64().unwrap_or(0),
-        progress["missing"].as_u64().unwrap_or(0),
-        progress["stale"].as_u64().unwrap_or(0),
-    );
-    html.push_str("<table><thead><tr><th>Category</th><th>Path</th><th>Source</th><th>Target</th><th>Status</th></tr></thead><tbody>");
-    for item in optional["items"].as_array().into_iter().flatten() {
-        let path = item["path"].as_str().unwrap_or("");
-        let source = item["source"].as_str().unwrap_or("");
-        let id = id_for_path(path);
-        let staged = staged_edit_for_pane(language, target, overlay, path, source);
-        let value = staged
-            .as_ref()
-            .and_then(|edit| edit["value"].as_str())
-            .or_else(|| item["target"].as_str())
-            .unwrap_or(source);
-        let status = staged
-            .as_ref()
-            .map(|_| "staged_direct".to_owned())
-            .unwrap_or_else(|| item["status"].as_str().unwrap_or("unknown").to_owned());
-        let warning = item["warning"].as_str().unwrap_or("");
-        html.push_str(&format!(
-            "<tr class=\"optional-metadata-row\" data-path=\"{}\" data-source=\"{}\"><td>{}</td><td>{}</td><td>{}</td><td><input id=\"optional-translation-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\"></td><td id=\"optional-status-{}\">{} {}</td></tr>",
-            escape_html(path),
-            escape_html(source),
-            escape_html(item["metadata_category"].as_str().unwrap_or("metadata")),
-            escape_html(path),
-            escape_html(source),
-            id,
-            escape_html(value),
-            escape_html(path),
-            escape_html(source),
-            id,
-            escape_html(&status),
-            escape_html(warning),
-        ));
-    }
-    html.push_str("</tbody></table></section>");
-    panel.set_inner_html(&html);
-    mark_panel_loaded(&panel);
-    register_optional_metadata_handlers(optional);
-    let target_writable = checkbox_checked(&document, "target-pane-writable");
-    apply_pane_writability(
-        checkbox_checked(&document, "source-pane-writable"),
-        target_writable,
-    );
-    update_staged_count(&prefix);
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -3839,112 +2741,220 @@ fn publish_note_detail_panel(detail: &Value) {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn register_control_handlers(_pivot: &Value) {
-    attach_select_reload_handler("language-select", true);
-    attach_select_reload_handler("target-select", false);
-    attach_select_reload_handler("overlay-select", false);
-    for filter in ["all", "missing", "stale", "needs_work"] {
-        attach_filter_reload_handler(filter);
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn register_lazy_pivot_load_handlers(pivot: &Value) {
-    attach_card_pivot_load_handler(pivot);
-    attach_source_string_pivot_load_handler(pivot);
-    attach_optional_metadata_load_handler(pivot);
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(dead_code)]
-fn register_view_switch_handlers(pivot: &Value) {
-    for view in ["notes", "cards", "source-strings", "metadata"] {
-        attach_view_switch_handler(pivot, view);
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(dead_code)]
-fn attach_view_switch_handler(pivot: &Value, view: &str) {
-    let view = view.to_owned();
-    let pivot = pivot.clone();
-    let button_id = format!("view-{view}");
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        activate_workbench_view(&view);
-        maybe_load_view(&pivot, &view);
-    }));
-    attach_click_handler(&button_id, closure);
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(dead_code)]
-fn activate_workbench_view(view: &str) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    if let Ok(panels) = document.query_selector_all(".workbench-view") {
-        for index in 0..panels.length() {
-            if let Some(node) = panels.get(index)
-                && let Ok(element) = node.dyn_into::<web_sys::Element>()
-            {
-                let active = element.get_attribute("data-view").as_deref() == Some(view);
-                let _ = if active {
-                    element.remove_attribute("hidden")
+fn load_card_list_for_parts(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    filter: Option<String>,
+    content_group: Option<String>,
+) {
+    let selection_generation = current_selection_generation();
+    wasm_bindgen_futures::spawn_local(async move {
+        match fetch_card_list_query(
+            language.clone(),
+            target.clone(),
+            overlay.clone(),
+            filter,
+            content_group.clone(),
+        )
+        .await
+        {
+            Ok(list) if is_current_selection_generation(selection_generation) => {
+                let first_card = list["rows"]
+                    .as_array()
+                    .and_then(|rows| rows.first())
+                    .and_then(|row| row["card_id"].as_str())
+                    .map(str::to_owned);
+                set_card_list_state(LazyValueState::Loaded(list.clone()));
+                set_selected_card_state(first_card.clone());
+                if let Some(card_id) = first_card {
+                    set_card_detail_state(DetailValueState::Loading(
+                        "Loading selected card…".to_owned(),
+                    ));
+                    load_card_detail_for_parts(
+                        language,
+                        target,
+                        overlay,
+                        card_id,
+                        list["filters"]["active"].as_str().map(str::to_owned),
+                        list["filters"]["content_group"].as_str().map(str::to_owned),
+                    );
                 } else {
-                    element.set_attribute("hidden", "")
-                };
-                let class_name = element.get_attribute("class").unwrap_or_default();
-                let mut classes = class_name
-                    .split_whitespace()
-                    .filter(|class| *class != "active")
-                    .map(str::to_owned)
-                    .collect::<Vec<_>>();
-                if active {
-                    classes.push("active".to_owned());
+                    set_card_detail_state(DetailValueState::Empty);
                 }
-                let _ = element.set_attribute("class", &classes.join(" "));
             }
+            Ok(_) => {}
+            Err(error) if is_current_selection_generation(selection_generation) => {
+                set_card_list_state(LazyValueState::Error(error));
+            }
+            Err(_) => {}
         }
-    }
-    if let Ok(buttons) = document.query_selector_all(".workbench-view-button") {
-        for index in 0..buttons.length() {
-            if let Some(node) = buttons.get(index)
-                && let Ok(element) = node.dyn_into::<web_sys::Element>()
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn load_card_detail_for_parts(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    card: String,
+    filter: Option<String>,
+    content_group: Option<String>,
+) {
+    let selection_generation = current_selection_generation();
+    let detail_generation = begin_card_detail_request();
+    wasm_bindgen_futures::spawn_local(async move {
+        match fetch_card_pivot_query(language, target, overlay, Some(card), filter, content_group)
+            .await
+        {
+            Ok(pivot)
+                if is_current_selection_generation(selection_generation)
+                    && is_current_card_detail_generation(detail_generation) =>
             {
-                let active = element.get_attribute("data-view").as_deref() == Some(view);
-                let class_name = element.get_attribute("class").unwrap_or_default();
-                let mut classes = class_name
-                    .split_whitespace()
-                    .filter(|class| *class != "active")
-                    .map(str::to_owned)
-                    .collect::<Vec<_>>();
-                if active {
-                    classes.push("active".to_owned());
-                    let _ = element.set_attribute("aria-current", "page");
-                } else {
-                    let _ = element.remove_attribute("aria-current");
-                }
-                let _ = element.set_attribute("class", &classes.join(" "));
+                set_card_detail_state(DetailValueState::Loaded(pivot));
             }
+            Ok(_) => {}
+            Err(error)
+                if is_current_selection_generation(selection_generation)
+                    && is_current_card_detail_generation(detail_generation) =>
+            {
+                set_card_detail_state(DetailValueState::Error(error));
+            }
+            Err(_) => {}
         }
-    }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn load_source_string_list_for_parts(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    content_group: Option<String>,
+    status: Option<String>,
+) {
+    let selection_generation = current_selection_generation();
+    wasm_bindgen_futures::spawn_local(async move {
+        match fetch_source_string_list_query(
+            language.clone(),
+            target.clone(),
+            overlay.clone(),
+            content_group,
+            status,
+        )
+        .await
+        {
+            Ok(list) if is_current_selection_generation(selection_generation) => {
+                let first_source = list["rows"]
+                    .as_array()
+                    .and_then(|rows| rows.first())
+                    .and_then(|row| row["source"].as_str())
+                    .map(str::to_owned);
+                set_source_string_list_state(LazyValueState::Loaded(list.clone()));
+                set_selected_source_string_state(first_source.clone());
+                if let Some(source) = first_source {
+                    set_source_string_detail_state(DetailValueState::Loading(
+                        "Loading selected source string…".to_owned(),
+                    ));
+                    load_source_string_detail_for_parts(
+                        language,
+                        target,
+                        overlay,
+                        source,
+                        list["filters"]["content_group"].as_str().map(str::to_owned),
+                        list["filters"]["status"].as_str().map(str::to_owned),
+                    );
+                } else {
+                    set_source_string_detail_state(DetailValueState::Empty);
+                }
+            }
+            Ok(_) => {}
+            Err(error) if is_current_selection_generation(selection_generation) => {
+                set_source_string_list_state(LazyValueState::Error(error));
+            }
+            Err(_) => {}
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn load_source_string_detail_for_parts(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+    source: String,
+    content_group: Option<String>,
+    status: Option<String>,
+) {
+    let selection_generation = current_selection_generation();
+    let detail_generation = begin_source_string_detail_request();
+    wasm_bindgen_futures::spawn_local(async move {
+        match fetch_source_string_pivot_query(
+            language,
+            target,
+            overlay,
+            Some(source),
+            content_group,
+            status,
+        )
+        .await
+        {
+            Ok(source_pivot)
+                if is_current_selection_generation(selection_generation)
+                    && is_current_source_string_detail_generation(detail_generation) =>
+            {
+                set_source_string_detail_state(DetailValueState::Loaded(source_pivot));
+            }
+            Ok(_) => {}
+            Err(error)
+                if is_current_selection_generation(selection_generation)
+                    && is_current_source_string_detail_generation(detail_generation) =>
+            {
+                set_source_string_detail_state(DetailValueState::Error(error));
+            }
+            Err(_) => {}
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn load_optional_metadata_for_parts(
+    language: Option<String>,
+    target: Option<String>,
+    overlay: Option<String>,
+) {
+    let selection_generation = current_selection_generation();
+    wasm_bindgen_futures::spawn_local(async move {
+        match fetch_optional_metadata_query(language, target, overlay).await {
+            Ok(optional) if is_current_selection_generation(selection_generation) => {
+                set_optional_metadata_state(LazyValueState::Loaded(optional));
+            }
+            Ok(_) => {}
+            Err(error) if is_current_selection_generation(selection_generation) => {
+                set_optional_metadata_state(LazyValueState::Error(error));
+            }
+            Err(_) => {}
+        }
+    });
 }
 
 #[cfg(target_arch = "wasm32")]
 fn maybe_load_view(pivot: &Value, view: &str) {
     match view {
         "cards" if panel_is_unloaded("card-pivot-panel") => {
-            set_panel_loading("card-pivot-panel", "Loading card list…");
+            set_card_list_state(LazyValueState::Loading("Loading card list…".to_owned()));
             let (language, target, overlay) = pivot_selection_parts(pivot);
             load_card_list_for_parts(language, target, overlay, None, None);
         }
         "source-strings" if panel_is_unloaded("source-string-pivot-panel") => {
-            set_panel_loading("source-string-pivot-panel", "Loading source string list…");
+            set_source_string_list_state(LazyValueState::Loading(
+                "Loading source string list…".to_owned(),
+            ));
             let (language, target, overlay) = pivot_selection_parts(pivot);
             load_source_string_list_for_parts(language, target, overlay, None, None);
         }
         "metadata" if panel_is_unloaded("optional-metadata-panel") => {
-            set_panel_loading("optional-metadata-panel", "Loading metadata…");
+            set_optional_metadata_state(LazyValueState::Loading("Loading metadata…".to_owned()));
             let (language, target, overlay) = pivot_selection_parts(pivot);
             load_optional_metadata_for_parts(language, target, overlay);
         }
@@ -3954,99 +2964,45 @@ fn maybe_load_view(pivot: &Value, view: &str) {
 
 #[cfg(target_arch = "wasm32")]
 fn panel_is_unloaded(panel_id: &str) -> bool {
-    web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id(panel_id))
-        .and_then(|panel| panel.get_attribute("data-lazy-state"))
-        .is_none_or(|state| state == "unloaded")
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_card_pivot_load_handler(pivot: &Value) {
-    let (language, target, overlay) = pivot_selection_parts(pivot);
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        set_panel_loading("card-pivot-panel", "Loading card list…");
-        load_card_list_for_parts(
-            language.clone(),
-            target.clone(),
-            overlay.clone(),
-            None,
-            None,
-        );
-    }));
-    attach_click_handler("load-card-pivot-button", closure);
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_source_string_pivot_load_handler(pivot: &Value) {
-    let (language, target, overlay) = pivot_selection_parts(pivot);
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        set_panel_loading("source-string-pivot-panel", "Loading source string list…");
-        load_source_string_list_for_parts(
-            language.clone(),
-            target.clone(),
-            overlay.clone(),
-            None,
-            None,
-        );
-    }));
-    attach_click_handler("load-source-string-pivot-button", closure);
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_optional_metadata_load_handler(pivot: &Value) {
-    let (language, target, overlay) = pivot_selection_parts(pivot);
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        set_panel_loading("optional-metadata-panel", "Loading metadata…");
-        load_optional_metadata_for_parts(language.clone(), target.clone(), overlay.clone());
-    }));
-    attach_click_handler("load-optional-metadata-button", closure);
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_click_handler(element_id: &str, closure: Closure<dyn FnMut(web_sys::Event)>) {
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id(element_id))
-    {
-        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
-fn render_panel_error(panel_id: &str, error: &str) {
-    if let Some(panel) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id(panel_id))
-    {
-        let _ = panel.set_attribute("aria-busy", "false");
-        panel.set_inner_html(&format!(
-            "<p class=\"workbench-error\">{}</p>",
-            escape_html(error)
-        ));
+    match panel_id {
+        "card-pivot-panel" => CARD_LIST_SIGNAL.with(|signal| {
+            signal
+                .borrow()
+                .as_ref()
+                .is_none_or(|signal| matches!(signal.get_untracked(), LazyValueState::Unloaded))
+        }),
+        "source-string-pivot-panel" => SOURCE_STRING_LIST_SIGNAL.with(|signal| {
+            signal
+                .borrow()
+                .as_ref()
+                .is_none_or(|signal| matches!(signal.get_untracked(), LazyValueState::Unloaded))
+        }),
+        "optional-metadata-panel" => OPTIONAL_METADATA_SIGNAL.with(|signal| {
+            signal
+                .borrow()
+                .as_ref()
+                .is_none_or(|signal| matches!(signal.get_untracked(), LazyValueState::Unloaded))
+        }),
+        _ => false,
     }
 }
 
 #[cfg(target_arch = "wasm32")]
-fn set_panel_loading(panel_id: &str, message: &str) {
-    if let Some(panel) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id(panel_id))
-    {
-        let _ = panel.set_attribute("data-lazy-state", "loading");
-        let _ = panel.set_attribute("aria-busy", "true");
-        panel.set_inner_html(&format!(
-            "<p class=\"workbench-loading\">{}</p>",
-            escape_html(message)
-        ));
+fn lazy_state_key(state: &LazyValueState) -> &'static str {
+    match state {
+        LazyValueState::Unloaded => "unloaded",
+        LazyValueState::Loading(_) => "loading",
+        LazyValueState::Error(_) | LazyValueState::Loaded(_) => "loaded",
     }
 }
 
 #[cfg(target_arch = "wasm32")]
-fn mark_panel_loaded(panel: &web_sys::Element) {
-    let _ = panel.set_attribute("data-lazy-state", "loaded");
-    let _ = panel.set_attribute("aria-busy", "false");
+fn lazy_state_busy(state: &LazyValueState) -> &'static str {
+    if matches!(state, LazyValueState::Loading(_)) {
+        "true"
+    } else {
+        "false"
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -4074,12 +3030,12 @@ fn apply_pane_writability(source_writable: bool, target_writable: bool) {
     );
     set_controls_disabled(
         &document,
-        "input[id^='translation-input-'], select[id^='translation-mode-'], input[id^='card-translation-input-'], select[id^='card-translation-mode-'], input[id^='optional-translation-input'], input[id^='source-string-direct-input'], button[id^='source-string-direct-stage'], button[id^='source-string-no-change'], input[id^='source-string-contextual-input-'], button[id^='source-string-contextual-stage-']",
+        "input[id^='translation-input-'], select[id^='translation-mode-'], input[id^='card-translation-input-'], select[id^='card-translation-mode-'], input[id^='optional-translation-input'], input[id^='source-string-direct-input'], button[id^='source-string-direct-stage'], button[id^='source-string-no-change'], button[id^='source-string-contextual-stage-']",
         !target_writable,
     );
     set_contenteditable(
         &document,
-        ".inline-target-field, .card-inline-target-field",
+        ".inline-target-field, .card-inline-target-field, .source-string-contextual-input",
         target_writable,
     );
 }
@@ -4143,6 +3099,64 @@ fn set_inputs_readonly(document: &web_sys::Document, selector: &str, readonly: b
 }
 
 #[cfg(target_arch = "wasm32")]
+fn stage_translation_with_optional_context(
+    prefix: &str,
+    path: &str,
+    storage_source: &str,
+    effective_source: &str,
+    value: &str,
+    mode: &str,
+    include_context_path: bool,
+) {
+    let mut edit = serde_json::json!({
+        "kind": "translation",
+        "path": path,
+        "source": effective_source,
+        "value": value,
+        "mode": mode,
+    });
+    if include_context_path {
+        edit["context_path"] = Value::String(path.to_owned());
+    }
+    if let Some(storage) = local_storage() {
+        let _ = storage.set_item(
+            &staging::translation_key(prefix, path, storage_source),
+            &edit.to_string(),
+        );
+    }
+    staging::bump_current();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn stage_metadata_translation(
+    prefix: &str,
+    language: &str,
+    target: &str,
+    overlay: &str,
+    path: &str,
+    source: &str,
+    value: &str,
+) {
+    let edit = serde_json::json!({
+        "kind": "translation",
+        "path": path,
+        "source": source,
+        "value": value,
+        "mode": "direct",
+        "language": language,
+        "target": target,
+        "overlay": overlay,
+    });
+    if let Some(storage) = local_storage() {
+        let _ = storage.set_item(
+            &staging::translation_key(prefix, path, source),
+            &edit.to_string(),
+        );
+    }
+    staging::bump_current();
+}
+
+#[cfg(target_arch = "wasm32")]
 fn stage_secondary_translation(
     language: &str,
     target: &str,
@@ -4195,57 +3209,6 @@ fn staged_edit_for_pane(
             storage.get_item(&key).ok().flatten()
         })
         .and_then(|value| serde_json::from_str(&value).ok())
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_select_reload_handler(element_id: &str, reset_dependent_selection: bool) {
-    let element_id = element_id.to_owned();
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-            return;
-        };
-        let language = selected_value(&document, "language-select");
-        let target = (!reset_dependent_selection)
-            .then(|| selected_value(&document, "target-select"))
-            .flatten();
-        let overlay = (!reset_dependent_selection)
-            .then(|| selected_value(&document, "overlay-select"))
-            .flatten();
-        let filter = active_filter(&document);
-        reload_note_pivot(language, target, overlay, filter);
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id(&element_id))
-    {
-        let _ =
-            element.add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_filter_reload_handler(filter: &str) {
-    let filter = filter.to_owned();
-    let selector = format!(".pivot-filters button[data-filter=\"{filter}\"]");
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-            return;
-        };
-        reload_note_pivot(
-            selected_value(&document, "language-select"),
-            selected_value(&document, "target-select"),
-            selected_value(&document, "overlay-select"),
-            Some(filter.clone()),
-        );
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.query_selector(&selector).ok().flatten())
-    {
-        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -4302,22 +3265,48 @@ fn is_current_note_detail_generation(generation: u64) -> bool {
 
 #[cfg(target_arch = "wasm32")]
 fn begin_card_detail_request() -> u64 {
-    next_generation(&CARD_DETAIL_GENERATION)
+    CARD_DETAIL_TOKEN_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            let next = signal.get_untracked().saturating_add(1);
+            signal.set(next);
+            next
+        } else {
+            0
+        }
+    })
 }
 
 #[cfg(target_arch = "wasm32")]
 fn is_current_card_detail_generation(generation: u64) -> bool {
-    current_generation(&CARD_DETAIL_GENERATION) == generation
+    CARD_DETAIL_TOKEN_SIGNAL.with(|signal| {
+        signal
+            .borrow()
+            .as_ref()
+            .is_some_and(|signal| signal.get_untracked() == generation)
+    })
 }
 
 #[cfg(target_arch = "wasm32")]
 fn begin_source_string_detail_request() -> u64 {
-    next_generation(&SOURCE_STRING_DETAIL_GENERATION)
+    SOURCE_STRING_DETAIL_TOKEN_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            let next = signal.get_untracked().saturating_add(1);
+            signal.set(next);
+            next
+        } else {
+            0
+        }
+    })
 }
 
 #[cfg(target_arch = "wasm32")]
 fn is_current_source_string_detail_generation(generation: u64) -> bool {
-    current_generation(&SOURCE_STRING_DETAIL_GENERATION) == generation
+    SOURCE_STRING_DETAIL_TOKEN_SIGNAL.with(|signal| {
+        signal
+            .borrow()
+            .as_ref()
+            .is_some_and(|signal| signal.get_untracked() == generation)
+    })
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -4332,6 +3321,48 @@ fn selected_value(document: &web_sys::Document, element_id: &str) -> Option<Stri
         .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
         .map(|select| select.value())
         .filter(|value| !value.is_empty())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn current_selected_value(element_id: &str) -> Option<String> {
+    web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| selected_value(&document, element_id))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn current_input_value(element_id: &str) -> Option<String> {
+    web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| input_value(&document, element_id))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn current_text_content(element_id: &str) -> Option<String> {
+    web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id(element_id))
+        .and_then(|element| element.text_content())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn current_active_filter() -> Option<String> {
+    web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| active_filter(&document))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn current_card_filter() -> Option<String> {
+    web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| {
+            document
+                .query_selector(".card-pivot-filters button.active")
+                .ok()
+                .flatten()
+                .and_then(|element| element.get_attribute("data-filter"))
+        })
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -4471,87 +3502,6 @@ fn reload_note_pivot(
 }
 
 #[cfg(target_arch = "wasm32")]
-fn register_optional_metadata_handlers(optional: &Value) {
-    let language = optional["language"]["code"]
-        .as_str()
-        .unwrap_or("")
-        .to_owned();
-    let target = optional["target"]["label"]
-        .as_str()
-        .unwrap_or("")
-        .to_owned();
-    let overlay = optional["overlay"]["label"]
-        .as_str()
-        .unwrap_or("")
-        .to_owned();
-    for item in optional["items"].as_array().into_iter().flatten() {
-        let path = item["path"].as_str().unwrap_or("").to_owned();
-        let source = item["source"].as_str().unwrap_or("").to_owned();
-        let id = id_for_path(&path);
-        attach_optional_metadata_handler(
-            language.clone(),
-            target.clone(),
-            overlay.clone(),
-            id,
-            path,
-            source,
-        );
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_optional_metadata_handler(
-    language: String,
-    target: String,
-    overlay: String,
-    id: String,
-    path: String,
-    source: String,
-) {
-    let input_id = format!("optional-translation-input-{id}");
-    let status_id = format!("optional-status-{id}");
-    let prefix = storage_prefix_for_parts(&language, &target, &overlay);
-    let key = format!("{prefix}translation::{path}::{source}");
-    let closure_input_id = input_id.clone();
-    let closure_status_id = status_id.clone();
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-            return;
-        };
-        let Some(input) = document
-            .get_element_by_id(&closure_input_id)
-            .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-        else {
-            return;
-        };
-        let edit = serde_json::json!({
-            "kind": "translation",
-            "path": path.clone(),
-            "source": source.clone(),
-            "value": input.value(),
-            "mode": "direct",
-            "language": language.clone(),
-            "target": target.clone(),
-            "overlay": overlay.clone(),
-        });
-        if let Some(storage) = local_storage() {
-            let _ = storage.set_item(&key, &edit.to_string());
-        }
-        if let Some(status) = document.get_element_by_id(&closure_status_id) {
-            status.set_text_content(Some("staged_direct"));
-        }
-        update_staged_count(&prefix);
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id(&input_id))
-    {
-        let _ = element.add_event_listener_with_callback("input", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
 fn restore_staged_dom_state(pivot: &Value) {
     let Some(document) = web_sys::window().and_then(|window| window.document()) else {
         return;
@@ -4595,6 +3545,201 @@ fn restore_staged_dom_state(pivot: &Value) {
             update_target_preview_field(&document, note_id, field_id, value);
             mark_preview_field_staged(&document, note_id, field_id, true);
         }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn decorate_card_detail_dom(pivot: &Value) {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    let Some(card) = pivot.get("selected_card").filter(|value| !value.is_null()) else {
+        return;
+    };
+    for field in card["fields"].as_array().into_iter().flatten() {
+        if !field["editable"].as_bool().unwrap_or(false) {
+            continue;
+        }
+        let field_id = field["field_id"].as_str().unwrap_or("");
+        let field_name = field["field_name"].as_str().unwrap_or("field");
+        let path = field["path"].as_str().unwrap_or("");
+        let source = field["source"].as_str().unwrap_or("");
+        let staged = staged_edit_for(pivot, path, source).is_some();
+        let selector = format!(
+            "#card-pivot-panel .card-target-preview [data-preview-field-id=\"{}\"]",
+            css_escape(field_id),
+        );
+        let Ok(nodes) = document.query_selector_all(&selector) else {
+            continue;
+        };
+        for index in 0..nodes.length() {
+            let Some(node) = nodes.get(index) else {
+                continue;
+            };
+            let Ok(element) = node.dyn_into::<web_sys::Element>() else {
+                continue;
+            };
+            append_class(&element, "card-inline-target-field");
+            let _ = element.set_attribute("contenteditable", "true");
+            let _ = element.set_attribute("tabindex", "0");
+            let _ = element.set_attribute("role", "textbox");
+            let _ = element.set_attribute(
+                "aria-label",
+                &format!("Edit card target translation for {field_name} inline"),
+            );
+            let _ = element.set_attribute("data-staged", if staged { "true" } else { "false" });
+        }
+    }
+    apply_pane_writability(
+        checkbox_checked(&document, "source-pane-writable"),
+        checkbox_checked(&document, "target-pane-writable"),
+    );
+}
+
+#[cfg(target_arch = "wasm32")]
+fn handle_card_inline_target_input(pivot: &Value, event: web_sys::Event) {
+    let Some(element) = event
+        .target()
+        .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+        .and_then(|element| element.closest("[data-preview-field-id]").ok().flatten())
+    else {
+        return;
+    };
+    let Some(field_id) = element.get_attribute("data-preview-field-id") else {
+        return;
+    };
+    let Some(card) = pivot.get("selected_card").filter(|value| !value.is_null()) else {
+        return;
+    };
+    let Some(field) = card["fields"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|field| field["field_id"].as_str().unwrap_or("") == field_id)
+    else {
+        return;
+    };
+    let prefix = storage_prefix(pivot);
+    let path = field["path"].as_str().unwrap_or("");
+    let source = field["source"].as_str().unwrap_or("");
+    let id = id_for_path(path);
+    let value = element.text_content().unwrap_or_default();
+    let mode_id = format!("card-translation-mode-{id}");
+    let source_input_id = format!("card-source-input-{id}");
+    let input_id = format!("card-translation-input-{id}");
+    let target_id = format!("card-target-text-{id}");
+    let status_id = format!("card-status-text-{id}");
+    let mode = current_selected_value(&mode_id).unwrap_or_else(|| "direct".to_owned());
+    let effective_source = effective_source_for_dom(&prefix, path, source, &source_input_id);
+    stage_translation_with_optional_context(
+        &prefix,
+        path,
+        source,
+        &effective_source,
+        &value,
+        &mode,
+        mode == "contextual",
+    );
+    if let Some(document) = web_sys::window().and_then(|window| window.document()) {
+        if let Some(input) = document
+            .get_element_by_id(&input_id)
+            .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+        {
+            input.set_value(&value);
+        }
+        set_element_text(&target_id, &value);
+        set_element_text(&status_id, &format!("staged_{mode}"));
+        update_card_preview_field(&document, "card-target-preview", &field_id, &value);
+        mark_card_preview_field_staged(&document, &field_id, true);
+    }
+    update_staged_count(&prefix);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn append_class(element: &web_sys::Element, class_name: &str) {
+    let existing = element.get_attribute("class").unwrap_or_default();
+    if existing.split_whitespace().any(|class| class == class_name) {
+        return;
+    }
+    let next = if existing.is_empty() {
+        class_name.to_owned()
+    } else {
+        format!("{existing} {class_name}")
+    };
+    let _ = element.set_attribute("class", &next);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn update_card_preview_field(
+    document: &web_sys::Document,
+    preview_class: &str,
+    field_id: &str,
+    value: &str,
+) {
+    let selector = format!(
+        "#card-pivot-panel .{} [data-preview-field-id=\"{}\"]",
+        preview_class,
+        css_escape(field_id)
+    );
+    let Ok(nodes) = document.query_selector_all(&selector) else {
+        return;
+    };
+    let active_element = document.active_element();
+    for index in 0..nodes.length() {
+        if let Some(node) = nodes.get(index)
+            && let Ok(element) = node.dyn_into::<web_sys::Element>()
+        {
+            if active_element.as_ref() == Some(&element) {
+                continue;
+            }
+            element.set_text_content(Some(value));
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn mark_card_preview_field_staged(document: &web_sys::Document, field_id: &str, staged: bool) {
+    let selector = format!(
+        "#card-pivot-panel .card-target-preview [data-preview-field-id=\"{}\"]",
+        css_escape(field_id)
+    );
+    let Ok(nodes) = document.query_selector_all(&selector) else {
+        return;
+    };
+    for index in 0..nodes.length() {
+        if let Some(node) = nodes.get(index)
+            && let Ok(element) = node.dyn_into::<web_sys::Element>()
+        {
+            let _ = element.set_attribute("data-staged", if staged { "true" } else { "false" });
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn update_source_string_targets(document: &web_sys::Document, source: &str, value: &str) {
+    let selector = format!(
+        ".source-string-occurrence[data-source=\"{}\"] .source-string-target-text",
+        css_escape(source)
+    );
+    if let Ok(nodes) = document.query_selector_all(&selector) {
+        for index in 0..nodes.length() {
+            if let Some(node) = nodes.get(index)
+                && let Ok(element) = node.dyn_into::<web_sys::Element>()
+            {
+                element.set_text_content(Some(value));
+            }
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn update_source_string_contextual_target(document: &web_sys::Document, path: &str, value: &str) {
+    let selector = format!(
+        ".source-string-occurrence[data-path=\"{}\"] .source-string-target-text",
+        css_escape(path)
+    );
+    if let Some(element) = document.query_selector(&selector).ok().flatten() {
+        element.set_text_content(Some(value));
     }
 }
 
@@ -4665,7 +3810,7 @@ fn update_preview_field(
             if active_element.as_ref() == Some(&element) {
                 continue;
             }
-            element.set_inner_html(value);
+            element.set_text_content(Some(value));
         }
     }
 }
@@ -4717,9 +3862,21 @@ fn refresh_progress_from_dom() {
             .unwrap_or_else(|| "0".to_owned());
         let _ = progress.set_attribute("data-complete", &complete.to_string());
         let _ = progress.set_attribute("data-missing", &missing.to_string());
-        progress.set_inner_html(&format!(
-            "Main note-field progress: {complete} / {total} complete, {missing} missing, {stale} stale (<span id=\"staged-edit-count\" data-count=\"{staged}\">{staged}</span> staged)"
-        ));
+        if let Some(first_child) = progress.first_child() {
+            first_child.set_node_value(Some(&format!(
+                "Main note-field progress: {complete} / {total} complete, {missing} missing, {stale} stale ("
+            )));
+        }
+        if let Some(staged_element) = document.get_element_by_id("staged-edit-count") {
+            staged_element.set_text_content(Some(&staged));
+            let _ = staged_element.set_attribute("data-count", &staged);
+            if let Some(tail) = staged_element.next_sibling() {
+                tail.set_node_value(Some(" staged)"));
+            } else {
+                let tail = document.create_text_node(" staged)");
+                let _ = progress.append_child(&tail);
+            }
+        }
     }
 }
 
@@ -4864,21 +4021,6 @@ fn update_staged_count_for_prefixes(prefixes: &[String]) {
         element.set_text_content(Some(&count.to_string()));
         let _ = element.set_attribute("data-count", &count.to_string());
     }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn edit_storage_key(pivot: &Value, path: &str, source: &str) -> String {
-    staging::translation_key(&storage_prefix(pivot), path, source)
-}
-
-#[cfg(target_arch = "wasm32")]
-fn source_edit_storage_key(pivot: &Value, path: &str, source: &str) -> String {
-    source_edit_storage_key_from_parts(&storage_prefix(pivot), path, source)
-}
-
-#[cfg(target_arch = "wasm32")]
-fn source_edit_storage_key_from_parts(prefix: &str, path: &str, source: &str) -> String {
-    staging::source_key(prefix, path, source)
 }
 
 #[cfg(target_arch = "wasm32")]
