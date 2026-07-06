@@ -46,16 +46,13 @@ pub fn stage_translation(
     value: &str,
     mode: &str,
 ) {
-    let mut edit = serde_json::json!({
+    let edit = serde_json::json!({
         "kind": "translation",
         "path": path,
         "source": effective_source,
         "value": value,
         "mode": mode,
     });
-    if mode == "contextual" {
-        edit["context_path"] = Value::String(path.to_owned());
-    }
     write_json(&translation_key(prefix, path, storage_source), &edit);
 }
 
