@@ -1,10 +1,15 @@
 use serde_json::Value;
 
 #[cfg(target_arch = "wasm32")]
+mod staging;
+
+#[cfg(target_arch = "wasm32")]
 use leptos::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 use std::cell::{Cell, RefCell};
+#[cfg(target_arch = "wasm32")]
+use std::rc::Rc;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
@@ -17,11 +22,14 @@ const STALE_WORKBENCH_REQUEST: &str = "__brainbrew_stale_workbench_request__";
 #[cfg(target_arch = "wasm32")]
 thread_local! {
     static WORKBENCH_SELECTION_GENERATION: Cell<u64> = const { Cell::new(0) };
-    static NOTE_DETAIL_GENERATION: Cell<u64> = const { Cell::new(0) };
     static CARD_DETAIL_GENERATION: Cell<u64> = const { Cell::new(0) };
     static SOURCE_STRING_DETAIL_GENERATION: Cell<u64> = const { Cell::new(0) };
     static SELECTED_VIEW_SIGNAL: RefCell<Option<RwSignal<WorkbenchView>>> = const { RefCell::new(None) };
     static TOP_LEVEL_ERROR_SIGNAL: RefCell<Option<RwSignal<Option<String>>>> = const { RefCell::new(None) };
+    static NOTE_PIVOT_SIGNAL: RefCell<Option<RwSignal<Option<Value>>>> = const { RefCell::new(None) };
+    static SELECTED_NOTE_SIGNAL: RefCell<Option<RwSignal<Option<String>>>> = const { RefCell::new(None) };
+    static NOTE_DETAIL_SIGNAL: RefCell<Option<RwSignal<NoteDetailState>>> = const { RefCell::new(None) };
+    static NOTE_DETAIL_TOKEN_SIGNAL: RefCell<Option<RwSignal<u64>>> = const { RefCell::new(None) };
     static CURRENT_NOTE_PIVOT: RefCell<Option<Value>> = const { RefCell::new(None) };
 }
 
@@ -32,6 +40,16 @@ enum WorkbenchView {
     Cards,
     SourceStrings,
     Metadata,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Debug, Default)]
+enum NoteDetailState {
+    #[default]
+    Empty,
+    Loading,
+    Error(String),
+    Loaded(Value),
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -66,12 +84,29 @@ pub fn App() -> impl IntoView {
     let workspace_summary = RwSignal::new(None::<WorkspaceSummary>);
     let top_level_status = RwSignal::new("loading".to_owned());
     let top_level_error = RwSignal::new(None::<String>);
+    let note_pivot = RwSignal::new(None::<Value>);
+    let selected_note_id = RwSignal::new(None::<String>);
+    let note_detail = RwSignal::new(NoteDetailState::Empty);
+    let note_detail_token = RwSignal::new(0_u64);
+    staging::provide(staging::Staging::new());
 
     SELECTED_VIEW_SIGNAL.with(|signal| {
         *signal.borrow_mut() = Some(selected_view);
     });
     TOP_LEVEL_ERROR_SIGNAL.with(|signal| {
         *signal.borrow_mut() = Some(top_level_error);
+    });
+    NOTE_PIVOT_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(note_pivot);
+    });
+    SELECTED_NOTE_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(selected_note_id);
+    });
+    NOTE_DETAIL_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(note_detail);
+    });
+    NOTE_DETAIL_TOKEN_SIGNAL.with(|signal| {
+        *signal.borrow_mut() = Some(note_detail_token);
     });
 
     publish_workspace_probe("loading", "Loading workspace metadata…", None);
@@ -173,7 +208,13 @@ pub fn App() -> impl IntoView {
                         data-view="notes"
                         hidden=move || selected_view.get() != WorkbenchView::Notes
                     >
-                        <div id="note-pivot-panel" class="workbench-view-interior"></div>
+                        <div id="note-pivot-panel" class="workbench-view-interior">
+                            <NotePivotInterior
+                                pivot=note_pivot
+                                selected_note_id=selected_note_id
+                                detail=note_detail
+                            />
+                        </div>
                     </section>
                     <section
                         id="view-panel-cards"
@@ -248,6 +289,617 @@ fn workbench_view_aria_current(current: WorkbenchView, view: WorkbenchView) -> &
 }
 
 #[cfg(target_arch = "wasm32")]
+#[component]
+fn NotePivotInterior(
+    pivot: RwSignal<Option<Value>>,
+    selected_note_id: RwSignal<Option<String>>,
+    detail: RwSignal<NoteDetailState>,
+) -> impl IntoView {
+    view! {
+        {move || match pivot.get() {
+            Some(pivot) => view! {
+                <NoteNavigation pivot=pivot.clone() selected_note_id=selected_note_id />
+                <NoteDetailPanel detail=detail />
+            }.into_any(),
+            None => view! {
+                <section class="note-navigation" data-total="0" data-limit="0" data-offset="0">
+                    <h3>Notes</h3>
+                    <p>Loading notes...</p>
+                </section>
+                <section id="note-detail-panel" class="note-detail-panel" aria-live="polite">
+                    <p>Loading selected note...</p>
+                </section>
+            }.into_any(),
+        }}
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn NoteNavigation(pivot: Value, selected_note_id: RwSignal<Option<String>>) -> impl IntoView {
+    let total = pivot["total"].as_u64().unwrap_or(0).to_string();
+    let limit = pivot["limit"].as_u64().unwrap_or(0).to_string();
+    let offset = pivot["offset"].as_u64().unwrap_or(0).to_string();
+    let rows = pivot["rows"].as_array().cloned().unwrap_or_default();
+    let has_more = pivot["has_more"].as_bool().unwrap_or(false);
+    let (language, target, overlay) = pivot_selection_parts(&pivot);
+
+    view! {
+        <section class="note-navigation" data-total=total data-limit=limit data-offset=offset>
+            <h3>Notes</h3>
+            {if rows.is_empty() {
+                view! { <p>No notes match the active filter.</p> }.into_any()
+            } else {
+                view! {
+                    <ol class="note-navigation-list">
+                        <For
+                            each=move || rows.clone()
+                            key=|row| row["note_id"].as_str().unwrap_or("").to_owned()
+                            children=move |row| {
+                                let note_id = row["note_id"].as_str().unwrap_or("").to_owned();
+                                let title = row["title"].as_str().unwrap_or(&note_id).to_owned();
+                                let status = row["status"].as_str().unwrap_or("unknown").to_owned();
+                                let field_count = row["translatable_field_count"].as_u64().unwrap_or(0);
+                                let missing_count = row["missing_count"].as_u64().unwrap_or(0);
+                                let stale_count = row["stale_count"].as_u64().unwrap_or(0);
+                                let language = language.clone();
+                                let target = target.clone();
+                                let overlay = overlay.clone();
+                                let row_note_id = note_id.clone();
+                                view! {
+                                    <li>
+                                        <button
+                                            type="button"
+                                            class=move || {
+                                                if selected_note_id.get().as_deref() == Some(row_note_id.as_str()) {
+                                                    "note-navigation-row active"
+                                                } else {
+                                                    "note-navigation-row"
+                                                }
+                                            }
+                                            data-note-id=note_id.clone()
+                                            on:click=move |_| {
+                                                set_selected_note_state(Some(note_id.clone()));
+                                                set_note_detail_state(NoteDetailState::Loading);
+                                                load_note_detail_for_parts(
+                                                    language.clone(),
+                                                    target.clone(),
+                                                    overlay.clone(),
+                                                    note_id.clone(),
+                                                );
+                                            }
+                                        >
+                                            <strong>{title}</strong><br/>
+                                            <span>{status}</span>
+                                            {format!(" · {field_count} field(s), {missing_count} missing, {stale_count} stale")}
+                                        </button>
+                                    </li>
+                                }
+                            }
+                        />
+                    </ol>
+                    {if has_more {
+                        view! { <p class="note-navigation-more">More notes are available; pagination controls will load additional pages in the next slice.</p> }.into_any()
+                    } else {
+                        "".into_any()
+                    }}
+                }.into_any()
+            }}
+        </section>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn NoteDetailPanel(detail: RwSignal<NoteDetailState>) -> impl IntoView {
+    view! {
+        <section id="note-detail-panel" class="note-detail-panel" aria-live="polite">
+            {move || match detail.get() {
+                NoteDetailState::Empty => view! { <p>No notes match the active filter.</p> }.into_any(),
+                NoteDetailState::Loading => view! { <p>Loading selected note...</p> }.into_any(),
+                NoteDetailState::Error(error) => view! { <p class="workbench-error">{error}</p> }.into_any(),
+                NoteDetailState::Loaded(detail) => view! { <NoteDetail detail=detail /> }.into_any(),
+            }}
+        </section>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn NoteDetail(detail: Value) -> impl IntoView {
+    let note = detail["notes"]
+        .as_array()
+        .and_then(|notes| notes.first())
+        .cloned();
+    match note {
+        Some(note) => view! { <LoadedNoteDetail detail=detail note=note /> }.into_any(),
+        None => view! { <p>No note detail is available.</p> }.into_any(),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn LoadedNoteDetail(detail: Value, note: Value) -> impl IntoView {
+    let note_id = note["note_id"].as_str().unwrap_or("").to_owned();
+    let status = note["status"].as_str().unwrap_or("unknown").to_owned();
+    let fields = note["fields"].as_array().cloned().unwrap_or_default();
+    let source_preview = preview_html(&note["source_preview"]);
+    let target_preview = preview_html(&note["target_preview"]);
+    let detail_for_effect = detail.clone();
+    let detail_for_input = detail.clone();
+    let note_id_for_input = note_id.clone();
+
+    Effect::new(move |_| {
+        decorate_note_detail_dom(&detail_for_effect);
+    });
+
+    view! {
+        <section class="note-card" data-note-id=note_id.clone()>
+            <h3>{format!("{}: {}", note_id, status)}</h3>
+            <div class="preview-grid">
+                <section>
+                    <h4>Source preview</h4>
+                    <div inner_html=source_preview></div>
+                </section>
+                <section>
+                    <h4>Target preview</h4>
+                    <div
+                        class="target-preview"
+                        inner_html=target_preview
+                        on:input=move |event| handle_note_inline_target_input(&detail_for_input, &note_id_for_input, event)
+                    ></div>
+                </section>
+            </div>
+            <p class="inline-edit-hint">Click highlighted text in the target preview to edit it in place. Staged preview edits are outlined and still use Apply to write YAML.</p>
+            <details class="field-editor-details">
+                <summary>Advanced field controls</summary>
+                <table class="field-editor">
+                    <thead>
+                        <tr>
+                            <th>Field</th>
+                            <th>Source / staged source edit</th>
+                            <th>Target / staged edit</th>
+                            <th>Status</th>
+                            <th>Occurrences</th>
+                            <th>Mode</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <For
+                            each=move || fields.clone()
+                            key=|field| field["path"].as_str().unwrap_or("").to_owned()
+                            children=move |field| view! { <NoteFieldRow detail=detail.clone() note=note.clone() field=field /> }
+                        />
+                    </tbody>
+                </table>
+            </details>
+        </section>
+    }.into_any()
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn NoteFieldRow(detail: Value, note: Value, field: Value) -> impl IntoView {
+    let prefix = storage_prefix(&detail);
+    let note_id = note["note_id"].as_str().unwrap_or("").to_owned();
+    let path = field["path"].as_str().unwrap_or("").to_owned();
+    let source = field["source"].as_str().unwrap_or("").to_owned();
+    let field_id = field["field_id"].as_str().unwrap_or("").to_owned();
+    let id = id_for_path(&path);
+    let field_name = field["field_name"].as_str().unwrap_or("field").to_owned();
+    let editable = field["editable"].as_bool().unwrap_or(false);
+    let source_editable = field["source_editable"].as_bool().unwrap_or(false);
+    let staged = staging::staged_translation_for_parts(&prefix, &path, &source);
+    let staged_source = staging::staged_source_for_parts(&prefix, &path, &source);
+    let target_initial = staged
+        .as_ref()
+        .and_then(|edit| edit["value"].as_str())
+        .or_else(|| field["target"].as_str())
+        .unwrap_or("")
+        .to_owned();
+    let source_initial = staged_source
+        .as_ref()
+        .and_then(|edit| edit["value"].as_str())
+        .unwrap_or(&source)
+        .to_owned();
+    let mode_initial = staged
+        .as_ref()
+        .and_then(|edit| edit["mode"].as_str())
+        .unwrap_or("direct")
+        .to_owned();
+    let source_scope_initial = staged_source
+        .as_ref()
+        .and_then(|edit| edit["scope"].as_str())
+        .unwrap_or("field")
+        .to_owned();
+    let source_impact_initial = staged_source
+        .as_ref()
+        .and_then(|edit| edit["impact_action"].as_str())
+        .unwrap_or("stale_translation")
+        .to_owned();
+    let status_initial = staged
+        .as_ref()
+        .and_then(|edit| edit["mode"].as_str())
+        .map(|mode| format!("staged_{mode}"))
+        .or_else(|| staged_source.as_ref().map(|_| "staged_source".to_owned()))
+        .unwrap_or_else(|| field["status"].as_str().unwrap_or("unknown").to_owned());
+    let target_value = RwSignal::new(target_initial.clone());
+    let source_value = RwSignal::new(source_initial.clone());
+    let status_value = RwSignal::new(status_initial);
+    let mode_value = RwSignal::new(mode_initial.clone());
+    let source_scope = RwSignal::new(source_scope_initial.clone());
+    let source_impact = RwSignal::new(source_impact_initial.clone());
+    let source_readonly = RwSignal::new(staged_source.is_none());
+    let occurrence_count = field["occurrence_count"].as_u64().unwrap_or(1);
+
+    let target_input_id = format!("translation-input-{id}");
+    let target_text_id = format!("target-text-{id}");
+    let status_id = format!("status-text-{id}");
+    let mode_id = format!("translation-mode-{id}");
+    let source_input_id = format!("source-input-{id}");
+    let source_text_id = format!("source-text-{id}");
+    let source_toggle_id = format!("source-edit-toggle-{id}");
+    let source_scope_id = format!("source-scope-{id}");
+    let source_impact_id = format!("source-impact-{id}");
+
+    let stage_target = Rc::new({
+        let prefix = prefix.clone();
+        let path = path.clone();
+        let source = source.clone();
+        let note_id = note_id.clone();
+        let field_id = field_id.clone();
+        let source_input_id = source_input_id.clone();
+        let target_text_id = target_text_id.clone();
+        let status_id = status_id.clone();
+        move |value: String, mode: String| {
+            let effective_source =
+                effective_source_for_dom(&prefix, &path, &source, &source_input_id);
+            staging::stage_translation(&prefix, &path, &source, &effective_source, &value, &mode);
+            target_value.set(value.clone());
+            status_value.set(format!("staged_{mode}"));
+            set_element_text(&target_text_id, &value);
+            set_element_text(&status_id, &format!("staged_{mode}"));
+            if let Some(document) = web_sys::window().and_then(|window| window.document()) {
+                update_target_preview_field(&document, &note_id, &field_id, &value);
+                mark_preview_field_staged(&document, &note_id, &field_id, true);
+            }
+            update_staged_count(&prefix);
+            refresh_progress_from_dom();
+        }
+    });
+
+    let stage_source = Rc::new({
+        let prefix = prefix.clone();
+        let path = path.clone();
+        let source = source.clone();
+        let note_id = note_id.clone();
+        let field_id = field_id.clone();
+        let source_text_id = source_text_id.clone();
+        let status_id = status_id.clone();
+        move |value: String, scope: String, impact: String| {
+            staging::stage_source_edit(&prefix, &path, &source, &value, &scope, &impact);
+            source_value.set(value.clone());
+            status_value.set("staged_source".to_owned());
+            source_readonly.set(false);
+            set_element_text(&source_text_id, &value);
+            set_element_text(&status_id, "staged_source");
+            if let Some(document) = web_sys::window().and_then(|window| window.document()) {
+                update_source_preview_field(&document, &note_id, &field_id, &value);
+            }
+            update_staged_count(&prefix);
+            refresh_progress_from_dom();
+        }
+    });
+
+    let stage_source_for_input = stage_source.clone();
+    let stage_source_for_scope = stage_source.clone();
+    let stage_source_for_impact = stage_source.clone();
+    let stage_target_for_input = stage_target.clone();
+    let stage_target_for_mode = stage_target.clone();
+    let source_input_id_for_toggle = source_input_id.clone();
+
+    view! {
+        <tr
+            data-field-path=path.clone()
+            data-note-id=note_id.clone()
+            data-field-id=field_id.clone()
+            data-editable=editable.to_string()
+            data-original-status=field["status"].as_str().unwrap_or("unknown").to_owned()
+        >
+            <td>{field_name}</td>
+            <td class="source-text">
+                <span id=source_text_id.clone()>{move || source_value.get()}</span>
+                <div class="source-edit-controls">
+                    <button
+                        id=source_toggle_id
+                        type="button"
+                        disabled=!source_editable
+                        on:click=move |_| {
+                            source_readonly.set(false);
+                            focus_input(&source_input_id_for_toggle);
+                        }
+                    >Edit source</button>
+                    <input
+                        id=source_input_id.clone()
+                        value=source_initial
+                        data-path=path.clone()
+                        data-source=source.clone()
+                        data-note-id=note_id.clone()
+                        data-field-id=field_id.clone()
+                        readonly=move || source_readonly.get()
+                        disabled=!source_editable
+                        on:input=move |event| {
+                            let value = event_input_value(&event);
+                            stage_source_for_input(value, source_scope.get_untracked(), source_impact.get_untracked());
+                        }
+                    />
+                </div>
+            </td>
+            <td>
+                <input
+                    id=target_input_id.clone()
+                    value=target_initial
+                    data-path=path.clone()
+                    data-source=source.clone()
+                    data-note-id=note_id.clone()
+                    data-field-id=field_id.clone()
+                    readonly=!editable
+                    on:input=move |event| {
+                        let value = event_input_value(&event);
+                        stage_target_for_input(value, mode_value.get_untracked());
+                    }
+                />
+                <div id=target_text_id>{move || target_value.get()}</div>
+            </td>
+            <td id=status_id>{move || status_value.get()}</td>
+            <td>
+                {format!("{occurrence_count} occurrence(s)")}<br/>
+                <select
+                    id=source_scope_id
+                    disabled=!source_editable
+                    on:change=move |event| {
+                        let value = event_select_value(&event);
+                        source_scope.set(value.clone());
+                        stage_source_for_scope(source_value.get_untracked(), value, source_impact.get_untracked());
+                    }
+                >
+                    <option value="field" selected=source_scope_initial == "field">This field only</option>
+                    <option value="all_occurrences" selected=source_scope_initial == "all_occurrences">All occurrences</option>
+                </select>
+            </td>
+            <td>
+                <select
+                    id=mode_id
+                    disabled=!editable
+                    on:change=move |event| {
+                        let value = event_select_value(&event);
+                        mode_value.set(value.clone());
+                        stage_target_for_mode(target_value.get_untracked(), value);
+                    }
+                >
+                    <option value="direct" selected=mode_initial == "direct">Direct</option>
+                    <option value="contextual" selected=mode_initial == "contextual">Contextual</option>
+                    <option value="no_change" selected=mode_initial == "no_change">No change</option>
+                </select>
+                <br/>
+                <label>
+                    Source impact
+                    <select
+                        id=source_impact_id
+                        disabled=!source_editable
+                        on:change=move |event| {
+                            let value = event_select_value(&event);
+                            source_impact.set(value.clone());
+                            stage_source_for_impact(source_value.get_untracked(), source_scope.get_untracked(), value);
+                        }
+                    >
+                        <option value="stale_translation" selected=source_impact_initial == "stale_translation">Create stale translation</option>
+                        <option value="migrate_key" selected=source_impact_initial == "migrate_key">Migrate key</option>
+                    </select>
+                </label>
+            </td>
+        </tr>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn event_input_value(event: &web_sys::Event) -> String {
+    event
+        .target()
+        .and_then(|target| target.dyn_into::<web_sys::HtmlInputElement>().ok())
+        .map(|input| input.value())
+        .unwrap_or_default()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn event_select_value(event: &web_sys::Event) -> String {
+    event
+        .target()
+        .and_then(|target| target.dyn_into::<web_sys::HtmlSelectElement>().ok())
+        .map(|select| select.value())
+        .unwrap_or_default()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn focus_input(input_id: &str) {
+    if let Some(input) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id(input_id))
+        .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+    {
+        input.set_read_only(false);
+        let _ = input.focus();
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_element_text(element_id: &str, value: &str) {
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id(element_id))
+    {
+        element.set_text_content(Some(value));
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn effective_source_for_dom(
+    prefix: &str,
+    path: &str,
+    source: &str,
+    source_input_id: &str,
+) -> String {
+    staging::staged_source_for_parts(prefix, path, source)
+        .and_then(|edit| edit["value"].as_str().map(str::to_owned))
+        .or_else(|| {
+            web_sys::window()
+                .and_then(|window| window.document())
+                .and_then(|document| document.get_element_by_id(source_input_id))
+                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+                .map(|input| input.value())
+                .filter(|value| value != source)
+        })
+        .unwrap_or_else(|| source.to_owned())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn decorate_note_detail_dom(detail: &Value) {
+    decorate_inline_target_fields(detail);
+    restore_staged_dom_state(detail);
+    update_staged_count_for_pivot(detail);
+    if let Some(document) = web_sys::window().and_then(|window| window.document()) {
+        apply_pane_writability(
+            checkbox_checked(&document, "source-pane-writable"),
+            checkbox_checked(&document, "target-pane-writable"),
+        );
+    }
+    refresh_progress_from_dom();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn decorate_inline_target_fields(detail: &Value) {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    let Some(note) = detail["notes"].as_array().and_then(|notes| notes.first()) else {
+        return;
+    };
+    let note_id = note["note_id"].as_str().unwrap_or("");
+    for field in note["fields"].as_array().into_iter().flatten() {
+        if !field["editable"].as_bool().unwrap_or(false) {
+            continue;
+        }
+        let field_id = field["field_id"].as_str().unwrap_or("");
+        let field_name = field["field_name"].as_str().unwrap_or("field");
+        let path = field["path"].as_str().unwrap_or("");
+        let source = field["source"].as_str().unwrap_or("");
+        let staged = staged_edit_for(detail, path, source).is_some();
+        let selector = format!(
+            ".note-card[data-note-id=\"{}\"] .target-preview [data-preview-field-id=\"{}\"]",
+            css_escape(note_id),
+            css_escape(field_id),
+        );
+        let Ok(nodes) = document.query_selector_all(&selector) else {
+            continue;
+        };
+        for index in 0..nodes.length() {
+            let Some(node) = nodes.get(index) else {
+                continue;
+            };
+            let Ok(element) = node.dyn_into::<web_sys::Element>() else {
+                continue;
+            };
+            add_class(&element, "inline-target-field");
+            let _ = element.set_attribute("contenteditable", "true");
+            let _ = element.set_attribute("tabindex", "0");
+            let _ = element.set_attribute("role", "textbox");
+            let _ = element.set_attribute(
+                "aria-label",
+                &format!("Edit target translation for {field_name} inline"),
+            );
+            let _ = element.set_attribute("data-staged", if staged { "true" } else { "false" });
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn add_class(element: &web_sys::Element, class: &str) {
+    let class_name = element.get_attribute("class").unwrap_or_default();
+    if class_name
+        .split_whitespace()
+        .any(|existing| existing == class)
+    {
+        return;
+    }
+    let class_name = if class_name.is_empty() {
+        class.to_owned()
+    } else {
+        format!("{class_name} {class}")
+    };
+    let _ = element.set_attribute("class", &class_name);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn handle_note_inline_target_input(detail: &Value, note_id: &str, event: web_sys::Event) {
+    let Some(element) = event
+        .target()
+        .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+    else {
+        return;
+    };
+    let Some(field_id) = element.get_attribute("data-preview-field-id") else {
+        return;
+    };
+    let Some(note) = detail["notes"].as_array().and_then(|notes| notes.first()) else {
+        return;
+    };
+    let Some(field) = note["fields"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|field| {
+            field["field_id"].as_str().unwrap_or("") == field_id
+                && field["editable"].as_bool().unwrap_or(false)
+        })
+    else {
+        return;
+    };
+    let path = field["path"].as_str().unwrap_or("");
+    let source = field["source"].as_str().unwrap_or("");
+    let id = id_for_path(path);
+    let prefix = storage_prefix(detail);
+    let input_id = format!("translation-input-{id}");
+    let mode_id = format!("translation-mode-{id}");
+    let source_input_id = format!("source-input-{id}");
+    let target_id = format!("target-text-{id}");
+    let status_id = format!("status-text-{id}");
+    let value = element.text_content().unwrap_or_default();
+    let mode = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id(&mode_id))
+        .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
+        .map(|select| select.value())
+        .unwrap_or_else(|| "direct".to_owned());
+    let effective_source = effective_source_for_dom(&prefix, path, source, &source_input_id);
+    staging::stage_translation(&prefix, path, source, &effective_source, &value, &mode);
+    if let Some(input) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id(&input_id))
+        .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+    {
+        input.set_value(&value);
+    }
+    set_element_text(&target_id, &value);
+    set_element_text(&status_id, &format!("staged_{mode}"));
+    if let Some(document) = web_sys::window().and_then(|window| window.document()) {
+        update_target_preview_field(&document, note_id, &field_id, &value);
+        mark_preview_field_staged(&document, note_id, &field_id, true);
+    }
+    update_staged_count(&prefix);
+    refresh_progress_from_dom();
+}
+
+#[cfg(target_arch = "wasm32")]
 fn open_workbench_view(view: WorkbenchView) {
     set_selected_view(view);
     maybe_load_current_view(view);
@@ -267,6 +919,33 @@ fn set_top_level_error(message: Option<String>) {
     TOP_LEVEL_ERROR_SIGNAL.with(|signal| {
         if let Some(signal) = signal.borrow().as_ref() {
             signal.set(message);
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_note_pivot_state(pivot: Option<Value>) {
+    NOTE_PIVOT_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            signal.set(pivot);
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_selected_note_state(note_id: Option<String>) {
+    SELECTED_NOTE_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            signal.set(note_id);
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_note_detail_state(state: NoteDetailState) {
+    NOTE_DETAIL_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            signal.set(state);
         }
     });
 }
@@ -358,9 +1037,6 @@ fn publish_note_pivot_panel(pivot: &Value) {
     let Some(global_controls) = document.get_element_by_id("workbench-global-controls") else {
         return;
     };
-    let Some(note_panel) = document.get_element_by_id("note-pivot-panel") else {
-        return;
-    };
     let Some(apply_box) = document.get_element_by_id("workbench-apply-box") else {
         return;
     };
@@ -447,14 +1123,14 @@ fn publish_note_pivot_panel(pivot: &Value) {
     chrome_html.push_str(&new_language_panel_html(pivot));
     global_controls.set_inner_html(&chrome_html);
 
-    let mut notes_html = String::new();
-    notes_html.push_str(&note_navigation_html(pivot));
-    if first_note_id(pivot).is_some() {
-        notes_html.push_str("<section id=\"note-detail-panel\" class=\"note-detail-panel\" aria-live=\"polite\"><p>Loading selected note…</p></section>");
+    let first_note = first_note_id(pivot);
+    set_note_pivot_state(Some(pivot.clone()));
+    set_selected_note_state(first_note.clone());
+    set_note_detail_state(if first_note.is_some() {
+        NoteDetailState::Loading
     } else {
-        notes_html.push_str("<section id=\"note-detail-panel\" class=\"note-detail-panel\"><p>No notes match the active filter.</p></section>");
-    }
-    note_panel.set_inner_html(&notes_html);
+        NoteDetailState::Empty
+    });
 
     apply_box.set_inner_html("<button id=\"apply-preview-button\" type=\"button\">Apply preview</button> <button id=\"apply-confirm-button\" type=\"button\">Confirm Apply</button><pre id=\"apply-preview-output\"></pre>");
     reset_lazy_secondary_pivot_panels(&document);
@@ -462,11 +1138,10 @@ fn publish_note_pivot_panel(pivot: &Value) {
     register_control_handlers(pivot);
     register_pane_layout_handlers(pivot);
     register_new_language_handlers(pivot);
-    register_note_navigation_handlers(pivot);
     register_lazy_pivot_load_handlers(pivot);
     register_apply_handlers(pivot);
     update_staged_count_for_pivot(pivot);
-    if let Some(note_id) = first_note_id(pivot) {
+    if let Some(note_id) = first_note {
         let (language, target, overlay) = pivot_selection_parts(pivot);
         load_note_detail_for_parts(language, target, overlay, note_id);
     }
@@ -704,162 +1379,12 @@ fn filter_buttons_html(pivot: &Value) -> String {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn note_navigation_html(pivot: &Value) -> String {
-    let mut html = String::new();
-    html.push_str(&format!(
-        "<section class=\"note-navigation\" data-total=\"{}\" data-limit=\"{}\" data-offset=\"{}\"><h3>Notes</h3>",
-        pivot["total"].as_u64().unwrap_or(0),
-        pivot["limit"].as_u64().unwrap_or(0),
-        pivot["offset"].as_u64().unwrap_or(0),
-    ));
-    if let Some(rows) = pivot["rows"].as_array() {
-        if rows.is_empty() {
-            html.push_str("<p>No notes match the active filter.</p>");
-        } else {
-            html.push_str("<ol class=\"note-navigation-list\">");
-            for (index, row) in rows.iter().enumerate() {
-                let note_id = row["note_id"].as_str().unwrap_or("");
-                let active = if index == 0 { " active" } else { "" };
-                html.push_str(&format!(
-                    "<li><button type=\"button\" class=\"note-navigation-row{}\" data-note-id=\"{}\"><strong>{}</strong><br><span>{}</span> · {} field(s), {} missing, {} stale</button></li>",
-                    active,
-                    escape_html(note_id),
-                    escape_html(row["title"].as_str().unwrap_or(note_id)),
-                    escape_html(row["status"].as_str().unwrap_or("unknown")),
-                    row["translatable_field_count"].as_u64().unwrap_or(0),
-                    row["missing_count"].as_u64().unwrap_or(0),
-                    row["stale_count"].as_u64().unwrap_or(0),
-                ));
-            }
-            html.push_str("</ol>");
-            if pivot["has_more"].as_bool().unwrap_or(false) {
-                html.push_str("<p class=\"note-navigation-more\">More notes are available; pagination controls will load additional pages in the next slice.</p>");
-            }
-        }
-    } else {
-        html.push_str("<p>No notes match the active filter.</p>");
-    }
-    html.push_str("</section>");
-    html
-}
-
-#[cfg(target_arch = "wasm32")]
 fn first_note_id(pivot: &Value) -> Option<String> {
     pivot["rows"]
         .as_array()
         .and_then(|rows| rows.first())
         .and_then(|row| row["note_id"].as_str())
         .map(str::to_owned)
-}
-
-#[cfg(target_arch = "wasm32")]
-fn note_html(pivot: &Value, note: &Value) -> String {
-    let mut html = String::new();
-    html.push_str(&format!(
-        "<section class=\"note-card\" data-note-id=\"{}\"><h3>{}: {}</h3>",
-        escape_html(note["note_id"].as_str().unwrap_or("")),
-        escape_html(note["note_id"].as_str().unwrap_or("note")),
-        escape_html(note["status"].as_str().unwrap_or("unknown"))
-    ));
-    html.push_str("<div class=\"preview-grid\"><section><h4>Source preview</h4>");
-    html.push_str(&preview_html(&note["source_preview"]));
-    html.push_str("</section><section><h4>Target preview</h4><div class=\"target-preview\">");
-    html.push_str(&preview_html(&note["target_preview"]));
-    html.push_str("</div></section></div>");
-    html.push_str("<p class=\"inline-edit-hint\">Click highlighted text in the target preview to edit it in place. Staged preview edits are outlined and still use Apply to write YAML.</p>");
-    html.push_str("<details class=\"field-editor-details\"><summary>Advanced field controls</summary><table class=\"field-editor\"><thead><tr><th>Field</th><th>Source / staged source edit</th><th>Target / staged edit</th><th>Status</th><th>Occurrences</th><th>Mode</th></tr></thead><tbody>");
-    for field in note["fields"].as_array().into_iter().flatten() {
-        let path = field["path"].as_str().unwrap_or("");
-        let source = field["source"].as_str().unwrap_or("");
-        let staged = staged_edit_for(pivot, path, source);
-        let staged_source = staged_source_edit_for(pivot, path, source);
-        let value = staged
-            .as_ref()
-            .and_then(|edit| edit["value"].as_str())
-            .unwrap_or_else(|| field["target"].as_str().unwrap_or(""));
-        let source_value = staged_source
-            .as_ref()
-            .and_then(|edit| edit["value"].as_str())
-            .unwrap_or(source);
-        let mode = staged
-            .as_ref()
-            .and_then(|edit| edit["mode"].as_str())
-            .unwrap_or("direct");
-        let source_scope = staged_source
-            .as_ref()
-            .and_then(|edit| edit["scope"].as_str())
-            .unwrap_or("field");
-        let source_impact = staged_source
-            .as_ref()
-            .and_then(|edit| edit["impact_action"].as_str())
-            .unwrap_or("stale_translation");
-        let id = id_for_path(path);
-        let editable = field["editable"].as_bool().unwrap_or(false);
-        let source_editable = field["source_editable"].as_bool().unwrap_or(false);
-        let readonly = if editable { "" } else { " readonly" };
-        let source_readonly = if staged_source.is_some() {
-            ""
-        } else {
-            " readonly"
-        };
-        let source_controls_disabled = if source_editable { "" } else { " disabled" };
-        let target_status = staged
-            .as_ref()
-            .and_then(|edit| edit["mode"].as_str())
-            .map(|mode| format!("staged_{mode}"));
-        let status = target_status
-            .or_else(|| staged_source.as_ref().map(|_| "staged_source".to_owned()))
-            .unwrap_or_else(|| field["status"].as_str().unwrap_or("unknown").to_owned());
-        let occurrence_count = field["occurrence_count"].as_u64().unwrap_or(1);
-        html.push_str(&format!(
-            "<tr data-field-path=\"{}\" data-note-id=\"{}\" data-field-id=\"{}\" data-editable=\"{}\" data-original-status=\"{}\"><td>{}</td><td class=\"source-text\"><span id=\"source-text-{}\">{}</span><div class=\"source-edit-controls\"><button id=\"source-edit-toggle-{}\" type=\"button\"{}>Edit source</button><input id=\"source-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\" data-note-id=\"{}\" data-field-id=\"{}\"{}{} /></div></td><td><input id=\"translation-input-{}\" value=\"{}\" data-path=\"{}\" data-source=\"{}\" data-note-id=\"{}\" data-field-id=\"{}\"{} /><div id=\"target-text-{}\">{}</div></td><td id=\"status-text-{}\">{}</td><td>{} occurrence(s)<br><select id=\"source-scope-{}\"{}><option value=\"field\"{}>This field only</option><option value=\"all_occurrences\"{}>All occurrences</option></select></td><td><select id=\"translation-mode-{}\"{}><option value=\"direct\"{}>Direct</option><option value=\"contextual\"{}>Contextual</option><option value=\"no_change\"{}>No change</option></select><br><label>Source impact <select id=\"source-impact-{}\"{}><option value=\"stale_translation\"{}>Create stale translation</option><option value=\"migrate_key\"{}>Migrate key</option></select></label></td></tr>",
-            escape_html(path),
-            escape_html(note["note_id"].as_str().unwrap_or("")),
-            escape_html(field["field_id"].as_str().unwrap_or("")),
-            editable,
-            escape_html(field["status"].as_str().unwrap_or("unknown")),
-            escape_html(field["field_name"].as_str().unwrap_or("field")),
-            id,
-            escape_html(source_value),
-            id,
-            source_controls_disabled,
-            id,
-            escape_html(source_value),
-            escape_html(path),
-            escape_html(source),
-            escape_html(note["note_id"].as_str().unwrap_or("")),
-            escape_html(field["field_id"].as_str().unwrap_or("")),
-            source_readonly,
-            source_controls_disabled,
-            id,
-            escape_html(value),
-            escape_html(path),
-            escape_html(source),
-            escape_html(note["note_id"].as_str().unwrap_or("")),
-            escape_html(field["field_id"].as_str().unwrap_or("")),
-            readonly,
-            id,
-            escape_html(value),
-            id,
-            escape_html(&status),
-            occurrence_count,
-            id,
-            source_controls_disabled,
-            selected_attr(source_scope, "field"),
-            selected_attr(source_scope, "all_occurrences"),
-            id,
-            if editable { "" } else { " disabled" },
-            selected_attr(mode, "direct"),
-            selected_attr(mode, "contextual"),
-            selected_attr(mode, "no_change"),
-            id,
-            source_controls_disabled,
-            selected_attr(source_impact, "stale_translation"),
-            selected_attr(source_impact, "migrate_key"),
-        ));
-    }
-    html.push_str("</tbody></table></details></section>");
-    html
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -2754,89 +3279,6 @@ fn css_escape(input: &str) -> String {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn register_note_navigation_handlers(pivot: &Value) {
-    let (language, target, overlay) = pivot_selection_parts(pivot);
-    for row in pivot["rows"].as_array().into_iter().flatten() {
-        let Some(note_id) = row["note_id"].as_str() else {
-            continue;
-        };
-        attach_note_select_handler(
-            language.clone(),
-            target.clone(),
-            overlay.clone(),
-            note_id.to_owned(),
-        );
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_note_select_handler(
-    language: Option<String>,
-    target: Option<String>,
-    overlay: Option<String>,
-    note_id: String,
-) {
-    let selector = format!(
-        ".note-navigation-row[data-note-id=\"{}\"]",
-        css_escape(&note_id)
-    );
-    let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-        mark_active_note_row(&note_id);
-        set_panel_loading("note-detail-panel", "Loading selected note…");
-        load_note_detail_for_parts(
-            language.clone(),
-            target.clone(),
-            overlay.clone(),
-            note_id.clone(),
-        );
-    }));
-    if let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.query_selector(&selector).ok().flatten())
-    {
-        let _ = element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-    }
-    closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
-fn mark_active_note_row(note_id: &str) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    if let Ok(nodes) = document.query_selector_all(".note-navigation-row.active") {
-        for index in 0..nodes.length() {
-            if let Some(node) = nodes.get(index)
-                && let Ok(element) = node.dyn_into::<web_sys::Element>()
-            {
-                let class_name = element.get_attribute("class").unwrap_or_default();
-                let class_name = class_name
-                    .split_whitespace()
-                    .filter(|class| *class != "active")
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                let _ = element.set_attribute("class", &class_name);
-            }
-        }
-    }
-    let selector = format!(
-        ".note-navigation-row[data-note-id=\"{}\"]",
-        css_escape(note_id)
-    );
-    if let Some(element) = document.query_selector(&selector).ok().flatten() {
-        let class_name = element.get_attribute("class").unwrap_or_default();
-        if !class_name.split_whitespace().any(|class| class == "active") {
-            let class_name = if class_name.is_empty() {
-                "active".to_owned()
-            } else {
-                format!("{class_name} active")
-            };
-            let _ = element.set_attribute("class", &class_name);
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
 fn load_note_detail_for_parts(
     language: Option<String>,
     target: Option<String>,
@@ -2858,15 +3300,7 @@ fn load_note_detail_for_parts(
                 if is_current_selection_generation(selection_generation)
                     && is_current_note_detail_generation(detail_generation) =>
             {
-                if let Some(panel) = web_sys::window()
-                    .and_then(|window| window.document())
-                    .and_then(|document| document.get_element_by_id("note-detail-panel"))
-                {
-                    panel.set_inner_html(&format!(
-                        "<p class=\"workbench-error\">{}</p>",
-                        escape_html(&error)
-                    ));
-                }
+                set_note_detail_state(NoteDetailState::Error(error));
             }
             Err(_) => {}
         }
@@ -2875,26 +3309,16 @@ fn load_note_detail_for_parts(
 
 #[cfg(target_arch = "wasm32")]
 fn publish_note_detail_panel(detail: &Value) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    let Some(panel) = document.get_element_by_id("note-detail-panel") else {
-        return;
-    };
-    let Some(note) = detail["notes"].as_array().and_then(|notes| notes.first()) else {
-        panel.set_inner_html("<p>No note detail is available.</p>");
-        return;
-    };
-    panel.set_inner_html(&note_html(detail, note));
-    mark_panel_loaded(&panel);
-    register_field_handlers(detail);
-    restore_staged_dom_state(detail);
+    if detail["notes"]
+        .as_array()
+        .and_then(|notes| notes.first())
+        .is_some()
+    {
+        set_note_detail_state(NoteDetailState::Loaded(detail.clone()));
+    } else {
+        set_note_detail_state(NoteDetailState::Empty);
+    }
     update_staged_count_for_pivot(detail);
-    apply_pane_writability(
-        checkbox_checked(&document, "source-pane-writable"),
-        checkbox_checked(&document, "target-pane-writable"),
-    );
-    refresh_progress_from_dom();
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -3653,12 +4077,25 @@ fn is_current_selection_generation(generation: u64) -> bool {
 
 #[cfg(target_arch = "wasm32")]
 fn begin_note_detail_request() -> u64 {
-    next_generation(&NOTE_DETAIL_GENERATION)
+    NOTE_DETAIL_TOKEN_SIGNAL.with(|signal| {
+        if let Some(signal) = signal.borrow().as_ref() {
+            let next = signal.get_untracked().saturating_add(1);
+            signal.set(next);
+            next
+        } else {
+            0
+        }
+    })
 }
 
 #[cfg(target_arch = "wasm32")]
 fn is_current_note_detail_generation(generation: u64) -> bool {
-    current_generation(&NOTE_DETAIL_GENERATION) == generation
+    NOTE_DETAIL_TOKEN_SIGNAL.with(|signal| {
+        signal
+            .borrow()
+            .as_ref()
+            .is_some_and(|signal| signal.get_untracked() == generation)
+    })
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -3901,49 +4338,6 @@ fn reload_note_pivot(
 }
 
 #[cfg(target_arch = "wasm32")]
-fn register_field_handlers(pivot: &Value) {
-    for note in pivot["notes"].as_array().into_iter().flatten() {
-        let note_id = note["note_id"].as_str().unwrap_or("").to_owned();
-        for field in note["fields"].as_array().into_iter().flatten() {
-            let path = field["path"].as_str().unwrap_or("").to_owned();
-            let source = field["source"].as_str().unwrap_or("").to_owned();
-            let field_id = field["field_id"].as_str().unwrap_or("").to_owned();
-            let field_name = field["field_name"].as_str().unwrap_or("field").to_owned();
-            let id = id_for_path(&path);
-            if field["source_editable"].as_bool().unwrap_or(false) {
-                attach_source_stage_handler(
-                    pivot,
-                    &id,
-                    path.clone(),
-                    source.clone(),
-                    note_id.clone(),
-                    field_id.clone(),
-                );
-            }
-            if field["editable"].as_bool().unwrap_or(false) {
-                attach_stage_handler(
-                    pivot,
-                    &id,
-                    path.clone(),
-                    source.clone(),
-                    note_id.clone(),
-                    field_id.clone(),
-                );
-                attach_inline_target_stage_handler(
-                    pivot,
-                    &id,
-                    path,
-                    source,
-                    note_id.clone(),
-                    field_id,
-                    field_name,
-                );
-            }
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
 fn register_optional_metadata_handlers(optional: &Value) {
     let language = optional["language"]["code"]
         .as_str()
@@ -4022,341 +4416,6 @@ fn attach_optional_metadata_handler(
         let _ = element.add_event_listener_with_callback("input", closure.as_ref().unchecked_ref());
     }
     closure.forget();
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_stage_handler(
-    pivot: &Value,
-    id: &str,
-    path: String,
-    source: String,
-    note_id: String,
-    field_id: String,
-) {
-    let key = edit_storage_key(pivot, &path, &source);
-    let prefix = storage_prefix(pivot);
-    let input_id = format!("translation-input-{id}");
-    let mode_id = format!("translation-mode-{id}");
-    let source_input_id = format!("source-input-{id}");
-    let target_id = format!("target-text-{id}");
-    let status_id = format!("status-text-{id}");
-    for element_id in [input_id.clone(), mode_id.clone()] {
-        let key = key.clone();
-        let prefix = prefix.clone();
-        let path = path.clone();
-        let source = source.clone();
-        let input_id = input_id.clone();
-        let mode_id = mode_id.clone();
-        let source_input_id = source_input_id.clone();
-        let target_id = target_id.clone();
-        let status_id = status_id.clone();
-        let note_id = note_id.clone();
-        let field_id = field_id.clone();
-        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-                return;
-            };
-            let Some(input) = document
-                .get_element_by_id(&input_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-            else {
-                return;
-            };
-            let Some(mode) = document
-                .get_element_by_id(&mode_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
-            else {
-                return;
-            };
-            let value = input.value();
-            let source_key = source_edit_storage_key_from_parts(&prefix, &path, &source);
-            let effective_source = local_storage()
-                .and_then(|storage| storage.get_item(&source_key).ok().flatten())
-                .and_then(|stored| serde_json::from_str::<Value>(&stored).ok())
-                .and_then(|edit| edit["value"].as_str().map(str::to_owned))
-                .or_else(|| {
-                    document
-                        .get_element_by_id(&source_input_id)
-                        .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-                        .map(|input| input.value())
-                        .filter(|value| value != &source)
-                })
-                .unwrap_or_else(|| source.clone());
-            let edit = serde_json::json!({
-                "kind": "translation",
-                "path": path,
-                "source": effective_source,
-                "value": value,
-                "mode": mode.value(),
-            });
-            if let Some(storage) = local_storage() {
-                let _ = storage.set_item(&key, &edit.to_string());
-            }
-            if let Some(target) = document.get_element_by_id(&target_id) {
-                target.set_text_content(Some(&input.value()));
-            }
-            if let Some(status) = document.get_element_by_id(&status_id) {
-                status.set_text_content(Some(&format!("staged_{}", mode.value())));
-            }
-            update_target_preview_field(&document, &note_id, &field_id, &input.value());
-            mark_preview_field_staged(&document, &note_id, &field_id, true);
-            update_staged_count(&prefix);
-            refresh_progress_from_dom();
-        }));
-        if let Some(element) = web_sys::window()
-            .and_then(|window| window.document())
-            .and_then(|document| document.get_element_by_id(&element_id))
-        {
-            let _ =
-                element.add_event_listener_with_callback("input", closure.as_ref().unchecked_ref());
-            let _ = element
-                .add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
-        }
-        closure.forget();
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_inline_target_stage_handler(
-    pivot: &Value,
-    id: &str,
-    path: String,
-    source: String,
-    note_id: String,
-    field_id: String,
-    field_name: String,
-) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-        return;
-    };
-    let selector = format!(
-        ".note-card[data-note-id=\"{}\"] .target-preview [data-preview-field-id=\"{}\"]",
-        css_escape(&note_id),
-        css_escape(&field_id),
-    );
-    let Ok(nodes) = document.query_selector_all(&selector) else {
-        return;
-    };
-    let key = edit_storage_key(pivot, &path, &source);
-    let prefix = storage_prefix(pivot);
-    let input_id = format!("translation-input-{id}");
-    let mode_id = format!("translation-mode-{id}");
-    let source_input_id = format!("source-input-{id}");
-    let target_id = format!("target-text-{id}");
-    let status_id = format!("status-text-{id}");
-    let staged = staged_edit_for(pivot, &path, &source).is_some();
-    for index in 0..nodes.length() {
-        let Some(node) = nodes.get(index) else {
-            continue;
-        };
-        let Ok(element) = node.dyn_into::<web_sys::Element>() else {
-            continue;
-        };
-        let class_name = element.get_attribute("class").unwrap_or_default();
-        let class_name = if class_name
-            .split_whitespace()
-            .any(|class| class == "inline-target-field")
-        {
-            class_name
-        } else if class_name.is_empty() {
-            "inline-target-field".to_owned()
-        } else {
-            format!("{class_name} inline-target-field")
-        };
-        let _ = element.set_attribute("class", &class_name);
-        let _ = element.set_attribute("contenteditable", "true");
-        let _ = element.set_attribute("tabindex", "0");
-        let _ = element.set_attribute("role", "textbox");
-        let _ = element.set_attribute(
-            "aria-label",
-            &format!("Edit target translation for {field_name} inline"),
-        );
-        let _ = element.set_attribute("data-staged", if staged { "true" } else { "false" });
-        let element_for_input = element.clone();
-        let key = key.clone();
-        let prefix = prefix.clone();
-        let path = path.clone();
-        let source = source.clone();
-        let input_id = input_id.clone();
-        let mode_id = mode_id.clone();
-        let source_input_id = source_input_id.clone();
-        let target_id = target_id.clone();
-        let status_id = status_id.clone();
-        let note_id = note_id.clone();
-        let field_id = field_id.clone();
-        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-                return;
-            };
-            let value = element_for_input.text_content().unwrap_or_default();
-            let mode = document
-                .get_element_by_id(&mode_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
-                .map(|select| select.value())
-                .unwrap_or_else(|| "direct".to_owned());
-            let source_key = source_edit_storage_key_from_parts(&prefix, &path, &source);
-            let effective_source = local_storage()
-                .and_then(|storage| storage.get_item(&source_key).ok().flatten())
-                .and_then(|stored| serde_json::from_str::<Value>(&stored).ok())
-                .and_then(|edit| edit["value"].as_str().map(str::to_owned))
-                .or_else(|| {
-                    document
-                        .get_element_by_id(&source_input_id)
-                        .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-                        .map(|input| input.value())
-                        .filter(|value| value != &source)
-                })
-                .unwrap_or_else(|| source.clone());
-            let edit = serde_json::json!({
-                "kind": "translation",
-                "path": path,
-                "source": effective_source,
-                "value": value,
-                "mode": mode,
-            });
-            if let Some(storage) = local_storage() {
-                let _ = storage.set_item(&key, &edit.to_string());
-            }
-            if let Some(input) = document
-                .get_element_by_id(&input_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-            {
-                input.set_value(&value);
-            }
-            if let Some(target) = document.get_element_by_id(&target_id) {
-                target.set_text_content(Some(&value));
-            }
-            if let Some(status) = document.get_element_by_id(&status_id) {
-                status.set_text_content(Some(&format!("staged_{mode}")));
-            }
-            update_target_preview_field(&document, &note_id, &field_id, &value);
-            mark_preview_field_staged(&document, &note_id, &field_id, true);
-            update_staged_count(&prefix);
-            refresh_progress_from_dom();
-        }));
-        let _ = element.add_event_listener_with_callback("input", closure.as_ref().unchecked_ref());
-        closure.forget();
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn attach_source_stage_handler(
-    pivot: &Value,
-    id: &str,
-    path: String,
-    source: String,
-    note_id: String,
-    field_id: String,
-) {
-    let key = source_edit_storage_key(pivot, &path, &source);
-    let prefix = storage_prefix(pivot);
-    let input_id = format!("source-input-{id}");
-    let scope_id = format!("source-scope-{id}");
-    let impact_id = format!("source-impact-{id}");
-    let source_text_id = format!("source-text-{id}");
-    let status_id = format!("status-text-{id}");
-    let toggle_id = format!("source-edit-toggle-{id}");
-    let translation_key = edit_storage_key(pivot, &path, &source);
-
-    {
-        let input_id = input_id.clone();
-        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-                return;
-            };
-            if let Some(input) = document
-                .get_element_by_id(&input_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-            {
-                input.set_read_only(false);
-                let _ = input.focus();
-            }
-        }));
-        if let Some(element) = web_sys::window()
-            .and_then(|window| window.document())
-            .and_then(|document| document.get_element_by_id(&toggle_id))
-        {
-            let _ =
-                element.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-        }
-        closure.forget();
-    }
-
-    for element_id in [input_id.clone(), scope_id.clone(), impact_id.clone()] {
-        let key = key.clone();
-        let prefix = prefix.clone();
-        let path = path.clone();
-        let source = source.clone();
-        let input_id = input_id.clone();
-        let scope_id = scope_id.clone();
-        let impact_id = impact_id.clone();
-        let source_text_id = source_text_id.clone();
-        let status_id = status_id.clone();
-        let translation_key = translation_key.clone();
-        let note_id = note_id.clone();
-        let field_id = field_id.clone();
-        let closure = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-            let Some(document) = web_sys::window().and_then(|window| window.document()) else {
-                return;
-            };
-            let Some(input) = document
-                .get_element_by_id(&input_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
-            else {
-                return;
-            };
-            let Some(scope) = document
-                .get_element_by_id(&scope_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
-            else {
-                return;
-            };
-            let Some(impact) = document
-                .get_element_by_id(&impact_id)
-                .and_then(|element| element.dyn_into::<web_sys::HtmlSelectElement>().ok())
-            else {
-                return;
-            };
-            let value = input.value();
-            let edit = serde_json::json!({
-                "kind": "source",
-                "path": path,
-                "source": source,
-                "value": value,
-                "scope": scope.value(),
-                "impact_action": impact.value(),
-            });
-            if let Some(storage) = local_storage() {
-                let _ = storage.set_item(&key, &edit.to_string());
-                if let Some(stored_translation) = storage.get_item(&translation_key).ok().flatten()
-                    && let Ok(mut translation_edit) =
-                        serde_json::from_str::<Value>(&stored_translation)
-                {
-                    translation_edit["source"] = Value::String(value.clone());
-                    let _ = storage.set_item(&translation_key, &translation_edit.to_string());
-                }
-            }
-            if let Some(source_text) = document.get_element_by_id(&source_text_id) {
-                source_text.set_text_content(Some(&input.value()));
-            }
-            if let Some(status) = document.get_element_by_id(&status_id) {
-                status.set_text_content(Some("staged_source"));
-            }
-            update_source_preview_field(&document, &note_id, &field_id, &input.value());
-            update_staged_count(&prefix);
-            refresh_progress_from_dom();
-        }));
-        if let Some(element) = web_sys::window()
-            .and_then(|window| window.document())
-            .and_then(|document| document.get_element_by_id(&element_id))
-        {
-            let _ =
-                element.add_event_listener_with_callback("input", closure.as_ref().unchecked_ref());
-            let _ = element
-                .add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
-        }
-        closure.forget();
-    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -4687,53 +4746,17 @@ async fn post_json(url: &str, body: &Value) -> Result<Value, String> {
 
 #[cfg(target_arch = "wasm32")]
 fn staged_edit_for(pivot: &Value, path: &str, source: &str) -> Option<Value> {
-    local_storage()
-        .and_then(|storage| {
-            storage
-                .get_item(&edit_storage_key(pivot, path, source))
-                .ok()
-                .flatten()
-        })
-        .and_then(|value| serde_json::from_str(&value).ok())
+    staging::staged_translation_for_parts(&storage_prefix(pivot), path, source)
 }
 
 #[cfg(target_arch = "wasm32")]
 fn staged_source_edit_for(pivot: &Value, path: &str, source: &str) -> Option<Value> {
-    local_storage()
-        .and_then(|storage| {
-            storage
-                .get_item(&source_edit_storage_key(pivot, path, source))
-                .ok()
-                .flatten()
-        })
-        .and_then(|value| serde_json::from_str(&value).ok())
+    staging::staged_source_for_parts(&storage_prefix(pivot), path, source)
 }
 
 #[cfg(target_arch = "wasm32")]
 fn collect_staged_edits(pivot: &Value) -> Vec<Value> {
-    let prefixes = active_storage_prefixes(pivot);
-    let Some(storage) = local_storage() else {
-        return Vec::new();
-    };
-    let mut edits = Vec::new();
-    let length = storage.length().unwrap_or(0);
-    for index in 0..length {
-        let Some(key) = storage.key(index).ok().flatten() else {
-            continue;
-        };
-        if !prefixes.iter().any(|prefix| {
-            key.starts_with(&format!("{prefix}translation::"))
-                || key.starts_with(&format!("{prefix}source::"))
-        }) {
-            continue;
-        }
-        if let Some(value) = storage.get_item(&key).ok().flatten()
-            && let Ok(edit) = serde_json::from_str::<Value>(&value)
-        {
-            edits.push(edit);
-        }
-    }
-    edits
+    staging::collect_staged_edits_for_prefixes(&active_storage_prefixes(pivot))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -4762,16 +4785,7 @@ fn active_storage_prefixes_for_default(default_prefix: &str) -> Vec<String> {
 
 #[cfg(target_arch = "wasm32")]
 fn clear_staged_edits(prefix: &str) {
-    let Some(storage) = local_storage() else {
-        return;
-    };
-    let keys = (0..storage.length().unwrap_or(0))
-        .filter_map(|index| storage.key(index).ok().flatten())
-        .filter(|key| key.starts_with(prefix))
-        .collect::<Vec<_>>();
-    for key in keys {
-        let _ = storage.remove_item(&key);
-    }
+    staging::clear_prefix(prefix);
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -4786,12 +4800,7 @@ fn update_staged_count(prefix: &str) {
 
 #[cfg(target_arch = "wasm32")]
 fn update_staged_count_for_prefixes(prefixes: &[String]) {
-    let count = local_storage().map_or(0, |storage| {
-        (0..storage.length().unwrap_or(0))
-            .filter_map(|index| storage.key(index).ok().flatten())
-            .filter(|key| prefixes.iter().any(|prefix| key.starts_with(prefix)))
-            .count()
-    });
+    let count = staging::staged_count_for_prefixes(prefixes);
     if let Some(element) = web_sys::window()
         .and_then(|window| window.document())
         .and_then(|document| document.get_element_by_id("staged-edit-count"))
@@ -4803,7 +4812,7 @@ fn update_staged_count_for_prefixes(prefixes: &[String]) {
 
 #[cfg(target_arch = "wasm32")]
 fn edit_storage_key(pivot: &Value, path: &str, source: &str) -> String {
-    format!("{}translation::{}::{}", storage_prefix(pivot), path, source)
+    staging::translation_key(&storage_prefix(pivot), path, source)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -4813,7 +4822,7 @@ fn source_edit_storage_key(pivot: &Value, path: &str, source: &str) -> String {
 
 #[cfg(target_arch = "wasm32")]
 fn source_edit_storage_key_from_parts(prefix: &str, path: &str, source: &str) -> String {
-    format!("{prefix}source::{path}::{source}")
+    staging::source_key(prefix, path, source)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -4836,12 +4845,12 @@ fn pivot_selection_parts(pivot: &Value) -> (Option<String>, Option<String>, Opti
 
 #[cfg(target_arch = "wasm32")]
 fn storage_prefix_for_parts(language: &str, target: &str, overlay: &str) -> String {
-    format!("brainbrew.workbench.staged.{language}.{target}.{overlay}::")
+    staging::storage_prefix_for_parts(language, target, overlay)
 }
 
 #[cfg(target_arch = "wasm32")]
 fn local_storage() -> Option<web_sys::Storage> {
-    web_sys::window().and_then(|window| window.local_storage().ok().flatten())
+    staging::local_storage()
 }
 
 #[cfg(target_arch = "wasm32")]
