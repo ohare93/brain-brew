@@ -49,6 +49,7 @@ in
     cd crates/brain-brew-workbench-ui
     trunk build --release --dist ../brain-brew-cli/assets/workbench --public-url /
   '';
+  scripts."workbench-ui-embed-check".exec = "scripts/check_workbench_ui_embed.sh";
   scripts.e2e.exec = ''
     set -euo pipefail
     artifact_dir="''${BRAINBREW_E2E_ARTIFACT_DIR:-$PWD/target/workbench-e2e-artifacts}"
@@ -109,6 +110,7 @@ in
     cargo fmt --all -- --check
     cargo test --workspace --exclude brain-brew-workbench-e2e --all-targets
     cargo clippy --workspace --exclude brain-brew-workbench-e2e --all-targets -- -D warnings
+    workbench-ui-embed-check
     e2e
   '';
 
