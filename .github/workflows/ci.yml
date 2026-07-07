@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  devenv-ci:
+    name: devenv shell ci
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: cachix/cachix-action@v16
+        with:
+          name: devenv
+      - name: Install devenv
+        run: nix profile add nixpkgs#devenv
+      - name: Run documented CI gate
+        run: devenv shell ci
+      - name: Upload Workbench E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-e2e-artifacts
+          path: target/workbench-e2e-artifacts
+          if-no-files-found: ignore
