@@ -44,21 +44,29 @@ pub struct LockedSource {
 pub fn from_str(input: &str) -> Result<FederationLock, LockfileError> {
     crate::strict_yaml::reject_duplicate_keys(input).map_err(LockfileError::Parse)?;
     let yaml: FederationLockYaml = serde_yaml::from_str(input).map_err(LockfileError::Parse)?;
+    crate::strict_yaml::reject_unintended_scalars(
+        input,
+        crate::strict_yaml::ScalarPolicy::Lockfile,
+    )
+    .map_err(LockfileError::Parse)?;
     yaml.into_lock()
 }
 
 /// Parse and re-emit a federation lock file using deterministic formatting.
 pub fn format_str(input: &str) -> Result<String, LockfileError> {
-    Ok(to_string(&from_str(input)?))
+    to_string(&from_str(input)?)
 }
 
 /// Emit a federation lock file as deterministic YAML.
-pub fn to_string(lock: &FederationLock) -> String {
+pub fn to_string(lock: &FederationLock) -> Result<String, LockfileError> {
+    for id in lock.packages.keys() {
+        validate_yaml_key("packages", id)?;
+    }
     let mut out = String::new();
     out.push_str(&format!("version: {}\n", lock.version));
     if lock.packages.is_empty() {
         out.push_str("packages: {}\n");
-        return out;
+        return Ok(out);
     }
     out.push_str("packages:\n");
     for (id, package) in &lock.packages {
@@ -79,7 +87,7 @@ pub fn to_string(lock: &FederationLock) -> String {
         out.push_str("    locked:\n");
         write_source(&mut out, "      ", &package.locked);
     }
-    out
+    Ok(out)
 }
 
 fn emitted_key(value: &str) -> String {

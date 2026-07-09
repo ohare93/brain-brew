@@ -2163,6 +2163,44 @@ fn fmt_rejects_duplicate_dynamic_keys_without_changing_source_bytes() {
 }
 
 #[test]
+fn fmt_rejects_malformed_unions_and_scalars_without_changing_source_bytes() {
+    let dir = temp_dir("fmt-malformed-yaml-schema");
+    let cases = [
+        (
+            "overlay.yaml",
+            "id: overlay.strict\nkind: patch\nnotes:\n  note.finland:\n    intent: merge\n    fields:\n      field.capital:\n        intent: replace\n        value: Helsinki\n        message:\n          - literal: city\n",
+            "notes.note.finland.fields.field.capital",
+        ),
+        (
+            "deck.yaml",
+            "deck:\n  id: deck.strict\n  name: Strict\n  description: true\nnote_types: {}\nnotes: {}\n",
+            "deck.description",
+        ),
+        (
+            "media.yaml",
+            "media.strict:\n  path: null\n  sha256: hash\n",
+            "media.strict.path",
+        ),
+    ];
+
+    for (name, source, schema_path) in cases {
+        let path = dir.join(name);
+        fs::write(&path, source).unwrap();
+
+        let output = run(["fmt", path.to_str().unwrap()]);
+
+        assert!(
+            !output.status.success(),
+            "{name}: formatter unexpectedly succeeded"
+        );
+        let error = stderr(&output);
+        assert!(error.contains(path.to_str().unwrap()), "{name}: {error}");
+        assert!(error.contains(schema_path), "{name}: {error}");
+        assert_eq!(fs::read(&path).unwrap(), source.as_bytes(), "{name}");
+    }
+}
+
+#[test]
 fn compose_applies_overlay_files_in_order() {
     let dir = temp_dir("compose-overlay");
     let deck_path = dir.join("deck.yaml");
@@ -4763,7 +4801,7 @@ fn media_hash_updates_hoisted_media_map_and_noops_second_run() {
         dir.join("media.yaml"),
         MEDIA_MAP_YAML.replace(
             "14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948",
-            "",
+            "''",
         ),
     )
     .unwrap();

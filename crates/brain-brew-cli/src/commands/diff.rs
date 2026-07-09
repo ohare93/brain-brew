@@ -13,7 +13,10 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         let left = read_deck(&overlay_args.left_path)?;
         let right = read_deck(&overlay_args.right_path)?;
         let overlay = draft_overlay_from_diff(&left, &right, overlay_args.id, overlay_args.kind)?;
-        print!("{}", canonical_yaml::overlay_to_string(&overlay));
+        print!(
+            "{}",
+            canonical_yaml::overlay_to_string(&overlay).map_err(|error| error.to_string())?
+        );
         return Ok(());
     }
 

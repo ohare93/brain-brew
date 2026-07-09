@@ -2,8 +2,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_formats::canonical_yaml;
 use brain_brew_formats::core::{
-    AdapterIds, CanonicalDeck, ChangeIntent, DeckChange, ExpectedBase, FieldDefinition,
-    MediaReference, Note, NoteType, Overlay, OverlayKind, PropertyChange, StableId,
+    AdapterIds, CanonicalDeck, ChangeIntent, DeckChange, ExpectedBase, FieldChange,
+    FieldDefinition, MediaReference, Note, NoteChange, NoteType, Overlay, OverlayKind,
+    PropertyChange, StableId, StructuredMessage,
 };
 use brain_brew_formats::lockfile::{
     FederationLock, LockedPackage, LockedPackageMetadata, LockedSource,
@@ -53,7 +54,7 @@ fn all_emitters_round_trip_hostile_values_and_are_idempotent() {
         );
 
         let overlay = overlay_with_value(value);
-        let overlay_once = canonical_yaml::overlay_to_string(&overlay);
+        let overlay_once = canonical_yaml::overlay_to_string(&overlay).expect("overlay emits");
         assert_eq!(
             canonical_yaml::overlay_from_str(&overlay_once)
                 .unwrap_or_else(|error| panic!("{case}: overlay parses: {error}\n{overlay_once}")),
@@ -67,7 +68,7 @@ fn all_emitters_round_trip_hostile_values_and_are_idempotent() {
         );
 
         let manifest = manifest_with_value(value);
-        let manifest_once = manifest::to_string(&manifest);
+        let manifest_once = manifest::to_string(&manifest).expect("manifest emits");
         assert_eq!(
             manifest::from_str(&manifest_once).unwrap_or_else(|error| panic!(
                 "{case}: manifest parses: {error}\n{manifest_once}"
@@ -82,7 +83,7 @@ fn all_emitters_round_trip_hostile_values_and_are_idempotent() {
         );
 
         let lock = lockfile_with_value(value);
-        let lock_once = lockfile::to_string(&lock);
+        let lock_once = lockfile::to_string(&lock).expect("lockfile emits");
         assert_eq!(
             lockfile::from_str(&lock_once)
                 .unwrap_or_else(|error| panic!("{case}: lock parses: {error}\n{lock_once}")),
@@ -124,7 +125,7 @@ fn hostile_string_map_keys_are_quoted_and_round_trip_where_the_schema_allows_the
         );
 
         let overlay = overlay_with_variable_key(key);
-        let overlay_once = canonical_yaml::overlay_to_string(&overlay);
+        let overlay_once = canonical_yaml::overlay_to_string(&overlay).expect("overlay emits");
         assert_eq!(
             canonical_yaml::overlay_from_str(&overlay_once).unwrap(),
             overlay
@@ -135,12 +136,12 @@ fn hostile_string_map_keys_are_quoted_and_round_trip_where_the_schema_allows_the
         );
 
         let manifest = manifest_with_map_key(key);
-        let manifest_once = manifest::to_string(&manifest);
+        let manifest_once = manifest::to_string(&manifest).expect("manifest emits");
         assert_eq!(manifest::from_str(&manifest_once).unwrap(), manifest);
         assert_eq!(manifest::format_str(&manifest_once).unwrap(), manifest_once);
 
         let lock = lockfile_with_package_key(key);
-        let lock_once = lockfile::to_string(&lock);
+        let lock_once = lockfile::to_string(&lock).expect("lockfile emits");
         assert_eq!(lockfile::from_str(&lock_once).unwrap(), lock);
         assert_eq!(lockfile::format_str(&lock_once).unwrap(), lock_once);
     }
@@ -165,7 +166,7 @@ fn newline_containing_map_keys_are_rejected_cleanly() {
     assert!(error.to_string().contains("cannot be emitted safely"));
 
     let error = lockfile::from_str(
-        "version: 1\npackages:\n  ? \"bad\\nkey\"\n  : manifest: brainbrew.yaml\n    package:\n      version: 1\n    locked:\n      type: path\n      path: .\n",
+        "version: 1\npackages:\n  ? \"bad\\nkey\"\n  : manifest: brainbrew.yaml\n    package:\n      version: '1'\n    locked:\n      type: path\n      path: .\n",
     )
     .expect_err("lockfile rejects newline package keys");
     assert!(error.to_string().contains("cannot be emitted safely"));
@@ -173,6 +174,63 @@ fn newline_containing_map_keys_are_rejected_cleanly() {
     let error = media_map::from_str("? \"bad\\nkey\"\n: path: media.png\n  sha256: abc\n")
         .expect_err("media map rejects newline stable id keys");
     assert!(error.to_string().contains("invalid stable id"));
+}
+
+#[test]
+fn fallible_public_emitters_reject_constructible_invalid_map_keys() {
+    let overlay_error = canonical_yaml::overlay_to_string(&overlay_with_variable_key("bad\nkey"))
+        .expect_err("overlay emitter returns an error");
+    assert!(
+        overlay_error
+            .to_string()
+            .contains("cannot be emitted safely")
+    );
+
+    let mut conflicting_overlay = overlay_with_value("value");
+    conflicting_overlay.note_changes.insert(
+        sid("note.strict"),
+        NoteChange {
+            intent: ChangeIntent::Merge,
+            note: None,
+            variables: BTreeMap::new(),
+            fields: BTreeMap::from([(
+                sid("field.value"),
+                FieldChange {
+                    intent: ChangeIntent::Replace,
+                    value: Some("value".to_owned()),
+                    message: Some(StructuredMessage {
+                        components: Vec::new(),
+                        format: None,
+                        variables: BTreeMap::new(),
+                    }),
+                    images: None,
+                    expected_base: None,
+                },
+            )]),
+            tags: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            expected_base: None,
+        },
+    );
+    let union_error = canonical_yaml::overlay_to_string(&conflicting_overlay)
+        .expect_err("overlay emitter rejects conflicting field representations");
+    assert!(
+        union_error
+            .to_string()
+            .contains("notes.note.strict.fields.field.value")
+    );
+
+    let manifest_error = manifest::to_string(&manifest_with_map_key("bad\nkey"))
+        .expect_err("manifest emitter returns an error");
+    assert!(
+        manifest_error
+            .to_string()
+            .contains("cannot be emitted safely")
+    );
+
+    let lock_error = lockfile::to_string(&lockfile_with_package_key("bad\nkey"))
+        .expect_err("lockfile emitter returns an error");
+    assert!(lock_error.to_string().contains("cannot be emitted safely"));
 }
 
 #[test]

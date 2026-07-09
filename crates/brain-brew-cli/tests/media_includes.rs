@@ -152,7 +152,7 @@ tombstones: []
 }
 
 fn media_map_yaml(sha256: &str) -> String {
-    format!("media.flags-fi-png:\n  path: flags/fi.png\n  sha256: {sha256}\n")
+    format!("media.flags-fi-png:\n  path: flags/fi.png\n  sha256: '{sha256}'\n")
 }
 
 fn run_in_dir<const N: usize>(args: [&str; N], cwd: &Path) -> std::process::Output {

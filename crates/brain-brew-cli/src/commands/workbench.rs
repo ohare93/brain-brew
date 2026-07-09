@@ -825,11 +825,7 @@ impl WorkspaceMetadata {
         let request = default_new_language_request(&manifest, code, display_name, &template)?;
         let (updated, overlay_writes) =
             apply_new_language_request(&self.manifest_root, &manifest, &request)?;
-        Ok(new_language_preview_response(
-            &updated,
-            &request,
-            &overlay_writes,
-        ))
+        new_language_preview_response(&updated, &request, &overlay_writes)
     }
 
     fn create_new_language_json(&self, request: NewLanguageRequest) -> Result<Value, String> {
@@ -837,7 +833,7 @@ impl WorkspaceMetadata {
         let manifest = self.current_manifest()?;
         let (updated, overlay_writes) =
             apply_new_language_request(&self.manifest_root, &manifest, &request)?;
-        let manifest_yaml = manifest::to_string(&updated);
+        let manifest_yaml = manifest::to_string(&updated).map_err(|error| error.to_string())?;
         manifest::from_str(&manifest_yaml)
             .map_err(|error| format!("invalid generated manifest: {error}"))?;
 
@@ -846,7 +842,8 @@ impl WorkspaceMetadata {
         for (relative_path, overlay) in overlay_writes {
             let relative = safe_new_language_relative_path(&relative_path)?;
             let path = self.manifest_root.join(&relative);
-            let overlay_yaml = canonical_yaml::overlay_to_string(&overlay);
+            let overlay_yaml = canonical_yaml::overlay_to_string(&overlay)
+                .map_err(|error| format!("invalid generated overlay {relative_path}: {error}"))?;
             canonical_yaml::overlay_from_str(&overlay_yaml)
                 .map_err(|error| format!("invalid generated overlay {relative_path}: {error}"))?;
             overlay_write_targets.push(AtomicFileWrite::text(path, relative_path, overlay_yaml));
@@ -1021,7 +1018,9 @@ impl WorkspaceMetadata {
                 if !changed {
                     continue;
                 }
-                let overlay_yaml = canonical_yaml::overlay_to_string(overlay);
+                let overlay_yaml = canonical_yaml::overlay_to_string(overlay).map_err(|error| {
+                    format!("invalid generated translation overlay {display_file}: {error}")
+                })?;
                 canonical_yaml::overlay_from_str(&overlay_yaml).map_err(|error| {
                     format!("invalid generated translation overlay {display_file}: {error}")
                 })?;
@@ -2002,7 +2001,7 @@ fn apply_new_language_request(
         },
     );
 
-    let manifest_yaml = manifest::to_string(&updated);
+    let manifest_yaml = manifest::to_string(&updated).map_err(|error| error.to_string())?;
     manifest::from_str(&manifest_yaml)
         .map_err(|error| format!("invalid generated manifest: {error}"))?;
     for target in &request.targets {
@@ -2050,23 +2049,25 @@ fn new_language_preview_response(
     manifest: &FederatedDeckManifest,
     request: &NewLanguageRequest,
     overlay_writes: &[(String, Overlay)],
-) -> Value {
+) -> Result<Value, String> {
     let overlay_files = overlay_writes
         .iter()
         .map(|(path, overlay)| {
-            json!({
+            Ok(json!({
                 "path": path,
-                "contents": canonical_yaml::overlay_to_string(overlay),
-            })
+                "contents": canonical_yaml::overlay_to_string(overlay)
+                    .map_err(|error| error.to_string())?,
+            }))
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, String>>()?;
+    let manifest_yaml = manifest::to_string(manifest).map_err(|error| error.to_string())?;
     let mut affected_files = vec![json!({ "path": "brainbrew.yaml" })];
     affected_files.extend(
         overlay_writes
             .iter()
             .map(|(path, _)| json!({ "path": path })),
     );
-    json!({
+    Ok(json!({
         "validation": { "ok": true, "errors": Vec::<String>::new() },
         "draft": request,
         "language": {
@@ -2079,8 +2080,8 @@ fn new_language_preview_response(
         "targets": &request.targets,
         "affected_files": affected_files,
         "overlay_files": overlay_files,
-        "manifest_yaml": manifest::to_string(manifest),
-    })
+        "manifest_yaml": manifest_yaml,
+    }))
 }
 
 fn validate_new_language_code(code: &str) -> Result<(), String> {

@@ -73,7 +73,7 @@ fn update(args: &[String]) -> Result<(), String> {
             locked: requested.locked_source(&fetched),
         },
     );
-    let formatted = lockfile::to_string(&lock);
+    let formatted = lockfile::to_string(&lock).map_err(|error| error.to_string())?;
     if let Some(parent) = args.lock_path.parent() {
         fs::create_dir_all(parent).map_err(|error| format!("{}: {error}", parent.display()))?;
     }

@@ -1267,7 +1267,7 @@ fn apply_stale_resolutions_to_overlay(
         for resolution in resolutions {
             apply_stale_resolution(translations, resolution, action, path)?;
         }
-        Ok::<_, String>(canonical_yaml::overlay_to_string(&overlay))
+        canonical_yaml::overlay_to_string(&overlay).map_err(|error| error.to_string())
     })?;
     if output != input {
         fs::write(path, output).map_err(|error| format!("{}: {error}", path.display()))?;

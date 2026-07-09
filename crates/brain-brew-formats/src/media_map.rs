@@ -14,6 +14,11 @@ pub fn from_str(input: &str) -> Result<BTreeMap<StableId, MediaReference>, Media
     crate::strict_yaml::reject_duplicate_keys(input).map_err(MediaMapYamlError::Parse)?;
     let file: BTreeMap<String, MediaYaml> =
         serde_yaml::from_str(input).map_err(MediaMapYamlError::Parse)?;
+    crate::strict_yaml::reject_unintended_scalars(
+        input,
+        crate::strict_yaml::ScalarPolicy::MediaMap,
+    )
+    .map_err(MediaMapYamlError::Parse)?;
     file.into_iter()
         .map(|(id, media)| {
             let stable_id = StableId::new(id)?;

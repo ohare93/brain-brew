@@ -495,7 +495,7 @@ notes:
         sid("media.flag.norway")
     );
 
-    let formatted = canonical_yaml::overlay_to_string(&overlay);
+    let formatted = canonical_yaml::overlay_to_string(&overlay).expect("overlay emits");
     assert!(formatted.contains("field.map: !image media.map.finland\n"));
     assert!(formatted.contains(
         "field.flag:\n      - !image media.flag.iceland.blur\n      - !image media.flag.iceland\n"

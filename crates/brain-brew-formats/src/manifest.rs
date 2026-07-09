@@ -270,17 +270,23 @@ pub struct ExpandedOverlay {
 pub fn from_str(input: &str) -> Result<FederatedDeckManifest, ManifestError> {
     crate::strict_yaml::reject_duplicate_keys(input).map_err(ManifestError::Parse)?;
     let yaml: ManifestYaml = serde_yaml::from_str(input).map_err(ManifestError::Parse)?;
+    crate::strict_yaml::reject_unintended_scalars(
+        input,
+        crate::strict_yaml::ScalarPolicy::Manifest,
+    )
+    .map_err(ManifestError::Parse)?;
     yaml.into_manifest()
 }
 
 /// Parse and re-emit a Federated Deck manifest using deterministic formatting.
 pub fn format_str(input: &str) -> Result<String, ManifestError> {
     let manifest = from_str(input)?;
-    Ok(to_string(&manifest))
+    to_string(&manifest)
 }
 
 /// Emit a Federated Deck manifest as deterministic YAML.
-pub fn to_string(manifest: &FederatedDeckManifest) -> String {
+pub fn to_string(manifest: &FederatedDeckManifest) -> Result<String, ManifestError> {
+    manifest.validate_language_catalog()?;
     let mut out = String::new();
     if let Some(package) = &manifest.package {
         out.push_str("package:\n");
@@ -467,7 +473,7 @@ pub fn to_string(manifest: &FederatedDeckManifest) -> String {
             }
         }
     }
-    out
+    Ok(out)
 }
 
 fn translation_coverage_policy_name(policy: TranslationCoveragePolicy) -> &'static str {

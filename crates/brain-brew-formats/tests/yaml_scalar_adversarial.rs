@@ -78,7 +78,7 @@ fn canonical_yaml_round_trips_hostile_scalar_and_block_values() {
 fn manifest_yaml_round_trips_hostile_scalars() {
     for (case, value) in HOSTILE_STRINGS {
         let original = manifest_with_value(value);
-        let emitted = manifest::to_string(&original);
+        let emitted = manifest::to_string(&original).expect("manifest emits");
         let parsed = manifest::from_str(&emitted)
             .unwrap_or_else(|error| panic!("{case}: emitted manifest parses: {error}\n{emitted}"));
 
@@ -90,7 +90,7 @@ fn manifest_yaml_round_trips_hostile_scalars() {
 fn lockfile_yaml_round_trips_hostile_scalars() {
     for (case, value) in HOSTILE_STRINGS {
         let original = lockfile_with_value(value);
-        let emitted = lockfile::to_string(&original);
+        let emitted = lockfile::to_string(&original).expect("lockfile emits");
         let parsed = lockfile::from_str(&emitted)
             .unwrap_or_else(|error| panic!("{case}: emitted lockfile parses: {error}\n{emitted}"));
 
@@ -110,7 +110,8 @@ fn emitted_yaml_is_idempotent_for_hostile_unit_cases() {
             "{case}: canonical YAML format is byte-idempotent"
         );
 
-        let manifest_once = manifest::to_string(&manifest_with_value(value));
+        let manifest_once =
+            manifest::to_string(&manifest_with_value(value)).expect("manifest emits");
         assert_eq!(
             manifest::format_str(&manifest_once)
                 .unwrap_or_else(|error| panic!("{case}: manifest formats: {error}")),
@@ -118,7 +119,8 @@ fn emitted_yaml_is_idempotent_for_hostile_unit_cases() {
             "{case}: manifest format is byte-idempotent"
         );
 
-        let lockfile_once = lockfile::to_string(&lockfile_with_value(value));
+        let lockfile_once =
+            lockfile::to_string(&lockfile_with_value(value)).expect("lockfile emits");
         assert_eq!(
             lockfile::format_str(&lockfile_once)
                 .unwrap_or_else(|error| panic!("{case}: lockfile formats: {error}")),

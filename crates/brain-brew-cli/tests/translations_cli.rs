@@ -290,7 +290,7 @@ notes:
     fields:
       field.capital: {current_capital}
       field.country: Finland
-    tags:
+    tags: []
     adapter_ids: {{}}
 media: {{}}
 tombstones: []

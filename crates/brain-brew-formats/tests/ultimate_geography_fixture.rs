@@ -218,7 +218,8 @@ fn ultimate_geography_fixture_formatting_is_byte_idempotent() {
         let overlay = read_overlay_file(&root, &overlay_path).unwrap_or_else(|error| {
             panic!("{} resolves and parses: {error}", overlay_path.display())
         });
-        let once = canonical_yaml::overlay_to_string(&overlay);
+        let once = canonical_yaml::overlay_to_string(&overlay)
+            .unwrap_or_else(|error| panic!("{} emits: {error}", overlay_path.display()));
         let twice = canonical_yaml::overlay_format_str(&once)
             .unwrap_or_else(|error| panic!("{} formats twice: {error}", overlay_path.display()));
         assert_eq!(

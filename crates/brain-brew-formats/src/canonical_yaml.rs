@@ -22,7 +22,13 @@ const UG_TARGET_ADDITION_REASON: &str = "target addition from upstream UG";
 /// Parse a CanonicalDeck from strict canonical YAML.
 pub fn from_str(input: &str) -> Result<CanonicalDeck, CanonicalYamlError> {
     crate::strict_yaml::reject_duplicate_keys(input).map_err(CanonicalYamlError::Parse)?;
+    validate_canonical_field_value_unions(input)?;
     let file: CanonicalDeckYaml = serde_yaml::from_str(input).map_err(CanonicalYamlError::Parse)?;
+    crate::strict_yaml::reject_unintended_scalars(
+        input,
+        crate::strict_yaml::ScalarPolicy::CanonicalDeck,
+    )
+    .map_err(CanonicalYamlError::Parse)?;
     let deck = file.into_deck()?;
     deck.validate().map_err(CanonicalYamlError::Validation)?;
     validate_deck_yaml_keys(&deck)?;
@@ -32,7 +38,10 @@ pub fn from_str(input: &str) -> Result<CanonicalDeck, CanonicalYamlError> {
 /// Parse a sparse overlay YAML file.
 pub fn overlay_from_str(input: &str) -> Result<Overlay, CanonicalYamlError> {
     crate::strict_yaml::reject_duplicate_keys(input).map_err(CanonicalYamlError::Parse)?;
+    validate_overlay_unions(input)?;
     let file: OverlayYaml = serde_yaml::from_str(input).map_err(CanonicalYamlError::Parse)?;
+    crate::strict_yaml::reject_unintended_scalars(input, crate::strict_yaml::ScalarPolicy::Overlay)
+        .map_err(CanonicalYamlError::Parse)?;
     let overlay = file.into_overlay()?;
     validate_overlay_yaml_keys(&overlay)?;
     Ok(overlay)
@@ -47,7 +56,7 @@ pub fn format_str(input: &str) -> Result<String, CanonicalYamlError> {
 /// Parse and re-emit a sparse overlay YAML file using deterministic formatting.
 pub fn overlay_format_str(input: &str) -> Result<String, CanonicalYamlError> {
     let overlay = overlay_from_str(input)?;
-    Ok(overlay_to_string(&overlay))
+    overlay_to_string(&overlay)
 }
 
 /// Emit a CanonicalDeck as deterministic canonical YAML.
@@ -85,11 +94,16 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
             writeln!(out, "        name: {}", yaml_scalar(&field.name))
                 .expect("writing to a string cannot fail");
         }
-        writeln!(out, "    card_template_order:").expect("writing to a string cannot fail");
-        for template in &note_type.card_templates {
-            writeln!(out, "      - {}", template.id).expect("writing to a string cannot fail");
+        if note_type.card_templates.is_empty() {
+            writeln!(out, "    card_template_order: []").expect("writing to a string cannot fail");
+            writeln!(out, "    card_templates: {{}}").expect("writing to a string cannot fail");
+        } else {
+            writeln!(out, "    card_template_order:").expect("writing to a string cannot fail");
+            for template in &note_type.card_templates {
+                writeln!(out, "      - {}", template.id).expect("writing to a string cannot fail");
+            }
+            writeln!(out, "    card_templates:").expect("writing to a string cannot fail");
         }
-        writeln!(out, "    card_templates:").expect("writing to a string cannot fail");
         let templates_by_id = note_type
             .card_templates
             .iter()
@@ -145,10 +159,14 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
                     .expect("writing to a string cannot fail");
                 }
             }
-            writeln!(out, "    tags:").expect("writing to a string cannot fail");
-            for tag in &note.tags {
-                writeln!(out, "      - {}", yaml_scalar(tag))
-                    .expect("writing to a string cannot fail");
+            if note.tags.is_empty() {
+                writeln!(out, "    tags: []").expect("writing to a string cannot fail");
+            } else {
+                writeln!(out, "    tags:").expect("writing to a string cannot fail");
+                for tag in &note.tags {
+                    writeln!(out, "      - {}", yaml_scalar(tag))
+                        .expect("writing to a string cannot fail");
+                }
             }
             write_adapter_ids(&mut out, "    ", &note.adapter_ids);
         }
@@ -181,7 +199,9 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
 }
 
 /// Emit a sparse overlay as deterministic YAML.
-pub fn overlay_to_string(overlay: &Overlay) -> String {
+pub fn overlay_to_string(overlay: &Overlay) -> Result<String, CanonicalYamlError> {
+    validate_overlay_yaml_keys(overlay)?;
+    validate_overlay_representations(overlay)?;
     let mut out = String::new();
     writeln!(out, "id: {}", overlay.id).expect("writing to a string cannot fail");
     writeln!(out, "kind: {}", overlay_kind_name(overlay.kind))
@@ -381,7 +401,7 @@ pub fn overlay_to_string(overlay: &Overlay) -> String {
         }
     }
 
-    out
+    Ok(out)
 }
 
 #[derive(Default)]
@@ -1035,11 +1055,16 @@ fn write_note_type_payload(out: &mut String, indent: &str, note_type: &NoteType)
         writeln!(out, "{indent}    name: {}", yaml_scalar(&field.name))
             .expect("writing to a string cannot fail");
     }
-    writeln!(out, "{indent}card_template_order:").expect("writing to a string cannot fail");
-    for template in &note_type.card_templates {
-        writeln!(out, "{indent}  - {}", template.id).expect("writing to a string cannot fail");
+    if note_type.card_templates.is_empty() {
+        writeln!(out, "{indent}card_template_order: []").expect("writing to a string cannot fail");
+        writeln!(out, "{indent}card_templates: {{}}").expect("writing to a string cannot fail");
+    } else {
+        writeln!(out, "{indent}card_template_order:").expect("writing to a string cannot fail");
+        for template in &note_type.card_templates {
+            writeln!(out, "{indent}  - {}", template.id).expect("writing to a string cannot fail");
+        }
+        writeln!(out, "{indent}card_templates:").expect("writing to a string cannot fail");
     }
-    writeln!(out, "{indent}card_templates:").expect("writing to a string cannot fail");
     let templates_by_id = note_type
         .card_templates
         .iter()
@@ -1089,9 +1114,14 @@ fn write_note_payload(out: &mut String, indent: &str, note: &Note) {
             .expect("writing to a string cannot fail");
         }
     }
-    writeln!(out, "{indent}tags:").expect("writing to a string cannot fail");
-    for tag in &note.tags {
-        writeln!(out, "{indent}  - {}", yaml_scalar(tag)).expect("writing to a string cannot fail");
+    if note.tags.is_empty() {
+        writeln!(out, "{indent}tags: []").expect("writing to a string cannot fail");
+    } else {
+        writeln!(out, "{indent}tags:").expect("writing to a string cannot fail");
+        for tag in &note.tags {
+            writeln!(out, "{indent}  - {}", yaml_scalar(tag))
+                .expect("writing to a string cannot fail");
+        }
     }
     write_adapter_ids(out, indent, &note.adapter_ids);
 }
@@ -1142,12 +1172,18 @@ fn write_structured_message_value(out: &mut String, indent: &str, message: &Stru
     if let Some(format) = &message.format {
         writeln!(out, "{indent}format: {}", yaml_scalar(format))
             .expect("writing to a string cannot fail");
-        writeln!(out, "{indent}variables:").expect("writing to a string cannot fail");
+        if message.variables.is_empty() {
+            writeln!(out, "{indent}variables: {{}}").expect("writing to a string cannot fail");
+        } else {
+            writeln!(out, "{indent}variables:").expect("writing to a string cannot fail");
+        }
         for (name, component) in &message.variables {
             writeln!(out, "{indent}  {}:", emitted_key(name))
                 .expect("writing to a string cannot fail");
             write_message_component(out, &format!("{indent}    "), component, false);
         }
+    } else if message.components.is_empty() {
+        writeln!(out, "{indent}message: []").expect("writing to a string cannot fail");
     } else {
         writeln!(out, "{indent}message:").expect("writing to a string cannot fail");
         write_message_components(out, &format!("{indent}  "), message);
@@ -1235,6 +1271,7 @@ pub enum CanonicalYamlError {
     InvalidFieldAddition(String),
     InvalidFieldFill(String),
     InvalidFieldValue(String),
+    InvalidSchemaValue { path: String, message: String },
     MissingOrderedEntity { section: &'static str, id: String },
     UnorderedEntity { section: &'static str, id: String },
     Validation(ValidationReport),
@@ -1257,6 +1294,9 @@ impl fmt::Display for CanonicalYamlError {
             Self::InvalidFieldAddition(message) => write!(f, "invalid field addition: {message}"),
             Self::InvalidFieldFill(message) => write!(f, "invalid field fill: {message}"),
             Self::InvalidFieldValue(message) => write!(f, "invalid field value: {message}"),
+            Self::InvalidSchemaValue { path, message } => {
+                write!(f, "invalid value at schema path {path}: {message}")
+            }
             Self::MissingOrderedEntity { section, id } => {
                 write!(f, "{section} order references missing entity {id}")
             }
@@ -1280,6 +1320,269 @@ impl From<InvalidStableId> for CanonicalYamlError {
     }
 }
 
+fn validate_canonical_field_value_unions(input: &str) -> Result<(), CanonicalYamlError> {
+    let root: Value = serde_yaml::from_str(input).map_err(CanonicalYamlError::Parse)?;
+    let Some(notes) = mapping_value(&root, "notes").and_then(Value::as_mapping) else {
+        return Ok(());
+    };
+    for (note_id, note) in notes {
+        let Some(note_id) = note_id.as_str() else {
+            continue;
+        };
+        validate_note_field_values(note, &format!("notes.{note_id}"))?;
+    }
+    Ok(())
+}
+
+fn validate_overlay_unions(input: &str) -> Result<(), CanonicalYamlError> {
+    let root: Value = serde_yaml::from_str(input).map_err(CanonicalYamlError::Parse)?;
+    if let Some(notes) = mapping_value(&root, "notes").and_then(Value::as_mapping) {
+        for (note_id, note_change) in notes {
+            let Some(note_id) = note_id.as_str() else {
+                continue;
+            };
+            let note_path = format!("notes.{note_id}");
+            if let Some(note) = mapping_value(note_change, "note") {
+                validate_note_field_values(note, &format!("{note_path}.note"))?;
+            }
+            if let Some(fields) = mapping_value(note_change, "fields").and_then(Value::as_mapping) {
+                for (field_id, change) in fields {
+                    let Some(field_id) = field_id.as_str() else {
+                        continue;
+                    };
+                    validate_field_change(change, &format!("{note_path}.fields.{field_id}"))?;
+                }
+            }
+        }
+    }
+    if let Some(media) = mapping_value(&root, "media").and_then(Value::as_mapping) {
+        for (media_id, change) in media {
+            let Some(media_id) = media_id.as_str() else {
+                continue;
+            };
+            let Some(change) = change.as_mapping() else {
+                continue;
+            };
+            let has_path = change.contains_key(Value::String("path".to_owned()));
+            let has_sha256 = change.contains_key(Value::String("sha256".to_owned()));
+            if has_path != has_sha256 {
+                return schema_error(
+                    format!("media.{media_id}"),
+                    "path and sha256 must be provided together",
+                );
+            }
+        }
+    }
+    if let Some(fills) = mapping_value(&root, "field_fills").and_then(Value::as_mapping) {
+        for (note_id, fields) in fills {
+            let (Some(note_id), Some(fields)) = (note_id.as_str(), fields.as_mapping()) else {
+                continue;
+            };
+            for (field_id, value) in fields {
+                let Some(field_id) = field_id.as_str() else {
+                    continue;
+                };
+                validate_field_value(value, &format!("field_fills.{note_id}.{field_id}"), true)?;
+            }
+        }
+    }
+    if let Some(additions) = mapping_value(&root, "field_additions").and_then(Value::as_mapping) {
+        for (note_type_id, addition) in additions {
+            let (Some(note_type_id), Some(values)) = (
+                note_type_id.as_str(),
+                mapping_value(addition, "values").and_then(Value::as_mapping),
+            ) else {
+                continue;
+            };
+            for (note_id, fields) in values {
+                let (Some(note_id), Some(fields)) = (note_id.as_str(), fields.as_mapping()) else {
+                    continue;
+                };
+                for (field_id, value) in fields {
+                    let Some(field_id) = field_id.as_str() else {
+                        continue;
+                    };
+                    validate_field_value(
+                        value,
+                        &format!("field_additions.{note_type_id}.values.{note_id}.{field_id}"),
+                        false,
+                    )?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_note_field_values(note: &Value, note_path: &str) -> Result<(), CanonicalYamlError> {
+    let Some(fields) = mapping_value(note, "fields").and_then(Value::as_mapping) else {
+        return Ok(());
+    };
+    for (field_id, value) in fields {
+        let Some(field_id) = field_id.as_str() else {
+            continue;
+        };
+        validate_field_value(value, &format!("{note_path}.fields.{field_id}"), true)?;
+    }
+    Ok(())
+}
+
+fn validate_field_change(value: &Value, path: &str) -> Result<(), CanonicalYamlError> {
+    let Some(change) = value.as_mapping() else {
+        return Ok(());
+    };
+    let has_value = change.contains_key(Value::String("value".to_owned()));
+    let has_message = change.contains_key(Value::String("message".to_owned()));
+    let has_format = change.contains_key(Value::String("format".to_owned()));
+    let has_variables = change.contains_key(Value::String("variables".to_owned()));
+    let alternatives = usize::from(has_value) + usize::from(has_message) + usize::from(has_format);
+    if alternatives > 1 {
+        return schema_error(
+            path.to_owned(),
+            "value, message, and format are mutually exclusive field representations",
+        );
+    }
+    if has_variables != has_format {
+        return schema_error(
+            path.to_owned(),
+            "format and variables must be provided together",
+        );
+    }
+    if let Some(field_value) = mapping_value(value, "value") {
+        validate_field_value(field_value, &format!("{path}.value"), false)?;
+    }
+    if let Some(message) = mapping_value(value, "message") {
+        validate_message_components(message, &format!("{path}.message"))?;
+    }
+    if let Some(variables) = mapping_value(value, "variables") {
+        validate_message_variables(variables, &format!("{path}.variables"))?;
+    }
+    Ok(())
+}
+
+fn validate_field_value(
+    value: &Value,
+    path: &str,
+    allow_messages: bool,
+) -> Result<(), CanonicalYamlError> {
+    match value {
+        Value::String(_) => Ok(()),
+        Value::Tagged(tagged) => validate_image_value(&tagged.tag.to_string(), &tagged.value, path),
+        Value::Sequence(items) => {
+            if items.is_empty() {
+                return schema_error(path.to_owned(), "image sequence must not be empty");
+            }
+            for (index, item) in items.iter().enumerate() {
+                let Value::Tagged(tagged) = item else {
+                    return schema_error(
+                        format!("{path}[{index}]"),
+                        "image sequences may contain only !image tagged scalars",
+                    );
+                };
+                validate_image_value(
+                    &tagged.tag.to_string(),
+                    &tagged.value,
+                    &format!("{path}[{index}]"),
+                )?;
+            }
+            Ok(())
+        }
+        Value::Mapping(mapping) if allow_messages => {
+            let has_format = mapping.contains_key(Value::String("format".to_owned()));
+            let has_variables = mapping.contains_key(Value::String("variables".to_owned()));
+            let has_message = mapping.contains_key(Value::String("message".to_owned()));
+            if has_message && mapping.len() == 1 {
+                return validate_message_components(
+                    mapping_value(value, "message").expect("message key exists"),
+                    &format!("{path}.message"),
+                );
+            }
+            if has_format && has_variables && mapping.len() == 2 {
+                return validate_message_variables(
+                    mapping_value(value, "variables").expect("variables key exists"),
+                    &format!("{path}.variables"),
+                );
+            }
+            schema_error(
+                path.to_owned(),
+                "structured field value must contain exactly message, or exactly format and variables",
+            )
+        }
+        _ => schema_error(
+            path.to_owned(),
+            if allow_messages {
+                "field value must be a string, structured message, or !image reference"
+            } else {
+                "field value must be a string or !image reference"
+            },
+        ),
+    }
+}
+
+fn validate_image_value(tag: &str, value: &Value, path: &str) -> Result<(), CanonicalYamlError> {
+    if tag != "!image" && tag != "image" {
+        return schema_error(path.to_owned(), format!("unsupported YAML tag {tag}"));
+    }
+    match value {
+        Value::String(media_id) if !media_id.is_empty() => Ok(()),
+        _ => schema_error(path.to_owned(), "!image value must be a non-empty string"),
+    }
+}
+
+fn validate_message_components(value: &Value, path: &str) -> Result<(), CanonicalYamlError> {
+    let Some(components) = value.as_sequence() else {
+        return schema_error(path.to_owned(), "message must be a sequence");
+    };
+    for (index, component) in components.iter().enumerate() {
+        validate_message_component(component, &format!("{path}[{index}]"))?;
+    }
+    Ok(())
+}
+
+fn validate_message_variables(value: &Value, path: &str) -> Result<(), CanonicalYamlError> {
+    let Some(variables) = value.as_mapping() else {
+        return schema_error(path.to_owned(), "message variables must be a mapping");
+    };
+    for (name, component) in variables {
+        let Some(name) = name.as_str() else {
+            continue;
+        };
+        validate_message_component(component, &format!("{path}.{name}"))?;
+    }
+    Ok(())
+}
+
+fn validate_message_component(value: &Value, path: &str) -> Result<(), CanonicalYamlError> {
+    let Some(component) = value.as_mapping() else {
+        return schema_error(path.to_owned(), "message component must be a mapping");
+    };
+    if component.len() != 1 {
+        return schema_error(
+            path.to_owned(),
+            "message component must contain exactly one of literal, text, or ref",
+        );
+    }
+    let (key, value) = component.iter().next().expect("one component entry");
+    if !matches!(key.as_str(), Some("literal" | "text" | "ref")) || !value.is_string() {
+        return schema_error(
+            path.to_owned(),
+            "message component must contain exactly one string literal, text, or ref",
+        );
+    }
+    Ok(())
+}
+
+fn mapping_value<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
+    value.as_mapping()?.get(Value::String(key.to_owned()))
+}
+
+fn schema_error<T>(path: String, message: impl Into<String>) -> Result<T, CanonicalYamlError> {
+    Err(CanonicalYamlError::InvalidSchemaValue {
+        path,
+        message: message.into(),
+    })
+}
+
 fn validate_deck_yaml_keys(deck: &CanonicalDeck) -> Result<(), CanonicalYamlError> {
     validate_string_keys("deck.variables", deck.variables.keys())?;
     validate_adapter_id_keys("deck.adapter_ids", &deck.adapter_ids)?;
@@ -1292,6 +1595,7 @@ fn validate_deck_yaml_keys(deck: &CanonicalDeck) -> Result<(), CanonicalYamlErro
         }
     }
     for note in deck.notes.values() {
+        validate_note_representations(note, &format!("notes.{}", note.id))?;
         validate_string_keys("note.variables", note.variables.keys())?;
         validate_adapter_id_keys("note.adapter_ids", &note.adapter_ids)?;
         for message in note.field_messages.values() {
@@ -1345,6 +1649,92 @@ fn validate_overlay_yaml_keys(overlay: &Overlay) -> Result<(), CanonicalYamlErro
         }
     }
     Ok(())
+}
+
+fn validate_overlay_representations(overlay: &Overlay) -> Result<(), CanonicalYamlError> {
+    for (note_id, change) in &overlay.note_changes {
+        if let Some(note) = &change.note {
+            validate_note_representations(note, &format!("notes.{note_id}.note"))?;
+        }
+        for (field_id, field_change) in &change.fields {
+            let path = format!("notes.{note_id}.fields.{field_id}");
+            let alternatives = usize::from(field_change.value.is_some())
+                + usize::from(field_change.message.is_some())
+                + usize::from(field_change.images.is_some());
+            if alternatives > 1 {
+                return schema_error(
+                    path,
+                    "value, message, and images are mutually exclusive field representations",
+                );
+            }
+            if let Some(message) = &field_change.message {
+                validate_structured_message_representation(message, &path)?;
+            }
+            if field_change.images.as_ref().is_some_and(Vec::is_empty) {
+                return schema_error(path, "image sequence must not be empty");
+            }
+        }
+    }
+    for (media_id, change) in &overlay.media_changes {
+        if let Some(media) = &change.media
+            && media.id != *media_id
+        {
+            return schema_error(
+                format!("media.{media_id}"),
+                format!("media payload id {} does not match its map key", media.id),
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_note_representations(note: &Note, path: &str) -> Result<(), CanonicalYamlError> {
+    for (field_id, message) in &note.field_messages {
+        if !note.fields.contains_key(field_id) {
+            return schema_error(
+                format!("{path}.fields.{field_id}"),
+                "structured message has no corresponding field",
+            );
+        }
+        if note.field_images.contains_key(field_id) {
+            return schema_error(
+                format!("{path}.fields.{field_id}"),
+                "message and images are mutually exclusive field representations",
+            );
+        }
+        validate_structured_message_representation(message, &format!("{path}.fields.{field_id}"))?;
+    }
+    for (field_id, images) in &note.field_images {
+        if !note.fields.contains_key(field_id) {
+            return schema_error(
+                format!("{path}.fields.{field_id}"),
+                "structured images have no corresponding field",
+            );
+        }
+        if images.is_empty() {
+            return schema_error(
+                format!("{path}.fields.{field_id}"),
+                "image sequence must not be empty",
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_structured_message_representation(
+    message: &StructuredMessage,
+    path: &str,
+) -> Result<(), CanonicalYamlError> {
+    match &message.format {
+        Some(_) if !message.components.is_empty() => schema_error(
+            path.to_owned(),
+            "formatted message must not also contain positional components",
+        ),
+        None if !message.variables.is_empty() => {
+            schema_error(path.to_owned(), "message variables require a format string")
+        }
+        _ => Ok(()),
+    }
 }
 
 fn validate_deck_note_type_payload_keys(note_type: &NoteType) -> Result<(), CanonicalYamlError> {
