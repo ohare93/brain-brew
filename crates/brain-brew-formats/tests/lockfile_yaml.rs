@@ -52,6 +52,36 @@ packages:
 }
 
 #[test]
+fn rejects_duplicate_lock_package_keys_with_schema_path() {
+    let yaml = r#"version: 1
+packages:
+  example.package:
+    manifest: one.yaml
+    package:
+      version: 1.0.0
+    locked:
+      type: path
+      path: one
+  example.package:
+    manifest: two.yaml
+    package:
+      version: 2.0.0
+    locked:
+      type: path
+      path: two
+"#;
+
+    let error = lockfile::from_str(yaml).expect_err("duplicate package is rejected");
+    let message = error.to_string();
+    assert!(
+        message.contains("duplicate key \"example.package\""),
+        "{message}"
+    );
+    assert!(message.contains("packages.example.package"), "{message}");
+    assert!(lockfile::format_str(yaml).is_err());
+}
+
+#[test]
 fn rejects_unknown_lock_fields() {
     let error = lockfile::from_str(
         r#"

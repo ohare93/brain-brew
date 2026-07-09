@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use brain_brew_core::{CanonicalDeck, Overlay, TranslationCoverageCategory, validate_deck_content};
-use brain_brew_formats::{crowdanki, manifest, media_map};
+use brain_brew_formats::{crowdanki, manifest, media_map, strict_yaml};
 
 use crate::args::parse_verify_args;
 use crate::help;
@@ -96,6 +96,8 @@ fn verify_included_media_map_format(
     context: &SourceContext,
 ) -> Result<(), String> {
     let input = fs::read_to_string(deck_path)
+        .map_err(|error| format!("{}: {error}", deck_path.display()))?;
+    strict_yaml::reject_duplicate_keys(&input)
         .map_err(|error| format!("{}: {error}", deck_path.display()))?;
     let value = serde_yaml::from_str::<serde_yaml::Value>(&input)
         .map_err(|error| format!("{}: {error}", deck_path.display()))?;

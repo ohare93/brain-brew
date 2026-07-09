@@ -4,7 +4,7 @@ use std::path::{Component, Path, PathBuf};
 
 use serde_yaml::Value;
 
-use crate::yaml_scalar;
+use crate::{strict_yaml, yaml_scalar};
 
 /// Resolve `!include path` tagged scalar authoring conveniences in a Canonical Deck or overlay YAML file.
 ///
@@ -16,6 +16,12 @@ pub fn resolve_file_includes(
     package_root: &Path,
     safe_include_roots: &[PathBuf],
 ) -> Result<String, IncludeError> {
+    strict_yaml::reject_duplicate_keys(input).map_err(|error| IncludeError {
+        source_path: source_path.to_path_buf(),
+        yaml_path: String::new(),
+        include_path: String::new(),
+        kind: Box::new(IncludeErrorKind::Parse(error.to_string())),
+    })?;
     if !input.contains("!include") {
         return Ok(input.to_owned());
     }
@@ -60,6 +66,7 @@ pub fn format_preserving_file_includes<E>(
 where
     E: ToString,
 {
+    strict_yaml::reject_duplicate_keys(input).map_err(|error| error.to_string())?;
     if !input.contains("!include") {
         return format(input).map_err(|error| error.to_string());
     }
@@ -443,6 +450,12 @@ impl IncludeResolver {
                     message: error.to_string(),
                 },
             )
+        })?;
+        strict_yaml::reject_duplicate_keys(&content).map_err(|error| IncludeError {
+            source_path: resolved.clone(),
+            yaml_path: String::new(),
+            include_path: include_path.to_owned(),
+            kind: Box::new(IncludeErrorKind::Parse(error.to_string())),
         })?;
         let value = serde_yaml::from_str::<Value>(&content).map_err(|error| IncludeError {
             source_path: resolved.clone(),

@@ -21,6 +21,7 @@ const UG_TARGET_ADDITION_REASON: &str = "target addition from upstream UG";
 
 /// Parse a CanonicalDeck from strict canonical YAML.
 pub fn from_str(input: &str) -> Result<CanonicalDeck, CanonicalYamlError> {
+    crate::strict_yaml::reject_duplicate_keys(input).map_err(CanonicalYamlError::Parse)?;
     let file: CanonicalDeckYaml = serde_yaml::from_str(input).map_err(CanonicalYamlError::Parse)?;
     let deck = file.into_deck()?;
     deck.validate().map_err(CanonicalYamlError::Validation)?;
@@ -30,6 +31,7 @@ pub fn from_str(input: &str) -> Result<CanonicalDeck, CanonicalYamlError> {
 
 /// Parse a sparse overlay YAML file.
 pub fn overlay_from_str(input: &str) -> Result<Overlay, CanonicalYamlError> {
+    crate::strict_yaml::reject_duplicate_keys(input).map_err(CanonicalYamlError::Parse)?;
     let file: OverlayYaml = serde_yaml::from_str(input).map_err(CanonicalYamlError::Parse)?;
     let overlay = file.into_overlay()?;
     validate_overlay_yaml_keys(&overlay)?;

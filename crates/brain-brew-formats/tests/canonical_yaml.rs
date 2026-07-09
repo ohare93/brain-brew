@@ -102,6 +102,30 @@ tombstones: []
 }
 
 #[test]
+fn rejects_duplicate_note_field_keys_with_schema_path() {
+    let yaml = EXPECTED_CANONICAL_YAML.replace(
+        "      field.capital: Helsinki\n",
+        "      field.capital: Helsinki\n      field.capital: Helsingfors\n",
+    );
+
+    for error in [
+        canonical_yaml::from_str(&yaml).expect_err("duplicate note field is rejected"),
+        canonical_yaml::format_str(&yaml).expect_err("formatter rejects duplicate note field"),
+    ] {
+        let message = error.to_string();
+        assert!(
+            message.contains("duplicate key \"field.capital\""),
+            "{message}"
+        );
+        assert!(
+            message.contains("notes.note.finland.fields.field.capital"),
+            "{message}"
+        );
+        assert!(message.contains("line "), "{message}");
+    }
+}
+
+#[test]
 fn parses_formats_and_resolves_structured_message_fields() {
     let yaml = r#"deck:
   id: deck.structured-message
@@ -598,6 +622,27 @@ fn top_level_media_include_resolves_to_the_same_deck_as_inline_media() {
     let resolved_deck = canonical_yaml::from_str(&resolved).expect("resolved deck parses");
     let inline_deck = canonical_yaml::from_str(&inline).expect("inline deck parses");
     assert_eq!(resolved_deck, inline_deck);
+}
+
+#[test]
+fn top_level_media_include_rejects_duplicate_ids_before_materializing() {
+    let dir = temp_fixture_dir("brain-brew-media-include-duplicate");
+    let media = image_media_map_yaml();
+    std::fs::write(dir.join("media.yaml"), format!("{media}{media}"))
+        .expect("write duplicate media include");
+    let inline = image_deck_yaml("field.flag: !image media.flag.finland");
+    let source = deck_with_media_include(&inline, "media.yaml");
+
+    let error = source_includes::resolve_file_includes(&source, &dir.join("deck.yaml"), &dir, &[])
+        .expect_err("duplicate included media ID is rejected");
+    let message = error.to_string();
+
+    assert!(message.contains("media.yaml"), "{message}");
+    assert!(
+        message.contains("duplicate key \"media.flag.finland\""),
+        "{message}"
+    );
+    assert!(message.contains("media.flag.finland"), "{message}");
 }
 
 #[test]

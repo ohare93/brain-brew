@@ -559,6 +559,59 @@ target_adaptations:
 }
 
 #[test]
+fn rejects_duplicate_overlay_and_contextual_translation_keys_with_schema_paths() {
+    let cases = [
+        (
+            "overlay note field",
+            r#"id: overlay.patch.capital
+kind: patch
+notes:
+  note.finland:
+    intent: merge
+    fields:
+      field.capital:
+        intent: replace
+        value: Helsinki
+      field.capital:
+        intent: replace
+        value: Helsingfors
+"#,
+            "notes.note.finland.fields.field.capital",
+            "field.capital",
+        ),
+        (
+            "contextual translation source",
+            r#"id: overlay.translation.de
+kind: translation
+translations:
+  contextual:
+    notes.note.finland:
+      Finland: Finnland
+      Finland: Suomi
+"#,
+            "translations.contextual.notes.note.finland.Finland",
+            "Finland",
+        ),
+    ];
+
+    for (case, yaml, path, key) in cases {
+        for error in [
+            canonical_yaml::overlay_from_str(yaml)
+                .expect_err(&format!("{case}: decoder rejects duplicate")),
+            canonical_yaml::overlay_format_str(yaml)
+                .expect_err(&format!("{case}: formatter rejects duplicate")),
+        ] {
+            let message = error.to_string();
+            assert!(
+                message.contains(&format!("duplicate key {key:?}")),
+                "{case}: {message}"
+            );
+            assert!(message.contains(path), "{case}: {message}");
+        }
+    }
+}
+
+#[test]
 fn parses_upstream_ug_target_additions_as_blank_source_adaptations() {
     let overlay = canonical_yaml::overlay_from_str(
         r#"id: overlay.translation.cs

@@ -42,6 +42,7 @@ pub struct LockedSource {
 
 /// Parse a federation lock file from strict YAML.
 pub fn from_str(input: &str) -> Result<FederationLock, LockfileError> {
+    crate::strict_yaml::reject_duplicate_keys(input).map_err(LockfileError::Parse)?;
     let yaml: FederationLockYaml = serde_yaml::from_str(input).map_err(LockfileError::Parse)?;
     yaml.into_lock()
 }

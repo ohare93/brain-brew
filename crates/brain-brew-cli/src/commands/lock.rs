@@ -320,7 +320,7 @@ fn parse_lock_verify_args(args: &[String]) -> Result<LockVerifyArgs, String> {
 
 fn read_lock(path: &Path) -> Result<FederationLock, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    lockfile::from_str(&input).map_err(|error| error.to_string())
+    lockfile::from_str(&input).map_err(|error| format!("{}: {error}", path.display()))
 }
 
 fn read_lock_or_empty(path: &Path) -> Result<FederationLock, String> {

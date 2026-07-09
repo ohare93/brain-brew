@@ -2094,6 +2094,75 @@ fn fmt_rewrites_federation_lock_yaml_in_place() {
 }
 
 #[test]
+fn fmt_rejects_duplicate_dynamic_keys_without_changing_source_bytes() {
+    let dir = temp_dir("fmt-duplicate-dynamic-keys");
+    let cases = [
+        (
+            "deck.yaml",
+            SAMPLE_CANONICAL_YAML.replace(
+                "      field.capital: Helsinki\n",
+                "      field.capital: Helsinki\n      field.capital: Helsingfors\n",
+            ),
+            "notes.note.finland.fields.field.capital",
+            "field.capital",
+        ),
+        (
+            "overlay.yaml",
+            CAPITAL_OVERLAY_YAML.replace(
+                "      field.capital:\n",
+                "      field.capital:\n        intent: replace\n        value: Oslo\n        expected_base:\n          value: Helsinki\n      field.capital:\n",
+            ),
+            "notes.note.finland.fields.field.capital",
+            "field.capital",
+        ),
+        (
+            "brainbrew.yaml",
+            MANIFEST_YAML.replace(
+                "targets:\n  patched-via-dependency:\n",
+                "targets:\n  patched-via-dependency:\n    overlays: []\n  patched-via-dependency:\n",
+            ),
+            "targets.patched-via-dependency",
+            "patched-via-dependency",
+        ),
+        (
+            "brainbrew.lock",
+            LOCK_YAML.replace(
+                "packages:\n  anki-geo.ultimate-geography:\n",
+                "packages:\n  anki-geo.ultimate-geography:\n    manifest: duplicate.yaml\n    package:\n      version: 0.0.0\n    locked:\n      type: path\n      path: duplicate\n  anki-geo.ultimate-geography:\n",
+            ),
+            "packages.anki-geo.ultimate-geography",
+            "anki-geo.ultimate-geography",
+        ),
+        (
+            "media.yaml",
+            format!("{MEDIA_MAP_YAML}{MEDIA_MAP_YAML}"),
+            "media.flags-fi-png",
+            "media.flags-fi-png",
+        ),
+    ];
+
+    for (name, source, schema_path, key) in cases {
+        let path = dir.join(name);
+        fs::write(&path, &source).unwrap();
+
+        let output = run(["fmt", path.to_str().unwrap()]);
+
+        assert!(
+            !output.status.success(),
+            "{name}: formatter unexpectedly succeeded"
+        );
+        let error = stderr(&output);
+        assert!(error.contains(path.to_str().unwrap()), "{name}: {error}");
+        assert!(error.contains(schema_path), "{name}: {error}");
+        assert!(
+            error.contains(&format!("duplicate key {key:?}")),
+            "{name}: {error}"
+        );
+        assert_eq!(fs::read(&path).unwrap(), source.as_bytes(), "{name}");
+    }
+}
+
+#[test]
 fn compose_applies_overlay_files_in_order() {
     let dir = temp_dir("compose-overlay");
     let deck_path = dir.join("deck.yaml");
@@ -4579,6 +4648,107 @@ fn media_hash_updates_source_hashes_and_preserves_includes() {
     assert!(source.contains("description: !include content/description.md"));
     assert!(
         source.contains("sha256: 14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948")
+    );
+}
+
+#[test]
+fn media_mutators_reject_duplicate_keys_without_changing_source_bytes() {
+    let dir = temp_dir("media-mutators-duplicate-keys");
+    fs::create_dir_all(dir.join("media/flags")).unwrap();
+    fs::write(dir.join("media/flags/fi.png"), b"flag-bytes").unwrap();
+    fs::write(dir.join("brainbrew.yaml"), SIMPLE_MEDIA_MANIFEST_YAML).unwrap();
+    let source = MEDIA_CANONICAL_YAML.replace(
+        "      field.flag: '<img src=\"flags/fi.png\">'\n",
+        "      field.flag: '<img src=\"flags/fi.png\">'\n      field.flag: '<img src=\"flags/other.png\">'\n",
+    );
+
+    let deck_path = dir.join("deck.yaml");
+    let manifest_path = dir.join("brainbrew.yaml");
+    let media_root = dir.join("media");
+    let assert_rejected_unchanged = |output: std::process::Output| {
+        assert!(!output.status.success(), "mutator unexpectedly succeeded");
+        let error = stderr(&output);
+        assert!(error.contains(deck_path.to_str().unwrap()), "{error}");
+        assert!(
+            error.contains("notes.note.finland.fields.field.flag"),
+            "{error}"
+        );
+        assert!(error.contains("duplicate key \"field.flag\""), "{error}");
+        assert_eq!(fs::read(&deck_path).unwrap(), source.as_bytes());
+    };
+
+    fs::write(&deck_path, &source).unwrap();
+    assert_rejected_unchanged(run([
+        "media",
+        "hash",
+        "--manifest",
+        manifest_path.to_str().unwrap(),
+        "--all-targets",
+        "--media-root",
+        media_root.to_str().unwrap(),
+    ]));
+
+    fs::write(&deck_path, &source).unwrap();
+    assert_rejected_unchanged(run([
+        "media",
+        "images-to-refs",
+        "--manifest",
+        manifest_path.to_str().unwrap(),
+        "--all-targets",
+    ]));
+}
+
+#[test]
+fn media_hash_preflights_all_sources_before_writing_on_duplicate_failure() {
+    let dir = temp_dir("media-hash-duplicate-overlay-preflight");
+    fs::create_dir_all(dir.join("media/flags")).unwrap();
+    fs::write(dir.join("media/flags/fi.png"), b"flag-bytes").unwrap();
+    let deck = MEDIA_CANONICAL_YAML.replace(
+        "14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948",
+        "''",
+    );
+    let overlay = r#"id: overlay.patch.duplicate
+kind: patch
+field_fills:
+  note.finland:
+    field.capital: Helsinki
+    field.capital: Helsingfors
+"#;
+    let manifest = r#"base: deck.yaml
+overlays:
+  overlay.patch.duplicate:
+    file: overlay.yaml
+    kind: patch
+targets:
+  duplicate:
+    overlays:
+      - overlay.patch.duplicate
+"#;
+    fs::write(dir.join("deck.yaml"), &deck).unwrap();
+    fs::write(dir.join("overlay.yaml"), overlay).unwrap();
+    fs::write(dir.join("brainbrew.yaml"), manifest).unwrap();
+
+    let output = run([
+        "media",
+        "hash",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+        "--media-root",
+        dir.join("media").to_str().unwrap(),
+    ]);
+
+    assert!(!output.status.success());
+    let error = stderr(&output);
+    assert!(error.contains("overlay.yaml"), "{error}");
+    assert!(
+        error.contains("field_fills.note.finland.field.capital"),
+        "{error}"
+    );
+    assert_eq!(fs::read(dir.join("deck.yaml")).unwrap(), deck.as_bytes());
+    assert_eq!(
+        fs::read(dir.join("overlay.yaml")).unwrap(),
+        overlay.as_bytes()
     );
 }
 

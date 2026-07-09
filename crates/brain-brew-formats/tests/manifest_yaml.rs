@@ -750,6 +750,65 @@ targets:
 }
 
 #[test]
+fn rejects_duplicate_manifest_dynamic_map_keys_with_schema_paths() {
+    let cases = [
+        (
+            "overlay",
+            r#"base: deck.yaml
+overlays:
+  overlay.patch.one:
+    file: one.yaml
+  overlay.patch.one:
+    file: two.yaml
+"#,
+            "overlays.overlay.patch.one",
+            "overlay.patch.one",
+        ),
+        (
+            "target",
+            r#"base: deck.yaml
+targets:
+  release:
+    overlays: []
+  release:
+    overlays: []
+"#,
+            "targets.release",
+            "release",
+        ),
+        (
+            "language target label",
+            r#"base: deck.yaml
+languages:
+  de:
+    display_name: German
+    primary_target: standard
+    targets:
+      standard: de-standard
+      standard: de-release
+"#,
+            "languages.de.targets.standard",
+            "standard",
+        ),
+    ];
+
+    for (case, yaml, path, key) in cases {
+        let error = manifest::from_str(yaml)
+            .expect_err(&format!("{case}: duplicate dynamic key is rejected"));
+        let message = error.to_string();
+        assert!(
+            message.contains(&format!("duplicate key {key:?}")),
+            "{case}: {message}"
+        );
+        assert!(message.contains(path), "{case}: {message}");
+        assert!(
+            manifest::format_str(yaml).is_err(),
+            "{case}: formatter must reject duplicate"
+        );
+    }
+}
+
+#[test]
 fn validates_translation_profile_category_references() {
     let error = manifest::from_str(
         r#"

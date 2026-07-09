@@ -11,6 +11,7 @@ use crate::yaml_scalar::{key as yaml_key, scalar as yaml_scalar};
 /// The root mapping is the same shape as the canonical deck's inline `media:`
 /// section: stable media ID keys mapped to `{ path, sha256 }` values.
 pub fn from_str(input: &str) -> Result<BTreeMap<StableId, MediaReference>, MediaMapYamlError> {
+    crate::strict_yaml::reject_duplicate_keys(input).map_err(MediaMapYamlError::Parse)?;
     let file: BTreeMap<String, MediaYaml> =
         serde_yaml::from_str(input).map_err(MediaMapYamlError::Parse)?;
     file.into_iter()

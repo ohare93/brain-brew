@@ -11,6 +11,7 @@ pub mod manifest;
 pub mod media;
 pub mod media_map;
 pub mod source_includes;
+pub mod strict_yaml;
 pub mod yaml_scalar;
 
 pub use brain_brew_core as core;

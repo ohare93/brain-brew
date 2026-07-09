@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use brain_brew_formats::{media, media_map};
+use brain_brew_formats::{media, media_map, strict_yaml};
 use serde_yaml::{Mapping, Value};
 
 use crate::help;
@@ -48,8 +48,7 @@ fn run_hash(args: &[String]) -> Result<(), String> {
     for path in source_files {
         let input =
             fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
-        let mut value = serde_yaml::from_str::<Value>(&input)
-            .map_err(|error| format!("{}: {error}", path.display()))?;
+        let mut value = parse_yaml_value(&input, &path)?;
         let (updated_path, updates) =
             update_media_hashes_for_source(&path, &mut value, &media_root)?;
         if updates == 0 {
@@ -101,8 +100,7 @@ fn run_images_to_refs(args: &[String]) -> Result<(), String> {
     for path in source_files {
         let input =
             fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
-        let mut value = serde_yaml::from_str::<Value>(&input)
-            .map_err(|error| format!("{}: {error}", path.display()))?;
+        let mut value = parse_yaml_value(&input, &path)?;
         let before = report.converted;
         migrate_image_fields_in_source(&mut value, &media_path_lookup, &mut report);
         if report.converted == before {
@@ -318,8 +316,7 @@ fn update_media_hashes_for_source(
             .map_err(|error| format!("{}: {error}", media_path.display()))?;
         media_map::from_str(&input)
             .map_err(|error| format!("{}: {error}", media_path.display()))?;
-        let mut media_value = serde_yaml::from_str::<Value>(&input)
-            .map_err(|error| format!("{}: {error}", media_path.display()))?;
+        let mut media_value = parse_yaml_value(&input, &media_path)?;
         let Some(media_entries) = media_value.as_mapping_mut() else {
             return Err(format!(
                 "{}: media map root must be a mapping",
@@ -397,11 +394,16 @@ fn media_path_lookup_from_sources(
     for path in source_files {
         let input =
             fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-        let value = serde_yaml::from_str::<Value>(&input)
-            .map_err(|error| format!("{}: {error}", path.display()))?;
+        let value = parse_yaml_value(&input, path)?;
         collect_media_paths_from_source(path, &value, &mut lookup)?;
     }
     Ok(lookup)
+}
+
+fn parse_yaml_value(input: &str, path: &Path) -> Result<Value, String> {
+    strict_yaml::reject_duplicate_keys(input)
+        .map_err(|error| format!("{}: {error}", path.display()))?;
+    serde_yaml::from_str(input).map_err(|error| format!("{}: {error}", path.display()))
 }
 
 fn collect_media_paths_from_source(
@@ -418,8 +420,7 @@ fn collect_media_paths_from_source(
             .map_err(|error| format!("{}: {error}", media_path.display()))?;
         media_map::from_str(&input)
             .map_err(|error| format!("{}: {error}", media_path.display()))?;
-        let media_value = serde_yaml::from_str::<Value>(&input)
-            .map_err(|error| format!("{}: {error}", media_path.display()))?;
+        let media_value = parse_yaml_value(&input, &media_path)?;
         let Some(media_entries) = media_value.as_mapping() else {
             return Err(format!(
                 "{}: media map root must be a mapping",

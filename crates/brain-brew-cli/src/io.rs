@@ -68,7 +68,7 @@ fn read_deck_from_package(
 fn read_deck_with_context(path: &Path, context: &SourceContext) -> Result<CanonicalDeck, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
     let input = resolve_source_includes(&input, path, context)?;
-    canonical_yaml::from_str(&input).map_err(|error| error.to_string())
+    canonical_yaml::from_str(&input).map_err(|error| format!("{}: {error}", path.display()))
 }
 
 fn read_overlay_from_package(
@@ -88,12 +88,12 @@ fn read_overlay_from_package(
 fn read_overlay_with_context(path: &Path, context: &SourceContext) -> Result<Overlay, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
     let input = resolve_source_includes(&input, path, context)?;
-    canonical_yaml::overlay_from_str(&input).map_err(|error| error.to_string())
+    canonical_yaml::overlay_from_str(&input).map_err(|error| format!("{}: {error}", path.display()))
 }
 
 pub(crate) fn read_manifest(path: &Path) -> Result<manifest::FederatedDeckManifest, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    manifest::from_str(&input).map_err(|error| error.to_string())
+    manifest::from_str(&input).map_err(|error| format!("{}: {error}", path.display()))
 }
 
 pub(crate) fn read_deck_and_overlays(

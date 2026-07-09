@@ -18,11 +18,11 @@ use brain_brew_core::{
     TranslationCoverageCategory, TranslationCoverageEntry, TranslationDictionary,
     validate_deck_content,
 };
-use brain_brew_formats::canonical_yaml;
 use brain_brew_formats::manifest::{
     self, BuildTarget, FederatedDeckManifest, LanguageManifestEntry, MetadataCategory,
     OverlayManifestEntry, TargetExports,
 };
+use brain_brew_formats::{canonical_yaml, strict_yaml};
 use include_dir::{Dir, include_dir};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -4113,6 +4113,8 @@ fn apply_staged_source_edits(
         .map_err(|error| format!("{}: {error}", base_file.display()))?;
     let raw_has_includes = raw_deck_yaml.contains("!include");
     let mut raw_deck_value = if raw_has_includes {
+        strict_yaml::reject_duplicate_keys(&raw_deck_yaml)
+            .map_err(|error| format!("{}: {error}", base_file.display()))?;
         Some(
             serde_yaml::from_str::<serde_yaml::Value>(&raw_deck_yaml).map_err(|error| {
                 format!(
@@ -4531,6 +4533,12 @@ fn source_apply_writes(
             None => canonical_yaml::to_string(modified_base).map_err(|error| error.to_string())?,
         };
         if plan.deck_yaml_output.is_some() {
+            strict_yaml::reject_duplicate_keys(&output).map_err(|error| {
+                format!(
+                    "invalid generated source deck {}: {error}",
+                    base_file.display()
+                )
+            })?;
             serde_yaml::from_str::<serde_yaml::Value>(&output).map_err(|error| {
                 format!(
                     "invalid generated source deck {}: {error}",
