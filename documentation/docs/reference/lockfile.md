@@ -74,7 +74,7 @@ locked:
   nar_hash: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 ```
 
-The URL identifies where the archive was obtained; the mandatory tree hash authenticates the extracted source tree.
+The URL identifies where the archive was obtained; the mandatory tree hash authenticates the extracted source tree. Remote Git and tarball URLs must use HTTPS. `file://` and plain filesystem paths are explicit local archive inputs; HTTP cannot be selected by lock YAML.
 
 ## Required tree hash
 
@@ -92,7 +92,31 @@ A cached tree is revalidated and rehashed before every use. A mismatching or pol
 
 Fetched and locked package trees contain **regular files and directories only**. Brain Brew rejects every symlink, including links whose text appears to stay inside the package. It also rejects filesystem hard links and special files, and rejects archive hard links, devices, FIFOs, sparse/continuous/unknown entries, unsafe raw paths, and duplicate or colliding normalized targets. This policy is identical for local path snapshots, GitHub source archives, tarballs, staging trees, and warm cache trees.
 
-Archives are inspected entry-by-entry and are never passed to a general-purpose unpack operation. Files are created in a private temporary tree with create-new semantics, ownership and set-ID metadata are discarded, and permissions are normalized to `0644`/`0755`. The complete tree is validated before hashing. Cache publication copies and revalidates that exact tree in the cache filesystem, checks its hash again, and atomically renames it to the content-addressed destination while holding a publication lock. A failed extraction or publication removes its private temporary state and does not replace an existing valid cache entry.
+Archives are inspected entry-by-entry and are never passed to a general-purpose unpack operation. Download bytes stream to a bounded private temporary file; gzip output streams to a second bounded tar file; raw metadata preflight and extraction then reopen that file without retaining the archive in memory. Files are created in a private temporary tree with create-new semantics, ownership and set-ID metadata are discarded, and permissions are normalized to `0644`/`0755`. PAX/GNU metadata, duplicate targets, and metadata entries are included in the entry/decompressed accounting. The complete tree is validated before hashing. Cache publication copies and revalidates that exact tree in the cache filesystem, checks its hash again, and atomically renames it to the content-addressed destination while holding a publication lock. A failed download, decompression, extraction, or publication removes its private temporary state and does not replace an existing valid cache entry.
+
+## Fetch policy defaults
+
+All GitHub API, GitHub codeload, and remote tarball requests use one non-environment-configurable `FetchPolicy`:
+
+| Budget | Default |
+|---|---:|
+| connect timeout | 10 seconds |
+| individual socket read timeout | 30 seconds |
+| monotonic total download/decompression deadline | 120 seconds |
+| redirects | 5 |
+| compressed/downloaded response | 64 MiB |
+| GitHub JSON response | 1 MiB |
+| decompressed tar stream | 512 MiB |
+| one regular file | 64 MiB |
+| physical archive entries, including metadata | 20,000 |
+| total expanded regular files | 256 MiB |
+| path bytes / components | 1,024 / 32 |
+| one PAX/GNU metadata entry | 64 KiB |
+| decompressed/compressed expansion ratio | 200:1 |
+
+These limits leave substantial headroom over the maintained Ultimate Geography source fixture (about 1 MiB total, 119 files, and a largest source file below 200 KiB) while bounding archives that are far outside the current source-package use case. There are no hidden environment overrides or CLI limit switches. Code-level policy injection is reserved for deterministic adapter tests.
+
+Redirects are followed manually. Every hop must remain HTTPS, URL credentials are forbidden, and all authorization headers are stripped. HTTPS cross-host redirects are allowed for content-delivery networks, subject to the same redirect and total-deadline budgets. `Content-Length` is rejected early when oversized but is never trusted: missing, false, and chunked lengths are bounded by bytes actually streamed.
 
 ### Symlink migration
 

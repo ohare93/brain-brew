@@ -269,6 +269,7 @@ dependencies = [
  "tokio",
  "tower-http",
  "ureq",
+ "url",
 ]
 
 [[package]]

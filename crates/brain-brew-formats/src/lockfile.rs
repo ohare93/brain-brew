@@ -295,6 +295,7 @@ fn validate_original_source(
             rev,
         } => {
             validate_nonempty(package_id, "original.url", url)?;
+            validate_remote_url(package_id, "original.url", url)?;
             if reference.is_some() && rev.is_some() {
                 return Err(invalid_package(
                     package_id,
@@ -309,7 +310,10 @@ fn validate_original_source(
             }
             Ok(())
         }
-        OriginalSource::Tarball { url } => validate_nonempty(package_id, "original.url", url),
+        OriginalSource::Tarball { url } => {
+            validate_nonempty(package_id, "original.url", url)?;
+            validate_archive_url(package_id, "original.url", url)
+        }
     }
 }
 
@@ -321,6 +325,7 @@ fn validate_locked_source(package_id: &str, source: &LockedSource) -> Result<(),
         }
         LockedSource::Git { url, rev, nar_hash } => {
             validate_nonempty(package_id, "locked.url", url)?;
+            validate_remote_url(package_id, "locked.url", url)?;
             if !is_full_git_commit(rev) {
                 return Err(invalid_package(
                     package_id,
@@ -331,8 +336,31 @@ fn validate_locked_source(package_id: &str, source: &LockedSource) -> Result<(),
         }
         LockedSource::Tarball { url, nar_hash } => {
             validate_nonempty(package_id, "locked.url", url)?;
+            validate_archive_url(package_id, "locked.url", url)?;
             validate_nar_hash(package_id, nar_hash)
         }
+    }
+}
+
+fn validate_remote_url(package_id: &str, field: &str, value: &str) -> Result<(), LockfileError> {
+    if value.starts_with("https://") {
+        Ok(())
+    } else {
+        Err(invalid_package(
+            package_id,
+            format!("{field} must use HTTPS; HTTP and other remote schemes are forbidden"),
+        ))
+    }
+}
+
+fn validate_archive_url(package_id: &str, field: &str, value: &str) -> Result<(), LockfileError> {
+    if value.starts_with("https://") || value.starts_with("file://") || !value.contains("://") {
+        Ok(())
+    } else {
+        Err(invalid_package(
+            package_id,
+            format!("{field} must use HTTPS or an explicit local file path"),
+        ))
     }
 }
 

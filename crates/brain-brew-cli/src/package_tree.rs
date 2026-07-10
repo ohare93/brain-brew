@@ -6,11 +6,14 @@
 
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Cursor, Read};
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use brain_brew_formats::safe_relative_path::SafeRelativePath;
 use tar::{Archive, EntryType};
+
+use crate::fetch_policy::{FetchPolicy, budget_error, check_total_deadline};
 
 pub(crate) fn copy_filtered(source: &Path, destination: &Path) -> Result<(), String> {
     let (canonical_source, source_metadata) = establish_root(source, "source package tree")?;
@@ -50,54 +53,131 @@ pub(crate) fn validate(root: &Path, tree_name: &str) -> Result<(), String> {
     validate_directory(root, &canonical_root, root, &root_metadata, tree_name)
 }
 
-pub(crate) fn extract_tar<R: Read>(mut reader: R, destination: &Path) -> Result<(), String> {
-    let mut bytes = Vec::new();
-    reader
-        .read_to_end(&mut bytes)
-        .map_err(|error| format!("failed to read tar archive: {error}"))?;
-    preflight_raw_archive(&bytes)?;
+pub(crate) fn extract_tar(
+    tar_path: &Path,
+    destination: &Path,
+    policy: &FetchPolicy,
+    source: &str,
+    started: Instant,
+) -> Result<(), String> {
+    preflight_raw_archive(tar_path, policy, source, started)
+        .map_err(|error| source_error(source, error))?;
 
-    create_private_directory(destination)?;
-    let result = extract_preflighted_archive(&bytes, destination)
-        .and_then(|()| validate(destination, "extracted package tree"));
+    create_private_directory(destination).map_err(|error| source_error(source, error))?;
+    let result = extract_preflighted_archive(tar_path, destination, policy, source, started)
+        .and_then(|()| validate(destination, "extracted package tree"))
+        .map_err(|error| source_error(source, error));
     if result.is_err() {
         let _ = fs::remove_dir_all(destination);
     }
     result
 }
 
-fn preflight_raw_archive(bytes: &[u8]) -> Result<(), String> {
-    let mut archive = Archive::new(Cursor::new(bytes));
+fn source_error(source: &str, error: String) -> String {
+    if error.starts_with("package source ") {
+        error
+    } else {
+        format!("package source {source:?}: {error}")
+    }
+}
+
+fn preflight_raw_archive(
+    tar_path: &Path,
+    policy: &FetchPolicy,
+    source: &str,
+    started: Instant,
+) -> Result<(), String> {
+    let input = File::open(tar_path).map_err(|error| {
+        format!("package source {source:?}: failed to open staged tar: {error}")
+    })?;
+    let mut archive = Archive::new(input);
     let entries = archive
         .entries()
         .map_err(|error| format!("failed to inspect tar archive: {error}"))?
         .raw(true);
+    let mut entry_count = 0_u64;
+    let mut expanded_regular_bytes = 0_u64;
     for (index, entry) in entries.enumerate() {
-        let mut entry = entry
-            .map_err(|error| format!("failed to inspect raw tar entry {}: {error}", index + 1))?;
+        check_total_deadline(source, policy, started)?;
+        let mut entry = entry.map_err(|error| {
+            format!(
+                "package source {source:?}: failed to inspect raw tar entry {}: {error}",
+                index + 1
+            )
+        })?;
+        entry_count += 1;
+        if entry_count > policy.max_archive_entries {
+            return Err(budget_error(
+                source,
+                "archive_entry_count",
+                entry_count,
+                policy.max_archive_entries,
+            ));
+        }
         let entry_type = entry.header().entry_type();
+        let entry_size = entry.header().size().map_err(|error| {
+            format!(
+                "package source {source:?}: invalid size in tar entry {}: {error}",
+                index + 1
+            )
+        })?;
+        if entry_type == EntryType::Regular {
+            if entry_size > policy.max_regular_file_bytes {
+                return Err(budget_error(
+                    source,
+                    "regular_file_bytes",
+                    entry_size,
+                    policy.max_regular_file_bytes,
+                ));
+            }
+            expanded_regular_bytes = expanded_regular_bytes.saturating_add(entry_size);
+            if expanded_regular_bytes > policy.max_expanded_regular_bytes {
+                return Err(budget_error(
+                    source,
+                    "expanded_regular_bytes",
+                    expanded_regular_bytes,
+                    policy.max_expanded_regular_bytes,
+                ));
+            }
+        } else if matches!(entry_type, EntryType::GNULongName | EntryType::XHeader)
+            && entry_size > policy.max_archive_metadata_bytes
+        {
+            return Err(budget_error(
+                source,
+                "archive_metadata_bytes",
+                entry_size,
+                policy.max_archive_metadata_bytes,
+            ));
+        }
         match entry_type {
             EntryType::Regular | EntryType::Directory => {
                 validate_archive_path(
                     entry.header().path_bytes().as_ref(),
                     entry_type == EntryType::Directory,
                     index + 1,
+                    policy,
+                    source,
                 )?;
             }
             EntryType::GNULongName => {
-                let mut path = Vec::new();
-                entry.read_to_end(&mut path).map_err(|error| {
-                    format!(
-                        "failed to inspect GNU long-name tar entry {}: {error}",
-                        index + 1
-                    )
-                })?;
+                let mut path = Vec::with_capacity(entry_size as usize);
+                entry
+                    .take(policy.max_archive_metadata_bytes + 1)
+                    .read_to_end(&mut path)
+                    .map_err(|error| {
+                        format!(
+                            "package source {source:?}: failed to inspect GNU long-name tar entry {}: {error}",
+                            index + 1
+                        )
+                    })?;
                 while matches!(path.last(), Some(0 | b'\n')) {
                     path.pop();
                 }
-                validate_archive_path(&path, true, index + 1)?;
+                validate_archive_path(&path, true, index + 1, policy, source)?;
             }
-            EntryType::XHeader => validate_pax_path_metadata(&mut entry, index + 1)?,
+            EntryType::XHeader => {
+                validate_pax_path_metadata(&mut entry, index + 1, policy, source)?
+            }
             EntryType::Link => return Err(rejected_archive_type(index + 1, "hard link")),
             EntryType::Symlink => return Err(rejected_archive_type(index + 1, "symlink")),
             EntryType::Char | EntryType::Block => {
@@ -119,6 +199,8 @@ fn preflight_raw_archive(bytes: &[u8]) -> Result<(), String> {
 fn validate_pax_path_metadata<R: Read>(
     entry: &mut tar::Entry<'_, R>,
     index: usize,
+    policy: &FetchPolicy,
+    source: &str,
 ) -> Result<(), String> {
     let extensions = entry
         .pax_extensions()
@@ -130,7 +212,7 @@ fn validate_pax_path_metadata<R: Read>(
         let extension = extension
             .map_err(|error| format!("failed to inspect PAX tar entry {index}: {error}"))?;
         match extension.key_bytes() {
-            b"path" => validate_archive_path(extension.value_bytes(), true, index)?,
+            b"path" => validate_archive_path(extension.value_bytes(), true, index, policy, source)?,
             key if key.starts_with(b"GNU.sparse.") => {
                 return Err(rejected_archive_type(index, "sparse metadata"));
             }
@@ -145,14 +227,24 @@ fn validate_pax_path_metadata<R: Read>(
     Ok(())
 }
 
-fn extract_preflighted_archive(bytes: &[u8], destination: &Path) -> Result<(), String> {
-    let mut archive = Archive::new(Cursor::new(bytes));
+fn extract_preflighted_archive(
+    tar_path: &Path,
+    destination: &Path,
+    policy: &FetchPolicy,
+    source: &str,
+    started: Instant,
+) -> Result<(), String> {
+    let input = File::open(tar_path).map_err(|error| {
+        format!("package source {source:?}: failed to reopen staged tar: {error}")
+    })?;
+    let mut archive = Archive::new(input);
     let entries = archive
         .entries()
         .map_err(|error| format!("failed to inspect tar archive: {error}"))?;
     let mut targets = BTreeMap::<PathBuf, EntryType>::new();
 
     for (index, entry) in entries.enumerate() {
+        check_total_deadline(source, policy, started)?;
         let mut entry =
             entry.map_err(|error| format!("failed to inspect tar entry {}: {error}", index + 1))?;
         let entry_type = entry.header().entry_type();
@@ -166,6 +258,8 @@ fn extract_preflighted_archive(bytes: &[u8], destination: &Path) -> Result<(), S
             entry.path_bytes().as_ref(),
             entry_type == EntryType::Directory,
             index + 1,
+            policy,
+            source,
         )?;
         reject_target_collision(&targets, relative.as_path(), entry_type, index + 1)?;
         targets.insert(relative.clone(), entry_type);
@@ -197,8 +291,15 @@ fn extract_preflighted_archive(bytes: &[u8], destination: &Path) -> Result<(), S
                     target.display()
                 )
             })?;
-            io::copy(&mut entry, &mut output)
-                .map_err(|error| format!("failed to extract {}: {error}", target.display()))?;
+            let copied = copy_archive_file(&mut entry, &mut output, policy, source, started)?;
+            if copied > policy.max_regular_file_bytes {
+                return Err(budget_error(
+                    source,
+                    "regular_file_bytes",
+                    copied,
+                    policy.max_regular_file_bytes,
+                ));
+            }
             output
                 .sync_all()
                 .map_err(|error| format!("failed to sync {}: {error}", target.display()))?;
@@ -206,6 +307,39 @@ fn extract_preflighted_archive(bytes: &[u8], destination: &Path) -> Result<(), S
         }
     }
     Ok(())
+}
+
+fn copy_archive_file(
+    input: &mut impl Read,
+    output: &mut impl io::Write,
+    policy: &FetchPolicy,
+    source: &str,
+    started: Instant,
+) -> Result<u64, String> {
+    let mut copied = 0_u64;
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        check_total_deadline(source, policy, started)?;
+        let count = input.read(&mut buffer).map_err(|error| {
+            format!("package source {source:?}: archive entry read failed: {error}")
+        })?;
+        if count == 0 {
+            break;
+        }
+        copied = copied.saturating_add(count as u64);
+        if copied > policy.max_regular_file_bytes {
+            return Err(budget_error(
+                source,
+                "regular_file_bytes",
+                copied,
+                policy.max_regular_file_bytes,
+            ));
+        }
+        output.write_all(&buffer[..count]).map_err(|error| {
+            format!("package source {source:?}: archive entry write failed: {error}")
+        })?;
+    }
+    Ok(copied)
 }
 
 fn reject_target_collision(
@@ -242,15 +376,31 @@ fn reject_target_collision(
     Ok(())
 }
 
-fn validate_archive_path(raw: &[u8], directory: bool, index: usize) -> Result<(), String> {
-    validated_archive_relative(raw, directory, index).map(|_| ())
+fn validate_archive_path(
+    raw: &[u8],
+    directory: bool,
+    index: usize,
+    policy: &FetchPolicy,
+    source: &str,
+) -> Result<(), String> {
+    validated_archive_relative(raw, directory, index, policy, source).map(|_| ())
 }
 
 fn validated_archive_relative(
     raw: &[u8],
     directory: bool,
     index: usize,
+    policy: &FetchPolicy,
+    source: &str,
 ) -> Result<PathBuf, String> {
+    if raw.len() > policy.max_archive_path_bytes {
+        return Err(budget_error(
+            source,
+            "archive_path_bytes",
+            raw.len(),
+            policy.max_archive_path_bytes,
+        ));
+    }
     let raw = std::str::from_utf8(raw).map_err(|_| {
         format!("archive package tree policy rejected non-UTF-8 archive path in entry {index}")
     })?;
@@ -264,6 +414,15 @@ fn validated_archive_relative(
             "archive package tree policy rejected archive path {raw:?} in entry {index}: {error}"
         )
     })?;
+    let depth = safe.as_path().components().count();
+    if depth > policy.max_archive_path_depth {
+        return Err(budget_error(
+            source,
+            "archive_path_depth",
+            depth,
+            policy.max_archive_path_depth,
+        ));
+    }
     Ok(safe.as_path().to_path_buf())
 }
 
@@ -654,4 +813,94 @@ fn normalize_file_permissions(path: &Path, _executable: bool) -> Result<(), Stri
 pub(crate) fn should_skip(name: &str) -> bool {
     matches!(name, ".git" | ".jj" | ".hg" | ".svn" | "target" | "result")
         || name.starts_with("result-")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tar::{Builder, Header};
+
+    #[test]
+    fn archive_preflight_enforces_entry_file_total_and_path_budgets() {
+        assert_budget(
+            &[("one", b"12345".as_slice()), ("two", b"x".as_slice())],
+            FetchPolicy {
+                max_regular_file_bytes: 4,
+                ..FetchPolicy::default()
+            },
+            "regular_file_bytes",
+        );
+        assert_budget(
+            &[("one", b"1"), ("two", b"2")],
+            FetchPolicy {
+                max_archive_entries: 1,
+                ..FetchPolicy::default()
+            },
+            "archive_entry_count",
+        );
+        assert_budget(
+            &[("one", b"123"), ("two", b"456")],
+            FetchPolicy {
+                max_expanded_regular_bytes: 5,
+                ..FetchPolicy::default()
+            },
+            "expanded_regular_bytes",
+        );
+        assert_budget(
+            &[("one/two/three", b"x")],
+            FetchPolicy {
+                max_archive_path_depth: 2,
+                ..FetchPolicy::default()
+            },
+            "archive_path_depth",
+        );
+        assert_budget(
+            &[("long-name", b"x")],
+            FetchPolicy {
+                max_archive_path_bytes: 4,
+                ..FetchPolicy::default()
+            },
+            "archive_path_bytes",
+        );
+        assert_budget(
+            &[("one", b"x")],
+            FetchPolicy {
+                total_timeout: std::time::Duration::ZERO,
+                ..FetchPolicy::default()
+            },
+            "total_timeout",
+        );
+    }
+
+    fn assert_budget(entries: &[(&str, &[u8])], policy: FetchPolicy, expected: &str) {
+        let root = tempfile::tempdir().unwrap();
+        let tar_path = root.path().join("fixture.tar");
+        let output = File::create(&tar_path).unwrap();
+        let mut builder = Builder::new(output);
+        for (path, bytes) in entries {
+            let mut header = Header::new_gnu();
+            header.set_path(path).unwrap();
+            header.set_size(bytes.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            builder.append(&header, *bytes).unwrap();
+        }
+        builder.finish().unwrap();
+        let destination = root.path().join("out");
+        let error = extract_tar(
+            &tar_path,
+            &destination,
+            &policy,
+            "fixture://archive",
+            Instant::now(),
+        )
+        .expect_err("archive exceeds its injected budget");
+        assert!(error.contains(expected), "{error}");
+        assert!(error.contains("current="), "{error}");
+        assert!(error.contains("limit="), "{error}");
+        assert!(
+            !destination.exists(),
+            "failed extraction must clean staging"
+        );
+    }
 }

@@ -5,6 +5,7 @@ use std::process;
 
 mod args;
 mod commands;
+mod fetch_policy;
 mod help;
 mod io;
 mod media_assets;

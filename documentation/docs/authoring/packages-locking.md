@@ -77,6 +77,8 @@ Version 1 locks are insecure and rejected rather than silently interpreted. Move
 
 Package snapshots use a reject-all-symlinks policy for path, GitHub, and tarball sources. Only regular files and directories may enter staging or the content-addressed cache; hard links and special entries are rejected too. If an older package or cache contains a symlink, replace it with real package-owned content, remove the rejected cache entry if the diagnostic requests that, and rerun `brainbrew lock update`. Even an apparently contained symlink is intentionally rejected.
 
+Remote sources are HTTPS-only. Brain Brew bounds redirects, connect/read/total time, downloaded and decompressed bytes, expansion ratio, entry count, individual and total regular-file bytes, metadata, and path size/depth. Downloads and decompressed tar streams use private temporary files rather than unbounded memory, and failures occur before cache publication. See [Lock file reference](../reference/lockfile.md#fetch-policy-defaults) for exact defaults and rationale.
+
 ## Review after updates
 
 When upstream changes, rerun:

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
-use std::io::{Cursor, Read};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
@@ -15,15 +15,14 @@ use fs2::FileExt as _;
 use nix_nar::Encoder;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use tempfile::TempDir;
+use tempfile::{NamedTempFile, TempDir};
 
+use crate::fetch_policy::{self, FetchPolicy, budget_error};
 use crate::help;
 use crate::io::read_manifest;
 use crate::output;
 use crate::package_tree;
 use crate::path_authorization::PathAuthorizer;
-
-const USER_AGENT: &str = concat!("brainbrew/", env!("CARGO_PKG_VERSION"));
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -49,7 +48,7 @@ fn update(args: &[String]) -> Result<(), String> {
     // or package manifest is loaded. This also makes v1 migration fail early.
     let mut lock = read_lock_or_empty(&args.lock_path)?;
     let fetch_requested = args.source.to_fetch_source()?;
-    let fetched = fetch_source(&fetch_requested, None)?;
+    let fetched = fetch_source(&fetch_requested, None, &FetchPolicy::default())?;
     let requested = args.source.to_requested_source(&args.lock_path)?;
     let package_manifest_raw = args
         .package_manifest
@@ -463,7 +462,7 @@ fn fetch_locked_source_with_mode(
         },
         LockedSource::Tarball { url, .. } => RequestedSource::Tarball { url: url.clone() },
     };
-    fetch_source(&requested, Some(expected_hash))
+    fetch_source(&requested, Some(expected_hash), &FetchPolicy::default())
         .map_err(|error| format!("locked package {package_id}: {error}"))
 }
 
@@ -500,19 +499,21 @@ pub(crate) fn locked_package_manifest_paths(lock_path: &Path) -> Result<Vec<Path
 fn fetch_source(
     source: &RequestedSource,
     expected_hash: Option<&str>,
+    policy: &FetchPolicy,
 ) -> Result<FetchedSource, String> {
     match source {
         RequestedSource::Path { path } => {
             snapshot_source_tree(Path::new(path), expected_hash, None)
         }
-        RequestedSource::Git { .. } => fetch_git_source(source, expected_hash),
-        RequestedSource::Tarball { url } => fetch_tarball_source(url, expected_hash, None),
+        RequestedSource::Git { .. } => fetch_git_source(source, expected_hash, policy),
+        RequestedSource::Tarball { url } => fetch_tarball_source(url, expected_hash, None, policy),
     }
 }
 
 fn fetch_git_source(
     source: &RequestedSource,
     expected_hash: Option<&str>,
+    policy: &FetchPolicy,
 ) -> Result<FetchedSource, String> {
     let RequestedSource::Git {
         url,
@@ -529,26 +530,32 @@ fn fetch_git_source(
     };
     let rev = match rev {
         Some(rev) if lockfile::is_full_git_commit(rev) => rev.clone(),
-        Some(rev) => resolve_github_rev(&repo, Some(rev))?,
-        None => resolve_github_rev(&repo, reference.as_deref())?,
+        Some(rev) => resolve_github_rev(&repo, Some(rev), policy)?,
+        None => resolve_github_rev(&repo, reference.as_deref(), policy)?,
     };
     let tarball = repo.codeload_tarball_url(&rev);
-    fetch_tarball_source(&tarball, expected_hash, Some(rev))
+    fetch_tarball_source(&tarball, expected_hash, Some(rev), policy)
 }
 
 fn fetch_tarball_source(
     url: &str,
     expected_hash: Option<&str>,
     rev: Option<String>,
+    policy: &FetchPolicy,
 ) -> Result<FetchedSource, String> {
     if let Some(cached) = cached_source(expected_hash)? {
         return Ok(FetchedSource { rev, ..cached });
     }
 
-    let bytes = read_url_or_file(url)?;
+    let download = fetch_policy::fetch_to_temp(
+        url,
+        policy,
+        policy.max_download_bytes,
+        Some("application/octet-stream"),
+    )?;
     let extracted = TempDir::new().map_err(|error| error.to_string())?;
     let extracted_tree = extracted.path().join("archive");
-    unpack_tarball(&bytes, &extracted_tree)?;
+    unpack_tarball(&download, &extracted_tree, policy, url)?;
     let source_root = normalized_extracted_root(&extracted_tree)?;
     snapshot_source_tree(&source_root, expected_hash, rev)
 }
@@ -603,49 +610,104 @@ fn cached_source(expected_hash: Option<&str>) -> Result<Option<FetchedSource>, S
     }))
 }
 
-fn read_url_or_file(url: &str) -> Result<Vec<u8>, String> {
-    if let Some(path) = url.strip_prefix("file://") {
-        return fs::read(path).map_err(|error| format!("{path}: {error}"));
-    }
-    let path = Path::new(url);
-    if path.exists() {
-        return fs::read(path).map_err(|error| format!("{}: {error}", path.display()));
-    }
-
-    let response = ureq::get(url)
-        .set("User-Agent", USER_AGENT)
-        .call()
-        .map_err(|error| format!("failed to fetch {url}: {error}"))?;
-    let mut reader = response.into_reader();
-    let mut bytes = Vec::new();
-    reader
-        .read_to_end(&mut bytes)
-        .map_err(|error| format!("failed to read {url}: {error}"))?;
-    Ok(bytes)
+fn read_json_url(url: &str, policy: &FetchPolicy) -> Result<Value, String> {
+    let download = fetch_policy::fetch_to_temp(
+        url,
+        policy,
+        policy.max_json_bytes,
+        Some("application/vnd.github+json"),
+    )?;
+    let body = fs::read(download.path())
+        .map_err(|error| format!("package source {url:?}: failed to read staged JSON: {error}"))?;
+    serde_json::from_slice(&body).map_err(|error| format!("failed to parse {url} as JSON: {error}"))
 }
 
-fn read_json_url(url: &str) -> Result<Value, String> {
-    let response = ureq::get(url)
-        .set("Accept", "application/vnd.github+json")
-        .set("User-Agent", USER_AGENT)
-        .call()
-        .map_err(|error| format!("failed to fetch {url}: {error}"))?;
-    let mut reader = response.into_reader();
-    let mut body = String::new();
-    reader
-        .read_to_string(&mut body)
-        .map_err(|error| format!("failed to read {url}: {error}"))?;
-    serde_json::from_str(&body).map_err(|error| format!("failed to parse {url} as JSON: {error}"))
-}
+fn unpack_tarball(
+    download: &fetch_policy::DownloadedFile,
+    destination: &Path,
+    policy: &FetchPolicy,
+    source: &str,
+) -> Result<(), String> {
+    let mut input = fs::File::open(download.path())
+        .map_err(|error| format!("package source {source:?}: {error}"))?;
+    let mut magic = [0_u8; 2];
+    let magic_len = input
+        .read(&mut magic)
+        .map_err(|error| format!("package source {source:?}: {error}"))?;
+    input
+        .seek(SeekFrom::Start(0))
+        .map_err(|error| format!("package source {source:?}: {error}"))?;
 
-fn unpack_tarball(bytes: &[u8], destination: &Path) -> Result<(), String> {
-    if bytes.starts_with(&[0x1f, 0x8b]) {
-        package_tree::extract_tar(GzDecoder::new(Cursor::new(bytes)), destination)
-            .map_err(|error| format!("failed to extract tar.gz: {error}"))
+    let mut staged_tar =
+        NamedTempFile::new().map_err(|error| format!("package source {source:?}: {error}"))?;
+    if magic_len == 2 && magic == [0x1f, 0x8b] {
+        copy_decompressed_tar(
+            GzDecoder::new(input),
+            &mut staged_tar,
+            download,
+            policy,
+            source,
+        )?;
     } else {
-        package_tree::extract_tar(Cursor::new(bytes), destination)
-            .map_err(|error| format!("failed to extract tar archive: {error}"))
+        copy_decompressed_tar(input, &mut staged_tar, download, policy, source)?;
     }
+    staged_tar.as_file_mut().sync_all().map_err(|error| {
+        format!("package source {source:?}: failed to sync staged tar: {error}")
+    })?;
+    package_tree::extract_tar(
+        staged_tar.path(),
+        destination,
+        policy,
+        source,
+        download.started,
+    )
+    .map_err(|error| format!("failed to extract package archive: {error}"))
+}
+
+fn copy_decompressed_tar(
+    mut input: impl Read,
+    output: &mut impl Write,
+    download: &fetch_policy::DownloadedFile,
+    policy: &FetchPolicy,
+    source: &str,
+) -> Result<(), String> {
+    let ratio_limit = download.bytes.saturating_mul(policy.max_expansion_ratio);
+    let mut total = 0_u64;
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        fetch_policy::check_total_deadline(source, policy, download.started)?;
+        let count = input.read(&mut buffer).map_err(|error| {
+            format!("package source {source:?}: truncated or invalid compressed archive: {error}")
+        })?;
+        if count == 0 {
+            break;
+        }
+        total = total.saturating_add(count as u64);
+        if total > policy.max_decompressed_tar_bytes {
+            return Err(budget_error(
+                source,
+                "decompressed_tar_bytes",
+                total,
+                policy.max_decompressed_tar_bytes,
+            ));
+        }
+        if total > ratio_limit {
+            let current_ratio = total
+                .saturating_add(download.bytes.saturating_sub(1))
+                .checked_div(download.bytes)
+                .unwrap_or(u64::MAX);
+            return Err(budget_error(
+                source,
+                "archive_expansion_ratio",
+                current_ratio,
+                policy.max_expansion_ratio,
+            ));
+        }
+        output.write_all(&buffer[..count]).map_err(|error| {
+            format!("package source {source:?}: staged tar write failed: {error}")
+        })?;
+    }
+    Ok(())
 }
 
 fn normalized_extracted_root(path: &Path) -> Result<PathBuf, String> {
@@ -670,9 +732,7 @@ struct GithubRepo {
 
 impl GithubRepo {
     fn parse(url: &str) -> Option<Self> {
-        let path = url
-            .strip_prefix("https://github.com/")
-            .or_else(|| url.strip_prefix("http://github.com/"))?;
+        let path = url.strip_prefix("https://github.com/")?;
         let mut parts = path.trim_end_matches('/').split('/');
         let owner = parts.next()?.to_owned();
         let name = parts.next()?.trim_end_matches(".git").to_owned();
@@ -713,17 +773,21 @@ fn normalize_github_url(url: &str) -> String {
         .unwrap_or_else(|| url.to_owned())
 }
 
-fn resolve_github_rev(repo: &GithubRepo, reference: Option<&str>) -> Result<String, String> {
+fn resolve_github_rev(
+    repo: &GithubRepo,
+    reference: Option<&str>,
+    policy: &FetchPolicy,
+) -> Result<String, String> {
     let reference = if let Some(reference) = reference {
         reference.to_owned()
     } else {
-        read_json_url(&repo.api_url())?
+        read_json_url(&repo.api_url(), policy)?
             .get("default_branch")
             .and_then(Value::as_str)
             .ok_or_else(|| "GitHub repository response did not include default_branch".to_owned())?
             .to_owned()
     };
-    read_json_url(&repo.commit_api_url(&reference))?
+    read_json_url(&repo.commit_api_url(&reference), policy)?
         .get("sha")
         .and_then(Value::as_str)
         .map(str::to_owned)
@@ -1005,13 +1069,13 @@ mod tests {
         assert_eq!(repo.owner, "anki-geo");
         assert_eq!(repo.name, "ultimate-geography");
 
-        let http_repo = GithubRepo::parse("http://github.com/anki-geo/ultimate-geography")
-            .expect("GitHub HTTP repo URL parses");
-        assert_eq!(http_repo.owner, "anki-geo");
-        assert_eq!(http_repo.name, "ultimate-geography");
+        assert!(
+            GithubRepo::parse("http://github.com/anki-geo/ultimate-geography").is_none(),
+            "production GitHub sources must be HTTPS"
+        );
         assert_eq!(
             normalize_github_url("http://github.com/anki-geo/ultimate-geography/"),
-            "https://github.com/anki-geo/ultimate-geography.git"
+            "http://github.com/anki-geo/ultimate-geography/"
         );
 
         assert!(
@@ -1045,7 +1109,7 @@ mod tests {
             rev: Some("abc123".to_owned()),
         };
 
-        let error = fetch_git_source(&source, Some("sha256-example"))
+        let error = fetch_git_source(&source, Some("sha256-example"), &FetchPolicy::default())
             .expect_err("non-GitHub URL is rejected before fetch");
         assert!(error.contains("native git locking currently supports GitHub HTTPS URLs"));
     }
@@ -1131,5 +1195,94 @@ targets: {}
         fs::write(&corrupt, "version: [\n").expect("write corrupt lock");
         let corrupt_error = read_lock(&corrupt).expect_err("corrupt lock file is rejected");
         assert!(corrupt_error.contains("failed to parse lock YAML"));
+    }
+
+    #[test]
+    fn archive_staging_enforces_compressed_decompressed_and_ratio_budgets() {
+        let root = TempDir::new().unwrap();
+        let archive = root.path().join("fixture.tar.gz");
+        write_compressible_archive(&archive);
+        let source = archive.to_str().unwrap();
+
+        let compressed_policy = FetchPolicy {
+            max_download_bytes: 10,
+            ..FetchPolicy::default()
+        };
+        let error = fetch_policy::fetch_to_temp(source, &compressed_policy, 10, None)
+            .expect_err("compressed bytes are bounded");
+        assert!(error.contains("compressed_download_bytes"), "{error}");
+
+        let decompressed_policy = FetchPolicy {
+            max_decompressed_tar_bytes: 1024,
+            max_expansion_ratio: u64::MAX,
+            ..FetchPolicy::default()
+        };
+        let download = fetch_policy::fetch_to_temp(
+            source,
+            &decompressed_policy,
+            decompressed_policy.max_download_bytes,
+            None,
+        )
+        .unwrap();
+        let destination = root.path().join("decompressed-out");
+        let error = unpack_tarball(&download, &destination, &decompressed_policy, source)
+            .expect_err("decompressed tar bytes are bounded");
+        assert!(error.contains("decompressed_tar_bytes"), "{error}");
+        assert!(!destination.exists());
+
+        let ratio_policy = FetchPolicy {
+            max_expansion_ratio: 1,
+            ..FetchPolicy::default()
+        };
+        let download = fetch_policy::fetch_to_temp(
+            source,
+            &ratio_policy,
+            ratio_policy.max_download_bytes,
+            None,
+        )
+        .unwrap();
+        let destination = root.path().join("ratio-out");
+        let error = unpack_tarball(&download, &destination, &ratio_policy, source)
+            .expect_err("archive expansion ratio is bounded");
+        assert!(error.contains("archive_expansion_ratio"), "{error}");
+        assert!(!destination.exists());
+    }
+
+    #[test]
+    fn truncated_gzip_is_rejected_without_publishing_extraction_state() {
+        let root = TempDir::new().unwrap();
+        let archive = root.path().join("truncated.tar.gz");
+        fs::write(&archive, [0x1f, 0x8b, 0x08, 0x00, 0x00]).unwrap();
+        let source = archive.to_str().unwrap();
+        let policy = FetchPolicy::default();
+        let download =
+            fetch_policy::fetch_to_temp(source, &policy, policy.max_download_bytes, None).unwrap();
+        let destination = root.path().join("out");
+        let error = unpack_tarball(&download, &destination, &policy, source)
+            .expect_err("truncated gzip must fail");
+        assert!(
+            error.contains("truncated or invalid compressed archive"),
+            "{error}"
+        );
+        assert!(!destination.exists());
+    }
+
+    fn write_compressible_archive(path: &Path) {
+        use flate2::Compression;
+        use flate2::write::GzEncoder;
+        use tar::{Builder, Header};
+
+        let output = fs::File::create(path).unwrap();
+        let encoder = GzEncoder::new(output, Compression::best());
+        let mut builder = Builder::new(encoder);
+        let bytes = vec![b'a'; 32 * 1024];
+        let mut header = Header::new_gnu();
+        header.set_path("pkg/repeated.txt").unwrap();
+        header.set_size(bytes.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder.append(&header, bytes.as_slice()).unwrap();
+        let encoder = builder.into_inner().unwrap();
+        encoder.finish().unwrap();
     }
 }

@@ -300,6 +300,30 @@ fn rejects_unknown_top_level_fields_and_future_versions() {
 }
 
 #[test]
+fn rejects_http_remote_sources_in_normal_lock_yaml() {
+    let yaml = format!(
+        r#"version: 2
+packages:
+  example.package:
+    manifest: brainbrew.yaml
+    package:
+      version: 1.0.0
+    original:
+      type: tarball
+      url: http://example.test/package.tar.gz
+    locked:
+      type: tarball
+      url: http://example.test/package.tar.gz
+      nar_hash: '{ZERO_SRI}'
+"#,
+    );
+    let error = lockfile::from_str(&yaml).expect_err("HTTP lock source is rejected");
+    let message = error.to_string();
+    assert!(message.contains("HTTPS"), "{message}");
+    assert!(message.contains("original.url"), "{message}");
+}
+
+#[test]
 fn reports_corrupt_lock_yaml_as_parse_error() {
     let error = lockfile::from_str("version: [\n").expect_err("corrupt lock YAML is rejected");
     assert!(matches!(error, lockfile::LockfileError::Parse(_)));
