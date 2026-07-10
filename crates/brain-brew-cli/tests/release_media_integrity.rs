@@ -19,6 +19,28 @@ fn stdout(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
+#[test]
+fn hashless_ug_sd_tasks_are_explicitly_non_release() {
+    let tasks_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sd/tasks.yaml");
+    let document: serde_yaml::Value =
+        serde_yaml::from_str(&fs::read_to_string(tasks_path).unwrap()).unwrap();
+
+    for task_name in ["run/ug/export/en-standard", "run/ug/verify/all"] {
+        let task = &document["tasks"][task_name];
+        let run = task["run"].as_str().unwrap();
+        let description = task["desc"].as_str().unwrap();
+        assert!(
+            run.contains("--media-mode reference-only"),
+            "{task_name} must explicitly select reference-only media verification"
+        );
+        assert!(
+            description.contains("hashless structural fixture")
+                && description.contains("not release or byte-integrity evidence"),
+            "{task_name} must identify its output as non-release structural evidence"
+        );
+    }
+}
+
 fn write_workspace(root: &Path, path: &str, hash: &str) -> PathBuf {
     fs::create_dir_all(root).unwrap();
     fs::write(

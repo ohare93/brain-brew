@@ -38,12 +38,12 @@ tasks:
       devenv shell brainbrew compose --manifest fixtures/ultimate-geography/brainbrew.yaml --target en-standard --out target/sd/ug-en-standard.yaml
 
   run/ug/export/en-standard:
-    desc: Export the Ultimate Geography en-standard CrowdAnki deck to target/sd/crowdanki/en-standard
-    run: devenv shell brainbrew export crowdanki --manifest fixtures/ultimate-geography/brainbrew.yaml --target en-standard --out target/sd/crowdanki/en-standard
+    desc: Export the hashless structural fixture (not release or byte-integrity evidence) to target/sd/crowdanki/en-standard
+    run: devenv shell brainbrew export crowdanki --manifest fixtures/ultimate-geography/brainbrew.yaml --target en-standard --out target/sd/crowdanki/en-standard --media-mode reference-only
 
   run/ug/verify/all:
-    desc: Verify every Ultimate Geography manifest target
-    run: devenv shell brainbrew verify --manifest fixtures/ultimate-geography/brainbrew.yaml --all-targets
+    desc: Verify every target in the hashless structural fixture (not release or byte-integrity evidence)
+    run: devenv shell brainbrew verify --manifest fixtures/ultimate-geography/brainbrew.yaml --all-targets --media-mode reference-only
 
   workbench/ug:
     desc: Build Workbench dev assets and serve the Ultimate Geography manifest; pass -- --no-open or -- --port <port> as needed
