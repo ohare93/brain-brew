@@ -819,6 +819,49 @@ async fn run_optional_metadata_smoke(
         .context("type optional deck name")?;
     wait_for_text(driver, "staged_direct").await?;
 
+    let description = wait_for_element(driver, "#optional-translation-input-deck_description")
+        .await
+        .context("optional deck description input appears")?;
+    description
+        .clear()
+        .await
+        .context("clear deck description")?;
+    description
+        .send_keys("<p>unterminated")
+        .await
+        .context("type invalid deck description")?;
+    wait_for_element(driver, "#apply-preview-button")
+        .await?
+        .click()
+        .await
+        .context("preview invalid metadata apply")?;
+    wait_for_apply_output(
+        driver,
+        "invalid_html_content [validation] at deck.description",
+    )
+    .await?;
+    let preview_output = wait_for_element(driver, "#apply-preview-output").await?;
+    assert_eq!(
+        preview_output.attr("data-validation-ok").await?.as_deref(),
+        Some("false")
+    );
+    wait_for_element(driver, "#apply-confirm-button")
+        .await?
+        .click()
+        .await
+        .context("confirm invalid metadata apply")?;
+    wait_for_apply_output(driver, "invalid_html_content (422) at deck.description").await?;
+    assert!(!fs::read_to_string(workspace.join("da.yaml"))?.contains("<p>unterminated"));
+
+    description
+        .clear()
+        .await
+        .context("clear invalid deck description")?;
+    description
+        .send_keys("A geography deck fixture.")
+        .await
+        .context("restore valid deck description")?;
+
     wait_for_element(driver, "#apply-preview-button")
         .await?
         .click()

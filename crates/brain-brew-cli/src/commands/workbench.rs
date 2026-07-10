@@ -14,9 +14,10 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use brain_brew_core::{
-    CanonicalDeck, CardTemplate, DomainDiagnostic, FieldValue, Note, NoteType, Overlay,
-    OverlayKind, StableId, TranslationCoverageCategory, TranslationCoverageEntry,
-    TranslationDictionary, validate_deck_content,
+    CanonicalDeck, CardTemplate, ContentKind, ContentValidationReport, DiagnosticCategory,
+    DomainDiagnostic, FieldGraphReport, FieldValue, Note, NoteType, Overlay, OverlayKind, StableId,
+    TranslationCoverageCategory, TranslationCoverageEntry, TranslationDictionary,
+    validate_deck_content,
 };
 use brain_brew_formats::canonical_source_document::CanonicalScalarTarget;
 use brain_brew_formats::manifest::{
@@ -37,9 +38,7 @@ use tokio::net::TcpListener;
 use tokio::task;
 use tower_http::services::{ServeDir, ServeFile};
 
-use crate::commands::translation_overlay::{
-    compose_lenient_translation_overlay, sanitize_lenient_translation_overlay,
-};
+use crate::commands::translation_overlay::sanitize_lenient_translation_overlay;
 use crate::help;
 use crate::io::{canonical_source_document, manifest_root, overlay_source_document, read_manifest};
 use crate::media_ownership::MediaRootSelections;
@@ -342,16 +341,38 @@ impl WorkbenchError {
         self.message
     }
 
-    fn compose(message: impl Into<String>, report: brain_brew_core::ComposeReport) -> Self {
+    fn domain(message: impl Into<String>, diagnostics: Vec<DomainDiagnostic>) -> Self {
         Self {
             kind: WorkbenchErrorKind::Domain,
             message: message.into(),
-            diagnostics: report
+            diagnostics,
+        }
+    }
+
+    fn compose(message: impl Into<String>, report: brain_brew_core::ComposeReport) -> Self {
+        Self::domain(
+            message,
+            report
                 .errors
                 .iter()
                 .map(|error| error.diagnostic())
                 .collect(),
-        }
+        )
+    }
+
+    fn field_graph(message: impl Into<String>, report: FieldGraphReport) -> Self {
+        Self::domain(
+            message,
+            report
+                .errors
+                .iter()
+                .map(|error| error.diagnostic())
+                .collect(),
+        )
+    }
+
+    fn render(message: impl Into<String>, report: brain_brew_core::VariableRenderReport) -> Self {
+        Self::domain(message, report.diagnostics())
     }
 }
 
@@ -1084,7 +1105,7 @@ impl WorkspaceMetadata {
             request.overlay.as_deref(),
         )?;
         if request.edits.is_empty() {
-            return Err(("missing staged edits".to_owned()).into());
+            return Err(WorkbenchError::request("missing staged edits"));
         }
 
         let source_edits = request
@@ -1155,8 +1176,8 @@ impl WorkspaceMetadata {
             ));
         }
 
-        let mut validation_errors =
-            validate_modified_base_and_overlay(&context, &modified_base, &primary_overlay).errors;
+        let mut validation =
+            validate_modified_base_and_overlay(&context, &modified_base, &primary_overlay)?;
         let mut overlay_writes =
             BTreeMap::<PathBuf, (String, OverlaySourceDocument, Overlay, bool)>::new();
         if source_plan.overlay_changed {
@@ -1206,9 +1227,9 @@ impl WorkspaceMetadata {
                     &modified_base,
                 ));
             }
-            let validation =
-                validate_modified_base_and_overlay(&group_context, &modified_base, &overlay);
-            validation_errors.extend(validation.errors);
+            let group_validation =
+                validate_modified_base_and_overlay(&group_context, &modified_base, &overlay)?;
+            validation.extend(group_validation.diagnostics);
             overlay_writes.insert(
                 group_context.selection.overlay_file.clone(),
                 (
@@ -1221,7 +1242,7 @@ impl WorkspaceMetadata {
         }
 
         if changes.is_empty() {
-            return Err(("missing staged edits".to_owned()).into());
+            return Err(WorkbenchError::request("missing staged edits"));
         }
         let mut outputs = source_plan.outputs.clone();
         for (display_file, document, _overlay, changed) in overlay_writes.values() {
@@ -1235,15 +1256,16 @@ impl WorkspaceMetadata {
                 &mut outputs,
             )?;
         }
-        if let Err(error) = validate_complete_workbench_result(
+        validation.extend(validate_complete_workbench_result(
             &modified_base,
             &overlay_writes,
             &validation_contexts,
-        ) {
-            validation_errors.push(error.message);
-        }
-        if mode == ApplyMode::Write && !validation_errors.is_empty() {
-            return Err(("validation failed; preview before applying".to_owned()).into());
+        )?);
+        if mode == ApplyMode::Write && !validation.diagnostics.is_empty() {
+            return Err(WorkbenchError::domain(
+                "validation failed; preview before applying",
+                validation.diagnostics,
+            ));
         }
         if mode == ApplyMode::Write {
             let writes = planned_workbench_outputs(&self.manifest_root, outputs)?;
@@ -1264,7 +1286,12 @@ impl WorkspaceMetadata {
             }
         }
         let file_groups = apply_file_groups_json(&changes);
-        let validation_ok = validation_errors.is_empty();
+        let validation_ok = validation.diagnostics.is_empty();
+        let validation_diagnostics = validation
+            .diagnostics
+            .iter()
+            .map(crate::output::diagnostic_json)
+            .collect::<Vec<_>>();
 
         Ok(json!({
             "mode": mode.as_str(),
@@ -1278,8 +1305,9 @@ impl WorkspaceMetadata {
             "file_groups": file_groups,
             "changed_entries": changes,
             "validation": {
+                "schema_version": crate::output::DIAGNOSTIC_SCHEMA_VERSION,
                 "ok": validation_ok,
-                "errors": validation_errors,
+                "diagnostics": validation_diagnostics,
             },
         }))
     }
@@ -1505,12 +1533,21 @@ impl WorkspaceMetadata {
                 selected_display_file = planned.display_file.clone();
                 selected_file = planned.file.clone();
                 selected_source_deck = Some(current.clone());
-                selected_report = Some(current.translation_coverage(overlay).map_err(|error| {
-                    format!("failed to resolve translation source fields: {error}")
-                })?);
+                selected_report =
+                    Some(current.translation_coverage(overlay).map_err(|report| {
+                        WorkbenchError::field_graph(
+                            "failed to resolve translation source fields",
+                            report,
+                        )
+                    })?);
             }
             let effective_overlay = if overlay.translations.is_some() {
-                sanitize_lenient_translation_overlay(&current, overlay)?
+                sanitize_lenient_translation_overlay(&current, overlay).map_err(|report| {
+                    WorkbenchError::field_graph(
+                        format!("failed to resolve translation overlay {}", planned.id),
+                        report,
+                    )
+                })?
             } else {
                 overlay.clone()
             };
@@ -2071,10 +2108,19 @@ struct SelectedTranslationContext {
     report: brain_brew_core::TranslationCoverageReport,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 struct ApplyValidation {
-    ok: bool,
-    errors: Vec<String>,
+    diagnostics: Vec<DomainDiagnostic>,
+}
+
+impl ApplyValidation {
+    fn extend(&mut self, diagnostics: impl IntoIterator<Item = DomainDiagnostic>) {
+        for diagnostic in diagnostics {
+            if !self.diagnostics.contains(&diagnostic) {
+                self.diagnostics.push(diagnostic);
+            }
+        }
+    }
 }
 
 fn default_template_language(manifest: &FederatedDeckManifest) -> Option<String> {
@@ -2091,15 +2137,13 @@ fn default_new_language_request(
     display_name: &str,
     template_language: &str,
 ) -> WorkbenchCoreResult<NewLanguageRequest> {
-    let template = manifest
-        .languages
-        .get(template_language)
-        .ok_or_else(|| format!("unknown template language {template_language:?}"))?;
+    let template = manifest.languages.get(template_language).ok_or_else(|| {
+        WorkbenchError::request(format!("unknown template language {template_language:?}"))
+    })?;
     if template.source || template.translation_overlays.is_empty() {
-        return Err((format!(
+        return Err(WorkbenchError::request(format!(
             "invalid template language {template_language:?}; choose a target language"
-        ))
-        .into());
+        )));
     }
 
     let groups = template
@@ -2160,27 +2204,30 @@ fn apply_new_language_request(
 ) -> WorkbenchCoreResult<(FederatedDeckManifest, Vec<(String, Overlay)>)> {
     validate_new_language_code(&request.code)?;
     if request.display_name.trim().is_empty() {
-        return Err(
-            ("invalid new language display name: expected a non-empty value".to_owned()).into(),
-        );
+        return Err(WorkbenchError::request(
+            "invalid new language display name: expected a non-empty value",
+        ));
     }
     if manifest.languages.contains_key(&request.code) {
-        return Err((format!(
+        return Err(WorkbenchError::request(format!(
             "invalid new language code {:?}: language already exists",
             request.code
-        ))
-        .into());
+        )));
     }
     let template = manifest
         .languages
         .get(&request.template_language)
-        .ok_or_else(|| format!("unknown template language {:?}", request.template_language))?;
+        .ok_or_else(|| {
+            WorkbenchError::request(format!(
+                "unknown template language {:?}",
+                request.template_language
+            ))
+        })?;
     if template.source || template.translation_overlays.is_empty() {
-        return Err((format!(
+        return Err(WorkbenchError::request(format!(
             "invalid template language {:?}; choose a target language",
             request.template_language
-        ))
-        .into());
+        )));
     }
 
     let template_translation_ids = template
@@ -2204,11 +2251,10 @@ fn apply_new_language_request(
     for group in &selected_groups {
         validate_stable_id("overlay id", &group.overlay_id)?;
         if manifest.overlays.contains_key(&group.overlay_id) {
-            return Err((format!(
+            return Err(WorkbenchError::request(format!(
                 "invalid new language overlay id {:?}: overlay already exists",
                 group.overlay_id
-            ))
-            .into());
+            )));
         }
         let absolute_path = PathAuthorizer::new("workspace", manifest_root)?
             .authorize_create(
@@ -2219,16 +2265,20 @@ fn apply_new_language_request(
             .map_err(|error| error.to_string())?
             .into_path_buf();
         if absolute_path.exists() {
-            return Err((format!(
+            return Err(WorkbenchError::request(format!(
                 "invalid new language overlay file already exists: {}",
                 absolute_path.display()
-            ))
-            .into());
+            )));
         }
         let template_overlay = manifest
             .overlays
             .get(&group.template_overlay_id)
-            .ok_or_else(|| format!("unknown template overlay {:?}", group.template_overlay_id))?;
+            .ok_or_else(|| {
+                WorkbenchError::request(format!(
+                    "unknown template overlay {:?}",
+                    group.template_overlay_id
+                ))
+            })?;
         let depends_on = template_overlay
             .depends_on
             .iter()
@@ -2268,22 +2318,20 @@ fn apply_new_language_request(
     for target in &request.targets {
         validate_stable_id("target id", &target.target_id)?;
         if manifest.targets.contains_key(&target.target_id) {
-            return Err((format!(
+            return Err(WorkbenchError::request(format!(
                 "invalid new language target id {:?}: target already exists",
                 target.target_id
-            ))
-            .into());
+            )));
         }
         let template_target_id = template.targets.get(&target.label).ok_or_else(|| {
-            format!(
+            WorkbenchError::request(format!(
                 "invalid new language target label {:?}: not found on template language",
                 target.label
-            )
+            ))
         })?;
-        let template_target = manifest
-            .targets
-            .get(template_target_id)
-            .ok_or_else(|| format!("unknown template target {template_target_id:?}"))?;
+        let template_target = manifest.targets.get(template_target_id).ok_or_else(|| {
+            WorkbenchError::request(format!("unknown template target {template_target_id:?}"))
+        })?;
         let overlays = template_target
             .overlays
             .iter()
@@ -2309,16 +2357,15 @@ fn apply_new_language_request(
         language_targets.insert(target.label.clone(), target.target_id.clone());
     }
     if language_targets.is_empty() {
-        return Err(
-            ("invalid new language scaffold: expected at least one target".to_owned()).into(),
-        );
+        return Err(WorkbenchError::request(
+            "invalid new language scaffold: expected at least one target",
+        ));
     }
     if !language_targets.contains_key(&request.primary_target) {
-        return Err((format!(
+        return Err(WorkbenchError::request(format!(
             "invalid new language primary target {:?}: not found in target labels",
             request.primary_target
-        ))
-        .into());
+        )));
     }
 
     let translation_overlays = selected_groups
@@ -2351,25 +2398,22 @@ fn selected_new_language_groups<'a>(
     let mut selected = Vec::new();
     for group in &request.groups {
         if !seen_labels.insert(group.label.clone()) {
-            return Err((format!(
+            return Err(WorkbenchError::request(format!(
                 "invalid new language overlay group {:?}: duplicate label",
                 group.label
-            ))
-            .into());
+            )));
         }
         let Some(template_overlay_id) = template.translation_overlays.get(&group.label) else {
-            return Err((format!(
+            return Err(WorkbenchError::request(format!(
                 "invalid new language overlay group {:?}: not found on template language",
                 group.label
-            ))
-            .into());
+            )));
         };
         if template_overlay_id != &group.template_overlay_id {
-            return Err((format!(
+            return Err(WorkbenchError::request(format!(
                 "invalid new language overlay group {:?}: template overlay changed",
                 group.label
-            ))
-            .into());
+            )));
         }
         if group.selected {
             selected.push(group);
@@ -2401,7 +2445,11 @@ fn new_language_preview_response(
             .map(|(path, _)| json!({ "path": path })),
     );
     Ok(json!({
-        "validation": { "ok": true, "errors": Vec::<String>::new() },
+        "validation": {
+            "schema_version": crate::output::DIAGNOSTIC_SCHEMA_VERSION,
+            "ok": true,
+            "diagnostics": Vec::<Value>::new(),
+        },
         "draft": request,
         "language": {
             "code": &request.code,
@@ -2423,10 +2471,9 @@ fn validate_new_language_code(code: &str) -> WorkbenchCoreResult<()> {
             .chars()
             .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
     {
-        return Err((format!(
+        return Err(WorkbenchError::request(format!(
             "invalid new language code {code:?}: expected letters, numbers, '-' or '_'"
-        ))
-        .into());
+        )));
     }
     Ok(())
 }
@@ -4341,24 +4388,28 @@ fn apply_staged_source_edits(
 
     for edit in edits {
         if !edit.path.starts_with("notes.") || !edit.path.contains(".fields.") {
-            return Err((format!("invalid source note-field edit path {:?}", edit.path)).into());
+            return Err(WorkbenchError::request(format!(
+                "invalid source note-field edit path {:?}",
+                edit.path
+            )));
         }
         if edit.source.is_empty() {
-            return Err((format!("invalid empty source for {}", edit.path)).into());
+            return Err(WorkbenchError::request(format!(
+                "invalid empty source for {}",
+                edit.path
+            )));
         }
         let Some(anchor_row) = row_by_path.get(&edit.path) else {
-            return Err((format!(
+            return Err(WorkbenchError::request(format!(
                 "invalid source edit path {:?}; choose an editable source note field",
                 edit.path
-            ))
-            .into());
+            )));
         };
         if anchor_row.source != edit.source {
-            return Err((format!(
+            return Err(WorkbenchError::request(format!(
                 "invalid source {:?} for {}; expected {:?}",
                 edit.source, edit.path, anchor_row.source
-            ))
-            .into());
+            )));
         }
         let target_rows = match edit.scope {
             SourceEditScope::Field => vec![anchor_row.clone()],
@@ -4533,23 +4584,25 @@ fn set_deck_note_field(
     value: &str,
 ) -> WorkbenchCoreResult<()> {
     let (note_id, field_id) = note_field_path(path)?;
-    let note_id = StableId::new(note_id).map_err(|error| error.to_string())?;
-    let field_id = StableId::new(field_id).map_err(|error| error.to_string())?;
-    let note = deck
-        .notes
-        .get_mut(&note_id)
-        .ok_or_else(|| format!("source edit path {path:?} is not in the canonical deck file"))?;
+    let note_id =
+        StableId::new(note_id).map_err(|error| WorkbenchError::request(error.to_string()))?;
+    let field_id =
+        StableId::new(field_id).map_err(|error| WorkbenchError::request(error.to_string()))?;
+    let note = deck.notes.get_mut(&note_id).ok_or_else(|| {
+        WorkbenchError::request(format!(
+            "source edit path {path:?} is not in the canonical deck file"
+        ))
+    })?;
     let current = note
         .fields
         .get(&field_id)
         .and_then(FieldValue::as_scalar)
         .unwrap_or_default();
     if current != expected_source {
-        return Err((format!(
+        return Err(WorkbenchError::request(format!(
             "invalid source {:?} for {}; expected canonical deck value {:?}",
             expected_source, path, current
-        ))
-        .into());
+        )));
     }
     note.fields
         .insert(field_id, FieldValue::Scalar(value.to_owned()));
@@ -4693,11 +4746,42 @@ fn validate_utf8_workbench_output(bytes: &[u8]) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+fn content_diagnostics(report: &ContentValidationReport) -> Vec<DomainDiagnostic> {
+    report
+        .errors
+        .iter()
+        .map(|error| DomainDiagnostic {
+            code: match error.kind {
+                ContentKind::HtmlFragment => "invalid_html_content",
+                ContentKind::Css => "invalid_css_content",
+            },
+            category: DiagnosticCategory::Validation,
+            path: error.path.parse().ok(),
+            address: error.path.clone(),
+            overlay_id: None,
+            source_id: None,
+            intent: None,
+            entity_kind: None,
+            expected: None,
+            actual: None,
+            first_conflict_participant: None,
+            current_conflict_participant: None,
+            original_removal: None,
+            field_graph_error: None,
+            children: Vec::new(),
+            message: match error.line {
+                Some(line) => format!("line {line}: {}", error.message),
+                None => error.message.clone(),
+            },
+        })
+        .collect()
+}
+
 fn validate_complete_workbench_result(
     modified_base: &CanonicalDeck,
     overlays: &BTreeMap<PathBuf, (String, OverlaySourceDocument, Overlay, bool)>,
     contexts: &[SelectedTranslationContext],
-) -> WorkbenchCoreResult<()> {
+) -> WorkbenchCoreResult<Vec<DomainDiagnostic>> {
     canonical_yaml::to_string(modified_base).map_err(|error| error.to_string())?;
     if !modified_base.media.is_empty() {
         media::validate_references(modified_base).map_err(|error| error.to_string())?;
@@ -4712,6 +4796,7 @@ fn validate_complete_workbench_result(
         canonical_yaml::overlay_to_string(overlay)
             .map_err(|error| format!("invalid generated translation overlay {display}: {error}"))?;
     }
+    let mut diagnostics = Vec::new();
     let mut validated = BTreeSet::new();
     for context in contexts {
         if !validated.insert(context.selection.target_id.clone()) {
@@ -4724,35 +4809,38 @@ fn validate_complete_workbench_result(
                 .filter(|(_, _, _, changed)| *changed)
                 .map(|(_, _, overlay, _)| overlay)
                 .unwrap_or(original);
-            deck = if overlay.translations.is_some() {
-                compose_lenient_translation_overlay(&deck, overlay)?
+            let effective_overlay = if overlay.translations.is_some() {
+                sanitize_lenient_translation_overlay(&deck, overlay).map_err(|report| {
+                    WorkbenchError::field_graph(
+                        format!("failed to validate translation overlay {}", planned.id),
+                        report,
+                    )
+                })?
             } else {
-                deck.compose(std::slice::from_ref(overlay))
-                    .map_err(|report| {
-                        WorkbenchError::compose(
-                            format!(
-                                "failed to validate complete Workbench target {} at overlay {}",
-                                context.selection.target_id, planned.id
-                            ),
-                            report,
-                        )
-                    })?
+                overlay.clone()
             };
+            deck = deck
+                .compose(std::slice::from_ref(&effective_overlay))
+                .map_err(|report| {
+                    WorkbenchError::compose(
+                        format!(
+                            "failed to validate complete Workbench target {} at overlay {}",
+                            context.selection.target_id, planned.id
+                        ),
+                        report,
+                    )
+                })?;
         }
-        let rendered = deck.render_variables().map_err(|error| {
-            format!(
-                "failed to render complete Workbench target {}: {error}",
-                context.selection.target_id
+        let rendered = deck.render_variables().map_err(|report| {
+            WorkbenchError::render(
+                format!(
+                    "failed to render complete Workbench target {}",
+                    context.selection.target_id
+                ),
+                report,
             )
         })?;
-        let content = validate_deck_content(&rendered);
-        if !content.is_empty() {
-            return Err((format!(
-                "content validation failed for complete Workbench target {}: {content}",
-                context.selection.target_id
-            ))
-            .into());
-        }
+        diagnostics.extend(content_diagnostics(&validate_deck_content(&rendered)));
         if !deck.media.is_empty() {
             media::validate_references(&deck).map_err(|error| {
                 format!(
@@ -4762,7 +4850,7 @@ fn validate_complete_workbench_result(
             })?;
         }
     }
-    Ok(())
+    Ok(diagnostics)
 }
 
 fn push_unique_affected_file(
@@ -4898,20 +4986,22 @@ fn apply_staged_edits_to_overlay(
     let mut changed = Vec::new();
     for edit in edits {
         if edit.source.is_empty() {
-            return Err((format!("invalid empty source for {}", edit.path)).into());
+            return Err(WorkbenchError::request(format!(
+                "invalid empty source for {}",
+                edit.path
+            )));
         }
         let Some(expected_source) = editable_sources.get(edit.path.as_str()) else {
-            return Err((format!(
+            return Err(WorkbenchError::request(format!(
                 "invalid edit path {:?}; choose an editable translation source in the selected target",
                 edit.path
-            )).into());
+            )));
         };
         if expected_source != &edit.source {
-            return Err((format!(
+            return Err(WorkbenchError::request(format!(
                 "invalid source {:?} for {}; expected {:?}",
                 edit.source, edit.path, expected_source
-            ))
-            .into());
+            )));
         }
         let translations = overlay.translations.as_ref();
         match edit.mode {
@@ -4987,35 +5077,24 @@ fn validate_modified_base_and_overlay(
     context: &SelectedTranslationContext,
     modified_base: &CanonicalDeck,
     modified_overlay: &Overlay,
-) -> ApplyValidation {
-    match context_with_modified_base_and_overlay(context, modified_base.clone(), modified_overlay) {
-        Ok(updated_context) => {
-            let mut errors = Vec::new();
-            match updated_context.target_deck.render_variables() {
-                Ok(rendered) => {
-                    let report = validate_deck_content(&rendered);
-                    if !report.is_empty() {
-                        errors.push(format!(
-                            "content validation failed for target {}: {report}",
-                            updated_context.selection.target_id
-                        ));
-                    }
-                }
-                Err(error) => errors.push(format!(
-                    "content validation failed for target {}: {error}",
+) -> WorkbenchCoreResult<ApplyValidation> {
+    let updated_context =
+        context_with_modified_base_and_overlay(context, modified_base.clone(), modified_overlay)?;
+    let rendered = updated_context
+        .target_deck
+        .render_variables()
+        .map_err(|report| {
+            WorkbenchError::render(
+                format!(
+                    "failed to render modified Workbench target {}",
                     updated_context.selection.target_id
-                )),
-            }
-            ApplyValidation {
-                ok: errors.is_empty(),
-                errors,
-            }
-        }
-        Err(error) => ApplyValidation {
-            ok: false,
-            errors: vec![error.message],
-        },
-    }
+                ),
+                report,
+            )
+        })?;
+    Ok(ApplyValidation {
+        diagnostics: content_diagnostics(&validate_deck_content(&rendered)),
+    })
 }
 
 fn context_with_modified_base_and_overlay(
@@ -5035,21 +5114,29 @@ fn context_with_modified_base_and_overlay(
         if planned.id == context.selection.overlay_id {
             selected_source_deck = Some(current.clone());
             selected_report = Some(current.translation_coverage(active_overlay).map_err(
-                |error| format!("failed to resolve translation source fields: {error}"),
-            )?);
-        }
-        current = if active_overlay.translations.is_some() {
-            compose_lenient_translation_overlay(&current, active_overlay)?
-        } else {
-            current
-                .compose(std::slice::from_ref(active_overlay))
-                .map_err(|report| {
-                    WorkbenchError::compose(
-                        format!("failed to compose overlay {}", planned.id),
+                |report| {
+                    WorkbenchError::field_graph(
+                        "failed to resolve translation source fields",
                         report,
                     )
-                })?
+                },
+            )?);
+        }
+        let effective_overlay = if active_overlay.translations.is_some() {
+            sanitize_lenient_translation_overlay(&current, active_overlay).map_err(|report| {
+                WorkbenchError::field_graph(
+                    format!("failed to resolve translation overlay {}", planned.id),
+                    report,
+                )
+            })?
+        } else {
+            active_overlay.clone()
         };
+        current = current
+            .compose(std::slice::from_ref(&effective_overlay))
+            .map_err(|report| {
+                WorkbenchError::compose(format!("failed to compose overlay {}", planned.id), report)
+            })?;
     }
     let Some(source_deck) = selected_source_deck else {
         return Err((format!(

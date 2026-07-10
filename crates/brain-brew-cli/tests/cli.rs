@@ -1197,18 +1197,27 @@ fn workbench_apply_rejects_invalid_rendered_description_content() {
         }]
     });
     let preview = post_json(&server.url("/api/workbench/apply-preview"), request.clone());
+    assert_eq!(preview["validation"]["schema_version"], 1);
     assert_eq!(preview["validation"]["ok"], false);
-    let errors = preview["validation"]["errors"].as_array().unwrap();
-    assert!(errors.iter().any(|error| {
-        error
+    assert!(preview["validation"].get("errors").is_none());
+    let diagnostic = &preview["validation"]["diagnostics"][0];
+    assert_eq!(diagnostic["code"], "invalid_html_content");
+    assert_eq!(diagnostic["category"], "validation");
+    assert_eq!(diagnostic["path"], "deck.description");
+    assert!(
+        diagnostic["message"]
             .as_str()
             .unwrap()
-            .contains("deck.description:1: unclosed HTML tag <p>")
-    }));
+            .contains("unclosed HTML tag <p>")
+    );
 
-    let error = post_json_error(&server.url("/api/workbench/apply"), request);
-    assert_eq!(error.0, 500);
-    assert!(error.1.contains("validation failed"));
+    let (status, body) = post_json_error(&server.url("/api/workbench/apply"), request);
+    assert_eq!(status, 422);
+    let error: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(error["error"]["schema_version"], 1);
+    assert_eq!(error["error"]["code"], "invalid_html_content");
+    assert_eq!(error["error"]["category"], "validation");
+    assert_eq!(error["error"]["diagnostics"][0]["path"], "deck.description");
     assert_eq!(
         fs::read_to_string(dir.join("da.yaml")).unwrap(),
         original_overlay
@@ -1356,7 +1365,7 @@ languages:
             }]
         }),
     );
-    assert_eq!(error.0, 500);
+    assert_eq!(error.0, 403);
     assert!(
         error.1.contains("read-only for locked source base"),
         "{}",
@@ -1486,7 +1495,7 @@ fn workbench_apply_journal_creation_failure_leaves_all_targets_unchanged() {
         atomic_multi_file_apply_request("atomic validation"),
     );
 
-    assert_eq!(error.0, 500);
+    assert_eq!(error.0, 409);
     assert!(
         error.1.contains("transaction") || error.1.contains("journal"),
         "unexpected error body: {}",
@@ -1523,7 +1532,7 @@ fn workbench_apply_staging_failure_leaves_targets_unchanged() {
         atomic_multi_file_apply_request("atomic temp"),
     );
 
-    assert_eq!(error.0, 500);
+    assert_eq!(error.0, 409);
     assert!(
         error.1.contains("transaction") || error.1.contains("stage"),
         "unexpected error body: {}",
@@ -1560,7 +1569,7 @@ fn workbench_restart_recovers_interrupted_prepare_before_apply() {
             &server.url("/api/workbench/apply"),
             atomic_multi_file_apply_request("interrupted prepare"),
         );
-        assert_eq!(error.0, 500);
+        assert_eq!(error.0, 409);
         assert_eq!(fs::read(dir.join("deck.yaml")).unwrap(), original_deck);
     }
     assert!(
@@ -1611,7 +1620,7 @@ fn workbench_apply_replace_failure_restores_every_original_file() {
         atomic_multi_file_apply_request("atomic rename"),
     );
 
-    assert_eq!(error.0, 500);
+    assert_eq!(error.0, 409);
     assert!(
         error.1.contains("restored the original workspace"),
         "{}",

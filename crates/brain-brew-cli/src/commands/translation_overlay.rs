@@ -1,10 +1,11 @@
-use brain_brew_core::{CanonicalDeck, Overlay, TranslationCoverageCategory};
+use brain_brew_core::{CanonicalDeck, FieldGraphReport, Overlay, TranslationCoverageCategory};
 
 pub(crate) fn compose_lenient_translation_overlay(
     current: &CanonicalDeck,
     overlay: &Overlay,
 ) -> Result<CanonicalDeck, String> {
-    let sanitized = sanitize_lenient_translation_overlay(current, overlay)?;
+    let sanitized = sanitize_lenient_translation_overlay(current, overlay)
+        .map_err(|error| format!("failed to resolve translation source fields: {error}"))?;
     current.compose(&[sanitized]).map_err(|error| {
         format!(
             "failed to compose translation overlay {}: {error}",
@@ -16,13 +17,11 @@ pub(crate) fn compose_lenient_translation_overlay(
 pub(crate) fn sanitize_lenient_translation_overlay(
     current: &CanonicalDeck,
     overlay: &Overlay,
-) -> Result<Overlay, String> {
+) -> Result<Overlay, FieldGraphReport> {
     let mut sanitized = overlay.clone();
     if let Some(translations) = &mut sanitized.translations {
         translations.require_complete = false;
-        let report = current
-            .translation_coverage(overlay)
-            .map_err(|error| format!("failed to resolve translation source fields: {error}"))?;
+        let report = current.translation_coverage(overlay)?;
         for entry in report.entries {
             match entry.category {
                 TranslationCoverageCategory::StaleDirectKey => {

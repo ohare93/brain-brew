@@ -1983,6 +1983,38 @@ pub struct VariableRenderReport {
     pub validation_errors: Vec<ValidationError>,
 }
 
+impl VariableRenderReport {
+    /// Project every render and validation failure without parsing display text.
+    pub fn diagnostics(&self) -> Vec<DomainDiagnostic> {
+        self.errors
+            .iter()
+            .map(|error| DomainDiagnostic {
+                code: "missing_variable",
+                category: DiagnosticCategory::Validation,
+                path: error.path.parse().ok(),
+                address: error.path.clone(),
+                overlay_id: None,
+                source_id: None,
+                intent: None,
+                entity_kind: None,
+                expected: None,
+                actual: None,
+                first_conflict_participant: None,
+                current_conflict_participant: None,
+                original_removal: None,
+                field_graph_error: None,
+                children: Vec::new(),
+                message: format!("missing variable ${}", error.variable),
+            })
+            .chain(
+                self.validation_errors
+                    .iter()
+                    .map(ValidationError::diagnostic),
+            )
+            .collect()
+    }
+}
+
 impl fmt::Display for VariableRenderReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut wrote_error = false;
@@ -2358,6 +2390,42 @@ pub struct FieldGraphError {
     /// Canonical closed field path. Empty except for [`FieldGraphErrorKind::Cycle`].
     pub cycle: Vec<String>,
     pub message: String,
+}
+
+impl FieldGraphError {
+    /// Project this graph issue without flattening its dependency metadata.
+    pub fn diagnostic(&self) -> DomainDiagnostic {
+        let code = match self.kind {
+            FieldGraphErrorKind::Cycle => "message_dependency_cycle",
+            FieldGraphErrorKind::InvalidTargetRepresentation => {
+                "invalid_message_target_representation"
+            }
+            FieldGraphErrorKind::InvalidReference
+            | FieldGraphErrorKind::MissingNote
+            | FieldGraphErrorKind::MissingFieldDefinition
+            | FieldGraphErrorKind::MissingFieldValue
+            | FieldGraphErrorKind::TombstonedDependency
+            | FieldGraphErrorKind::InvalidMessage => "invalid_message_reference",
+        };
+        DomainDiagnostic {
+            code,
+            category: DiagnosticCategory::Validation,
+            path: self.consuming_path.parse().ok(),
+            address: self.consuming_path.clone(),
+            overlay_id: None,
+            source_id: None,
+            intent: None,
+            entity_kind: None,
+            expected: None,
+            actual: None,
+            first_conflict_participant: None,
+            current_conflict_participant: None,
+            original_removal: None,
+            field_graph_error: Some(self.clone()),
+            children: Vec::new(),
+            message: self.message.clone(),
+        }
+    }
 }
 
 /// A deterministic field graph planning or resolution failure report.

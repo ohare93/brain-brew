@@ -87,8 +87,8 @@ The E2E harness lives in `crates/brain-brew-workbench-e2e`, uses Rust `thirtyfou
 The current note pivot supports target-translation edits and constrained source note-field edits:
 
 - `GET /api/workbench/note-pivot` returns the selected target language, target, translation overlay, main note-field progress, note rows, field statuses, occurrence counts, source edit controls, and near-Anki source/target previews.
-- `POST /api/workbench/apply-preview` accepts browser-local staged edits and returns changed entries, affected source/overlay files, and validation results without writing YAML.
-- `POST /api/workbench/apply` is blocked in normal/read-only mode. In explicitly enabled unsafe development mode it repeats validation, applies source edits first, then applies target translation edits against the updated source state.
+- `POST /api/workbench/apply-preview` accepts browser-local staged edits and returns changed entries, affected source/overlay files, and validation results without writing YAML. `validation` contains `schema_version: 1`, `ok`, and an ordered `diagnostics` array using the same diagnostics-v1 objects as error envelopes; it never contains newline-joined diagnostic strings.
+- `POST /api/workbench/apply` is blocked in normal/read-only mode. In explicitly enabled unsafe development mode it repeats validation, applies source edits first, then applies target translation edits against the updated source state. Validation failure returns HTTP 422 with the diagnostics-v1 error envelope and the same typed child metadata shown by preview.
 - Target translation edits rewrite the selected Translation Overlay as canonical YAML.
 - Source note-field edits rewrite the Canonical Deck File, except `!include`-backed scalar fields rewrite the included file and keep the include reference intact.
 - Repeated source text edits default to the current field only. The browser UI shows the occurrence count and offers an all-occurrences scope.

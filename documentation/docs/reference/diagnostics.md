@@ -18,7 +18,7 @@ CLI domain failures and Workbench HTTP failures use an error object with `schema
 - ordered `children` for final validation issues;
 - `message`, which is supplemental display text and must not be parsed.
 
-Workbench returns the same `error.schema_version`, `code`, `category`, `message`, and ordered `diagnostics` fields. Domain-backed composition failures use HTTP 422, invalid requests use 400, read-only mutation attempts use 403, and unexpected adapter failures use 500.
+Workbench returns the same `error.schema_version`, `code`, `category`, `message`, and ordered `diagnostics` fields. Domain-backed composition and development-write validation failures use HTTP 422, invalid requests use 400, read-only mutation attempts use 403, and unexpected adapter failures use 500. Apply-preview success embeds the same version-1 diagnostic objects under `validation.diagnostics`; clients must not expect or reconstruct newline-joined `validation.errors` strings.
 
 Ordering follows deterministic core validation/composition order. Object consumers must ignore unknown fields. A future incompatible envelope changes `schema_version`; adding optional fields does not.
 

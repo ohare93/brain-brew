@@ -3909,7 +3909,7 @@ fn refresh_progress_from_dom() {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[allow(dead_code)]
 fn apply_result_text(heading: &str, value: &Value) -> String {
     let mut lines = vec![heading.to_owned(), "Affected files:".to_owned()];
     for file in value["affected_files"].as_array().into_iter().flatten() {
@@ -3960,15 +3960,21 @@ fn apply_result_text(heading: &str, value: &Value) -> String {
         "Validation: {}",
         value["validation"]["ok"].as_bool().unwrap_or(false)
     ));
-    for error in value["validation"]["errors"]
+    for diagnostic in value["validation"]["diagnostics"]
         .as_array()
         .into_iter()
         .flatten()
     {
-        lines.push(format!(
-            "- validation error: {}",
-            error.as_str().unwrap_or("unknown")
-        ));
+        let code = diagnostic["code"].as_str().unwrap_or("validation_failed");
+        let category = diagnostic["category"].as_str().unwrap_or("validation");
+        let path = diagnostic["path"]
+            .as_str()
+            .or_else(|| diagnostic["address"].as_str())
+            .unwrap_or("unknown path");
+        let message = diagnostic["message"]
+            .as_str()
+            .unwrap_or("validation failed");
+        lines.push(format!("- {code} [{category}] at {path}: {message}"));
     }
     lines.join("\n")
 }
@@ -4375,4 +4381,34 @@ fn encode_query_component(input: &str) -> String {
         }
     }
     encoded
+}
+
+#[cfg(test)]
+mod typed_apply_validation_tests {
+    use super::*;
+
+    #[test]
+    fn apply_preview_renders_structured_diagnostics_without_legacy_error_strings() {
+        let preview = serde_json::json!({
+            "affected_files": [{"path": "deck.yaml"}],
+            "file_groups": [],
+            "changed_entries": [],
+            "validation": {
+                "schema_version": 1,
+                "ok": false,
+                "diagnostics": [{
+                    "code": "invalid_html_content",
+                    "category": "validation",
+                    "path": "deck.description",
+                    "message": "line 1: unclosed HTML tag <p>"
+                }]
+            }
+        });
+
+        let rendered = apply_result_text("Apply preview", &preview);
+        assert!(rendered.contains(
+            "invalid_html_content [validation] at deck.description: line 1: unclosed HTML tag <p>"
+        ));
+        assert!(!rendered.contains("unknown"));
+    }
 }
