@@ -132,6 +132,14 @@ notes:
 
 `format` renders `{variable}` placeholders and can itself be translated when a language needs different glue or ordering. `ref` resolves another note field before export, `text` is extracted for translation coverage at the named variable path, and `literal` is available for non-translatable named variables. Adapter exports receive a plain resolved string.
 
+### Message reference scope and graph resolution
+
+A `ref` is always a complete canonical `notes.<note-id>.fields.<field-id>` path. References may cross notes in the same composed deck; aliases and display names are not reference keys. Brain Brew builds one deck-wide graph from the final semantic `FieldValue` map after the ordered overlay/translation stack. Scalar fields are terminal nodes, messages depend on every referenced field, and structured images are terminal semantic nodes lowered by the rendering adapter. A message may therefore reference a scalar, another message, or an image field. Image lowering keeps the exact deterministic `<img src="..." />` adapter form documented above.
+
+Validation and rendering use the same graph plan. Missing notes, missing field definitions, absent values, tombstoned dependencies, malformed paths/messages, and unrepresentable image targets are typed failures carrying the consuming note/field/component path and dependency. Cycles fail validation before export. Their diagnostic includes a canonical closed path such as `A -> B -> C -> A`; a tail leading into the cycle is not included in the closed trace.
+
+Nodes and edges are traversed in canonical field-path order, dependencies are emitted before consumers, and each node is resolved at most once. Successful planning/resolution is `O(V + E)` after the canonical deck maps have been built. Diamonds share the same memoized dependency value. Output and diagnostics do not depend on source map insertion order or unrelated fields. A later overlay replacement remains visible through every live reference; only an explicit full-message translation or consuming-path translation that intentionally differs from the referenced field materializes a literal and severs that edge.
+
 The older positional component form remains accepted for simple cases:
 
 ```yaml

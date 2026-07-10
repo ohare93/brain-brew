@@ -146,6 +146,8 @@ Island (blå bakgrunn med hvitt kors), Norge (rød bakgrunn med blått kors)
 
 Strict coverage reports missing and stale entries for the `format` glue and for each `text` or `ref` component instead of requiring one long key for the whole composite field. The translator context view shows the resolved message plus its components so translators can edit the glue, reusable country names, and qualifier fragments separately. If a target language needs a special whole-field wording, add a contextual translation for the full resolved source string at the field or note context; that full override replaces the component-composed output for that target.
 
+Translation coverage and application resolve source fields through the same validated dependency graph used by export. Reusable direct/no-change translations stay attached to the referenced upstream field, so a later overlay replacement propagates through downstream messages. A consuming-path contextual adaptation intentionally materializes that component as a literal when it differs from the referenced field. Missing references and cycles are errors rather than empty fallback text.
+
 Coordinate with deck maintainers before migrating existing large fields: structured messages are best for repeated, composite source text where component reuse clearly reduces duplication.
 
 ## Stale translations

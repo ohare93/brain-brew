@@ -269,8 +269,8 @@ tombstones: []
 
     assert_eq!(
         deck.field_text(&sid("note.finland"), &sid("field.flag-similarity"))
-            .as_deref(),
-        Some("Iceland (blue background with a white cross)")
+            .expect("structured message resolves"),
+        "Iceland (blue background with a white cross)"
     );
     assert_eq!(
         deck.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")]
@@ -338,8 +338,8 @@ tombstones: []
 
     assert_eq!(
         deck.field_text(&sid("note.finland"), &sid("field.flag-similarity"))
-            .as_deref(),
-        Some("Iceland (blue background with a white cross)")
+            .expect("structured message resolves"),
+        "Iceland (blue background with a white cross)"
     );
     let message = deck.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")]
         .as_message()

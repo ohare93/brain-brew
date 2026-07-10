@@ -1020,10 +1020,13 @@ fn collect_translation_reports(
         let mut current = plan.base.clone();
         for (planned, overlay) in &plan.overlays {
             if overlay.translations.is_some() {
-                if overlay_matches_scope(target, planned, overlay, args)
-                    && let Some(report) = current.translation_coverage(overlay)
-                {
-                    let full_context = current.translation_context(&report);
+                if overlay_matches_scope(target, planned, overlay, args) {
+                    let report = current
+                        .translation_coverage(overlay)
+                        .map_err(|error| format!("failed to resolve translation source fields for target {target}: {error}"))?;
+                    let full_context = current.translation_context(&report).map_err(|error| {
+                        format!("failed to build translation context for target {target}: {error}")
+                    })?;
                     let mut entries = report
                         .entries
                         .iter()

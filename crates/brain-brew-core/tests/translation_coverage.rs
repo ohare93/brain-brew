@@ -40,7 +40,7 @@ fn untranslated_structured_message_format_is_fallback_coverage_but_compose_succe
 
     let report = deck
         .translation_coverage(&overlay)
-        .expect("translation overlay has coverage");
+        .expect("translation overlay field graph resolves");
     assert!(report.entries.iter().any(|entry| {
         entry.category == TranslationCoverageCategory::UntranslatedFallback
             && entry.path == "notes.note.finland.fields.field.summary.message.format"
@@ -52,8 +52,8 @@ fn untranslated_structured_message_format_is_fallback_coverage_but_compose_succe
     assert_eq!(
         resolved
             .field_text(&sid("note.finland"), &sid("field.summary"))
-            .as_deref(),
-        Some("Capital: Helsingfors")
+            .expect("summary field resolves"),
+        "Capital: Helsingfors"
     );
 }
 
@@ -90,7 +90,7 @@ fn shadowed_stale_record_reports_rendered_translation_instead_of_dead_target() {
 
     let report = deck
         .translation_coverage(&overlay)
-        .expect("translation overlay has coverage");
+        .expect("translation overlay field graph resolves");
     let stale = report
         .entries
         .iter()

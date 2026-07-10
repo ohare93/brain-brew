@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::messages::resolve_structured_messages_with_validation_errors;
+use crate::messages::lower_images_from_deck;
 use crate::translation::apply_translation_dictionary;
 use crate::*;
 
@@ -24,11 +24,13 @@ impl CanonicalDeck {
                 .errors
                 .into_iter()
                 .map(|error| {
-                    ComposeError::new(
+                    let mut compose_error = ComposeError::new(
                         ComposeErrorKind::ValidationFailed,
                         error.path,
                         error.message,
-                    )
+                    );
+                    compose_error.field_graph_error = error.field_graph_error;
+                    compose_error
                 })
                 .collect(),
         })?;
@@ -2131,21 +2133,8 @@ fn requires_expected_base(intent: ChangeIntent) -> bool {
 fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, VariableRenderReport> {
     let mut rendered = deck.clone();
     let mut errors = Vec::new();
-    let mut image_errors = Vec::new();
     let deck_variables = rendered.variables.clone();
     let tombstones = rendered.tombstones.clone();
-    let media_paths = rendered
-        .media
-        .iter()
-        .filter(|(id, _)| {
-            tombstones
-                .blocking(&TombstoneAddress::MediaReference {
-                    media_id: (*id).clone(),
-                })
-                .is_none()
-        })
-        .map(|(id, media)| (id.clone(), media.path.clone()))
-        .collect::<BTreeMap<_, _>>();
 
     if tombstones.blocking(&TombstoneAddress::DeckName).is_none() {
         render_string_with_variables(
@@ -2288,98 +2277,41 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
                 FieldValue::Images(_) => {}
             }
         }
-        render_image_fields(note_id, note, &media_paths, &mut image_errors);
     }
 
-    if errors.is_empty() {
-        let mut validation_errors = image_errors;
-        resolve_structured_messages_with_validation_errors(&mut rendered, &mut validation_errors);
-        if validation_errors.is_empty() {
-            Ok(rendered)
-        } else {
-            Err(VariableRenderReport {
-                errors,
-                validation_errors,
-            })
-        }
-    } else {
-        Err(VariableRenderReport {
+    if !errors.is_empty() {
+        return Err(VariableRenderReport {
             errors,
             validation_errors: Vec::new(),
-        })
+        });
     }
-}
 
-fn render_image_fields(
-    note_id: &StableId,
-    note: &mut Note,
-    media_paths: &BTreeMap<StableId, String>,
-    errors: &mut Vec<ValidationError>,
-) {
-    let image_fields = note
-        .fields
-        .iter()
-        .filter_map(|(field_id, value)| {
-            value
-                .as_images()
-                .map(|images| (field_id.clone(), images.to_vec()))
-        })
-        .collect::<Vec<_>>();
-    for (field_id, images) in image_fields {
-        let path = note_field_path(note_id, &field_id);
-        let mut rendered = String::new();
-        let mut field_has_error = false;
-        for image in images {
-            let Some(media_path) = media_paths.get(&image.media_id) else {
-                errors.push(ValidationError::new(
-                    ValidationErrorKind::UnknownMediaReference,
-                    path.clone(),
-                    format!(
-                        "unknown media id \"{}\" referenced in field {path}",
-                        image.media_id
-                    ),
-                ));
-                field_has_error = true;
-                continue;
-            };
-            let encoded_path = encode_media_path_for_url(media_path);
-            rendered.push_str("<img src=\"");
-            rendered.push_str(&escape_html_attribute(&encoded_path));
-            rendered.push_str("\" />");
+    match rendered.resolve_field_graph(|note_id, field_id, images| {
+        lower_images_from_deck(&rendered, note_id, field_id, images)
+    }) {
+        Ok(graph) => {
+            for (path, value) in graph.values {
+                let DeckPath::NoteField { note_id, field_id } = path
+                    .parse()
+                    .expect("planned graph values always have canonical note-field paths")
+                else {
+                    unreachable!("planned graph values are note fields")
+                };
+                if let Some(note) = rendered.notes.get_mut(&note_id) {
+                    note.fields.insert(field_id, FieldValue::Scalar(value));
+                }
+            }
+            Ok(rendered)
         }
-        if !field_has_error {
-            note.fields
-                .insert(field_id.clone(), FieldValue::Scalar(rendered));
-        }
+        Err(report) => Err(VariableRenderReport {
+            errors,
+            validation_errors: report
+                .errors
+                .into_iter()
+                .map(ValidationError::from_field_graph)
+                .collect(),
+        }),
     }
-}
-
-fn encode_media_path_for_url(path: &str) -> String {
-    let mut encoded = String::with_capacity(path.len());
-    for byte in path.as_bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(*byte, b'-' | b'.' | b'_' | b'~' | b'/') {
-            encoded.push(char::from(*byte));
-        } else {
-            use std::fmt::Write as _;
-            write!(&mut encoded, "%{byte:02X}").expect("writing to String cannot fail");
-        }
-    }
-    encoded
-}
-
-fn escape_html_attribute(value: &str) -> String {
-    let mut escaped = String::with_capacity(value.len());
-    for ch in value.chars() {
-        match ch {
-            '&' => escaped.push_str("&amp;"),
-            '"' => escaped.push_str("&quot;"),
-            '\'' => escaped.push_str("&#39;"),
-            '<' => escaped.push_str("&lt;"),
-            '>' => escaped.push_str("&gt;"),
-            _ => escaped.push(ch),
-        }
-    }
-    escaped
 }
 
 fn render_message_variables(

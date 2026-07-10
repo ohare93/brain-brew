@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
@@ -2008,6 +2008,8 @@ pub struct ComposeError {
     pub actual: Option<ComposePrecondition>,
     /// Original removal record when a later overlay attempts to reuse its address.
     pub original_removal: Option<TombstoneRecord>,
+    /// Structured graph diagnostics when composition fails during field dependency planning.
+    pub field_graph_error: Option<FieldGraphError>,
     pub message: String,
 }
 
@@ -2024,6 +2026,7 @@ impl ComposeError {
             expected: None,
             actual: None,
             original_removal: None,
+            field_graph_error: None,
             message,
         }
     }
@@ -2162,6 +2165,94 @@ pub enum SemanticChangeKind {
     Tombstoned,
 }
 
+/// The semantic representation of a note-field graph node.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum FieldValueKind {
+    Scalar,
+    Images,
+    Message,
+}
+
+impl FieldValueKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Scalar => "scalar",
+            Self::Images => "images",
+            Self::Message => "message",
+        }
+    }
+}
+
+/// Machine-readable structured-message dependency failure.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum FieldGraphErrorKind {
+    InvalidReference,
+    MissingNote,
+    MissingFieldDefinition,
+    MissingFieldValue,
+    TombstonedDependency,
+    InvalidTargetRepresentation,
+    Cycle,
+    InvalidMessage,
+}
+
+/// One path-rich failure produced while planning or resolving note field dependencies.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct FieldGraphError {
+    pub kind: FieldGraphErrorKind,
+    pub note_id: StableId,
+    pub field_id: StableId,
+    pub consuming_path: String,
+    pub dependency: Option<String>,
+    pub representation: Option<FieldValueKind>,
+    /// Canonical closed field path. Empty except for [`FieldGraphErrorKind::Cycle`].
+    pub cycle: Vec<String>,
+    pub message: String,
+}
+
+/// A deterministic field graph planning or resolution failure report.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FieldGraphReport {
+    pub errors: Vec<FieldGraphError>,
+}
+
+impl FieldGraphReport {
+    pub fn has_kind(&self, kind: FieldGraphErrorKind) -> bool {
+        self.errors.iter().any(|error| error.kind == kind)
+    }
+}
+
+impl fmt::Display for FieldGraphReport {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (index, error) in self.errors.iter().enumerate() {
+            if index > 0 {
+                writeln!(f)?;
+            }
+            write!(f, "{}: {}", error.consuming_path, error.message)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for FieldGraphReport {}
+
+/// Scalar values resolved in deterministic dependency-first order.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResolvedFieldGraph {
+    pub(crate) values: HashMap<String, String>,
+    pub(crate) order: Vec<String>,
+}
+
+impl ResolvedFieldGraph {
+    pub fn get(&self, path: &str) -> Option<&str> {
+        self.values.get(path).map(String::as_str)
+    }
+
+    pub fn order(&self) -> &[String] {
+        &self.order
+    }
+}
+
 /// A strict validation failure report.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ValidationReport {
@@ -2195,6 +2286,8 @@ pub struct ValidationError {
     pub kind: ValidationErrorKind,
     pub path: String,
     pub message: String,
+    /// Structured graph diagnostics when this validation failure came from a field dependency.
+    pub field_graph_error: Option<FieldGraphError>,
 }
 
 impl ValidationError {
@@ -2203,6 +2296,28 @@ impl ValidationError {
             kind,
             path,
             message,
+            field_graph_error: None,
+        }
+    }
+
+    pub(crate) fn from_field_graph(error: FieldGraphError) -> Self {
+        let kind = match error.kind {
+            FieldGraphErrorKind::Cycle => ValidationErrorKind::MessageDependencyCycle,
+            FieldGraphErrorKind::InvalidTargetRepresentation => {
+                ValidationErrorKind::InvalidMessageTargetRepresentation
+            }
+            FieldGraphErrorKind::InvalidReference
+            | FieldGraphErrorKind::MissingNote
+            | FieldGraphErrorKind::MissingFieldDefinition
+            | FieldGraphErrorKind::MissingFieldValue
+            | FieldGraphErrorKind::TombstonedDependency
+            | FieldGraphErrorKind::InvalidMessage => ValidationErrorKind::InvalidMessageReference,
+        };
+        Self {
+            kind,
+            path: error.consuming_path.clone(),
+            message: error.message.clone(),
+            field_graph_error: Some(error),
         }
     }
 }
@@ -2217,6 +2332,8 @@ pub enum ValidationErrorKind {
     DuplicateFieldDefinition,
     DuplicateCardTemplate,
     InvalidMessageReference,
+    InvalidMessageTargetRepresentation,
+    MessageDependencyCycle,
     InvalidStableId,
     ConflictingFieldRepresentation,
     UnknownMediaReference,

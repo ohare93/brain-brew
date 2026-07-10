@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, FieldValue,
-    MediaReference, Note, NoteType, StableId, TombstoneAddress, TombstoneRecord, Tombstones,
+    MediaReference, MessageComponent, Note, NoteType, StableId, StructuredMessage,
+    TombstoneAddress, TombstoneRecord, Tombstones,
 };
 use brain_brew_formats::{canonical_yaml, crowdanki};
 
@@ -58,6 +59,35 @@ fn export_is_byte_identical_for_structured_image_and_equivalent_raw_img_field() 
         .deck_json;
 
     assert_eq!(structured_json, raw_json);
+}
+
+#[test]
+fn crowdanki_export_resolves_message_to_structured_image_dependency() {
+    let mut deck = ug_style_deck();
+    let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
+    note.fields.insert(
+        sid("field.flag"),
+        FieldValue::Images(vec![FieldImageReference {
+            media_id: sid("media.flags-fi-png"),
+        }]),
+    );
+    note.fields.insert(
+        sid("field.capital"),
+        FieldValue::Message(StructuredMessage {
+            components: vec![MessageComponent::FieldRef(
+                "notes.note.finland.fields.field.flag".to_owned(),
+            )],
+            format: None,
+            variables: BTreeMap::new(),
+        }),
+    );
+
+    let export = crowdanki::export_deck(&deck).expect("mixed field graph exports");
+    let json: serde_json::Value = serde_json::from_str(&export.deck_json).unwrap();
+    assert_eq!(
+        json["notes"][0]["fields"][1],
+        "<img src=\"flags/fi.png\" />"
+    );
 }
 
 #[test]

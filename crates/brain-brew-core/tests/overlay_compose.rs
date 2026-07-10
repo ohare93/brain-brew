@@ -634,7 +634,9 @@ fn translation_context_identifies_note_field_card_and_duplicate_status() {
     let report = base
         .translation_coverage(&overlay)
         .expect("translation overlay has coverage");
-    let context = base.translation_context(&report);
+    let context = base
+        .translation_context(&report)
+        .expect("translation context field graph resolves");
     let finland = context
         .units
         .iter()
@@ -1069,7 +1071,7 @@ fn render_variables_reports_structured_message_resolution_errors_after_substitut
     let output = report.to_string();
     assert!(output.contains("notes.note.finland.fields.field.summary"));
     assert!(output.contains("notes.note.missing.fields.field.country"));
-    assert!(output.contains("does not resolve to a note field"));
+    assert!(output.contains("names missing note note.missing"));
 }
 
 #[test]
@@ -1100,13 +1102,13 @@ fn canonical_validation_rejects_structured_message_reference_cycles() {
     let report = deck
         .validate()
         .expect_err("message cycle must fail validation");
-    assert!(report.has_kind(ValidationErrorKind::InvalidMessageReference));
-    assert!(
-        report
-            .errors
-            .iter()
-            .any(|error| error.message.contains("cycle"))
-    );
+    assert!(report.has_kind(ValidationErrorKind::MessageDependencyCycle));
+    assert!(report.errors.iter().any(|error| {
+        error
+            .field_graph_error
+            .as_ref()
+            .is_some_and(|details| details.cycle.first() == details.cycle.last())
+    }));
 }
 
 #[test]
@@ -1296,8 +1298,8 @@ fn translation_dictionary_resolves_structured_message_components() {
     assert_eq!(
         resolved
             .field_text(&sid("note.finland"), &sid("field.flag-similarity"))
-            .as_deref(),
-        Some("Island (blå bakgrunn med hvitt kors), Norge (rød bakgrunn med blått kors)")
+            .expect("structured message resolves"),
+        "Island (blå bakgrunn med hvitt kors), Norge (rød bakgrunn med blått kors)"
     );
 }
 
@@ -1348,10 +1350,8 @@ fn translation_dictionary_no_change_wins_over_stale_record_for_structured_messag
     assert_eq!(
         resolved
             .field_text(&sid("note.finland"), &sid("field.flag-similarity"))
-            .as_deref(),
-        Some(
-            "Iceland (blue background with a white cross), Norway (red background with a blue cross)"
-        )
+            .expect("structured message resolves"),
+        "Iceland (blue background with a white cross), Norway (red background with a blue cross)"
     );
 }
 
@@ -1415,8 +1415,8 @@ fn translation_dictionary_can_translate_structured_message_format() {
     assert_eq!(
         resolved
             .field_text(&sid("note.finland"), &sid("field.flag-similarity"))
-            .as_deref(),
-        Some("冰岛(蓝底白十字)、挪威(红底蓝十字)")
+            .expect("structured message resolves"),
+        "冰岛(蓝底白十字)、挪威(红底蓝十字)"
     );
 }
 

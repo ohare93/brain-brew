@@ -108,9 +108,14 @@ fn ultimate_geography_fixture_uses_structured_messages_for_flag_similarity() {
         .into_iter()
         .flat_map(|target| {
             let deck = compose_target(&root, &manifest, target);
+            let field_id = sid("field.flag-similarity");
             deck.notes
-                .keys()
-                .filter_map(|note_id| deck.field_text(note_id, &sid("field.flag-similarity")))
+                .iter()
+                .filter(|(_, note)| note.fields.contains_key(&field_id))
+                .map(|(note_id, _)| {
+                    deck.field_text(note_id, &field_id)
+                        .expect("UG structured message graph resolves")
+                })
                 .filter(|value| !value.is_empty())
                 .collect::<Vec<_>>()
         })

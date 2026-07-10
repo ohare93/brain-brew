@@ -241,7 +241,13 @@ fn verify_translation_coverage_policy(
 ) -> Result<(), String> {
     let mut current = plan.base.clone();
     for (planned, overlay) in &plan.overlays {
-        if let Some(report) = current.translation_coverage(overlay) {
+        let report = current.translation_coverage(overlay).map_err(|error| {
+            format!(
+                "failed to resolve translation source fields for target {}: {error}",
+                plan.target
+            )
+        })?;
+        if overlay.translations.is_some() {
             if policy == manifest::TranslationCoveragePolicy::Strict {
                 let missing = report
                     .entries
@@ -325,14 +331,18 @@ fn stale_translation_warning_messages(plan: &TargetPlan) -> Result<Vec<String>, 
     let mut messages = Vec::new();
     let mut current = plan.base.clone();
     for (planned, overlay) in &plan.overlays {
-        if let Some(report) = current.translation_coverage(overlay)
-            && let Some(message) = stale_translation_warning_message(
-                &plan.target,
-                &planned.id,
-                &planned.display_file,
-                &report.entries,
+        let report = current.translation_coverage(overlay).map_err(|error| {
+            format!(
+                "failed to resolve translation source fields for target {}: {error}",
+                plan.target
             )
-        {
+        })?;
+        if let Some(message) = stale_translation_warning_message(
+            &plan.target,
+            &planned.id,
+            &planned.display_file,
+            &report.entries,
+        ) {
             messages.push(message);
         }
         current = current.compose(std::slice::from_ref(overlay)).map_err(|error| {
@@ -353,14 +363,15 @@ fn stale_translation_warning_messages_for_overlays(
     let mut messages = Vec::new();
     let mut current = base.clone();
     for (display_file, overlay) in overlays {
-        if let Some(report) = current.translation_coverage(overlay)
-            && let Some(message) = stale_translation_warning_message(
-                target,
-                overlay.id.as_str(),
-                display_file,
-                &report.entries,
-            )
-        {
+        let report = current.translation_coverage(overlay).map_err(|error| {
+            format!("failed to resolve translation source fields for target {target}: {error}")
+        })?;
+        if let Some(message) = stale_translation_warning_message(
+            target,
+            overlay.id.as_str(),
+            display_file,
+            &report.entries,
+        ) {
             messages.push(message);
         }
         current = current

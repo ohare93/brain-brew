@@ -1365,7 +1365,9 @@ impl WorkspaceMetadata {
                 selected_display_file = planned.display_file.clone();
                 selected_file = planned.file.clone();
                 selected_source_deck = Some(current.clone());
-                selected_report = current.translation_coverage(overlay);
+                selected_report = Some(current.translation_coverage(overlay).map_err(|error| {
+                    format!("failed to resolve translation source fields: {error}")
+                })?);
             }
             current = if overlay.translations.is_some() {
                 compose_lenient_translation_overlay(&current, overlay)?
@@ -2909,6 +2911,10 @@ fn card_summary_json(card: &ProducedCardRow) -> Value {
 }
 
 fn card_detail_json(context: &SelectedTranslationContext, card: &ProducedCardRow) -> Value {
+    let target_fields = context
+        .target_deck
+        .resolved_field_graph()
+        .expect("selected Workbench target deck was graph-validated when its context was built");
     let source_note = context.source_deck.notes.get(&card.note_id);
     let target_note = context.target_deck.notes.get(&card.note_id).or(source_note);
     let source_note_type = context.source_deck.note_types.get(&card.note_type_id);
@@ -2920,7 +2926,9 @@ fn card_detail_json(context: &SelectedTranslationContext, card: &ProducedCardRow
         .iter()
         .map(|row| {
             let target = target_note
-                .and_then(|note| context.target_deck.field_text(&note.id, &row.field_id))
+                .map(|note| {
+                    resolved_field_text_or_diagnostic(&target_fields, &note.id, &row.field_id)
+                })
                 .unwrap_or_else(|| row.translated.clone());
             json!({
                 "path": row.path,
@@ -2960,7 +2968,10 @@ fn render_single_note_card(
     note_type: &NoteType,
     template_id: &StableId,
 ) -> Value {
-    let rendered_deck = deck.render_variables().unwrap_or_else(|_| deck.clone());
+    let rendered_deck = match deck.render_variables() {
+        Ok(rendered) => rendered,
+        Err(error) => return json!({ "error": error.to_string(), "cards": [] }),
+    };
     let rendered_note = rendered_deck.notes.get(&note.id).unwrap_or(note);
     let rendered_note_type = rendered_deck
         .note_types
@@ -2983,6 +2994,7 @@ fn source_string_rows(context: &SelectedTranslationContext) -> Vec<MainFieldRow>
     context
         .source_deck
         .translation_context(&context.report)
+        .expect("selected translation context was graph-validated when it was built")
         .units
         .into_iter()
         .filter_map(|unit| {
@@ -3077,6 +3089,10 @@ fn source_string_occurrence_json(
     context: &SelectedTranslationContext,
     row: &MainFieldRow,
 ) -> Value {
+    let target_fields = context
+        .target_deck
+        .resolved_field_graph()
+        .expect("selected Workbench target deck was graph-validated when its context was built");
     let note = context.source_deck.notes.get(&row.note_id);
     let target_note = context.target_deck.notes.get(&row.note_id).or(note);
     let source_note_type = context.source_deck.note_types.get(&row.note_type_id);
@@ -3090,7 +3106,7 @@ fn source_string_occurrence_json(
             row.translated.clone()
         } else {
             target_note
-                .and_then(|note| context.target_deck.field_text(&note.id, &row.field_id))
+                .map(|note| resolved_field_text_or_diagnostic(&target_fields, &note.id, &row.field_id))
                 .unwrap_or_else(|| row.translated.clone())
         },
         "status": row.category.as_str(),
@@ -3264,12 +3280,31 @@ struct MainFieldRow {
     translated: String,
 }
 
+fn resolved_field_text_or_diagnostic(
+    graph: &brain_brew_core::ResolvedFieldGraph,
+    note_id: &StableId,
+    field_id: &StableId,
+) -> String {
+    let path = brain_brew_core::DeckPath::NoteField {
+        note_id: note_id.clone(),
+        field_id: field_id.clone(),
+    }
+    .to_string();
+    graph
+        .get(&path)
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("[field resolution error: no live value at {path}]"))
+}
+
 fn main_field_rows(
     source_deck: &CanonicalDeck,
     selection: &WorkbenchSelection,
     entries: &[TranslationCoverageEntry],
 ) -> Vec<MainFieldRow> {
     let structural_fields = structural_field_set(selection, source_deck);
+    let resolved_fields = source_deck
+        .resolved_field_graph()
+        .expect("selected Workbench source deck was graph-validated when its context was built");
     let entries_by_path = entries
         .iter()
         .map(|entry| (entry.path.as_str(), entry))
@@ -3280,13 +3315,13 @@ fn main_field_rows(
             continue;
         };
         for field in &note_type.fields {
-            let Some(source) = source_deck.field_text(note_id, &field.id) else {
+            let path = format!("notes.{note_id}.fields.{}", field.id);
+            let Some(source) = resolved_fields.get(&path).map(str::to_owned) else {
                 continue;
             };
             if source.is_empty() {
                 continue;
             }
-            let path = format!("notes.{note_id}.fields.{}", field.id);
             let structural = structural_fields.contains(field.id.as_str());
             let entry = entries_by_path.get(path.as_str()).copied();
             rows.push(MainFieldRow {
@@ -3670,6 +3705,9 @@ fn note_pivot_notes_json(
     selected_note: Option<&str>,
 ) -> Value {
     let rows = main_field_rows(source_deck, &context.selection, &context.report.entries);
+    let target_fields = target_deck
+        .resolved_field_graph()
+        .expect("selected Workbench target deck was graph-validated when its context was built");
     let rows_by_note = rows.into_iter().fold(
         BTreeMap::<StableId, Vec<MainFieldRow>>::new(),
         |mut rows_by_note, row| {
@@ -3703,9 +3741,8 @@ fn note_pivot_notes_json(
         let fields = field_rows
             .iter()
             .map(|row| {
-                let target = target_deck
-                    .field_text(note_id, &row.field_id)
-                    .unwrap_or_else(|| row.translated.clone());
+                let target =
+                    resolved_field_text_or_diagnostic(&target_fields, note_id, &row.field_id);
                 json!({
                     "path": row.path,
                     "note_id": row.note_id.to_string(),
@@ -3838,7 +3875,10 @@ fn is_stale_category(category: TranslationCoverageCategory) -> bool {
 }
 
 fn render_note_cards(deck: &CanonicalDeck, note: &Note, note_type: &NoteType) -> Value {
-    let rendered_deck = deck.render_variables().unwrap_or_else(|_| deck.clone());
+    let rendered_deck = match deck.render_variables() {
+        Ok(rendered) => rendered,
+        Err(error) => return json!({ "error": error.to_string(), "cards": [] }),
+    };
     let rendered_note = rendered_deck.notes.get(&note.id).unwrap_or(note);
     let rendered_note_type = rendered_deck
         .note_types
@@ -4792,7 +4832,9 @@ fn context_with_modified_base_and_overlay(
         };
         if planned.id == context.selection.overlay_id {
             selected_source_deck = Some(current.clone());
-            selected_report = current.translation_coverage(active_overlay);
+            selected_report = Some(current.translation_coverage(active_overlay).map_err(
+                |error| format!("failed to resolve translation source fields: {error}"),
+            )?);
         }
         current = if active_overlay.translations.is_some() {
             compose_lenient_translation_overlay(&current, active_overlay)?

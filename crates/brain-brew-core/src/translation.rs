@@ -2,25 +2,31 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::compose::record_change_path;
 use crate::messages::{
-    message_component_path, message_format_path, message_variable_path, render_message_format,
-    rendered_field_text_at_path,
+    lower_images_from_deck, message_component_path, message_format_path, message_variable_path,
+    render_message_format,
 };
 use crate::*;
 
 impl CanonicalDeck {
     /// Report translation coverage for one translation overlay without modifying this deck.
-    pub fn translation_coverage(&self, overlay: &Overlay) -> Option<TranslationCoverageReport> {
-        overlay
-            .translations
-            .as_ref()
-            .map(|translations| translation_coverage_report(self, overlay, translations))
+    pub fn translation_coverage(
+        &self,
+        overlay: &Overlay,
+    ) -> Result<TranslationCoverageReport, FieldGraphReport> {
+        let Some(translations) = overlay.translations.as_ref() else {
+            return Ok(TranslationCoverageReport {
+                overlay_id: overlay.id.clone(),
+                entries: Vec::new(),
+            });
+        };
+        translation_coverage_report(self, overlay, translations)
     }
 
     /// Build translator-facing note/field/card context for one coverage report.
     pub fn translation_context(
         &self,
         report: &TranslationCoverageReport,
-    ) -> TranslationContextView {
+    ) -> Result<TranslationContextView, FieldGraphReport> {
         translation_context_view(self, report)
     }
 }
@@ -29,9 +35,12 @@ fn translation_coverage_report(
     deck: &CanonicalDeck,
     overlay: &Overlay,
     translations: &TranslationDictionary,
-) -> TranslationCoverageReport {
+) -> Result<TranslationCoverageReport, FieldGraphReport> {
+    let resolved = deck.resolve_field_graph(|note_id, field_id, images| {
+        lower_images_from_deck(deck, note_id, field_id, images)
+    })?;
     let mut builder = TranslationCoverageBuilder {
-        deck,
+        resolved: &resolved,
         translations,
         entries: Vec::new(),
         seen_sources: BTreeSet::new(),
@@ -194,8 +203,10 @@ fn translation_coverage_report(
             match value {
                 FieldValue::Scalar(value) => builder.record_string(value, path, None),
                 FieldValue::Message(message) => {
-                    let rendered = rendered_field_text_at_path(deck, &path).unwrap_or_default();
-                    builder.record_message(&rendered, path, note_id, field_id, message);
+                    let rendered = resolved
+                        .get(&path)
+                        .expect("every planned message has a resolved value");
+                    builder.record_message(rendered, path, note_id, field_id, message);
                 }
                 FieldValue::Images(_) => {}
             }
@@ -216,11 +227,11 @@ fn translation_coverage_report(
         );
     }
 
-    builder.finish(overlay.id.clone())
+    Ok(builder.finish(overlay.id.clone()))
 }
 
 struct TranslationCoverageBuilder<'a> {
-    deck: &'a CanonicalDeck,
+    resolved: &'a ResolvedFieldGraph,
     translations: &'a TranslationDictionary,
     entries: Vec<TranslationCoverageEntry>,
     seen_sources: BTreeSet<String>,
@@ -457,9 +468,11 @@ impl TranslationCoverageBuilder<'_> {
                 self.record_string(value, path, None);
             }
             MessageComponent::FieldRef(reference) => {
-                if let Some(value) = rendered_field_text_at_path(self.deck, reference) {
-                    self.record_string(&value, path, None);
-                }
+                let value = self
+                    .resolved
+                    .get(reference)
+                    .expect("message references were validated by the shared field graph");
+                self.record_string(value, path, None);
             }
         }
     }
@@ -821,7 +834,10 @@ impl TranslationCoverageBuilder<'_> {
 fn translation_context_view(
     deck: &CanonicalDeck,
     report: &TranslationCoverageReport,
-) -> TranslationContextView {
+) -> Result<TranslationContextView, FieldGraphReport> {
+    let resolved = deck.resolve_field_graph(|note_id, field_id, images| {
+        lower_images_from_deck(deck, note_id, field_id, images)
+    })?;
     let mut source_counts = BTreeMap::<String, usize>::new();
     for entry in &report.entries {
         if !entry.source.is_empty() {
@@ -837,17 +853,20 @@ fn translation_context_view(
     let units = report
         .entries
         .iter()
-        .map(|entry| translation_context_unit(deck, entry, &source_counts, &entries_by_path))
+        .map(|entry| {
+            translation_context_unit(deck, &resolved, entry, &source_counts, &entries_by_path)
+        })
         .collect::<Vec<_>>();
 
-    TranslationContextView {
+    Ok(TranslationContextView {
         overlay_id: report.overlay_id.clone(),
         units,
-    }
+    })
 }
 
 fn translation_context_unit(
     deck: &CanonicalDeck,
+    resolved: &ResolvedFieldGraph,
     entry: &TranslationCoverageEntry,
     source_counts: &BTreeMap<String, usize>,
     entries_by_path: &BTreeMap<&str, &TranslationCoverageEntry>,
@@ -873,13 +892,13 @@ fn translation_context_unit(
     let note_fields = note
         .zip(note_type)
         .zip(note_id.as_ref())
-        .map(|((note, note_type), note_id)| {
-            note_field_contexts(note, note_type, note_id, entries_by_path)
+        .map(|((_note, note_type), note_id)| {
+            note_field_contexts(note_type, note_id, resolved, entries_by_path)
         })
         .unwrap_or_default();
     let message = note.zip(note_id.as_ref()).zip(field_id.as_ref()).and_then(
         |((note, note_id), field_id)| {
-            message_context(deck, note, note_id, field_id, entries_by_path)
+            message_context(note, note_id, field_id, resolved, entries_by_path)
         },
     );
     let card_templates = note_type
@@ -973,28 +992,28 @@ fn field_definition_name<'a>(note_type: &'a NoteType, field_id: &StableId) -> Op
 }
 
 fn note_field_contexts(
-    note: &Note,
     note_type: &NoteType,
     note_id: &StableId,
+    resolved: &ResolvedFieldGraph,
     entries_by_path: &BTreeMap<&str, &TranslationCoverageEntry>,
 ) -> Vec<TranslationNoteFieldContext> {
     note_type
         .fields
         .iter()
-        .map(|field| {
-            let source = note
-                .fields
-                .get(&field.id)
-                .and_then(FieldValue::as_scalar)
-                .unwrap_or_default()
-                .to_owned();
+        .filter_map(|field| {
+            let path = DeckPath::NoteField {
+                note_id: note_id.clone(),
+                field_id: field.id.clone(),
+            }
+            .to_string();
+            let source = resolved.get(&path)?.to_owned();
             let path = DeckPath::NoteField {
                 note_id: note_id.clone(),
                 field_id: field.id.clone(),
             }
             .to_string();
             let entry = entries_by_path.get(path.as_str()).copied();
-            TranslationNoteFieldContext {
+            Some(TranslationNoteFieldContext {
                 field_id: field.id.clone(),
                 field_name: field.name.clone(),
                 source: source.clone(),
@@ -1002,16 +1021,16 @@ fn note_field_contexts(
                     .and_then(|entry| entry.translated.clone())
                     .unwrap_or(source),
                 category: entry.map(|entry| entry.category),
-            }
+            })
         })
         .collect()
 }
 
 fn message_context(
-    deck: &CanonicalDeck,
     note: &Note,
     note_id: &StableId,
     field_id: &StableId,
+    resolved: &ResolvedFieldGraph,
     entries_by_path: &BTreeMap<&str, &TranslationCoverageEntry>,
 ) -> Option<TranslationMessageContext> {
     let message = note.fields.get(field_id)?.as_message()?;
@@ -1020,7 +1039,7 @@ fn message_context(
         field_id: field_id.clone(),
     }
     .to_string();
-    let resolved_source = rendered_field_text_at_path(deck, &field_path).unwrap_or_default();
+    let resolved_source = resolved.get(&field_path)?.to_owned();
     let full_field_translation = entries_by_path
         .get(
             DeckPath::NoteField {
@@ -1053,7 +1072,7 @@ fn message_context(
         for (index, (name, component)) in message.variables.iter().enumerate() {
             let path = message_variable_path(note_id, field_id, name);
             let context = message_component_context(
-                deck,
+                resolved,
                 component,
                 index,
                 Some(name.clone()),
@@ -1082,7 +1101,7 @@ fn message_context(
     let mut components = Vec::new();
     for (index, component) in message.components.iter().enumerate() {
         components.push(message_component_context(
-            deck,
+            resolved,
             component,
             index,
             None,
@@ -1105,7 +1124,7 @@ fn message_context(
 }
 
 fn message_component_context(
-    deck: &CanonicalDeck,
+    resolved: &ResolvedFieldGraph,
     component: &MessageComponent,
     index: usize,
     name: Option<String>,
@@ -1118,7 +1137,10 @@ fn message_component_context(
         MessageComponent::Text(value) => (MessageComponentKind::Text, value.clone(), None),
         MessageComponent::FieldRef(reference) => (
             MessageComponentKind::FieldRef,
-            rendered_field_text_at_path(deck, reference).unwrap_or_default(),
+            resolved
+                .get(reference)
+                .expect("message references were validated by the shared field graph")
+                .to_owned(),
             Some(reference.clone()),
         ),
     };
@@ -1184,6 +1206,23 @@ pub(crate) fn apply_translation_dictionary(
     errors: &mut Vec<ComposeError>,
 ) {
     let source_deck = resolved.clone();
+    let source_graph = match source_deck.resolve_field_graph(|note_id, field_id, images| {
+        lower_images_from_deck(&source_deck, note_id, field_id, images)
+    }) {
+        Ok(graph) => graph,
+        Err(report) => {
+            errors.extend(report.errors.into_iter().map(|graph_error| {
+                let mut error = ComposeError::new(
+                    ComposeErrorKind::ValidationFailed,
+                    graph_error.consuming_path.clone(),
+                    graph_error.message.clone(),
+                );
+                error.field_graph_error = Some(graph_error);
+                error
+            }));
+            return;
+        }
+    };
     let mut seen_direct = BTreeSet::new();
     let mut seen_contextual = BTreeSet::new();
     let mut seen_target_adaptations = BTreeSet::new();
@@ -1349,7 +1388,10 @@ pub(crate) fn apply_translation_dictionary(
                     field_id: field_id.clone(),
                 }
                 .to_string();
-                let source = rendered_field_text_at_path(&source_deck, &path).unwrap_or_default();
+                let source = source_graph
+                    .get(&path)
+                    .expect("every live source field was resolved by the shared graph")
+                    .to_owned();
                 let Some(value) = note.fields.get_mut(&field_id) else {
                     continue;
                 };
@@ -1357,7 +1399,7 @@ pub(crate) fn apply_translation_dictionary(
                     FieldValue::Scalar(value) => context.translate_string(value, path, None),
                     FieldValue::Message(message) => {
                         let full_override = context.translate_message_field(
-                            &source_deck,
+                            &source_graph,
                             &source,
                             path,
                             note_id,
@@ -1476,6 +1518,20 @@ pub(crate) fn apply_translation_dictionary(
     }
 }
 
+fn message_is_single_reference(message: &StructuredMessage) -> bool {
+    if message.format.is_none() {
+        return matches!(
+            message.components.as_slice(),
+            [MessageComponent::FieldRef(_)]
+        );
+    }
+    let Some((name, MessageComponent::FieldRef(_))) = message.variables.first_key_value() else {
+        return false;
+    };
+    message.variables.len() == 1
+        && message.format.as_deref() == Some(format!("{{{name}}}").as_str())
+}
+
 struct TranslationApplyContext<'a, 'b> {
     overlay: &'a Overlay,
     translations: &'a TranslationDictionary,
@@ -1499,16 +1555,36 @@ impl TranslationApplyContext<'_, '_> {
 
     fn translate_message_field(
         &mut self,
-        source_deck: &CanonicalDeck,
+        source_graph: &ResolvedFieldGraph,
         resolved_source: &str,
         path: String,
         note_id: &StableId,
         field_id: &StableId,
         message: &mut StructuredMessage,
     ) -> Option<String> {
-        if self.translations.target_adaptations.contains_key(&path)
-            || has_explicit_string_entry(self.translations, resolved_source, &path, None)
-        {
+        let full_field_outcome = resolve_translation(
+            self.translations,
+            resolved_source,
+            TranslationResolveOptions {
+                path: &path,
+                variable_key: None,
+                include_target_adaptation: true,
+                include_variable: true,
+                include_ignored: true,
+            },
+        );
+        let is_live_reference_alias = message_is_single_reference(message);
+        let has_path_specific_full_override = match full_field_outcome {
+            TranslationOutcome::TargetAdaptation { .. } | TranslationOutcome::Contextual { .. } => {
+                true
+            }
+            TranslationOutcome::Direct { .. } => !is_live_reference_alias,
+            TranslationOutcome::Stale { record, .. } => {
+                record.context.is_some() || !is_live_reference_alias
+            }
+            _ => false,
+        };
+        if has_path_specific_full_override {
             let mut translated = resolved_source.to_owned();
             self.translate_string(&mut translated, path, None);
             return Some(translated);
@@ -1522,7 +1598,7 @@ impl TranslationApplyContext<'_, '_> {
             self.translate_string_without_missing(format, message_format_path(note_id, field_id));
             for (variable, component) in &mut message.variables {
                 self.translate_message_component(
-                    source_deck,
+                    source_graph,
                     component,
                     message_variable_path(note_id, field_id, variable),
                 );
@@ -1530,7 +1606,7 @@ impl TranslationApplyContext<'_, '_> {
         } else {
             for (index, component) in message.components.iter_mut().enumerate() {
                 self.translate_message_component(
-                    source_deck,
+                    source_graph,
                     component,
                     message_component_path(note_id, field_id, index),
                 );
@@ -1541,7 +1617,7 @@ impl TranslationApplyContext<'_, '_> {
 
     fn translate_message_component(
         &mut self,
-        source_deck: &CanonicalDeck,
+        source_graph: &ResolvedFieldGraph,
         component: &mut MessageComponent,
         path: String,
     ) {
@@ -1551,12 +1627,64 @@ impl TranslationApplyContext<'_, '_> {
                 self.translate_string(value, path, None);
             }
             MessageComponent::FieldRef(reference) => {
-                let Some(source) = rendered_field_text_at_path(source_deck, reference) else {
-                    return;
+                let source = source_graph
+                    .get(reference)
+                    .expect("message references were validated by the shared field graph");
+                let materialize_path_specific_translation = matches!(
+                    resolve_translation(
+                        self.translations,
+                        source,
+                        TranslationResolveOptions {
+                            path: &path,
+                            variable_key: None,
+                            include_target_adaptation: true,
+                            include_variable: true,
+                            include_ignored: true,
+                        },
+                    ),
+                    TranslationOutcome::TargetAdaptation { .. }
+                        | TranslationOutcome::Contextual { .. }
+                        | TranslationOutcome::Stale {
+                            record: StaleTranslation {
+                                context: Some(_),
+                                ..
+                            },
+                            ..
+                        }
+                );
+                let dependency_outcome = resolve_translation(
+                    self.translations,
+                    source,
+                    TranslationResolveOptions {
+                        path: reference,
+                        variable_key: None,
+                        include_target_adaptation: true,
+                        include_variable: true,
+                        include_ignored: true,
+                    },
+                );
+                let dependency_target = match dependency_outcome {
+                    TranslationOutcome::TargetAdaptation { adaptation } => {
+                        adaptation.target.as_str()
+                    }
+                    TranslationOutcome::Variable { translated }
+                    | TranslationOutcome::Direct { translated }
+                    | TranslationOutcome::Contextual { translated, .. } => translated,
+                    TranslationOutcome::Stale { record, .. } => record.target.as_str(),
+                    TranslationOutcome::NoChange
+                    | TranslationOutcome::Missing
+                    | TranslationOutcome::Ignored
+                    | TranslationOutcome::Empty => source,
                 };
-                let mut translated = source.clone();
+                let mut translated = source.to_owned();
                 self.translate_string(&mut translated, path, None);
-                if translated != source {
+                // Keep the edge live when the dependency itself receives the same reusable
+                // translation. Materialize only a consuming-path decision or a translation that
+                // the dependency path intentionally ignores, so later overlays still propagate
+                // whenever semantics permit.
+                if translated != source
+                    && (materialize_path_specific_translation || translated != dependency_target)
+                {
                     *component = MessageComponent::Literal(translated);
                 }
             }

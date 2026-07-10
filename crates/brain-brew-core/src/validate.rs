@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::messages::validate_message_references;
+use crate::messages::validate_message_graph;
 use crate::*;
 
 impl CanonicalDeck {
@@ -273,16 +273,7 @@ impl CanonicalDeck {
                 .to_string();
                 match value {
                     FieldValue::Scalar(_) => {}
-                    FieldValue::Message(message) => {
-                        if let Err(error) = message.validate_shape() {
-                            errors.push(ValidationError::new(
-                                ValidationErrorKind::InvalidMessageReference,
-                                path.clone(),
-                                error.to_string(),
-                            ));
-                        }
-                        validate_message_references(self, id, field_id, message, &mut errors);
-                    }
+                    FieldValue::Message(_) => {}
                     FieldValue::Images(images) => {
                         if images.is_empty() {
                             errors.push(ValidationError::new(
@@ -338,16 +329,7 @@ impl CanonicalDeck {
             }
         }
 
-        if !errors
-            .iter()
-            .any(|error| error.kind == ValidationErrorKind::InvalidMessageReference)
-        {
-            let mut message_graph = self.clone();
-            crate::messages::resolve_structured_messages_with_validation_errors(
-                &mut message_graph,
-                &mut errors,
-            );
-        }
+        validate_message_graph(self, &mut errors);
 
         for record in self.tombstones.iter() {
             validate_tombstone_address_ids(
