@@ -119,6 +119,22 @@ devenv shell ci
 devenv test
 ```
 
+Devenv defaults `RUST_TEST_THREADS` and `CARGO_BUILD_JOBS` to `2`, reducing CPU
+and thermal pressure while accepting longer Rust test/build runtimes. The
+same defaults cover named scripts, focused Cargo commands, Workbench write
+checks, and E2E Rust builds/tests. Set either standard variable before Devenv
+to override it for one invocation:
+
+```bash
+RUST_TEST_THREADS=8 CARGO_BUILD_JOBS=8 devenv shell test
+RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=4 devenv shell -- cargo test -p brain-brew-core
+devenv shell check:rust-parallelism
+```
+
+The regression check enters real nested Devenv shells and verifies both the
+`2`/`2` defaults and preserved explicit overrides. These Rust settings do not
+bound Chromium, Trunk, npm, Nix builds, or other non-Cargo processes.
+
 ## Runtime dependencies
 
 The CLI is intended to run natively. Nix is an install/build option, not a runtime requirement for package locking. `brainbrew lock update` computes NAR hashes and fetches path/tarball/GitHub inputs in Rust.

@@ -4,6 +4,12 @@ let
   releasePkgs = import inputs."nixpkgs-cargo-dist" {
     system = pkgs.stdenv.hostPlatform.system;
   };
+  # Runtime fallbacks preserve standard caller-provided overrides. Devenv runs
+  # enterTest independently from shell activation, so both paths use this block.
+  rustParallelismDefaults = ''
+    export RUST_TEST_THREADS="''${RUST_TEST_THREADS:-2}"
+    export CARGO_BUILD_JOBS="''${CARGO_BUILD_JOBS:-2}"
+  '';
 in
 {
   packages = [
@@ -23,6 +29,7 @@ in
   ];
 
   enterShell = ''
+    ${rustParallelismDefaults}
     echo 'Brain Brew dev environment ready' > /dev/null
   '';
 
@@ -31,6 +38,30 @@ in
   '';
   scripts.fmt.exec = "cargo fmt --all";
   scripts."fmt:check".exec = "cargo fmt --all -- --check";
+  scripts."check:rust-parallelism".exec = ''
+    set -euo pipefail
+
+    assert_parallelism() {
+      local label="$1"
+      local expected_test_threads="$2"
+      local expected_build_jobs="$3"
+      shift 3
+
+      "$@" devenv shell -- bash -c '
+        set -euo pipefail
+        test "''${RUST_TEST_THREADS-}" = "$1"
+        test "''${CARGO_BUILD_JOBS-}" = "$2"
+      ' _ "$expected_test_threads" "$expected_build_jobs"
+      printf '%s: RUST_TEST_THREADS=%s CARGO_BUILD_JOBS=%s\n' \
+        "$label" "$expected_test_threads" "$expected_build_jobs"
+    }
+
+    assert_parallelism default 2 2 \
+      env -u RUST_TEST_THREADS -u CARGO_BUILD_JOBS
+    assert_parallelism override 7 9 \
+      env -u RUST_TEST_THREADS -u CARGO_BUILD_JOBS \
+      RUST_TEST_THREADS=7 CARGO_BUILD_JOBS=9
+  '';
   scripts.check.exec = "cargo check --workspace --exclude brain-brew-workbench-e2e --all-targets";
   scripts.test.exec = "cargo test --workspace --exclude brain-brew-workbench-e2e --all-targets";
   scripts.clippy.exec = "cargo clippy --workspace --exclude brain-brew-workbench-e2e --all-targets -- -D warnings";
@@ -108,6 +139,7 @@ in
 
   scripts.ci.exec = ''
     set -euo pipefail
+    check:rust-parallelism
     cargo fmt --all -- --check
     cargo test --workspace --exclude brain-brew-workbench-e2e --all-targets
     cargo test -p brainbrew --features workbench-write-dev --test cli workbench_
@@ -119,6 +151,8 @@ in
 
   enterTest = ''
     set -euo pipefail
+    ${rustParallelismDefaults}
+    check:rust-parallelism
     cargo fmt --all -- --check
     cargo test --workspace --exclude brain-brew-workbench-e2e --all-targets
     cargo clippy --workspace --exclude brain-brew-workbench-e2e --all-targets -- -D warnings

@@ -99,6 +99,20 @@ devenv shell ci
 devenv test
 ```
 
+Rust commands in Devenv default to two libtest threads and two Cargo build
+jobs. This keeps CPU and thermal load lower at the cost of longer test/build
+runtime. Existing `RUST_TEST_THREADS` and `CARGO_BUILD_JOBS` values are
+preserved, so higher-throughput one-off runs can opt in explicitly:
+
+```bash
+RUST_TEST_THREADS=8 CARGO_BUILD_JOBS=8 devenv shell test
+RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=4 devenv shell -- cargo test -p brain-brew-core
+devenv shell check:rust-parallelism
+```
+
+These settings govern Rust test/compilation parallelism only; they do not limit
+Chromium, Trunk, npm, Nix builds, or other non-Cargo tools.
+
 Useful docs:
 
 - Agent guidance: [`AGENTS.md`](AGENTS.md)
