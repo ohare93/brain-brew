@@ -6,6 +6,146 @@ use brain_brew_formats::manifest;
 use serde_json::{Value, json};
 
 pub(crate) const JSON_ERROR_ALREADY_PRINTED: &str = "__brainbrew_json_error_already_printed";
+pub(crate) const DIFFERENCES_FOUND: &str = "__brainbrew_differences_found";
+
+#[derive(Clone, Debug)]
+pub(crate) struct CliError {
+    pub(crate) version: u32,
+    pub(crate) code: &'static str,
+    pub(crate) category: &'static str,
+    pub(crate) message: String,
+    pub(crate) source: Option<String>,
+    pub(crate) path: Option<String>,
+    pub(crate) details: serde_json::Map<String, Value>,
+}
+
+impl CliError {
+    pub(crate) fn from_message(message: impl Into<String>) -> Self {
+        let message = message.into();
+        let lower = message.to_ascii_lowercase();
+        let (code, category) = if lower.contains("usage:")
+            || lower.contains("unexpected")
+            || lower.contains("requires a ")
+            || lower.contains("missing --")
+            || lower.contains("choose --")
+            || lower.contains("duplicate argument")
+        {
+            ("invalid_arguments", "usage")
+        } else if lower.contains("transaction") || lower.contains("recover") {
+            ("transaction_failed", "filesystem")
+        } else if lower.contains("yaml")
+            || lower.contains("json")
+            || lower.contains("schema")
+            || lower.contains("parse")
+            || lower.contains("invalid overlay")
+        {
+            ("source_invalid", "format")
+        } else if lower.contains("no such file")
+            || lower.contains("permission denied")
+            || lower.contains("refusing to")
+        {
+            ("filesystem_error", "filesystem")
+        } else if lower.contains("validation") || lower.contains("invalid deck") {
+            ("validation_failed", "validation")
+        } else {
+            ("command_failed", "command")
+        };
+        let (source, path) = diagnostic_location(&message);
+        Self {
+            version: 1,
+            code,
+            category,
+            message,
+            source,
+            path,
+            details: serde_json::Map::new(),
+        }
+    }
+
+    fn from_value(value: Value) -> Self {
+        let mut object = value
+            .as_object()
+            .cloned()
+            .unwrap_or_else(|| serde_json::Map::from_iter([("message".to_owned(), value.clone())]));
+        let message = object
+            .remove("message")
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .unwrap_or_else(|| "command failed".to_owned());
+        let mut error = Self::from_message(message);
+        if let Some(errors) = object.get("errors").and_then(Value::as_array) {
+            error.code = "validation_failed";
+            error.category = "validation";
+            error.path = errors
+                .first()
+                .and_then(|item| item.get("path"))
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+        }
+        error.details = object;
+        error
+    }
+
+    pub(crate) fn human_message(&self) -> &str {
+        &self.message
+    }
+
+    fn json(&self) -> Value {
+        let mut value = json!({
+            "version": self.version,
+            "code": self.code,
+            "category": self.category,
+            "message": self.message,
+            "source": self.source,
+            "path": self.path,
+            "details": self.details,
+        });
+        // Preserve the pre-v1 route fields during the compatibility window while
+        // making the versioned fields above authoritative.
+        if let Some(object) = value.as_object_mut() {
+            for (key, detail) in &self.details {
+                object.entry(key.clone()).or_insert_with(|| detail.clone());
+            }
+        }
+        value
+    }
+}
+
+fn diagnostic_location(message: &str) -> (Option<String>, Option<String>) {
+    let first_line = message.lines().next().unwrap_or(message);
+    let source = first_line
+        .split(':')
+        .next()
+        .and_then(|candidate| {
+            let candidate = candidate.trim().split(" (").next().unwrap_or_default();
+            (candidate.contains('/')
+                || candidate.ends_with(".yaml")
+                || candidate.ends_with(".json"))
+            .then(|| candidate.to_owned())
+        })
+        .or_else(|| {
+            message.split_whitespace().find_map(|word| {
+                let candidate = word.trim_matches(|character: char| {
+                    matches!(character, '`' | '"' | '\'' | '(' | ')' | ',' | '.' | ':')
+                });
+                (candidate.ends_with(".yaml") || candidate.ends_with(".json"))
+                    .then(|| candidate.to_owned())
+            })
+        });
+    let path = first_line
+        .split("schema path ")
+        .nth(1)
+        .and_then(|suffix| suffix.split([':', ',']).next())
+        .or_else(|| {
+            first_line
+                .split("YAML: ")
+                .nth(1)
+                .and_then(|suffix| suffix.split(':').next())
+        })
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(str::to_owned);
+    (source, path)
+}
 
 pub(crate) fn print_json_diff(diff: &SemanticDiff) {
     let changes = diff
@@ -50,17 +190,22 @@ pub(crate) fn print_success(message: impl AsRef<str>, details: &[(&str, String)]
 }
 
 pub(crate) fn print_error(message: &str) {
-    eprintln!("{}", error_text(message));
+    let error = CliError::from_message(message);
+    eprintln!("{}", error_text(error.human_message()));
 }
 
 pub(crate) fn print_json_error(message: &str) {
-    print_json_error_value(json!({"message": message}));
+    print_json_cli_error(&CliError::from_message(message));
 }
 
 pub(crate) fn print_json_error_value(error: Value) {
+    print_json_cli_error(&CliError::from_value(error));
+}
+
+fn print_json_cli_error(error: &CliError) {
     println!(
         "{}",
-        serde_json::to_string_pretty(&json!({"error": error})).unwrap()
+        serde_json::to_string_pretty(&json!({"error": error.json()})).unwrap()
     );
 }
 

@@ -596,6 +596,19 @@ fn importing_unknown_fields_fails_closed_with_json_error() {
 }
 
 #[test]
+fn importing_nested_json_schema_errors_report_the_machine_path() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["notes"][0]["unexpected"] = serde_json::json!(true);
+
+    let message = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect_err("unknown nested fields fail closed")
+        .to_string();
+
+    assert!(message.contains("schema path $.notes[0]"), "{message}");
+    assert!(message.contains("unexpected"), "{message}");
+}
+
+#[test]
 fn importing_non_default_deck_configurations_fails_closed() {
     let mut deck_json = expected_crowdanki_json_value();
     deck_json["deck_configurations"][0]["new"]["perDay"] = serde_json::json!(999);

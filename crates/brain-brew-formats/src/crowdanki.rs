@@ -83,8 +83,24 @@ pub fn export_deck(deck: &CanonicalDeck) -> Result<CrowdAnkiExport, CrowdAnkiErr
 
 /// Import normalized CrowdAnki `deck.json`, accepting generated stable IDs.
 pub fn import_deck_accept_suggested_ids(input: &str) -> Result<CanonicalDeck, CrowdAnkiError> {
-    let deck_json: CrowdAnkiDeckJson = serde_json::from_str(input).map_err(CrowdAnkiError::Json)?;
+    let mut deserializer = serde_json::Deserializer::from_str(input);
+    let deck_json: CrowdAnkiDeckJson = serde_path_to_error::deserialize(&mut deserializer)
+        .map_err(|error| CrowdAnkiError::JsonPath {
+            path: json_path(error.path()),
+            message: error.inner().to_string(),
+        })?;
     deck_json.into_deck()
+}
+
+fn json_path(path: &serde_path_to_error::Path) -> String {
+    let path = path.to_string();
+    if path.is_empty() || path == "." {
+        "$".to_owned()
+    } else if path.starts_with('[') {
+        format!("${path}")
+    } else {
+        format!("$.{path}")
+    }
 }
 
 /// Options for comparing generated CrowdAnki JSON with an expected oracle.
@@ -763,6 +779,7 @@ fn validate_supported_deck_configurations(
 #[derive(Debug)]
 pub enum CrowdAnkiError {
     Json(serde_json::Error),
+    JsonPath { path: String, message: String },
     StableId(String),
     Unsupported(String),
     Validation(ValidationReport),
@@ -773,6 +790,9 @@ impl fmt::Display for CrowdAnkiError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Json(error) => write!(f, "CrowdAnki JSON error: {error}"),
+            Self::JsonPath { path, message } => {
+                write!(f, "CrowdAnki JSON error at schema path {path}: {message}")
+            }
             Self::StableId(id) => write!(f, "generated invalid stable id {id:?}"),
             Self::Unsupported(message) => write!(f, "unsupported CrowdAnki data: {message}"),
             Self::Validation(report) => write!(f, "imported deck failed validation: {report}"),

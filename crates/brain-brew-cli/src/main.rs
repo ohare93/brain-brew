@@ -11,6 +11,7 @@ mod io;
 mod media_assets;
 mod media_ownership;
 mod output;
+mod output_transaction;
 mod overlay_draft;
 mod package_resolver;
 mod package_tree;
@@ -23,6 +24,9 @@ fn main() {
     let args = env::args().skip(1).collect::<Vec<_>>();
     let json_error_output = json_error_output_requested(&args);
     if let Err(error) = run(&args) {
+        if error == output::DIFFERENCES_FOUND {
+            process::exit(2);
+        }
         if error != output::JSON_ERROR_ALREADY_PRINTED {
             if json_error_output {
                 output::print_json_error(&error);
@@ -42,15 +46,22 @@ fn run(args: &[String]) -> Result<(), String> {
 
     let command = canonical_command(command);
 
-    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        if command == "--help" || command == "-h" {
+    if let Some(help_command) = valid_help_request(args) {
+        if let Some(help_command) = help_command {
+            print!(
+                "{}",
+                help::command(help_command).expect("recognized command has help")
+            );
+        } else {
             print_usage();
-            return Ok(());
         }
-        if let Some(command_help) = help::command(command) {
-            print!("{command_help}");
-            return Ok(());
-        }
+        return Ok(());
+    }
+    if matches!(command, "--help" | "-h") {
+        return Err("--help does not accept unexpected trailing arguments".to_owned());
+    }
+    if matches!(command, "--version" | "-V") && args.len() != 1 {
+        return Err("--version does not accept trailing arguments".to_owned());
     }
 
     match command {
@@ -87,11 +98,38 @@ fn canonical_command(command: &str) -> &str {
 }
 
 fn json_error_output_requested(args: &[String]) -> bool {
-    let Some(command) = args.first().map(|command| canonical_command(command)) else {
-        return false;
+    args.iter().any(|arg| arg == "--json")
+}
+
+fn valid_help_request(args: &[String]) -> Option<Option<&str>> {
+    let help_count = args
+        .iter()
+        .filter(|arg| matches!(arg.as_str(), "--help" | "-h"))
+        .count();
+    if help_count != 1 {
+        return None;
+    }
+    let words = args
+        .iter()
+        .filter(|arg| !matches!(arg.as_str(), "--help" | "-h"))
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    if words.is_empty() {
+        return Some(None);
+    }
+    let command = canonical_command(words[0]);
+    let valid = match command {
+        "lock" => matches!(words.as_slice(), ["lock"] | ["lock", "update" | "verify"]),
+        "media" => matches!(
+            words.as_slice(),
+            ["media"] | ["media", "hash" | "images-to-refs"]
+        ),
+        "workbench" => matches!(words.as_slice(), ["workbench"] | ["workbench", "serve"]),
+        "import" => matches!(words.as_slice(), ["import"] | ["import", "crowdanki"]),
+        "export" => matches!(words.as_slice(), ["export"] | ["export", "crowdanki"]),
+        other => help::command(other).is_some() && words.len() == 1,
     };
-    matches!(command, "validate" | "explain" | "diff" | "targets")
-        && args.iter().any(|arg| arg == "--json")
+    valid.then_some(Some(command))
 }
 
 fn unknown_command_error(command: &str) -> String {

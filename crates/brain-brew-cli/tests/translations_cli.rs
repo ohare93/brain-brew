@@ -160,11 +160,28 @@ fn translations_argument_conflicts_are_reported_before_execution() {
             !output.status.success(),
             "args {args:?} unexpectedly succeeded"
         );
-        assert!(
-            stderr(&output).contains(expected),
-            "args {args:?} stderr: {}",
-            stderr(&output)
-        );
+        if args.contains(&"--json") {
+            assert!(
+                stderr(&output).is_empty(),
+                "args {args:?} stderr: {}",
+                stderr(&output)
+            );
+            let json: serde_json::Value =
+                serde_json::from_slice(&output.stdout).expect("JSON-mode error is valid JSON");
+            assert_eq!(json["error"]["version"], 1);
+            assert!(
+                json["error"]["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains(expected)),
+                "args {args:?} JSON: {json}"
+            );
+        } else {
+            assert!(
+                stderr(&output).contains(expected),
+                "args {args:?} stderr: {}",
+                stderr(&output)
+            );
+        }
     }
 }
 

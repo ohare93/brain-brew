@@ -56,6 +56,78 @@ impl PlannedWorkspaceFile {
 }
 
 /// Recover interrupted writes before a mutator reads or plans against the workspace.
+/// Publish one generated output file beneath its nearest caller-selected existing
+/// ancestor. New outputs create missing parents; existing outputs require force.
+pub(crate) fn write_output_file(
+    path: &Path,
+    bytes: Vec<u8>,
+    force: bool,
+    validator: impl FnOnce(&[u8]) -> Result<(), String>,
+) -> Result<(), String> {
+    let requested = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|error| format!("cannot resolve current directory: {error}"))?
+            .join(path)
+    };
+    let root = nearest_existing_ancestor(
+        requested
+            .parent()
+            .ok_or_else(|| format!("output {} has no parent directory", path.display()))?,
+    )?;
+    recover_workspace(&root)?;
+
+    let planned = match std::fs::symlink_metadata(&requested) {
+        Ok(metadata) if !metadata.file_type().is_file() => {
+            return Err(format!(
+                "refusing to replace non-file output {}",
+                requested.display()
+            ));
+        }
+        Ok(_) if !force => {
+            return Err(format!(
+                "refusing to overwrite existing output {}; pass --force to replace it recoverably",
+                requested.display()
+            ));
+        }
+        Ok(_) => {
+            let original = std::fs::read(&requested)
+                .map_err(|error| format!("{}: {error}", requested.display()))?;
+            PlannedWorkspaceFile::validated(requested, original, bytes, validator)?
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            PlannedWorkspaceFile::validated_new(requested, bytes, validator)?
+        }
+        Err(error) => return Err(format!("{}: {error}", requested.display())),
+    };
+    commit_workspace_files(&root, vec![planned])
+}
+
+pub(crate) fn nearest_existing_ancestor(path: &Path) -> Result<PathBuf, String> {
+    let mut cursor = path;
+    loop {
+        match std::fs::symlink_metadata(cursor) {
+            Ok(metadata) if !metadata.file_type().is_dir() => {
+                return Err(format!(
+                    "output parent {} is not a directory",
+                    cursor.display()
+                ));
+            }
+            Ok(_) => {
+                return std::fs::canonicalize(cursor)
+                    .map_err(|error| format!("{}: {error}", cursor.display()));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                cursor = cursor.parent().ok_or_else(|| {
+                    format!("output parent {} has no existing ancestor", path.display())
+                })?;
+            }
+            Err(error) => return Err(format!("{}: {error}", cursor.display())),
+        }
+    }
+}
+
 pub(crate) fn recover_workspace(workspace_root: &Path) -> Result<(), String> {
     WorkspaceTransactionManager::new(&RealWorkspaceFilesystem, &NoFailures)
         .recover(workspace_root)

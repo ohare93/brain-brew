@@ -15,6 +15,19 @@ where
         .expect("brainbrew command runs")
 }
 
+fn run_with_env<I, S>(args: I, variables: &[(&str, &str)]) -> Output
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let mut command = Command::new(env!("CARGO_BIN_EXE_brainbrew"));
+    command.args(args);
+    for (name, value) in variables {
+        command.env(name, value);
+    }
+    command.output().expect("brainbrew command runs")
+}
+
 fn stdout(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
@@ -44,8 +57,15 @@ fn assert_json_error(output: &Output, expected_message: &str) {
     assert!(!output.status.success());
     assert!(stderr(output).is_empty(), "stderr: {}", stderr(output));
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("stdout is JSON");
+    let error = &json["error"];
+    assert_eq!(error["version"], 1, "JSON error version: {json}");
+    assert!(error["code"].is_string(), "JSON error code: {json}");
+    assert!(error["category"].is_string(), "JSON error category: {json}");
+    assert!(error.get("source").is_some(), "JSON error source: {json}");
+    assert!(error.get("path").is_some(), "JSON error path: {json}");
+    assert!(error["details"].is_object(), "JSON error details: {json}");
     assert!(
-        json["error"]["message"]
+        error["message"]
             .as_str()
             .expect("JSON error message is a string")
             .contains(expected_message),
@@ -284,6 +304,19 @@ fn targets_stdout_stderr_contract_covers_human_and_json_success_and_error() {
             .unwrap()
             .contains("missing.yaml")
     );
+
+    let malformed = dir.join("malformed.yaml");
+    fs::write(&malformed, "base: []\noverlays: {}\ntargets: {}\n").unwrap();
+    let malformed_error = run([
+        "targets",
+        "--manifest",
+        malformed.to_str().unwrap(),
+        "--json",
+    ]);
+    assert_json_error(&malformed_error, "manifest YAML");
+    let json: serde_json::Value = serde_json::from_slice(&malformed_error.stdout).unwrap();
+    assert_eq!(json["error"]["source"], malformed.display().to_string());
+    assert_eq!(json["error"]["path"], "base");
 }
 
 #[test]
@@ -361,10 +394,211 @@ fn version_and_bare_invocation_are_stable() {
     assert!(stdout(&version).starts_with("brainbrew "));
     assert!(stderr(&version).is_empty());
 
+    let trailing_version = run(["--version", "unexpected"]);
+    assert_human_error(
+        &trailing_version,
+        "--version does not accept trailing arguments",
+    );
+    let trailing_help = run(["compose", "--bogus", "--help"]);
+    assert_human_error(&trailing_help, "unexpected argument");
+
     let bare = run(std::iter::empty::<&str>());
     assert!(bare.status.success(), "stderr: {}", stderr(&bare));
     assert!(stdout(&bare).contains("Usage:"));
     assert!(stderr(&bare).is_empty());
+}
+
+#[test]
+fn compose_creates_missing_parents_and_requires_explicit_overwrite() {
+    let dir = temp_dir("compose-output");
+    let deck = dir.join("deck.yaml");
+    let output = dir.join("nested/build/resolved.yaml");
+    fs::write(&deck, SAMPLE_CANONICAL_YAML).unwrap();
+
+    let created = run([
+        "compose",
+        deck.to_str().unwrap(),
+        "--out",
+        output.to_str().unwrap(),
+    ]);
+    assert!(created.status.success(), "stderr: {}", stderr(&created));
+    assert!(output.is_file());
+
+    let refused = run([
+        "compose",
+        deck.to_str().unwrap(),
+        "--out",
+        output.to_str().unwrap(),
+    ]);
+    assert_human_error(&refused, "pass --force");
+
+    let failed_output = dir.join("ordinary/failure/resolved.yaml");
+    let failed = run_with_env(
+        [
+            "compose",
+            deck.to_str().unwrap(),
+            "--out",
+            failed_output.to_str().unwrap(),
+        ],
+        &[("BRAINBREW_TRANSACTION_FAIL_POINT", "stage:0")],
+    );
+    assert!(!failed.status.success());
+    assert!(!failed_output.exists());
+    assert!(
+        !dir.join("ordinary").exists(),
+        "failed compose left empty parents"
+    );
+
+    let replaced = run([
+        "compose",
+        deck.to_str().unwrap(),
+        "--force",
+        "--out",
+        output.to_str().unwrap(),
+    ]);
+    assert!(replaced.status.success(), "stderr: {}", stderr(&replaced));
+}
+
+#[test]
+fn export_force_cleanly_replaces_a_dirty_tree_and_rolls_back_publish_failure() {
+    let dir = temp_dir("export-output");
+    let deck = dir.join("deck.yaml");
+    let output = dir.join("crowdanki");
+    fs::write(&deck, SAMPLE_CANONICAL_YAML).unwrap();
+
+    let created = run([
+        "export",
+        "crowdanki",
+        deck.to_str().unwrap(),
+        "--out",
+        output.to_str().unwrap(),
+    ]);
+    assert!(created.status.success(), "stderr: {}", stderr(&created));
+    fs::write(output.join("stale.bin"), b"stale").unwrap();
+    let original = fs::read(output.join("deck.json")).unwrap();
+
+    let refused = run([
+        "export",
+        "crowdanki",
+        deck.to_str().unwrap(),
+        "--out",
+        output.to_str().unwrap(),
+    ]);
+    assert_human_error(&refused, "pass --force");
+    assert!(output.join("stale.bin").exists());
+
+    let interrupted = run_with_env(
+        [
+            "export",
+            "crowdanki",
+            deck.to_str().unwrap(),
+            "--force",
+            "--out",
+            output.to_str().unwrap(),
+        ],
+        &[("BRAINBREW_OUTPUT_FAIL_POINT", "before-publish")],
+    );
+    assert!(!interrupted.status.success());
+    assert_eq!(fs::read(output.join("deck.json")).unwrap(), original);
+    assert!(output.join("stale.bin").exists());
+
+    let crashed = run_with_env(
+        [
+            "export",
+            "crowdanki",
+            deck.to_str().unwrap(),
+            "--force",
+            "--out",
+            output.to_str().unwrap(),
+        ],
+        &[
+            ("BRAINBREW_OUTPUT_FAIL_POINT", "before-publish"),
+            ("BRAINBREW_OUTPUT_FAIL_MODE", "crash"),
+        ],
+    );
+    assert!(!crashed.status.success());
+    assert!(
+        !output.exists(),
+        "uncertain output must not expose a mixed tree"
+    );
+    assert!(
+        fs::read_dir(&dir).unwrap().any(|entry| entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .contains("publish.json")),
+        "interruption must leave explicit recovery metadata"
+    );
+
+    let replaced = run([
+        "export",
+        "crowdanki",
+        deck.to_str().unwrap(),
+        "--force",
+        "--out",
+        output.to_str().unwrap(),
+    ]);
+    assert!(replaced.status.success(), "stderr: {}", stderr(&replaced));
+    assert!(!output.join("stale.bin").exists());
+    assert_eq!(fs::read_dir(&output).unwrap().count(), 1);
+}
+
+#[test]
+fn translations_json_failures_use_the_versioned_error_envelope() {
+    let dir = temp_dir("translations-json-error");
+    let missing = dir.join("missing.yaml");
+    let output = run([
+        "translations",
+        "--manifest",
+        missing.to_str().unwrap(),
+        "--target",
+        "missing",
+        "--json",
+    ]);
+    assert_json_error(&output, "missing.yaml");
+}
+
+#[test]
+fn diff_exit_code_distinguishes_changes_from_operational_errors() {
+    let dir = temp_dir("diff-exit-code");
+    let left = dir.join("left.yaml");
+    let same = dir.join("same.yaml");
+    let changed = dir.join("changed.yaml");
+    fs::write(&left, SAMPLE_CANONICAL_YAML).unwrap();
+    fs::write(&same, SAMPLE_CANONICAL_YAML).unwrap();
+    fs::write(
+        &changed,
+        SAMPLE_CANONICAL_YAML.replace("field.capital: Helsinki", "field.capital: Turku"),
+    )
+    .unwrap();
+
+    assert_eq!(
+        run([
+            "diff",
+            left.to_str().unwrap(),
+            same.to_str().unwrap(),
+            "--exit-code",
+        ])
+        .status
+        .code(),
+        Some(0)
+    );
+    let differences = run([
+        "diff",
+        left.to_str().unwrap(),
+        changed.to_str().unwrap(),
+        "--json",
+        "--exit-code",
+    ]);
+    assert_eq!(differences.status.code(), Some(2));
+    assert!(serde_json::from_slice::<serde_json::Value>(&differences.stdout).is_ok());
+    assert!(stderr(&differences).is_empty());
+    assert_eq!(
+        run(["diff", left.to_str().unwrap(), "--exit-code"])
+            .status
+            .code(),
+        Some(1)
+    );
 }
 
 const SIMPLE_MANIFEST_YAML: &str = r#"base: deck.yaml

@@ -8,29 +8,36 @@ Run `brainbrew --help` or `brainbrew <command> --help` for exact current usage. 
 
 ## Exit and error contract
 
-Commands return exit code `0` on success and a non-zero exit code on failure. Human-readable failures print diagnostics to stderr with empty stdout.
+Commands return exit code `0` on success and exit code `1` on operational or usage failure. Human-readable failures print diagnostics to stderr with empty stdout. `diff --exit-code` additionally returns `2` when a valid comparison contains semantic differences; it still returns `1` for an operational error.
 
-For `validate`, `explain`, `diff`, and `targets`, passing `--json` also opts failures into a machine-readable contract: failures emit a JSON object on stdout, use a non-zero exit code, and leave stderr empty.
+Whenever `--json` is selected, including `translations` and every existing JSON route, failures emit the versioned machine envelope below on stdout and leave stderr empty. Success output remains the command's documented JSON schema.
 
 ```json
 {
   "error": {
+    "version": 1,
+    "code": "validation_failed",
+    "category": "validation",
     "message": "target composition failed",
-    "errors": [
-      {
-        "kind": "ExpectedBaseMismatch",
-        "path": "notes.note.france.fields.field.capital",
-        "message": "field-level merge may only fill a blank value"
-      }
-    ],
-    "target": "de-standard",
-    "base": "deck.yaml",
-    "overlay_stack": []
+    "source": "deck.yaml",
+    "path": "notes.note.france.fields.field.capital",
+    "details": {
+      "errors": [
+        {
+          "kind": "ExpectedBaseMismatch",
+          "path": "notes.note.france.fields.field.capital",
+          "message": "field-level merge may only fill a blank value"
+        }
+      ],
+      "target": "de-standard",
+      "base": "deck.yaml",
+      "overlay_stack": []
+    }
   }
 }
 ```
 
-When validation or composition details are available, `error.errors[]` contains objects with `kind`, `path`, and `message`. Context such as `overlay_stack`, `target`, and `base` is included where the command can report it, such as `explain --json`. `verify` and `export crowdanki` are not part of this JSON error set; their failures continue to use plain-text stderr.
+`version`, `code`, `category`, `message`, `source`, `path`, and `details` are always present; unavailable source/path values are `null`. Validation/composition details retain typed `kind`, machine `path`, and message values in `details.errors[]`. During the version-1 compatibility window those route-specific detail keys are also mirrored directly under `error`.
 
 ## `targets`
 
@@ -69,17 +76,19 @@ Validates source or composed target semantics.
 
 ```bash
 brainbrew compose --manifest brainbrew.yaml --target en-standard --out build/en-standard.yaml
+brainbrew compose --manifest brainbrew.yaml --target en-standard --out build/en-standard.yaml --force
 ```
 
-Produces a resolved Canonical Deck.
+Produces a resolved Canonical Deck. Missing output parents below the selected output ancestor are created. Existing files, directories, and symlinks are refused by default; `--force` may replace an existing regular file through the recoverable workspace transaction. Parent creation and ordinary failed commits leave no empty output directories.
 
 ## `export crowdanki`
 
 ```bash
 brainbrew export crowdanki --manifest brainbrew.yaml --target en-standard
+brainbrew export crowdanki --manifest brainbrew.yaml --target en-standard --force
 ```
 
-Exports a CrowdAnki folder. Without `--out`, manifest-target exports default to `build/crowdanki/<target>` unless the target configures `exports.crowdanki.out`.
+Exports a CrowdAnki folder. Without `--out`, manifest-target exports default to `build/crowdanki/<target>` unless the target configures `exports.crowdanki.out`. Existing output is refused unless `--force` is explicit. Brain Brew serializes `deck.json`, validates and reads every selected media byte, stages the complete clean tree privately, then publishes it by directory rename. Forced replacement first renames the old complete tree to a recovery backup; ordinary failure restores it, and interruption leaves a sibling recovery journal rather than a mixed tree. Without `--media-root`, media declarations are reported but assets are intentionally not copied.
 
 ## `media hash`
 
@@ -104,10 +113,11 @@ Imports a CrowdAnki folder into typed, canonical Deck YAML. By default import cr
 ```bash
 brainbrew diff left.yaml right.yaml
 brainbrew diff left.yaml right.yaml --json
+brainbrew diff left.yaml right.yaml --exit-code
 brainbrew diff left.yaml right.yaml --as-overlay --id overlay.patch.example --kind patch
 ```
 
-Compares decks semantically or drafts an overlay.
+Compares decks semantically or drafts an overlay. Default report mode exits `0` even when changes are present. With `--exit-code`, no differences exit `0`, differences exit `2` after the same human/JSON report, and parse/filesystem/usage errors exit `1`.
 
 ## `explain`
 

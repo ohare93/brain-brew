@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use brain_brew_core::CanonicalDeck;
 use brain_brew_formats::media;
@@ -24,10 +24,26 @@ pub(crate) fn validate_media_references(deck: &CanonicalDeck) -> Result<(), Stri
     }
 }
 
-pub(crate) fn validate_media_assets(deck: &CanonicalDeck, media_root: &Path) -> Result<(), String> {
+pub(crate) fn collect_media_assets(
+    deck: &CanonicalDeck,
+    media_root: &Path,
+) -> Result<Vec<(PathBuf, Vec<u8>)>, String> {
     validate_media_references(deck)?;
     let assets = read_media_assets(deck, media_root)?;
-    media::validate_hashes(deck, &assets).map_err(|error| error.to_string())
+    media::validate_hashes(deck, &assets).map_err(|error| error.to_string())?;
+    deck.media
+        .values()
+        .map(|declaration| {
+            let bytes = assets.get(&declaration.path).cloned().ok_or_else(|| {
+                format!(
+                    "{}: declared media file {:?} was not read",
+                    media_root.display(),
+                    declaration.path
+                )
+            })?;
+            Ok((PathBuf::from("media").join(&declaration.path), bytes))
+        })
+        .collect()
 }
 
 /// Validate a composed target by resolving every declaration through its final
@@ -37,9 +53,18 @@ pub(crate) fn validate_owned_media_assets(
     deck: &CanonicalDeck,
     roots: &MediaRootSelections,
 ) -> Result<(), String> {
+    collect_owned_media_assets(plan, deck, roots).map(|_| ())
+}
+
+pub(crate) fn collect_owned_media_assets(
+    plan: &TargetPlan,
+    deck: &CanonicalDeck,
+    roots: &MediaRootSelections,
+) -> Result<Vec<(PathBuf, Vec<u8>)>, String> {
     validate_media_references(deck)?;
     roots.require_for_plan(plan)?;
     ensure_plan_matches_deck(plan, deck)?;
+    let mut assets = Vec::with_capacity(plan.media_declarations.len());
     for declaration in plan.media_declarations.values() {
         let root = roots.require_for_declaration(&plan.qualified_name, declaration)?;
         let bytes = read_owned_asset(&plan.qualified_name, declaration, root)?;
@@ -63,8 +88,9 @@ pub(crate) fn validate_owned_media_assets(
                 ),
             ));
         }
+        assets.push((PathBuf::from("media").join(&declaration.path), bytes));
     }
-    Ok(())
+    Ok(assets)
 }
 
 fn read_media_assets(
@@ -91,41 +117,6 @@ fn read_media_assets(
         }
     }
     Ok(assets)
-}
-
-pub(crate) fn copy_owned_media_assets(
-    plan: &TargetPlan,
-    deck: &CanonicalDeck,
-    roots: &MediaRootSelections,
-    out_dir: &Path,
-) -> Result<(), String> {
-    roots.require_for_plan(plan)?;
-    ensure_plan_matches_deck(plan, deck)?;
-    let destination_authorizer = PathAuthorizer::new("export", out_dir)?;
-    for declaration in plan.media_declarations.values() {
-        let root = roots.require_for_declaration(&plan.qualified_name, declaration)?;
-        let source = owned_asset_path(&plan.qualified_name, declaration, root)?;
-        let destination = destination_authorizer
-            .authorize_create(
-                Path::new("<export>"),
-                format!("media.{}.path", declaration.id),
-                &format!("media/{}", declaration.path),
-            )
-            .map_err(|error| error.to_string())?
-            .into_path_buf();
-        if let Some(parent) = destination.parent() {
-            fs::create_dir_all(parent).map_err(|error| format!("{}: {error}", parent.display()))?;
-        }
-        fs::copy(&source, &destination).map_err(|error| {
-            owned_error(
-                &plan.qualified_name,
-                declaration,
-                root,
-                &format!("copy to {} failed: {error}", destination.display()),
-            )
-        })?;
-    }
-    Ok(())
 }
 
 fn ensure_plan_matches_deck(plan: &TargetPlan, deck: &CanonicalDeck) -> Result<(), String> {
@@ -210,38 +201,4 @@ fn owned_error(
         root.display(),
         declaration.source_kind.ownership_name()
     )
-}
-
-pub(crate) fn copy_media_assets(
-    deck: &CanonicalDeck,
-    media_root: &Path,
-    out_dir: &Path,
-) -> Result<(), String> {
-    let source_authorizer = PathAuthorizer::new("media", media_root)?;
-    let destination_authorizer = PathAuthorizer::new("export", out_dir)?;
-    for media in deck.media.values() {
-        let source = source_authorizer
-            .authorize_read(
-                Path::new("<composed deck>"),
-                format!("media.{}.path", media.id),
-                &media.path,
-            )
-            .map_err(|error| error.to_string())?
-            .into_path_buf();
-        let destination = destination_authorizer
-            .authorize_create(
-                Path::new("<export>"),
-                format!("media.{}.path", media.id),
-                &format!("media/{}", media.path),
-            )
-            .map_err(|error| error.to_string())?
-            .into_path_buf();
-        if let Some(parent) = destination.parent() {
-            fs::create_dir_all(parent).map_err(|error| format!("{}: {error}", parent.display()))?;
-        }
-        fs::copy(&source, &destination).map_err(|error| {
-            format!("{} -> {}: {error}", source.display(), destination.display())
-        })?;
-    }
-    Ok(())
 }

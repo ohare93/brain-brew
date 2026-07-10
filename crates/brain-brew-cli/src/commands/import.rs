@@ -5,22 +5,24 @@ use brain_brew_formats::canonical_source_document::CanonicalSourceDocument;
 use brain_brew_formats::crowdanki;
 use brain_brew_formats::source_document::{SourceFile, SourceProvenance};
 
-use crate::workspace_mutation::{PlannedWorkspaceFile, commit_workspace_files, recover_workspace};
+use crate::workspace_mutation::{
+    PlannedWorkspaceFile, commit_workspace_files, nearest_existing_ancestor, recover_workspace,
+};
 
 const USAGE: &str = "usage: brainbrew import crowdanki <deck-folder> --accept-suggested-ids [--force] --out deck.yaml";
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     let parsed = parse_args(args)?;
-    let output_root = output_root(&parsed.out_path)?;
+    let output_path = absolute_output_path(&parsed.out_path)?;
+    let output_root = output_root(&output_path)?;
     recover_workspace(&output_root)?;
 
     let deck_json_path = parsed.deck_dir.join("deck.json");
     let deck_json = fs::read_to_string(&deck_json_path)
         .map_err(|error| format!("{}: {error}", deck_json_path.display()))?;
     let deck = crowdanki::import_deck_accept_suggested_ids(&deck_json)
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| format!("{}: {error}", deck_json_path.display()))?;
 
-    let output_path = absolute_output_path(&parsed.out_path, &output_root)?;
     let provenance = SourceProvenance::new(output_path.display().to_string())
         .with_source_root(output_root.display().to_string());
     let emission = CanonicalSourceDocument::from_deck(provenance, deck)
@@ -97,7 +99,7 @@ fn parse_args(args: &[String]) -> Result<ImportArgs, String> {
                 index += 1;
             }
             "--out" if out_path.is_none() => {
-                let Some(path) = args.get(index + 1) else {
+                let Some(path) = args.get(index + 1).filter(|value| !value.starts_with('-')) else {
                     return Err("--out requires a path".to_owned());
                 };
                 out_path = Some(PathBuf::from(path));
@@ -125,16 +127,24 @@ fn parse_args(args: &[String]) -> Result<ImportArgs, String> {
 fn output_root(out_path: &Path) -> Result<PathBuf, String> {
     let parent = out_path
         .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    fs::canonicalize(parent).map_err(|error| format!("{}: {error}", parent.display()))
+        .ok_or_else(|| format!("import output {} has no parent", out_path.display()))?;
+    nearest_existing_ancestor(parent)
 }
 
-fn absolute_output_path(out_path: &Path, output_root: &Path) -> Result<PathBuf, String> {
-    let file_name = out_path
-        .file_name()
-        .ok_or_else(|| format!("import output {} has no file name", out_path.display()))?;
-    Ok(output_root.join(file_name))
+fn absolute_output_path(out_path: &Path) -> Result<PathBuf, String> {
+    if out_path.file_name().is_none() {
+        return Err(format!(
+            "import output {} has no file name",
+            out_path.display()
+        ));
+    }
+    if out_path.is_absolute() {
+        Ok(out_path.to_path_buf())
+    } else {
+        std::env::current_dir()
+            .map(|directory| directory.join(out_path))
+            .map_err(|error| format!("cannot resolve current directory: {error}"))
+    }
 }
 
 fn canonical_import_validator(path: &Path) -> impl FnOnce(&[u8]) -> Result<(), String> + '_ {

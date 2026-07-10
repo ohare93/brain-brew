@@ -91,6 +91,8 @@ brainbrew export crowdanki \
 
 Export copies the declared media set itself, so release scripts do not need a separate `cp media/*` step. Files present under a media root but not declared are not exported. Each declaration is read only from its final declaring package's authorized root; a same-named file under the root package cannot satisfy a dependency declaration.
 
+Export refuses an existing output directory by default. To rerun intentionally, pass `--force`: Brain Brew validates and stages the complete new tree, moves the old complete tree to a recovery backup, and publishes the stage as one clean directory replacement. This removes stale files without ever copying into the live output tree.
+
 ## Default and configured export paths
 
 ```yaml
@@ -135,7 +137,7 @@ When `golden` is configured, `verify` compares generated CrowdAnki JSON against 
 To update a golden intentionally, export the target to its configured golden directory, review the semantic and JSON differences, then commit the golden with the source change:
 
 ```bash
-brainbrew export crowdanki --manifest brainbrew.yaml --target de-standard --out goldens/de-standard
+brainbrew export crowdanki --manifest brainbrew.yaml --target de-standard --out goldens/de-standard --force
 brainbrew verify --manifest brainbrew.yaml --target de-standard --media-root media/
 ```
 

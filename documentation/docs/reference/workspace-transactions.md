@@ -4,7 +4,9 @@ title: Workspace transaction contract
 
 # Workspace transaction contract
 
-`brainbrew` owns a journaled filesystem transaction module for source mutations. `fmt`, `translations --apply`/`--resolve`, `media hash`, `media images-to-refs`, CrowdAnki import, and development-only Workbench Apply/new-language writes use it today. Lock, compose, and export migrations are tracked separately. No multi-file sequence is described as an atomic rename; these operations are fingerprint-checked and recoverable.
+`brainbrew` owns a journaled filesystem transaction module for source mutations and generated files. `fmt`, `translations --apply`/`--resolve`, `media hash`, `media images-to-refs`, CrowdAnki import, compose output, and development-only Workbench Apply/new-language writes use it today. Lock migration remains separate. No multi-file sequence is described as an atomic rename; these operations are fingerprint-checked and recoverable.
+
+CrowdAnki export uses the related clean-tree publisher documented below because its transaction unit is a directory tree rather than individual source files.
 
 ## Interface
 
@@ -81,6 +83,14 @@ A directory created before the initial journal is safe to remove because target 
 ## Concurrency
 
 `workspace.lock` is an advisory exclusive file lock. It serializes cooperating Brain Brew processes, and the validated plan is rechecked after lock acquisition. A pending journal blocks a new commit until recovery runs. Non-cooperating editors are detected by fingerprint checks before preparation and by old/new fingerprint checks during recovery, but advisory locking cannot prevent them from racing a commit.
+
+## Clean output-tree publication
+
+Export first produces the complete artifact set in memory: deterministic `deck.json` plus exactly the declared media bytes when media roots were selected. Reference/path/hash checks and all source reads finish before destination mutation. It then creates a private sibling staging directory, writes and syncs every file, and syncs the staged directory tree.
+
+A new output is published by renaming that complete stage into place. Existing output is refused unless `--force` is explicit. Forced publication accepts only a real directory (never a file or symlink), writes a versioned sibling journal, renames the complete old directory to a private backup, and renames the complete stage into place. Ordinary failures roll back to the backup. On interruption, the journal distinguishes prepared from published state: recovery restores the original for an uncertain/prepared publication or finalizes cleanup for a durably recorded published tree. Thus stale files cannot survive a successful export, and a failure exposes either the old complete tree or an explicit sibling journal/backup—not a mixed output directory.
+
+Like source transactions, output publication requires same-parent directory rename semantics and durable file/directory syncing. It deliberately does not claim that rename replacement and directory durability are equivalent on every filesystem/platform.
 
 ## Durability and platform assumptions
 

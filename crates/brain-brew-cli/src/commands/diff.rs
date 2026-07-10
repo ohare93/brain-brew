@@ -2,7 +2,7 @@ use std::path::Path;
 
 use brain_brew_formats::canonical_yaml;
 
-use crate::args::{parse_diff_overlay_args, split_json_flag};
+use crate::args::parse_diff_overlay_args;
 use crate::io::read_deck;
 use crate::output::{print_human_diff, print_json_diff};
 use crate::overlay_draft::draft_overlay_from_diff;
@@ -20,12 +20,24 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         return Ok(());
     }
 
-    let (json_output, paths) = split_json_flag(args);
-    if let Some(arg) = paths.iter().find(|arg| arg.starts_with('-')) {
-        return Err(format!("unexpected argument {arg:?}"));
+    let mut json_output = false;
+    let mut exit_code = false;
+    let mut paths = Vec::new();
+    for arg in args {
+        match arg.as_str() {
+            "--json" if !json_output => json_output = true,
+            "--exit-code" if !exit_code => exit_code = true,
+            duplicate if matches!(duplicate, "--json" | "--exit-code") => {
+                return Err(format!("duplicate diff argument {duplicate:?}"));
+            }
+            other if !other.starts_with('-') => paths.push(other.to_owned()),
+            other => return Err(format!("unexpected argument {other:?}")),
+        }
     }
     if paths.len() != 2 {
-        return Err("usage: brainbrew diff <left.yaml> <right.yaml> [--json]".to_owned());
+        return Err(
+            "usage: brainbrew diff <left.yaml> <right.yaml> [--json] [--exit-code]".to_owned(),
+        );
     }
     let left = read_deck(Path::new(&paths[0]))?;
     let right = read_deck(Path::new(&paths[1]))?;
@@ -35,5 +47,9 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     } else {
         print_human_diff(&diff);
     }
-    Ok(())
+    if exit_code && !diff.is_empty() {
+        Err(crate::output::DIFFERENCES_FOUND.to_owned())
+    } else {
+        Ok(())
+    }
 }

@@ -7,6 +7,7 @@ pub(crate) struct ManifestTargetArgs {
     pub(crate) manifest_path: PathBuf,
     pub(crate) target: String,
     pub(crate) out_path: Option<PathBuf>,
+    pub(crate) force: bool,
     pub(crate) media_roots: Vec<String>,
     pub(crate) include_paths: Vec<PathBuf>,
     pub(crate) package_roots: Vec<PathBuf>,
@@ -27,6 +28,7 @@ pub(crate) struct ExportArgs {
     pub(crate) overlay_paths: Vec<String>,
     pub(crate) out_path: Option<PathBuf>,
     pub(crate) media_root: Option<PathBuf>,
+    pub(crate) force: bool,
 }
 
 pub(crate) struct DiffOverlayArgs {
@@ -87,36 +89,58 @@ pub(crate) fn parse_targets_args(args: &[String]) -> Result<TargetsArgs, String>
 }
 
 pub(crate) fn parse_manifest_target_args(args: &[String]) -> Result<ManifestTargetArgs, String> {
+    parse_manifest_target_args_with_force(args, false)
+}
+
+pub(crate) fn parse_manifest_target_output_args(
+    args: &[String],
+) -> Result<ManifestTargetArgs, String> {
+    parse_manifest_target_args_with_force(args, true)
+}
+
+fn parse_manifest_target_args_with_force(
+    args: &[String],
+    allow_force: bool,
+) -> Result<ManifestTargetArgs, String> {
     let mut manifest_path = None;
     let mut target = None;
     let mut out_path = None;
+    let mut force = false;
     let mut media_roots = Vec::new();
     let mut include_paths = Vec::new();
     let mut package_roots = Vec::new();
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
-            "--manifest" => {
-                let Some(path) = args.get(index + 1) else {
+            "--manifest" if manifest_path.is_none() => {
+                let Some(path) = args.get(index + 1).filter(|value| !value.starts_with('-')) else {
                     return Err("--manifest requires a path".to_owned());
                 };
                 manifest_path = Some(PathBuf::from(path));
                 index += 2;
             }
-            "--target" => {
-                let Some(name) = args.get(index + 1) else {
+            "--target" if target.is_none() => {
+                let Some(name) = args.get(index + 1).filter(|value| !value.starts_with('-')) else {
                     return Err("--target requires a name".to_owned());
                 };
                 target = Some(name.clone());
                 index += 2;
             }
-            "--out" => {
-                let Some(path) = args.get(index + 1) else {
+            "--out" if out_path.is_none() => {
+                let Some(path) = args.get(index + 1).filter(|value| !value.starts_with('-')) else {
                     return Err("--out requires a path".to_owned());
                 };
                 out_path = Some(PathBuf::from(path));
                 index += 2;
             }
+            duplicate if matches!(duplicate, "--manifest" | "--target" | "--out") => {
+                return Err(format!("duplicate argument {duplicate:?}"));
+            }
+            "--force" if allow_force && !force => {
+                force = true;
+                index += 1;
+            }
+            "--force" if allow_force => return Err("duplicate argument \"--force\"".to_owned()),
             "--media-root" => {
                 let Some(path) = args.get(index + 1) else {
                     return Err("--media-root requires a path".to_owned());
@@ -148,6 +172,7 @@ pub(crate) fn parse_manifest_target_args(args: &[String]) -> Result<ManifestTarg
         manifest_path: manifest_path.unwrap_or_else(|| PathBuf::from("brainbrew.yaml")),
         target,
         out_path,
+        force,
         media_roots,
         include_paths,
         package_roots,
@@ -246,18 +271,23 @@ fn parse_translation_coverage_policy(value: &str) -> Result<TranslationCoverageP
 
 pub(crate) fn parse_overlay_and_optional_out(
     args: &[String],
-) -> Result<(Vec<String>, Option<PathBuf>), String> {
+) -> Result<(Vec<String>, Option<PathBuf>, bool), String> {
     let export_args = parse_overlay_out_media(args)?;
     if export_args.media_root.is_some() {
         return Err("--media-root is only supported for media-aware commands".to_owned());
     }
-    Ok((export_args.overlay_paths, export_args.out_path))
+    Ok((
+        export_args.overlay_paths,
+        export_args.out_path,
+        export_args.force,
+    ))
 }
 
 pub(crate) fn parse_overlay_out_media(args: &[String]) -> Result<ExportArgs, String> {
     let mut overlay_paths = Vec::new();
     let mut out_path = None;
     let mut media_root = None;
+    let mut force = false;
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -268,19 +298,26 @@ pub(crate) fn parse_overlay_out_media(args: &[String]) -> Result<ExportArgs, Str
                 overlay_paths.push(path.clone());
                 index += 2;
             }
-            "--out" => {
-                let Some(path) = args.get(index + 1) else {
+            "--out" if out_path.is_none() => {
+                let Some(path) = args.get(index + 1).filter(|value| !value.starts_with('-')) else {
                     return Err("--out requires a path".to_owned());
                 };
                 out_path = Some(PathBuf::from(path));
                 index += 2;
             }
-            "--media-root" => {
-                let Some(path) = args.get(index + 1) else {
+            "--media-root" if media_root.is_none() => {
+                let Some(path) = args.get(index + 1).filter(|value| !value.starts_with('-')) else {
                     return Err("--media-root requires a path".to_owned());
                 };
                 media_root = Some(PathBuf::from(path));
                 index += 2;
+            }
+            "--force" if !force => {
+                force = true;
+                index += 1;
+            }
+            duplicate if matches!(duplicate, "--media-root" | "--force" | "--out") => {
+                return Err(format!("duplicate argument {duplicate:?}"));
             }
             other => return Err(format!("unexpected argument {other:?}")),
         }
@@ -289,6 +326,7 @@ pub(crate) fn parse_overlay_out_media(args: &[String]) -> Result<ExportArgs, Str
         overlay_paths,
         out_path,
         media_root,
+        force,
     })
 }
 

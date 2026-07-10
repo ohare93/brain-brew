@@ -1,14 +1,14 @@
-use std::fs;
 use std::path::Path;
 
 use brain_brew_formats::canonical_yaml;
 
-use crate::args::{parse_manifest_target_args, parse_overlay_and_optional_out};
+use crate::args::{parse_manifest_target_output_args, parse_overlay_and_optional_out};
 use crate::commands::verify;
 use crate::help;
 use crate::io::read_deck_and_overlays;
 use crate::output;
 use crate::planner::plan_manifest_target;
+use crate::workspace_mutation::write_output_file;
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -20,7 +20,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         .iter()
         .any(|arg| arg == "--manifest" || arg == "--target")
     {
-        let manifest_args = parse_manifest_target_args(args)?;
+        let manifest_args = parse_manifest_target_output_args(args)?;
         let plan = plan_manifest_target(
             &manifest_args.manifest_path,
             &manifest_args.target,
@@ -31,7 +31,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         let deck = plan.compose()?;
         let yaml = canonical_yaml::to_string(&deck).map_err(|error| error.to_string())?;
         if let Some(path) = manifest_args.out_path {
-            fs::write(&path, yaml).map_err(|error| format!("{}: {error}", path.display()))?;
+            write_canonical_output(&path, yaml.into_bytes(), manifest_args.force)?;
             let mut details = vec![
                 (
                     "manifest",
@@ -61,7 +61,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         return Err(format!("unexpected argument {:?}", args[0]));
     }
     let deck_path = Path::new(&args[0]);
-    let (overlay_paths, out_path) = parse_overlay_and_optional_out(&args[1..])?;
+    let (overlay_paths, out_path, force) = parse_overlay_and_optional_out(&args[1..])?;
     let (base, overlays) = read_deck_and_overlays(deck_path, &overlay_paths)?;
     verify::emit_stale_translation_warnings_for_overlays("ad-hoc", &base, &overlays)?;
     let deck = base
@@ -74,7 +74,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         .map_err(|error| error.to_string())?;
     let yaml = canonical_yaml::to_string(&deck).map_err(|error| error.to_string())?;
     if let Some(path) = out_path {
-        fs::write(&path, yaml).map_err(|error| format!("{}: {error}", path.display()))?;
+        write_canonical_output(&path, yaml.into_bytes(), force)?;
         let mut details = vec![
             ("source", deck_path.display().to_string()),
             ("overlays", overlay_paths.len().to_string()),
@@ -86,4 +86,14 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         print!("{yaml}");
     }
     Ok(())
+}
+
+fn write_canonical_output(path: &Path, bytes: Vec<u8>, force: bool) -> Result<(), String> {
+    write_output_file(path, bytes, force, |replacement| {
+        let text = std::str::from_utf8(replacement)
+            .map_err(|error| format!("generated compose output is not UTF-8: {error}"))?;
+        canonical_yaml::from_str(text)
+            .map(|_| ())
+            .map_err(|error| format!("{}: {error}", path.display()))
+    })
 }

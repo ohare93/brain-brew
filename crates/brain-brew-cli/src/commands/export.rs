@@ -1,18 +1,18 @@
-use std::fs;
 use std::path::Path;
 
 use brain_brew_core::CanonicalDeck;
 use brain_brew_formats::crowdanki;
 
-use crate::args::{parse_manifest_target_args, parse_overlay_out_media};
+use crate::args::{parse_manifest_target_output_args, parse_overlay_out_media};
 use crate::commands::verify;
 use crate::help;
 use crate::io::{configured_crowdanki_out, manifest_root, read_deck_and_overlays};
 use crate::media_assets::{
-    copy_media_assets, copy_owned_media_assets, validate_media_assets, validate_owned_media_assets,
+    collect_media_assets, collect_owned_media_assets, validate_media_references,
 };
 use crate::media_ownership::MediaRootSelections;
 use crate::output;
+use crate::output_transaction::{OutputArtifact, publish_output_tree};
 use crate::path_authorization::PathAuthorizer;
 use crate::planner::{ManifestRegistry, TargetPlan};
 
@@ -33,7 +33,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         .iter()
         .any(|arg| arg == "--manifest" || arg == "--target")
     {
-        let manifest_args = parse_manifest_target_args(&args[1..])?;
+        let manifest_args = parse_manifest_target_output_args(&args[1..])?;
         let registry = ManifestRegistry::load(
             &manifest_args.manifest_path,
             &manifest_args.include_paths,
@@ -67,7 +67,13 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         verify::emit_stale_translation_warnings(&plan)?;
         let deck = plan.compose()?;
         let media_roots = MediaRootSelections::parse(&registry, &manifest_args.media_roots, &root)?;
-        return write_owned_crowdanki_export(&plan, &deck, &out_dir, &media_roots);
+        return write_owned_crowdanki_export(
+            &plan,
+            &deck,
+            &out_dir,
+            &media_roots,
+            manifest_args.force,
+        );
     }
 
     if args.len() < 4 {
@@ -92,7 +98,12 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                 .collect::<Vec<_>>(),
         )
         .map_err(|error| error.to_string())?;
-    write_crowdanki_export(&deck, &out_dir, export_args.media_root.as_deref())
+    write_crowdanki_export(
+        &deck,
+        &out_dir,
+        export_args.media_root.as_deref(),
+        export_args.force,
+    )
 }
 
 fn write_owned_crowdanki_export(
@@ -100,18 +111,22 @@ fn write_owned_crowdanki_export(
     deck: &CanonicalDeck,
     out_dir: &Path,
     media_roots: &MediaRootSelections,
+    force: bool,
 ) -> Result<(), String> {
     plan.media_reference_bindings(deck)?;
-    if media_roots.supplied() {
-        validate_owned_media_assets(plan, deck, media_roots)?;
-    }
     let export = crowdanki::export_deck(deck).map_err(|error| error.to_string())?;
-    fs::create_dir_all(out_dir).map_err(|error| format!("{}: {error}", out_dir.display()))?;
-    fs::write(out_dir.join("deck.json"), export.deck_json)
-        .map_err(|error| format!("{}: {error}", out_dir.display()))?;
+    let mut artifacts = vec![OutputArtifact::new(
+        "deck.json",
+        export.deck_json.as_bytes().to_vec(),
+    )];
     if media_roots.supplied() {
-        copy_owned_media_assets(plan, deck, media_roots, out_dir)?;
+        artifacts.extend(
+            collect_owned_media_assets(plan, deck, media_roots)?
+                .into_iter()
+                .map(|(path, bytes)| OutputArtifact::new(path, bytes)),
+        );
     }
+    publish_output_tree(out_dir, artifacts, force)?;
     let mut details = vec![("output", out_dir.join("deck.json").display().to_string())];
     details.extend(output::deck_stats(deck));
     if media_roots.supplied() {
@@ -136,18 +151,22 @@ fn write_crowdanki_export(
     deck: &CanonicalDeck,
     out_dir: &Path,
     media_root: Option<&Path>,
+    force: bool,
 ) -> Result<(), String> {
-    if let Some(media_root) = media_root {
-        validate_media_assets(deck, media_root)?;
-    }
+    validate_media_references(deck)?;
     let export = crowdanki::export_deck(deck).map_err(|error| error.to_string())?;
-    fs::create_dir_all(out_dir).map_err(|error| format!("{}: {error}", out_dir.display()))?;
-    fs::write(out_dir.join("deck.json"), export.deck_json)
-        .map_err(|error| format!("{}: {error}", out_dir.display()))?;
-
+    let mut artifacts = vec![OutputArtifact::new(
+        "deck.json",
+        export.deck_json.as_bytes().to_vec(),
+    )];
     if let Some(media_root) = media_root {
-        copy_media_assets(deck, media_root, out_dir)?;
+        artifacts.extend(
+            collect_media_assets(deck, media_root)?
+                .into_iter()
+                .map(|(path, bytes)| OutputArtifact::new(path, bytes)),
+        );
     }
+    publish_output_tree(out_dir, artifacts, force)?;
 
     let mut details = vec![("output", out_dir.join("deck.json").display().to_string())];
     details.extend(output::deck_stats(deck));
