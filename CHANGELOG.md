@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Recursive package-root discovery is now deterministic, no-follow, and registry-owned, with exact built-in VCS/build/output/cache pruning, authorized component-glob ignores, explicit depth/entry/manifest budgets, structured actionable errors, and JSON visit/prune statistics shared by every package-root command.
 - Media-bearing `verify` and manifest/ad-hoc CrowdAnki export are now release-strict by default: every final package owner needs an explicit media root, hashes must be canonical lowercase SHA-256, and bytes must exist and match before clean-tree publication. Hashless/source-only fixtures must migrate to explicit `--media-mode reference-only`, whose human/JSON status is always marked not release-ready when media is present.
 - Structured `!image` rendering percent-encodes hostile filenames and HTML-attribute escapes output without changing declaration/CrowdAnki filenames; media paths now reject control, URL/platform, bidi/format-control, and reserved-name ambiguity, while scanners decode normalized HTML/URL references before comparison.
 - Package federation now validates the complete root/include/package-root/lock registry before planning: package versions and exact pins use SemVer, explicit base compatibility ranges are enforced, dependency cycles include full deterministic edge traces, and overlay catalog IDs/kinds must match decoded sources.

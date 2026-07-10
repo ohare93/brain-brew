@@ -1347,7 +1347,13 @@ impl WorkspaceMetadata {
         &self,
         selection: WorkbenchSelection,
     ) -> Result<SelectedTranslationContext, String> {
-        let plan = plan_manifest_target(&self.manifest_path, &selection.target_id, &[], &[])?;
+        let plan = plan_manifest_target(
+            &self.manifest_path,
+            &selection.target_id,
+            &[],
+            &[],
+            &crate::package_resolver::DiscoveryPolicy::default(),
+        )?;
         let mut current = plan.base.clone();
         let mut selected_source_deck = None;
         let mut selected_report = None;
@@ -1475,7 +1481,13 @@ impl WorkspaceMetadata {
                 .map(|package| format!("{}:{target_id}", package.id))
                 .unwrap_or_else(|| target_id.clone())
         };
-        let plan = plan_manifest_target(&self.manifest_path, &target_reference, &[], &[])?;
+        let plan = plan_manifest_target(
+            &self.manifest_path,
+            &target_reference,
+            &[],
+            &[],
+            &crate::package_resolver::DiscoveryPolicy::default(),
+        )?;
         let planned_overlay = plan
             .overlays
             .iter()

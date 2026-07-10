@@ -31,10 +31,11 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     verify_manifest_format(&verify_args.manifest_path)?;
     let manifest = read_manifest(&verify_args.manifest_path)?;
     let root = manifest_root(&verify_args.manifest_path);
-    let registry = ManifestRegistry::load(
+    let registry = ManifestRegistry::load_with_policy(
         &verify_args.manifest_path,
         &verify_args.include_paths,
         &verify_args.package_roots,
+        &verify_args.discovery_policy,
     )?;
     for loaded in registry.manifests() {
         verify_manifest_format(&loaded.path)?;

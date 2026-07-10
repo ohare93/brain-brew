@@ -33,10 +33,11 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         .any(|arg| arg == "--manifest" || arg == "--target")
     {
         let manifest_args = parse_manifest_target_export_args(&args[1..])?;
-        let registry = ManifestRegistry::load(
+        let registry = ManifestRegistry::load_with_policy(
             &manifest_args.manifest_path,
             &manifest_args.include_paths,
             &manifest_args.package_roots,
+            &manifest_args.discovery_policy,
         )?;
         let plan = registry.plan(&manifest_args.target)?;
         // Export destinations belong to the caller-selected workspace, never a

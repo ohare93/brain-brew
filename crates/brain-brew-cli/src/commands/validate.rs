@@ -22,6 +22,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                 &manifest_args.target,
                 &manifest_args.include_paths,
                 &manifest_args.package_roots,
+                &manifest_args.discovery_policy,
             )?;
             let overlays = plan
                 .overlays
@@ -38,6 +39,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                 &manifest_args.target,
                 &manifest_args.include_paths,
                 &manifest_args.package_roots,
+                &manifest_args.discovery_policy,
             )?
             .compose()?
         };

@@ -19,7 +19,8 @@ use crate::commands::translation_overlay::compose_lenient_translation_overlay;
 use crate::help;
 use crate::io::{manifest_root, overlay_from_source_text, overlay_source_document, read_manifest};
 use crate::output;
-use crate::planner::{PlannedOverlay, plan_manifest_target};
+use crate::package_resolver::{DiscoveryPolicy, apply_discovery_option};
+use crate::planner::{ManifestRegistry, PlannedOverlay, plan_manifest_target};
 use crate::workspace_mutation::{PlannedWorkspaceFile, commit_workspace_files, recover_workspace};
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
@@ -34,7 +35,10 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     let mut args = parse_translation_args(args)?;
     let interactive = should_use_interactive(&args);
     if !args.manifest_path.exists() && !interactive {
-        return Err(missing_manifest_error(&args.manifest_path));
+        return Err(missing_manifest_error(
+            &args.manifest_path,
+            &args.discovery_policy,
+        )?);
     }
 
     if interactive {
@@ -141,6 +145,7 @@ struct TranslationArgs {
     all_targets: bool,
     include_paths: Vec<PathBuf>,
     package_roots: Vec<PathBuf>,
+    discovery_policy: DiscoveryPolicy,
     language: Option<String>,
     overlay: Option<String>,
     note: Option<String>,
@@ -169,6 +174,7 @@ fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
         all_targets: false,
         include_paths: Vec::new(),
         package_roots: Vec::new(),
+        discovery_policy: DiscoveryPolicy::default(),
         language: None,
         overlay: None,
         note: None,
@@ -222,6 +228,16 @@ fn parse_translation_args(args: &[String]) -> Result<TranslationArgs, String> {
                     return Err("--package-root requires a path".to_owned());
                 };
                 parsed.package_roots.push(PathBuf::from(path));
+                index += 2;
+            }
+            flag @ ("--discovery-max-depth"
+            | "--discovery-max-entries"
+            | "--discovery-max-manifests"
+            | "--package-ignore") => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| format!("{flag} requires a value"))?;
+                apply_discovery_option(flag, value, &mut parsed.discovery_policy)?;
                 index += 2;
             }
             "--language" => {
@@ -425,9 +441,12 @@ fn configure_interactively<R: Read, W: Write>(
     ui.message("Brain Brew translation coverage")?;
 
     if !args.manifest_path.exists() {
-        let manifests = discover_nearby_manifests();
+        let manifests = discover_nearby_manifests(&args.discovery_policy)?;
         if manifests.is_empty() {
-            return Err(missing_manifest_error(&args.manifest_path));
+            return Err(missing_manifest_error(
+                &args.manifest_path,
+                &args.discovery_policy,
+            )?);
         }
         let labels = manifests
             .iter()
@@ -996,6 +1015,7 @@ fn collect_translation_reports(
             target,
             &args.include_paths,
             &args.package_roots,
+            &args.discovery_policy,
         )?;
         let mut current = plan.base.clone();
         for (planned, overlay) in &plan.overlays {
@@ -1688,6 +1708,7 @@ fn non_dictionary_translation_overlays(
             &target,
             &args.include_paths,
             &args.package_roots,
+            &args.discovery_policy,
         )?;
         for (planned, overlay) in &plan.overlays {
             if overlay.kind == OverlayKind::Translation
@@ -2718,6 +2739,7 @@ fn validate_final_translation_composition(
             &target,
             &args.include_paths,
             &args.package_roots,
+            &args.discovery_policy,
         )?;
         let mut current = plan.base.clone();
         for (planned, original_overlay) in &plan.overlays {
@@ -2759,6 +2781,7 @@ fn translation_overlay_choices(args: &TranslationArgs) -> Result<Vec<OverlayChoi
             &target,
             &args.include_paths,
             &args.package_roots,
+            &args.discovery_policy,
         )?;
         for (planned, overlay) in &plan.overlays {
             if overlay.kind == OverlayKind::Translation
@@ -2875,51 +2898,38 @@ fn context_parent_candidate(path: &str) -> Option<String> {
     None
 }
 
-fn discover_nearby_manifests() -> Vec<PathBuf> {
-    let mut results = BTreeSet::new();
-    if let Ok(current) = env::current_dir() {
-        discover_manifests_under(&current, &current, 0, &mut results);
-        for ancestor in current.ancestors().skip(1).take(4) {
-            let candidate = ancestor.join("brainbrew.yaml");
-            if candidate.exists() {
+fn discover_nearby_manifests(policy: &DiscoveryPolicy) -> Result<Vec<PathBuf>, String> {
+    let current = env::current_dir().map_err(|error| {
+        format!("package discovery failed closed: could not read current directory: {error}")
+    })?;
+    let mut results =
+        ManifestRegistry::discover_manifest_paths(std::slice::from_ref(&current), policy)?
+            .into_iter()
+            .map(|path| relative_to_current(&path))
+            .collect::<BTreeSet<_>>();
+    for directory in current.ancestors().skip(1).take(4) {
+        let candidate = directory.join("brainbrew.yaml");
+        match fs::symlink_metadata(&candidate) {
+            Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {
                 results.insert(relative_to_current(&candidate));
+            }
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(format!(
+                    "package discovery rejected symlink {} while checking nearby manifests",
+                    candidate.display()
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(format!(
+                    "package discovery failed closed while inspecting nearby manifest {}: {error}",
+                    candidate.display()
+                ));
             }
         }
     }
-    results.into_iter().take(20).collect()
-}
-
-fn discover_manifests_under(
-    root: &Path,
-    dir: &Path,
-    depth: usize,
-    results: &mut BTreeSet<PathBuf>,
-) {
-    if depth > 4 {
-        return;
-    }
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if name == "target"
-            || name == ".git"
-            || name == ".jj"
-            || name == ".devenv"
-            || name == ".direnv"
-            || name == "node_modules"
-        {
-            continue;
-        }
-        if path.is_file() && name == "brainbrew.yaml" {
-            results.insert(path.strip_prefix(root).unwrap_or(&path).to_path_buf());
-        } else if path.is_dir() {
-            discover_manifests_under(root, &path, depth + 1, results);
-        }
-    }
+    Ok(results.into_iter().take(20).collect())
 }
 
 fn relative_to_current(path: &Path) -> PathBuf {
@@ -2929,12 +2939,12 @@ fn relative_to_current(path: &Path) -> PathBuf {
         .unwrap_or_else(|| path.to_path_buf())
 }
 
-fn missing_manifest_error(path: &Path) -> String {
+fn missing_manifest_error(path: &Path, policy: &DiscoveryPolicy) -> Result<String, String> {
     let mut message = format!("No Brain Brew manifest found at {}.", path.display());
     if path == Path::new("brainbrew.yaml") {
         message.push_str("\n\nRun from a deck workspace, or pass --manifest <path>.");
     }
-    let manifests = discover_nearby_manifests();
+    let manifests = discover_nearby_manifests(policy)?;
     if !manifests.is_empty() {
         message.push_str("\n\nFound possible manifests:");
         for manifest in &manifests {
@@ -2949,7 +2959,7 @@ fn missing_manifest_error(path: &Path) -> String {
             message.push_str("\n  brainbrew translations --interactive");
         }
     }
-    message
+    Ok(message)
 }
 
 fn equivalent_command(args: &TranslationArgs) -> String {

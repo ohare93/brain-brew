@@ -21,7 +21,10 @@ use crate::io::{
     canonical_document_from_package, include_roots_from_manifest, manifest_root,
     overlay_document_from_package, read_manifest,
 };
-use crate::package_resolver::{discover_package_manifests, validate_package_dependencies};
+use crate::package_resolver::{
+    DiscoveryPolicy, DiscoveryResult, DiscoveryStats, discover_package_manifests,
+    validate_package_dependencies,
+};
 use crate::path_authorization::PathAuthorizer;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -204,14 +207,22 @@ pub(crate) fn plan_manifest_target(
     target: &str,
     include_paths: &[PathBuf],
     package_roots: &[PathBuf],
+    discovery_policy: &DiscoveryPolicy,
 ) -> Result<TargetPlan, String> {
-    ManifestRegistry::load(manifest_path, include_paths, package_roots)?.plan(target)
+    ManifestRegistry::load_with_policy(
+        manifest_path,
+        include_paths,
+        package_roots,
+        discovery_policy,
+    )?
+    .plan(target)
 }
 
 pub(crate) struct ManifestRegistry {
     root_index: usize,
     manifests: Vec<RegistryManifest>,
     packages: BTreeMap<String, usize>,
+    discovery_stats: DiscoveryStats,
 }
 
 impl ManifestRegistry {
@@ -219,6 +230,51 @@ impl ManifestRegistry {
         manifest_path: &Path,
         include_paths: &[PathBuf],
         package_roots: &[PathBuf],
+    ) -> Result<Self, String> {
+        Self::load_with_policy(
+            manifest_path,
+            include_paths,
+            package_roots,
+            &DiscoveryPolicy::default(),
+        )
+    }
+
+    pub(crate) fn load_with_policy(
+        manifest_path: &Path,
+        include_paths: &[PathBuf],
+        package_roots: &[PathBuf],
+        discovery_policy: &DiscoveryPolicy,
+    ) -> Result<Self, String> {
+        let discovery = discover_package_manifests(package_roots, discovery_policy)
+            .map_err(|error| error.to_string())?;
+        Self::load_with_discovery(manifest_path, include_paths, discovery)
+    }
+
+    pub(crate) fn discover_manifest_paths(
+        package_roots: &[PathBuf],
+        discovery_policy: &DiscoveryPolicy,
+    ) -> Result<Vec<PathBuf>, String> {
+        discover_package_manifests(package_roots, discovery_policy)
+            .map(|result| result.manifests)
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn discover(
+        package_roots: &[PathBuf],
+        discovery_policy: &DiscoveryPolicy,
+    ) -> Result<Self, String> {
+        let discovery = discover_package_manifests(package_roots, discovery_policy)
+            .map_err(|error| error.to_string())?;
+        let Some(root) = discovery.manifests.first().cloned() else {
+            return Err("no Brain Brew package manifests were discovered".to_owned());
+        };
+        Self::load_with_discovery(&root, &[], discovery)
+    }
+
+    fn load_with_discovery(
+        manifest_path: &Path,
+        include_paths: &[PathBuf],
+        discovery: DiscoveryResult,
     ) -> Result<Self, String> {
         let root_path = canonical_manifest_path(manifest_path)?;
         let mut candidates = BTreeMap::<PathBuf, RegistrySourceKind>::new();
@@ -234,8 +290,12 @@ impl ManifestRegistry {
                 RegistrySourceKind::ExplicitInclude,
             );
         }
-        for path in discover_package_manifests(package_roots)? {
-            insert_candidate(&mut candidates, path, RegistrySourceKind::PackageRoot);
+        for path in &discovery.manifests {
+            insert_candidate(
+                &mut candidates,
+                canonical_manifest_path(path)?,
+                RegistrySourceKind::PackageRoot,
+            );
         }
 
         // Locks are siblings of selected package manifests. Iterate to a fixed
@@ -323,11 +383,16 @@ impl ManifestRegistry {
             root_index,
             manifests,
             packages,
+            discovery_stats: discovery.stats,
         })
     }
 
     pub(crate) fn manifests(&self) -> &[RegistryManifest] {
         &self.manifests
+    }
+
+    pub(crate) fn discovery_stats(&self) -> &DiscoveryStats {
+        &self.discovery_stats
     }
 
     pub(crate) fn root(&self) -> &RegistryManifest {

@@ -4,6 +4,7 @@ use brain_brew_core::{OverlayKind, StableId};
 use brain_brew_formats::manifest::TranslationCoveragePolicy;
 
 use crate::media_verification::MediaVerificationMode;
+use crate::package_resolver::{DiscoveryPolicy, apply_discovery_option};
 
 pub(crate) struct ManifestTargetArgs {
     pub(crate) manifest_path: PathBuf,
@@ -15,6 +16,7 @@ pub(crate) struct ManifestTargetArgs {
     pub(crate) json_output: bool,
     pub(crate) include_paths: Vec<PathBuf>,
     pub(crate) package_roots: Vec<PathBuf>,
+    pub(crate) discovery_policy: DiscoveryPolicy,
 }
 
 pub(crate) struct VerifyArgs {
@@ -28,6 +30,7 @@ pub(crate) struct VerifyArgs {
     pub(crate) package_roots: Vec<PathBuf>,
     pub(crate) translation_coverage: Option<TranslationCoveragePolicy>,
     pub(crate) skip_content_validation: bool,
+    pub(crate) discovery_policy: DiscoveryPolicy,
 }
 
 pub(crate) struct ExportArgs {
@@ -49,6 +52,7 @@ pub(crate) struct DiffOverlayArgs {
 pub(crate) struct TargetsArgs {
     pub(crate) manifest_paths: Vec<PathBuf>,
     pub(crate) package_roots: Vec<PathBuf>,
+    pub(crate) discovery_policy: DiscoveryPolicy,
 }
 
 pub(crate) fn split_json_flag(args: &[String]) -> (bool, Vec<String>) {
@@ -67,6 +71,7 @@ pub(crate) fn split_json_flag(args: &[String]) -> (bool, Vec<String>) {
 pub(crate) fn parse_targets_args(args: &[String]) -> Result<TargetsArgs, String> {
     let mut manifest_paths = Vec::new();
     let mut package_roots = Vec::new();
+    let mut discovery_policy = DiscoveryPolicy::default();
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -84,6 +89,13 @@ pub(crate) fn parse_targets_args(args: &[String]) -> Result<TargetsArgs, String>
                 package_roots.push(PathBuf::from(path));
                 index += 2;
             }
+            flag @ ("--discovery-max-depth"
+            | "--discovery-max-entries"
+            | "--discovery-max-manifests"
+            | "--package-ignore") => {
+                apply_discovery_arg(args, index, flag, &mut discovery_policy)?;
+                index += 2;
+            }
             other => return Err(format!("unexpected targets argument {other:?}")),
         }
     }
@@ -93,6 +105,7 @@ pub(crate) fn parse_targets_args(args: &[String]) -> Result<TargetsArgs, String>
     Ok(TargetsArgs {
         manifest_paths,
         package_roots,
+        discovery_policy,
     })
 }
 
@@ -127,6 +140,7 @@ fn parse_manifest_target_args_with_force(
     let mut json_output = false;
     let mut include_paths = Vec::new();
     let mut package_roots = Vec::new();
+    let mut discovery_policy = DiscoveryPolicy::default();
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -198,6 +212,13 @@ fn parse_manifest_target_args_with_force(
                 package_roots.push(PathBuf::from(path));
                 index += 2;
             }
+            flag @ ("--discovery-max-depth"
+            | "--discovery-max-entries"
+            | "--discovery-max-manifests"
+            | "--package-ignore") => {
+                apply_discovery_arg(args, index, flag, &mut discovery_policy)?;
+                index += 2;
+            }
             other => return Err(format!("unexpected argument {other:?}")),
         }
     }
@@ -214,6 +235,7 @@ fn parse_manifest_target_args_with_force(
         json_output,
         include_paths,
         package_roots,
+        discovery_policy,
     })
 }
 
@@ -229,6 +251,7 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
     let mut package_roots = Vec::new();
     let mut translation_coverage = None;
     let mut skip_content_validation = false;
+    let mut discovery_policy = DiscoveryPolicy::default();
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -285,6 +308,13 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
                 package_roots.push(PathBuf::from(path));
                 index += 2;
             }
+            flag @ ("--discovery-max-depth"
+            | "--discovery-max-entries"
+            | "--discovery-max-manifests"
+            | "--package-ignore") => {
+                apply_discovery_arg(args, index, flag, &mut discovery_policy)?;
+                index += 2;
+            }
             "--translation-coverage" => {
                 let Some(policy) = args.get(index + 1) else {
                     return Err("--translation-coverage requires lenient or strict".to_owned());
@@ -313,7 +343,24 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
         package_roots,
         translation_coverage,
         skip_content_validation,
+        discovery_policy,
     })
+}
+
+fn apply_discovery_arg(
+    args: &[String],
+    index: usize,
+    flag: &str,
+    policy: &mut DiscoveryPolicy,
+) -> Result<(), String> {
+    let value = args
+        .get(index + 1)
+        .ok_or_else(|| format!("{flag} requires a value"))?;
+    if apply_discovery_option(flag, value, policy)? {
+        Ok(())
+    } else {
+        Err(format!("unknown discovery option {flag:?}"))
+    }
 }
 
 fn parse_translation_coverage_policy(value: &str) -> Result<TranslationCoveragePolicy, String> {

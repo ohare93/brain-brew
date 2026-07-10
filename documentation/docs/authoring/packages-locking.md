@@ -63,6 +63,33 @@ Or discover sibling packages:
 brainbrew targets --package-root ../anki-geo-packages
 ```
 
+## Bounded package-root discovery
+
+Every command that accepts `--package-root` uses the registry planner's single discovery implementation. Discovery reads directory entries in sorted order, never follows symlinks, and returns manifests in package-root/normalized-relative-path order. A symlink, special entry, unreadable candidate directory, replaced directory identity, or filesystem read error outside a pruned tree fails closed with the package root and current path.
+
+The defaults are:
+
+| Budget | Default | Override | Maximum override |
+|---|---:|---|---:|
+| directory depth (package root is depth 0) | 32 | `--discovery-max-depth <n>` | 256 |
+| inspected entries, including roots and entries later pruned | 100,000 | `--discovery-max-entries <n>` | 10,000,000 |
+| discovered `brainbrew.yaml` manifests | 1,000 | `--discovery-max-manifests <n>` | 100,000 |
+
+Zero, non-decimal, overflow, and effectively unbounded overrides are rejected. Budget failures report `package_root`, `current_path`, `consumed`, `limit`, and the exact override flag. These defaults leave substantial room above the measured Brain Brew repository (600 inspected entries, depth 6, 2 manifests after pruning) and Ultimate Geography fixture (146 inspected entries, depth 4, 1 manifest), while bounding accidental scans of a repository root.
+
+Before metadata or descent, discovery prunes directory entries with these exact names: `.git`, `.jj`, `.hg`, `.svn`, `.devenv`, `.direnv`, `target`, `build`, `output`, `outputs`, `dist`, `site`, `_site`, `node_modules`, `.docusaurus`, `.cache`, `.brainbrew-cache`, `.brainbrew-transactions`, and `result`. Nix `result-*` entries and Brain Brew `.brainbrew-*.stage`/`.brainbrew-*.backup` publication directories are also pruned by their complete structural names. Matching is not based on substrings: names such as `builder`, `my-target`, and `legitimate-generated-name` remain discoverable.
+
+Use repeatable `--package-ignore <pattern>` for repository-specific generated or declared export directories that do not use those conventional names:
+
+```bash
+brainbrew targets \
+  --package-root ../anki-geo-packages \
+  --package-ignore 'releases/generated' \
+  --package-ignore 'vendor/**/fixtures-*'
+```
+
+Ignore values use the same portable, package-root-relative authorization as `SafeRelativePath`: absolute paths, `.`/`..`, backslashes, drive/UNC forms, repeated separators, controls, and other ambiguous forms are rejected before traversal. `*` and `?` match within one complete path component; a component equal to `**` matches zero or more complete components. A literal pattern matches only that exact relative path. Built-ins have precedence over configured patterns, and both only prune (a configured pattern cannot re-enable a built-in tree). `targets --json` reports roots/entries/directories/files/manifests visited and built-in/configured prune counts under `discovery`.
+
 ## Lock an upstream package
 
 ```bash

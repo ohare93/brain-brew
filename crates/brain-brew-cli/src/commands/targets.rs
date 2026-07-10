@@ -2,25 +2,27 @@ use serde_json::json;
 
 use crate::args::{parse_targets_args, split_json_flag};
 use crate::output::package_json;
-use crate::package_resolver::discover_package_manifests;
 use crate::planner::ManifestRegistry;
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     let (json_output, rest) = split_json_flag(args);
-    let mut target_args = parse_targets_args(&rest)?;
-    if target_args.manifest_paths.is_empty() {
-        target_args.manifest_paths = discover_package_manifests(&target_args.package_roots)?;
-    }
-    let Some(root_manifest) = target_args.manifest_paths.first().cloned() else {
-        return Err("no Brain Brew package manifests were discovered".to_owned());
+    let target_args = parse_targets_args(&rest)?;
+    let registry = if let Some(root_manifest) = target_args.manifest_paths.first() {
+        let explicit = target_args
+            .manifest_paths
+            .iter()
+            .skip(1)
+            .cloned()
+            .collect::<Vec<_>>();
+        ManifestRegistry::load_with_policy(
+            root_manifest,
+            &explicit,
+            &target_args.package_roots,
+            &target_args.discovery_policy,
+        )?
+    } else {
+        ManifestRegistry::discover(&target_args.package_roots, &target_args.discovery_policy)?
     };
-    let explicit = target_args
-        .manifest_paths
-        .iter()
-        .skip(1)
-        .cloned()
-        .collect::<Vec<_>>();
-    let registry = ManifestRegistry::load(&root_manifest, &explicit, &target_args.package_roots)?;
 
     if json_output {
         let mut packages = Vec::new();
@@ -67,11 +69,23 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             }));
         }
         let package = registry.root().manifest.package.as_ref().map(package_json);
+        let stats = registry.discovery_stats();
         println!(
             "{}",
-            serde_json::to_string_pretty(
-                &json!({"package": package, "targets": all_targets, "packages": packages})
-            )
+            serde_json::to_string_pretty(&json!({
+                "package": package,
+                "targets": all_targets,
+                "packages": packages,
+                "discovery": {
+                    "roots_inspected": stats.roots_inspected,
+                    "entries_inspected": stats.entries_inspected,
+                    "directories_inspected": stats.directories_inspected,
+                    "regular_files_inspected": stats.regular_files_inspected,
+                    "manifests_found": stats.manifests_found,
+                    "built_in_pruned": stats.built_in_pruned,
+                    "configured_pruned": stats.configured_pruned,
+                }
+            }))
             .unwrap()
         );
     } else {

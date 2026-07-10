@@ -13,6 +13,7 @@ use crate::io::{
 };
 use crate::media_ownership::MediaRootSelections;
 use crate::output;
+use crate::package_resolver::{DiscoveryPolicy, apply_discovery_option};
 use crate::path_authorization::PathAuthorizer;
 use crate::planner::{
     ManifestRegistry, MediaDeclarationProvenance, PlanSourceKind, RegistryManifest,
@@ -41,10 +42,11 @@ fn run_hash(args: &[String]) -> Result<(), String> {
     let args = parse_media_args(args, true)?;
     let workspace_root = manifest_root(&args.manifest_path);
     recover_workspace(&workspace_root)?;
-    let registry = ManifestRegistry::load(
+    let registry = ManifestRegistry::load_with_policy(
         &args.manifest_path,
         &args.include_paths,
         &args.package_roots,
+        &args.discovery_policy,
     )?;
     let roots = MediaRootSelections::parse(&registry, &args.media_roots, &workspace_root)?;
     let plans = selected_plans(&registry, args.target.as_deref(), args.all_targets)?;
@@ -173,10 +175,11 @@ fn run_images_to_refs(args: &[String]) -> Result<(), String> {
     let args = parse_media_args(args, false)?;
     let workspace_root = manifest_root(&args.manifest_path);
     recover_workspace(&workspace_root)?;
-    let registry = ManifestRegistry::load(
+    let registry = ManifestRegistry::load_with_policy(
         &args.manifest_path,
         &args.include_paths,
         &args.package_roots,
+        &args.discovery_policy,
     )?;
     let plans = selected_plans(&registry, args.target.as_deref(), args.all_targets)?;
     let locked_before = snapshot_locked_packages(&registry)?;
@@ -264,6 +267,7 @@ struct MediaArgs {
     media_roots: Vec<String>,
     include_paths: Vec<PathBuf>,
     package_roots: Vec<PathBuf>,
+    discovery_policy: DiscoveryPolicy,
 }
 
 fn parse_media_args(args: &[String], require_roots: bool) -> Result<MediaArgs, String> {
@@ -274,6 +278,7 @@ fn parse_media_args(args: &[String], require_roots: bool) -> Result<MediaArgs, S
         media_roots: Vec::new(),
         include_paths: Vec::new(),
         package_roots: Vec::new(),
+        discovery_policy: DiscoveryPolicy::default(),
     };
     let mut index = 0;
     while index < args.len() {
@@ -309,6 +314,14 @@ fn parse_media_args(args: &[String], require_roots: bool) -> Result<MediaArgs, S
                 parsed
                     .package_roots
                     .push(PathBuf::from(value("--package-root", index)?));
+                index += 2;
+            }
+            flag @ ("--discovery-max-depth"
+            | "--discovery-max-entries"
+            | "--discovery-max-manifests"
+            | "--package-ignore") => {
+                let selected = value(flag, index)?;
+                apply_discovery_option(flag, &selected, &mut parsed.discovery_policy)?;
                 index += 2;
             }
             other => return Err(format!("unexpected media argument {other:?}")),

@@ -47,7 +47,20 @@ brainbrew targets --manifest brainbrew.yaml --json
 brainbrew targets --package-root ../packages
 ```
 
-Lists build targets and package metadata.
+Lists build targets and package metadata. With `--json`, the `discovery` object reports inspected roots/entries/directories/files/manifests and built-in/configured prune counts.
+
+### Package-root discovery options
+
+Every command whose usage accepts `--package-root` also accepts the same repeatable/validated discovery options:
+
+```text
+--package-ignore <safe-relative-pattern>
+--discovery-max-depth <1..=256>
+--discovery-max-entries <1..=10000000>
+--discovery-max-manifests <1..=100000>
+```
+
+Defaults are depth 32, 100,000 inspected entries, and 1,000 manifests. `*`/`?` match within one path component and a complete `**` component matches any number of components. See [Packages and lock files](../authoring/packages-locking.md#bounded-package-root-discovery) for pruning, precedence, diagnostics, and rationale.
 
 ## `fmt`
 
