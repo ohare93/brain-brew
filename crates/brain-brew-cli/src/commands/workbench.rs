@@ -22,6 +22,7 @@ use brain_brew_formats::manifest::{
     self, BuildTarget, FederatedDeckManifest, LanguageManifestEntry, MetadataCategory,
     OverlayManifestEntry, TargetExports,
 };
+use brain_brew_formats::safe_relative_path::SafeRelativePath;
 use brain_brew_formats::{canonical_yaml, strict_yaml};
 use include_dir::{Dir, include_dir};
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,7 @@ use tower_http::services::{ServeDir, ServeFile};
 use crate::commands::translation_overlay::compose_lenient_translation_overlay;
 use crate::help;
 use crate::io::{manifest_root, plan_manifest_target_with_packages, read_manifest};
+use crate::path_authorization::PathAuthorizer;
 
 static EMBEDDED_WORKBENCH_ASSETS: Dir<'static> =
     include_dir!("$CARGO_MANIFEST_DIR/assets/workbench");
@@ -557,11 +559,11 @@ impl WorkspaceMetadata {
                 cache.file_signatures.clone(),
             )
         };
-        let current_signatures = self.tracked_file_signatures(&manifest);
+        let current_signatures = self.tracked_file_signatures(&manifest)?;
         if previous_signatures.is_empty() {
             let mut cache = self.cache.blocking_write();
             if cache.file_signatures.is_empty() {
-                cache.file_signatures = self.tracked_file_signatures(&cache.manifest);
+                cache.file_signatures = self.tracked_file_signatures(&cache.manifest)?;
             }
             return Ok(());
         }
@@ -576,7 +578,7 @@ impl WorkspaceMetadata {
         } else {
             manifest
         };
-        let refreshed_signatures = self.tracked_file_signatures(&refreshed_manifest);
+        let refreshed_signatures = self.tracked_file_signatures(&refreshed_manifest)?;
 
         let mut cache = self.cache.blocking_write();
         if cache.generation == generation && cache.file_signatures == previous_signatures {
@@ -590,7 +592,7 @@ impl WorkspaceMetadata {
 
     fn invalidate_workspace_cache_after_write(&self) -> Result<(), String> {
         let manifest = read_manifest(&self.manifest_path)?;
-        let signatures = self.tracked_file_signatures(&manifest);
+        let signatures = self.tracked_file_signatures(&manifest)?;
         let mut cache = self.cache.blocking_write();
         cache.generation += 1;
         cache.manifest = manifest;
@@ -602,20 +604,10 @@ impl WorkspaceMetadata {
     fn tracked_file_signatures(
         &self,
         manifest: &FederatedDeckManifest,
-    ) -> BTreeMap<PathBuf, Option<FileSignature>> {
-        let mut paths = vec![
-            self.manifest_path.clone(),
-            self.manifest_root.join(&manifest.base),
-        ];
-        paths.extend(
-            manifest
-                .overlays
-                .values()
-                .map(|overlay| self.manifest_root.join(&overlay.file)),
-        );
-        paths.sort();
-        paths.dedup();
-        paths
+    ) -> Result<BTreeMap<PathBuf, Option<FileSignature>>, String> {
+        let paths =
+            authorized_manifest_source_files(&self.manifest_path, &self.manifest_root, manifest)?;
+        Ok(paths
             .into_iter()
             .map(|path| {
                 let signature = fs::metadata(&path).ok().map(|metadata| FileSignature {
@@ -624,7 +616,7 @@ impl WorkspaceMetadata {
                 });
                 (path, signature)
             })
-            .collect()
+            .collect())
     }
 
     fn workspace_json(&self) -> Result<Value, String> {
@@ -880,8 +872,14 @@ impl WorkspaceMetadata {
         let mut writes = Vec::new();
         let mut overlay_write_targets = Vec::new();
         for (relative_path, overlay) in overlay_writes {
-            let relative = safe_new_language_relative_path(&relative_path)?;
-            let path = self.manifest_root.join(&relative);
+            let path = PathAuthorizer::new("workspace", &self.manifest_root)?
+                .authorize_create(
+                    &self.manifest_path,
+                    "new-language overlay file",
+                    &relative_path,
+                )
+                .map_err(|error| error.to_string())?
+                .into_path_buf();
             let overlay_yaml = canonical_yaml::overlay_to_string(&overlay)
                 .map_err(|error| format!("invalid generated overlay {relative_path}: {error}"))?;
             canonical_yaml::overlay_from_str(&overlay_yaml)
@@ -964,7 +962,10 @@ impl WorkspaceMetadata {
 
         let mut primary_overlay = read_overlay_for_rewrite(&context.selection.overlay_file)?;
         let mut modified_base = context.base_deck.clone();
-        let base_file = self.manifest_root.join(&manifest.base);
+        let base_file = PathAuthorizer::new("workspace", &self.manifest_root)?
+            .authorize_read(&self.manifest_path, "base", &manifest.base)
+            .map_err(|error| error.to_string())?
+            .into_path_buf();
         let mut source_plan = apply_staged_source_edits(
             &mut modified_base,
             &mut primary_overlay,
@@ -1112,8 +1113,8 @@ impl WorkspaceMetadata {
             return Err(format!("unknown media asset {requested_path:?}"));
         }
 
-        let candidates = self.media_file_candidates(&requested_path);
-        if let Some(path) = candidates.iter().find(|path| path.is_file()) {
+        let candidates = self.media_file_candidates(&requested_path)?;
+        if let Some(path) = candidates.first() {
             let bytes = fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
             return Response::builder()
                 .status(StatusCode::OK)
@@ -1130,43 +1131,42 @@ impl WorkspaceMetadata {
             .map_err(|error| format!("failed to build missing media placeholder: {error}"))
     }
 
-    fn media_file_candidates(&self, requested_path: &str) -> Vec<PathBuf> {
-        let mut candidates = vec![
-            self.manifest_root.join(requested_path),
-            self.manifest_root.join("media").join(requested_path),
-        ];
+    fn media_file_candidates(&self, requested_path: &str) -> Result<Vec<PathBuf>, String> {
+        let mut roots = vec![self.manifest_root.clone(), self.manifest_root.join("media")];
         if let Some(media_root) = &self.media_root {
-            candidates.push(media_root.join(requested_path));
-            candidates.push(media_root.join("media").join(requested_path));
+            roots.push(media_root.clone());
+            roots.push(media_root.join("media"));
         }
-        if let Some(deck_dir_name) = self
-            .manifest_root
-            .file_name()
-            .and_then(|name| name.to_str())
-        {
-            for ancestor in self.manifest_root.ancestors() {
-                candidates.push(
-                    ancestor
-                        .join("external")
-                        .join(deck_dir_name)
-                        .join("media")
-                        .join(requested_path),
-                );
-                candidates.push(
-                    ancestor
-                        .join("external")
-                        .join(deck_dir_name)
-                        .join(requested_path),
-                );
+        let mut candidates = Vec::new();
+        for root in roots {
+            if !root.is_dir() {
+                continue;
+            }
+            let authorizer = PathAuthorizer::new("media", &root)?;
+            match authorizer.authorize_read(&self.manifest_path, "media.path", requested_path) {
+                Ok(path) => candidates.push(path.into_path_buf()),
+                Err(error) if error.reason.contains("cannot be resolved for reading") => {}
+                Err(error) => return Err(error.to_string()),
             }
         }
-        candidates
+        Ok(candidates)
     }
 
     fn media_path_declared(&self, requested_path: &str) -> Result<bool, String> {
         self.ensure_fresh_cache()?;
         let (generation, manifest, cached) = {
             let cache = self.cache.blocking_read();
+            if cache.selected_contexts.values().any(|context| {
+                context.generation == cache.generation
+                    && context
+                        .value
+                        .target_deck
+                        .media
+                        .values()
+                        .any(|media| media.path == requested_path)
+            }) {
+                return Ok(true);
+            }
             (
                 cache.generation,
                 cache.manifest.clone(),
@@ -1390,11 +1390,18 @@ impl WorkspaceMetadata {
                 format!("language {language_code:?} has no overlay label {overlay_label:?}")
             })?
             .clone();
-        let overlay_file = manifest
+        let overlay = manifest
             .overlays
             .get(&overlay_id)
-            .map(|overlay| self.manifest_root.join(&overlay.file))
             .ok_or_else(|| format!("overlay {overlay_id:?} is not in the manifest catalog"))?;
+        let overlay_file = PathAuthorizer::new("workspace", &self.manifest_root)?
+            .authorize_read(
+                &self.manifest_path,
+                format!("overlays.{overlay_id}.file"),
+                &overlay.file,
+            )
+            .map_err(|error| error.to_string())?
+            .into_path_buf();
 
         let overlay_badges = language_entry
             .translation_overlays
@@ -1926,8 +1933,14 @@ fn apply_new_language_request(
                 group.overlay_id
             ));
         }
-        let relative_path = safe_new_language_relative_path(&group.file)?;
-        let absolute_path = manifest_root.join(&relative_path);
+        let absolute_path = PathAuthorizer::new("workspace", manifest_root)?
+            .authorize_create(
+                &manifest_root.join("brainbrew.yaml"),
+                format!("overlays.{}.file", group.overlay_id),
+                &group.file,
+            )
+            .map_err(|error| error.to_string())?
+            .into_path_buf();
         if absolute_path.exists() {
             return Err(format!(
                 "invalid new language overlay file already exists: {}",
@@ -2141,20 +2154,6 @@ fn validate_stable_id(kind: &str, value: &str) -> Result<(), String> {
     StableId::new(value.to_owned())
         .map(|_| ())
         .map_err(|error| format!("invalid new language {kind} {value:?}: {error}"))
-}
-
-fn safe_new_language_relative_path(path: &str) -> Result<PathBuf, String> {
-    let candidate = Path::new(path);
-    if path.is_empty() || path.starts_with('~') || candidate.is_absolute() {
-        return Err(format!("invalid new language file path {path:?}"));
-    }
-    if !candidate
-        .components()
-        .all(|component| matches!(component, std::path::Component::Normal(_)))
-    {
-        return Err(format!("invalid new language file path {path:?}"));
-    }
-    Ok(candidate.to_path_buf())
 }
 
 fn note_list_json_from_context(
@@ -3856,15 +3855,9 @@ fn is_external_or_already_routed_media(path: &str) -> bool {
 }
 
 fn safe_media_relative_path(path: &str) -> Result<String, String> {
-    let path = path.trim_start_matches('/');
-    if path.is_empty()
-        || path.contains("..")
-        || path.starts_with('~')
-        || Path::new(path).is_absolute()
-    {
-        return Err(format!("invalid media path {path:?}"));
-    }
-    Ok(path.to_owned())
+    SafeRelativePath::new(path)
+        .map(|path| path.as_str().to_owned())
+        .map_err(|reason| format!("invalid media path {path:?}: {reason}"))
 }
 
 fn missing_media_placeholder_svg(path: &str) -> String {
@@ -4552,13 +4545,10 @@ fn yaml_mapping_get_mut<'a>(
 }
 
 fn resolve_workbench_include_path(root: &Path, include_path: &str) -> Result<PathBuf, String> {
-    let requested = Path::new(include_path);
-    if requested.is_absolute() || include_path.contains("..") {
-        return Err(format!(
-            "source edit include path {include_path:?} is not a safe package-root-relative path"
-        ));
-    }
-    Ok(root.join(requested))
+    PathAuthorizer::new("workspace", root)?
+        .authorize_read(&root.join("brainbrew.yaml"), "!include", include_path)
+        .map(|path| path.into_path_buf())
+        .map_err(|error| error.to_string())
 }
 
 fn source_apply_writes(
@@ -4980,16 +4970,37 @@ fn file_fingerprints(
     root: &Path,
     manifest: &FederatedDeckManifest,
 ) -> Result<Vec<Value>, String> {
-    let mut files = vec![manifest_path.to_path_buf(), root.join(&manifest.base)];
-    for overlay in manifest.overlays.values() {
-        files.push(root.join(&overlay.file));
-    }
-    files.sort();
-    files.dedup();
+    let files = authorized_manifest_source_files(manifest_path, root, manifest)?;
     files
         .into_iter()
         .map(|path| file_fingerprint(root, &path))
         .collect()
+}
+
+fn authorized_manifest_source_files(
+    manifest_path: &Path,
+    root: &Path,
+    manifest: &FederatedDeckManifest,
+) -> Result<Vec<PathBuf>, String> {
+    let authorizer = PathAuthorizer::new("workspace", root)?;
+    let mut files = vec![manifest_path.to_path_buf()];
+    files.push(
+        authorizer
+            .authorize_read(manifest_path, "base", &manifest.base)
+            .map_err(|error| error.to_string())?
+            .into_path_buf(),
+    );
+    for (id, overlay) in &manifest.overlays {
+        files.push(
+            authorizer
+                .authorize_read(manifest_path, format!("overlays.{id}.file"), &overlay.file)
+                .map_err(|error| error.to_string())?
+                .into_path_buf(),
+        );
+    }
+    files.sort();
+    files.dedup();
+    Ok(files)
 }
 
 fn file_fingerprint(root: &Path, path: &Path) -> Result<Value, String> {

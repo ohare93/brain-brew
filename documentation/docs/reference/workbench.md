@@ -34,9 +34,11 @@ Release builds embed the checked-in Trunk output from `crates/brain-brew-cli/ass
 devenv shell workbench-ui-build
 devenv shell workbench-ui-watch
 brainbrew workbench serve --manifest brainbrew.yaml --dev-assets target/workbench-ui --no-open
-# Optional when media files live outside the manifest root:
-brainbrew workbench serve --manifest brainbrew.yaml --media-root media/
+# Required explicit root selection when media files are not under the manifest root:
+brainbrew workbench serve --manifest brainbrew.yaml --media-root /path/to/media/
 ```
+
+Workbench does not scan ancestor `external/` directories for media. Each media declaration is authorized beneath the manifest root or the explicitly selected `--media-root`; escaping symlinks are rejected.
 
 Refresh release-embedded assets after frontend changes:
 

@@ -11,6 +11,7 @@ mod media_assets;
 mod output;
 mod overlay_draft;
 mod package_resolver;
+mod path_authorization;
 mod workspace_mutation;
 mod workspace_transaction;
 

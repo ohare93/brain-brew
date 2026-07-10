@@ -846,7 +846,7 @@ fn workbench_media_can_load_from_media_root_or_placeholder() {
 }
 
 #[test]
-fn workbench_media_auto_discovers_external_deck_media() {
+fn workbench_media_requires_explicit_external_root_selection() {
     let root = temp_dir("workbench-auto-external-media");
     let manifest_dir = root.join("projects/deck-fixture");
     fs::create_dir_all(&manifest_dir).unwrap();
@@ -866,12 +866,13 @@ fn workbench_media_auto_discovers_external_deck_media() {
     ]);
     let media = ureq::get(&server.url("/api/media/flags/fi.png"))
         .call()
-        .expect("GET declared media from inferred external media root succeeds");
+        .expect("GET declared media returns a placeholder without an explicit root");
     assert_eq!(media.status(), 200);
     assert_eq!(
         media.header("content-type").unwrap_or_default(),
-        "image/png"
+        "image/svg+xml"
     );
+    assert!(media.into_string().unwrap().contains("Missing media asset"));
 }
 
 #[test]
@@ -4721,7 +4722,7 @@ fn verify_accepts_hoisted_media_map_and_rejects_bad_includes() {
     ]);
     assert!(!output.status.success());
     assert!(
-        stderr(&output).contains("escapes package root"),
+        stderr(&output).contains("parent-directory"),
         "{}",
         stderr(&output)
     );
@@ -5547,7 +5548,7 @@ fn file_includes_work_across_validate_compose_export_verify_diff_and_fmt() {
     let fmt = run(["fmt", deck_for_fmt.to_str().unwrap()]);
     assert!(fmt.status.success(), "stderr: {}", stderr(&fmt));
     let formatted = fs::read_to_string(deck_for_fmt).unwrap();
-    assert!(formatted.contains("description: !include ./content/../content/base-description.md"));
+    assert!(formatted.contains("description: !include content/base-description.md"));
     assert!(formatted.contains("question_format: !include templates/front.html"));
     assert!(formatted.contains("answer_format: !include templates/back.html"));
     assert!(formatted.contains("styling: !include styles/card.css"));
@@ -5574,7 +5575,7 @@ fn fmt_preserves_include_markers_and_does_not_inline_included_content() {
         include_directives(&formatted),
         include_directives(&original)
     );
-    assert!(formatted.contains("description: !include ./content/../content/base-description.md"));
+    assert!(formatted.contains("description: !include content/base-description.md"));
     assert!(formatted.contains("question_format: !include templates/front.html"));
     assert!(formatted.contains("answer_format: !include templates/back.html"));
     assert!(formatted.contains("styling: !include styles/card.css"));
@@ -5597,9 +5598,7 @@ fn fmt_on_include_bearing_file_is_idempotent() {
     let after_second = fs::read_to_string(deck_path).unwrap();
 
     assert_eq!(after_second, after_first);
-    assert!(
-        after_second.contains("description: !include ./content/../content/base-description.md")
-    );
+    assert!(after_second.contains("description: !include content/base-description.md"));
     assert!(!after_second.contains("Base deck description."));
 }
 
@@ -5621,7 +5620,7 @@ fn fmt_normalizes_non_include_parts_of_include_bearing_file() {
     let formatted = fs::read_to_string(deck_path).unwrap();
     assert!(formatted.contains("name: Include Fixture"));
     assert!(!formatted.contains("name: 'Include Fixture'"));
-    assert!(formatted.contains("description: !include ./content/../content/base-description.md"));
+    assert!(formatted.contains("description: !include content/base-description.md"));
     assert!(!formatted.contains("Base deck description."));
 }
 
@@ -5671,7 +5670,7 @@ fn file_include_errors_name_referring_yaml_path_and_included_path() {
     fs::write(
         &deck_path,
         deck.replace(
-            "description: !include ./content/../content/base-description.md",
+            "description: !include content/base-description.md",
             "description: !include content/missing.md",
         ),
     )
@@ -5692,7 +5691,7 @@ fn file_include_errors_name_referring_yaml_path_and_included_path() {
 }
 
 #[test]
-fn file_includes_reject_package_root_escape_unless_safe_root_is_configured() {
+fn file_includes_reject_parent_paths_even_when_an_external_root_is_configured() {
     let root = temp_dir("file-include-roots");
     let package = root.join("package");
     let shared = root.join("shared");
@@ -5709,7 +5708,7 @@ fn file_includes_reject_package_root_escape_unless_safe_root_is_configured() {
     fs::write(
         &deck_path,
         deck.replace(
-            "description: !include ./content/../content/base-description.md",
+            "description: !include content/base-description.md",
             "description: !include ../shared/description.md",
         ),
     )
@@ -5726,7 +5725,7 @@ fn file_includes_reject_package_root_escape_unless_safe_root_is_configured() {
     let err = stderr(&rejected);
     assert!(err.contains("deck.description"), "stderr: {err}");
     assert!(err.contains("../shared/description.md"), "stderr: {err}");
-    assert!(err.contains("escapes package root"), "stderr: {err}");
+    assert!(err.contains("parent-directory"), "stderr: {err}");
 
     let manifest_path = package.join("brainbrew.yaml");
     fs::write(
@@ -5737,14 +5736,20 @@ fn file_includes_reject_package_root_escape_unless_safe_root_is_configured() {
         ),
     )
     .unwrap();
-    let accepted = run([
+    let still_rejected = run([
         "validate",
         "--manifest",
         manifest_path.to_str().unwrap(),
         "--target",
         "base",
     ]);
-    assert!(accepted.status.success(), "stderr: {}", stderr(&accepted));
+    assert!(!still_rejected.status.success());
+    let err = stderr(&still_rejected);
+    assert!(
+        err.contains("brainbrew.yaml:include_roots[0] path"),
+        "stderr: {err}"
+    );
+    assert!(err.contains("parent-directory"), "stderr: {err}");
 }
 
 #[test]
@@ -5758,7 +5763,7 @@ fn file_include_cycles_are_reported_with_yaml_path_and_include_chain() {
     fs::write(
         &deck_path,
         deck.replace(
-            "description: !include ./content/../content/base-description.md",
+            "description: !include content/base-description.md",
             "description: !include content/a.md",
         ),
     )
@@ -6915,7 +6920,7 @@ fn write_include_workspace(dir: &Path) {
         r#"deck:
   id: deck.include-fixture
   name: Include Fixture
-  description: !include ./content/../content/base-description.md
+  description: !include content/base-description.md
   adapter_ids:
     crowdanki:uuid: include-fixture-deck-uuid
 note_types:

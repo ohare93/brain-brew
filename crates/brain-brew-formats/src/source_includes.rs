@@ -1,6 +1,8 @@
 use std::fmt;
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
+
+use crate::safe_relative_path::SafeRelativePath;
 
 use serde_yaml::Value;
 
@@ -8,8 +10,9 @@ use crate::{strict_yaml, yaml_scalar};
 
 /// Resolve `!include path` tagged scalar authoring conveniences in a Canonical Deck or overlay YAML file.
 ///
-/// Include paths are interpreted relative to `package_root`. Paths may not escape that root unless the
-/// normalized target is under one of `safe_include_roots`.
+/// Include paths use canonical portable safe-relative syntax and are interpreted relative to
+/// `package_root`. `safe_include_roots` remains in the compatibility API, but cannot authorize
+/// `.`/`..` syntax or a path outside the package-root-relative namespace.
 pub fn resolve_file_includes(
     input: &str,
     source_path: &Path,
@@ -210,7 +213,7 @@ enum IncludeErrorKind {
     UnsupportedTag(String),
     IncludePathNotScalar,
     NotScalarContentField,
-    AbsolutePath,
+    UnsafeSyntax(String),
     EscapesPackageRoot {
         package_root: PathBuf,
     },
@@ -271,9 +274,9 @@ impl fmt::Display for IncludeError {
                 "{location}: !include {} is only valid for scalar content fields",
                 self.include_path
             ),
-            IncludeErrorKind::AbsolutePath => write!(
+            IncludeErrorKind::UnsafeSyntax(reason) => write!(
                 f,
-                "{location}: include path {} must be package-root-relative, not absolute",
+                "{location}: include path {} is not a safe package-root-relative path: {reason}",
                 self.include_path
             ),
             IncludeErrorKind::EscapesPackageRoot { package_root } => write!(
@@ -539,27 +542,16 @@ impl IncludeResolver {
         include_path: &str,
         yaml_path: &[String],
     ) -> Result<PathBuf, IncludeError> {
-        let requested = Path::new(include_path);
-        if requested.is_absolute() {
-            return Err(IncludeError::new(
+        let requested = SafeRelativePath::new(include_path).map_err(|error| {
+            IncludeError::new(
                 &self.source_path,
                 yaml_path,
                 include_path,
-                IncludeErrorKind::AbsolutePath,
-            ));
-        }
-        let normalized = normalize_path(&self.package_root.join(requested));
-        if !self.is_under_allowed_root(&normalized) {
-            return Err(IncludeError::new(
-                &self.source_path,
-                yaml_path,
-                include_path,
-                IncludeErrorKind::EscapesPackageRoot {
-                    package_root: self.package_root.clone(),
-                },
-            ));
-        }
-        if let Ok(canonical) = fs::canonicalize(&normalized)
+                IncludeErrorKind::UnsafeSyntax(error.to_string()),
+            )
+        })?;
+        let joined = self.package_root.join(requested.as_path());
+        if let Ok(canonical) = fs::canonicalize(&joined)
             && !self.is_under_allowed_root(&canonical)
         {
             return Err(IncludeError::new(
@@ -571,7 +563,7 @@ impl IncludeResolver {
                 },
             ));
         }
-        Ok(normalized)
+        Ok(joined)
     }
 
     fn is_under_allowed_root(&self, path: &Path) -> bool {
@@ -737,20 +729,4 @@ fn yaml_path_display(path: &[String]) -> String {
         }
     }
     display
-}
-
-fn normalize_path(path: &Path) -> PathBuf {
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
-            Component::RootDir => normalized.push(component.as_os_str()),
-            Component::CurDir => {}
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            Component::Normal(part) => normalized.push(part),
-        }
-    }
-    normalized
 }

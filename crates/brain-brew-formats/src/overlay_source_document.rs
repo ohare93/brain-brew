@@ -50,6 +50,7 @@ pub struct TranslationStubs {
 pub struct OverlaySourceDocument {
     provenance: SourceProvenance,
     overlay: Overlay,
+    resolved_overlay: Overlay,
     includes: IncludeState,
 }
 
@@ -81,12 +82,17 @@ impl OverlaySourceDocument {
         let overlay = canonical_yaml::overlay_from_str(&prepared.yaml_without_directives).map_err(
             |error| SourceDocumentError::source(prepared.root.provenance(), error.to_string()),
         )?;
+        let resolved_overlay = canonical_yaml::overlay_from_str(&prepared.materialized_yaml)
+            .map_err(|error| {
+                SourceDocumentError::source(prepared.root.provenance(), error.to_string())
+            })?;
         canonical_yaml::overlay_to_string(&overlay).map_err(|error| {
             SourceDocumentError::source(prepared.root.provenance(), error.to_string())
         })?;
         Ok(Self {
             provenance: prepared.root.provenance().clone(),
             overlay,
+            resolved_overlay,
             includes: prepared.includes,
         })
     }
@@ -99,6 +105,7 @@ impl OverlaySourceDocument {
             .map_err(|error| SourceDocumentError::source(&provenance, error.to_string()))?;
         Ok(Self {
             provenance,
+            resolved_overlay: overlay.clone(),
             overlay,
             includes: IncludeState::default(),
         })
@@ -111,6 +118,11 @@ impl OverlaySourceDocument {
     /// Read-only validated domain view. Mutation remains behind typed methods.
     pub fn overlay(&self) -> &Overlay {
         &self.overlay
+    }
+
+    /// Fully materialized read view with scalar include contents substituted.
+    pub fn resolved_overlay(&self) -> &Overlay {
+        &self.resolved_overlay
     }
 
     /// Apply a translation decision and clean entries that would conflict at the

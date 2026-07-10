@@ -64,7 +64,7 @@ package:
   version: 0.1.0
 base: deck.yaml
 include_roots:
-  - ../shared-source-text
+  - shared-source-text
 overlays:
   overlay.translation.de:
     file: overlays/languages/de.yaml
@@ -75,7 +75,7 @@ targets:
       - overlay.translation.de
 ```
 
-Most packages do not need `include_roots`; use it only when a deliberately shared source-text directory sits outside the package. Without an explicit safe root, `!include ../outside-file` is rejected.
+Most packages do not need `include_roots`; use it only to search a dedicated source-text directory inside the package. Manifest-owned paths never select files outside the package: absolute paths, `.`/`..`, Windows drive/UNC forms, backslashes, and symlink escapes are rejected. Move older sibling-directory includes beneath the package root or supply an external source through an explicit caller-owned workflow.
 
 ## Formatting
 

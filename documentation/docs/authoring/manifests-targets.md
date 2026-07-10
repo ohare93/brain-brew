@@ -19,19 +19,23 @@ targets:
     overlays: []
 ```
 
+Manifest `base`, overlay `file`, configured export `out`/`golden`, package-lock `manifest`, include, and media paths all use the canonical safe-relative syntax described below. Brain Brew checks canonical root containment before reads and checks the deepest existing ancestor before creating outputs.
+
 ## File include roots
 
-`!include` paths in `deck.yaml` and overlay YAML are resolved relative to the package root, which is the directory containing the manifest. They cannot escape that root by default. If a workspace intentionally shares source text from a sibling directory, configure a safe include root:
+`!include` paths in `deck.yaml` and overlay YAML use portable safe-relative syntax. They are resolved first beneath the package root (the directory containing the manifest), then beneath any configured in-package include roots:
 
 ```yaml
 base: deck.yaml
 include_roots:
-  - ../shared-source-text
+  - shared-source-text
 overlays: {}
 targets:
   en-standard:
     overlays: []
 ```
+
+Paths are non-empty, use `/`, and contain only normal components. Absolute paths, Windows drive/UNC forms, backslashes, repeated separators, and every `.` or `..` component are rejected before I/O. Symlinks may be followed only when their canonical target stays inside the selected root. Older manifests that used `../shared-source-text` must move that content beneath the package root or select it explicitly outside the manifest workflow.
 
 The composed deck always contains the resolved scalar text; exported decks do not depend on these source files.
 

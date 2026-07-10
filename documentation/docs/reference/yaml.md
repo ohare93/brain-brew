@@ -219,7 +219,9 @@ media.flag.france:
 
 This whitelist applies only to top-level `media:` in deck files. It is not supported in overlay files or any other mapping position. Formatting a deck that uses the structural include preserves `media: !include media.yaml`; format the included file itself with `brainbrew fmt media.yaml`. `brainbrew media hash` follows the include and writes hashes into the media-map file. A CrowdAnki import that rewrites the deck re-inlines `media:` instead of preserving the include.
 
-Include paths are deterministic and package-root-relative: under a manifest workflow they are resolved relative to the directory containing `brainbrew.yaml`. A path may not escape that package root unless the manifest declares an explicit safe include root. Formatting a file that uses scalar `!include` materializes the included scalar content into canonical YAML.
+Include paths use one portable safe-relative syntax and are authorized beneath a selected canonical root. Under a manifest workflow, the package root is selected first; optional `include_roots` may name additional existing directories inside that package. Empty, absolute/rooted, Windows drive/UNC, backslash-separated, repeated-separator, `.` component, and `..` component forms are rejected before target I/O. Existing targets and the deepest existing ancestor of new targets must resolve canonically beneath the selected root, so escaping symlinks fail.
+
+Formatting preserves scalar `!include` directives; composition materializes their scalar content in memory. This is an intentional compatibility change: older `../shared` includes are no longer accepted, even with `include_roots`. Move shared files under the package or select an external root explicitly at a caller-owned boundary.
 
 ## Manifest file
 
@@ -231,7 +233,7 @@ package:
     - upstream.package@0.1.0
 base: deck.yaml
 include_roots:
-  - ../shared-source-text
+  - shared-source-text
 overlays:
   overlay.translation.de:
     file: overlays/languages/de.yaml

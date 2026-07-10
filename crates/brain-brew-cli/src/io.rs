@@ -13,6 +13,7 @@ use serde_yaml::Value;
 use crate::commands::lock::locked_package_manifest_paths;
 use crate::output::package_json;
 use crate::package_resolver::{discover_package_manifests, validate_package_dependencies};
+use crate::path_authorization::PathAuthorizer;
 
 pub(crate) fn format_source(input: &str) -> Result<String, String> {
     let mut errors = Vec::new();
@@ -85,9 +86,9 @@ fn load_source_include(
     request: &IncludeRequest,
     context: &SourceContext,
 ) -> Result<SourceFile, String> {
-    let path = resolve_include_target_for_context(request.target(), context)?;
+    let declaring = Path::new(request.referring_source().source_name());
     let absolute =
-        fs::canonicalize(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+        authorize_include_read(declaring, request.schema_path(), request.target(), context)?;
     let text = fs::read_to_string(&absolute)
         .map_err(|error| format!("{}: {error}", absolute.display()))?;
     Ok(SourceFile::new(
@@ -118,8 +119,11 @@ fn read_deck_from_package(
 
 fn read_deck_with_context(path: &Path, context: &SourceContext) -> Result<CanonicalDeck, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    let input = resolve_source_includes(&input, path, context)?;
-    canonical_yaml::from_str(&input).map_err(|error| format!("{}: {error}", path.display()))
+    CanonicalSourceDocument::parse_with_includes(source_file(path, &input, context)?, |request| {
+        load_source_include(request, context)
+    })
+    .map(|document| document.resolved_deck().clone())
+    .map_err(|error| error.to_string())
 }
 
 fn read_overlay_from_package(
@@ -151,8 +155,11 @@ fn overlay_from_source_text_with_context(
     input: &str,
     context: &SourceContext,
 ) -> Result<Overlay, String> {
-    let input = resolve_source_includes(input, path, context)?;
-    canonical_yaml::overlay_from_str(&input).map_err(|error| format!("{}: {error}", path.display()))
+    OverlaySourceDocument::parse_with_includes(source_file(path, input, context)?, |request| {
+        load_source_include(request, context)
+    })
+    .map(|document| document.resolved_overlay().clone())
+    .map_err(|error| error.to_string())
 }
 
 pub(crate) fn read_manifest(path: &Path) -> Result<manifest::FederatedDeckManifest, String> {
@@ -286,7 +293,7 @@ impl ManifestRegistry {
             .map(|path| {
                 let manifest = read_manifest(path)?;
                 let root = manifest_root(path);
-                let include_roots = include_roots_from_manifest(&root, &manifest);
+                let include_roots = include_roots_from_manifest(path, &root, &manifest)?;
                 Ok(LoadedManifest {
                     path: path.clone(),
                     root,
@@ -368,7 +375,10 @@ impl ManifestRegistry {
             (
                 loaded.manifest.base.clone(),
                 read_deck_from_package(
-                    &loaded.root.join(&loaded.manifest.base),
+                    PathAuthorizer::new("package", &loaded.root)?
+                        .authorize_read(&loaded.path, "base", &loaded.manifest.base)
+                        .map_err(|error| error.to_string())?
+                        .as_path(),
                     &loaded.root,
                     &loaded.include_roots,
                 )?,
@@ -476,9 +486,17 @@ impl ManifestRegistry {
         } else {
             overlay_id.to_owned()
         };
+        let file = PathAuthorizer::new("package", &loaded.root)?
+            .authorize_read(
+                &loaded.path,
+                format!("overlays.{overlay_id}.file"),
+                &entry.file,
+            )
+            .map_err(|error| error.to_string())?
+            .into_path_buf();
         expanded.push(PlannedOverlay {
             id,
-            file: loaded.root.join(&entry.file),
+            file,
             display_file,
             package_root: loaded.root.clone(),
             include_roots: loaded.include_roots.clone(),
@@ -610,7 +628,7 @@ pub(crate) fn root_relative_path(root: &Path, path: &Path) -> PathBuf {
 pub(crate) fn configured_crowdanki_out(
     manifest: &manifest::FederatedDeckManifest,
     target: &str,
-) -> Option<PathBuf> {
+) -> Option<String> {
     manifest
         .targets
         .get(target)?
@@ -618,8 +636,7 @@ pub(crate) fn configured_crowdanki_out(
         .crowdanki
         .as_ref()?
         .out
-        .as_deref()
-        .map(PathBuf::from)
+        .clone()
 }
 
 pub(crate) fn manifest_root(path: &Path) -> PathBuf {
@@ -643,7 +660,7 @@ pub(crate) fn source_context_for_path(path: &Path) -> Result<SourceContext, Stri
     let manifest_path = root.join("brainbrew.yaml");
     let include_roots = if manifest_path.exists() {
         let manifest = read_manifest(&manifest_path)?;
-        include_roots_from_manifest(&root, &manifest)
+        include_roots_from_manifest(&manifest_path, &root, &manifest)?
     } else {
         Vec::new()
     };
@@ -664,13 +681,25 @@ fn nearest_manifest_root(path: &Path) -> Option<PathBuf> {
 }
 
 pub(crate) fn include_roots_from_manifest(
+    manifest_path: &Path,
     root: &Path,
     manifest: &manifest::FederatedDeckManifest,
-) -> Vec<PathBuf> {
+) -> Result<Vec<PathBuf>, String> {
+    let authorizer = PathAuthorizer::new("package", root)?;
     manifest
         .include_roots
         .iter()
-        .map(|include_root| root_relative_path(root, Path::new(include_root)))
+        .enumerate()
+        .map(|(index, include_root)| {
+            authorizer
+                .authorize_read(
+                    manifest_path,
+                    format!("include_roots[{index}]"),
+                    include_root,
+                )
+                .map(|path| path.into_path_buf())
+                .map_err(|error| error.to_string())
+        })
         .collect()
 }
 
@@ -697,15 +726,37 @@ pub(crate) fn resolve_include_target_for_context(
     include_path: &str,
     context: &SourceContext,
 ) -> Result<PathBuf, String> {
-    source_includes::resolve_include_target(include_path, &context.root, &context.include_roots)
-        .map_err(|error| error.to_string())
+    authorize_include_read(
+        &context.root.join("brainbrew.yaml"),
+        "!include",
+        include_path,
+        context,
+    )
 }
 
-fn resolve_source_includes(
-    input: &str,
-    path: &Path,
+fn authorize_include_read(
+    declaring_file: &Path,
+    field: &str,
+    include_path: &str,
     context: &SourceContext,
-) -> Result<String, String> {
-    source_includes::resolve_file_includes(input, path, &context.root, &context.include_roots)
-        .map_err(|error| error.to_string())
+) -> Result<PathBuf, String> {
+    let mut roots = vec![("package", context.root.as_path())];
+    roots.extend(
+        context
+            .include_roots
+            .iter()
+            .map(|root| ("configured include", root.as_path())),
+    );
+    let mut not_found = None;
+    for (name, root) in roots {
+        let authorizer = PathAuthorizer::new(name, root)?;
+        match authorizer.authorize_read(declaring_file, field, include_path) {
+            Ok(path) => return Ok(path.into_path_buf()),
+            Err(error) if error.reason.contains("cannot be resolved for reading") => {
+                not_found = Some(error.to_string());
+            }
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Err(not_found.unwrap_or_else(|| "no selected include root is available".to_owned()))
 }

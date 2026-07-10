@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::Path;
 
 use brain_brew_core::CanonicalDeck;
 use brain_brew_formats::media;
+
+use crate::path_authorization::PathAuthorizer;
 
 pub(crate) fn validate_media_references(deck: &CanonicalDeck) -> Result<(), String> {
     let report = media::reference_report(deck);
@@ -31,9 +33,16 @@ fn read_media_assets(
     media_root: &Path,
 ) -> Result<BTreeMap<String, Vec<u8>>, String> {
     let mut assets = BTreeMap::new();
+    let authorizer = PathAuthorizer::new("media", media_root)?;
     for media in deck.media.values() {
-        let relative_path = safe_media_relative_path(&media.path)?;
-        let full_path = media_root.join(&relative_path);
+        let full_path = authorizer
+            .authorize_read(
+                Path::new("<composed deck>"),
+                format!("media.{}.path", media.id),
+                &media.path,
+            )
+            .map_err(|error| error.to_string())?
+            .into_path_buf();
         match fs::read(&full_path) {
             Ok(bytes) => {
                 assets.insert(media.path.clone(), bytes);
@@ -50,10 +59,25 @@ pub(crate) fn copy_media_assets(
     media_root: &Path,
     out_dir: &Path,
 ) -> Result<(), String> {
+    let source_authorizer = PathAuthorizer::new("media", media_root)?;
+    let destination_authorizer = PathAuthorizer::new("export", out_dir)?;
     for media in deck.media.values() {
-        let relative_path = safe_media_relative_path(&media.path)?;
-        let source = media_root.join(&relative_path);
-        let destination = out_dir.join("media").join(&relative_path);
+        let source = source_authorizer
+            .authorize_read(
+                Path::new("<composed deck>"),
+                format!("media.{}.path", media.id),
+                &media.path,
+            )
+            .map_err(|error| error.to_string())?
+            .into_path_buf();
+        let destination = destination_authorizer
+            .authorize_create(
+                Path::new("<export>"),
+                format!("media.{}.path", media.id),
+                &format!("media/{}", media.path),
+            )
+            .map_err(|error| error.to_string())?
+            .into_path_buf();
         if let Some(parent) = destination.parent() {
             fs::create_dir_all(parent).map_err(|error| format!("{}: {error}", parent.display()))?;
         }
@@ -62,16 +86,4 @@ pub(crate) fn copy_media_assets(
         })?;
     }
     Ok(())
-}
-
-fn safe_media_relative_path(path: &str) -> Result<PathBuf, String> {
-    let path = Path::new(path);
-    if path.is_absolute()
-        || path
-            .components()
-            .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
-    {
-        return Err(format!("unsafe media path {}", path.display()));
-    }
-    Ok(path.to_path_buf())
 }

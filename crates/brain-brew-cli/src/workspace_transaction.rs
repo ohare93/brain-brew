@@ -14,7 +14,9 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
+
+use brain_brew_formats::safe_relative_path::SafeRelativePath;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1278,36 +1280,23 @@ fn validate_plan(
 }
 
 fn validate_relative_target(path: &Path) -> Result<String, TransactionError> {
-    if path.as_os_str().is_empty() || path.is_absolute() {
-        return Err(TransactionError::InvalidTarget {
+    let raw = path
+        .to_str()
+        .ok_or_else(|| TransactionError::InvalidTarget {
             path: path.to_path_buf(),
-            reason: "target must be a non-empty relative path".to_owned(),
-        });
-    }
-    if path
-        .components()
-        .next()
-        .is_some_and(|component| component.as_os_str() == std::ffi::OsStr::new(CONTROL_DIRECTORY))
-    {
+            reason: "target path must be valid UTF-8 for the durable journal".to_owned(),
+        })?;
+    let safe = SafeRelativePath::new(raw).map_err(|error| TransactionError::InvalidTarget {
+        path: path.to_path_buf(),
+        reason: error.to_string(),
+    })?;
+    if safe.as_str().split('/').next() == Some(CONTROL_DIRECTORY) {
         return Err(TransactionError::InvalidTarget {
             path: path.to_path_buf(),
             reason: "the transaction control directory is reserved".to_owned(),
         });
     }
-    for component in path.components() {
-        if !matches!(component, Component::Normal(_)) {
-            return Err(TransactionError::InvalidTarget {
-                path: path.to_path_buf(),
-                reason: "target may contain only normal relative path components".to_owned(),
-            });
-        }
-    }
-    path.to_str()
-        .map(str::to_owned)
-        .ok_or_else(|| TransactionError::InvalidTarget {
-            path: path.to_path_buf(),
-            reason: "target path must be valid UTF-8 for the durable journal".to_owned(),
-        })
+    Ok(safe.as_str().to_owned())
 }
 
 fn validate_current_target(
@@ -1820,6 +1809,32 @@ mod tests {
         );
         assert!(!outside.path().join("outside.yaml").exists());
         assert!(!directory.path().join(CONTROL_DIRECTORY).exists());
+    }
+
+    #[test]
+    fn transaction_targets_use_canonical_portable_relative_syntax() {
+        for raw in [
+            "",
+            ".",
+            "./deck.yaml",
+            "../deck.yaml",
+            "nested/../deck.yaml",
+            "/tmp/deck.yaml",
+            "C:/deck.yaml",
+            r"\\server\share\deck.yaml",
+            r"nested\deck.yaml",
+            "nested//deck.yaml",
+        ] {
+            let error = validate_relative_target(Path::new(raw)).unwrap_err();
+            assert!(
+                matches!(error, TransactionError::InvalidTarget { .. }),
+                "{raw:?}"
+            );
+        }
+        assert_eq!(
+            validate_relative_target(Path::new("nested/deck.yaml")).unwrap(),
+            "nested/deck.yaml"
+        );
     }
 
     #[test]

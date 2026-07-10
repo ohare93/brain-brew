@@ -206,6 +206,7 @@ pub struct ImageConversionReport {
 pub(crate) struct PreparedSource {
     pub root: SourceFile,
     pub yaml_without_directives: String,
+    pub materialized_yaml: String,
     pub includes: IncludeState,
 }
 
@@ -374,11 +375,41 @@ pub(crate) fn prepare_source(
     )?;
     let yaml_without_directives = serde_yaml::to_string(&value)
         .map_err(|error| SourceDocumentError::source(&root.provenance, error.to_string()))?;
+    materialize_scalar_includes(&mut value, &includes);
+    let materialized_yaml = serde_yaml::to_string(&value)
+        .map_err(|error| SourceDocumentError::source(&root.provenance, error.to_string()))?;
     Ok(PreparedSource {
         root,
         yaml_without_directives,
+        materialized_yaml,
         includes,
     })
+}
+
+fn materialize_scalar_includes(value: &mut Value, includes: &IncludeState) {
+    match value {
+        Value::String(text) => {
+            if let Some(include) = includes
+                .scalar
+                .values()
+                .find(|include| include.sentinel == *text)
+            {
+                *text = include.source.text.clone();
+            }
+        }
+        Value::Tagged(tagged) => materialize_scalar_includes(&mut tagged.value, includes),
+        Value::Sequence(sequence) => {
+            for item in sequence {
+                materialize_scalar_includes(item, includes);
+            }
+        }
+        Value::Mapping(mapping) => {
+            for item in mapping.values_mut() {
+                materialize_scalar_includes(item, includes);
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -443,7 +474,7 @@ fn prepare_value(
                 return Err(SourceDocumentError::at(
                     root,
                     schema_path,
-                    "!include is only valid for scalar content fields",
+                    format!("!include {target:?} is only valid for scalar content fields"),
                 ));
             }
             let loaded = load_scalar_include(request, loader, stack)?;

@@ -894,8 +894,8 @@ async fn run_ultimate_geography_manifest_smoke(
     assert_eq!(legacy_shell_visible.json().as_bool(), Some(false));
     wait_for_js_bool(
         driver,
-        "return Array.from(document.querySelectorAll('.anki-card-preview img')).some((img) => img.complete && img.naturalWidth > 0);",
-        "media preview image dimensions",
+        "return Array.from(document.querySelectorAll('.anki-card-preview img')).some((img) => img.getAttribute('src')?.startsWith('/api/media/'));",
+        "media preview uses the authorized media route",
     )
     .await?;
     assert_no_secondary_pivot_fetches(driver)

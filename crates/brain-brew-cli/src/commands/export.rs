@@ -13,6 +13,7 @@ use crate::io::{
 };
 use crate::media_assets::{copy_media_assets, validate_media_assets};
 use crate::output;
+use crate::path_authorization::PathAuthorizer;
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if matches!(args, [flag] if flag == "--help" || flag == "-h")
@@ -37,11 +38,23 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         let out_dir = if let Some(out_path) = manifest_args.out_path.clone() {
             out_path
         } else if let Some(path) = configured_crowdanki_out(&manifest, &manifest_args.target) {
-            root.join(path)
+            PathAuthorizer::new("workspace", &root)?
+                .authorize_create(
+                    &manifest_args.manifest_path,
+                    format!("targets.{}.exports.crowdanki.out", manifest_args.target),
+                    &path,
+                )
+                .map_err(|error| error.to_string())?
+                .into_path_buf()
         } else {
-            root.join("build")
-                .join("crowdanki")
-                .join(&manifest_args.target)
+            PathAuthorizer::new("workspace", &root)?
+                .authorize_create(
+                    &manifest_args.manifest_path,
+                    "generated CrowdAnki output",
+                    &format!("build/crowdanki/{}", manifest_args.target),
+                )
+                .map_err(|error| error.to_string())?
+                .into_path_buf()
         };
         let plan = plan_manifest_target_with_packages(
             &manifest_args.manifest_path,

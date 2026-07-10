@@ -110,6 +110,7 @@ impl CanonicalScalarTarget {
 pub struct CanonicalSourceDocument {
     provenance: SourceProvenance,
     deck: CanonicalDeck,
+    resolved_deck: CanonicalDeck,
     includes: IncludeState,
 }
 
@@ -150,12 +151,20 @@ impl CanonicalSourceDocument {
         if let Some(media) = prepared.includes.media() {
             deck.media = media.clone();
         }
+        let mut resolved_deck =
+            canonical_yaml::from_str(&prepared.materialized_yaml).map_err(|error| {
+                SourceDocumentError::source(prepared.root.provenance(), error.to_string())
+            })?;
+        if let Some(media) = prepared.includes.media() {
+            resolved_deck.media = media.clone();
+        }
         canonical_yaml::to_string(&deck).map_err(|error| {
             SourceDocumentError::source(prepared.root.provenance(), error.to_string())
         })?;
         Ok(Self {
             provenance: prepared.root.provenance().clone(),
             deck,
+            resolved_deck,
             includes: prepared.includes,
         })
     }
@@ -169,6 +178,7 @@ impl CanonicalSourceDocument {
             .map_err(|error| SourceDocumentError::source(&provenance, error.to_string()))?;
         Ok(Self {
             provenance,
+            resolved_deck: deck.clone(),
             deck,
             includes: IncludeState::default(),
         })
@@ -181,6 +191,11 @@ impl CanonicalSourceDocument {
     /// Read-only validated domain view. Mutation remains behind typed methods.
     pub fn deck(&self) -> &CanonicalDeck {
         &self.deck
+    }
+
+    /// Fully materialized read view with scalar include contents substituted.
+    pub fn resolved_deck(&self) -> &CanonicalDeck {
+        &self.resolved_deck
     }
 
     /// Compare-and-set one scalar field or metadata value.

@@ -19,6 +19,7 @@ use tempfile::TempDir;
 use crate::help;
 use crate::io::read_manifest;
 use crate::output;
+use crate::path_authorization::PathAuthorizer;
 
 const USER_AGENT: &str = concat!("brainbrew/", env!("CARGO_PKG_VERSION"));
 
@@ -45,7 +46,18 @@ fn update(args: &[String]) -> Result<(), String> {
     let fetch_requested = args.source.to_fetch_source()?;
     let fetched = fetch_source(&fetch_requested, None)?;
     let requested = args.source.to_requested_source(&args.lock_path)?;
-    let package_manifest = fetched.source_path.join(&args.package_manifest);
+    let package_manifest_raw = args
+        .package_manifest
+        .to_str()
+        .ok_or_else(|| "--package-manifest must be valid UTF-8".to_owned())?;
+    let package_manifest = PathAuthorizer::new("fetched package", &fetched.source_path)?
+        .authorize_read(
+            &args.lock_path,
+            "packages.<updated>.manifest",
+            package_manifest_raw,
+        )
+        .map_err(|error| error.to_string())?
+        .into_path_buf();
     let manifest = read_manifest(&package_manifest)?;
     let package = manifest.package.as_ref().ok_or_else(|| {
         format!(
@@ -104,7 +116,14 @@ fn verify(args: &[String]) -> Result<(), String> {
                 fetched.nar_hash
             ));
         }
-        let manifest_path = fetched.source_path.join(&package.manifest);
+        let manifest_path = PathAuthorizer::new("fetched package", &fetched.source_path)?
+            .authorize_read(
+                &args.lock_path,
+                format!("packages.{package_id}.manifest"),
+                &package.manifest,
+            )
+            .map_err(|error| error.to_string())?
+            .into_path_buf();
         verify_locked_manifest_metadata(package_id, package, &manifest_path)?;
     }
 
@@ -471,7 +490,14 @@ pub(crate) fn locked_package_manifest_paths(lock_path: &Path) -> Result<Vec<Path
                     fetched.nar_hash
                 ));
             }
-            let manifest_path = fetched.source_path.join(&package.manifest);
+            let manifest_path = PathAuthorizer::new("fetched package", &fetched.source_path)?
+                .authorize_read(
+                    lock_path,
+                    format!("packages.{package_id}.manifest"),
+                    &package.manifest,
+                )
+                .map_err(|error| error.to_string())?
+                .into_path_buf();
             verify_locked_manifest_metadata(package_id, package, &manifest_path)?;
             Ok(manifest_path)
         })

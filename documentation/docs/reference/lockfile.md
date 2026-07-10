@@ -41,13 +41,13 @@ packages:
 
 ## Fields
 
-- `manifest`: path to the package manifest inside the fetched source tree.
+- `manifest`: portable safe-relative path to the package manifest inside the fetched source tree. Absolute, drive, UNC, backslash, `.`/`..`, and symlink-escape forms are rejected before the manifest is read.
 - `package.version`: package version read from the locked manifest.
 - `original`: the maintainer-requested source.
 - `locked`: the immutable source actually used.
 - `locked.nar_hash`: SRI SHA-256 of the source tree's Nix Archive serialization.
 
-Path-based locks store portable paths relative to the directory containing `brainbrew.lock`, not absolute machine-local paths. For example, a package locked from a sibling directory is stored as `path: ../pkg`.
+Path-based locks store source selections relative to the directory containing `brainbrew.lock`, not absolute machine-local paths. For example, a package explicitly selected from a sibling directory is stored as `path: ../pkg`. This source-selection field is distinct from package-owned file paths: once the source root is selected, `manifest`, manifest `base`/overlay files, includes, and media may not escape it.
 
 Brain Brew computes `nar_hash` in Rust. The CLI does not require the `nix` command at runtime.
 

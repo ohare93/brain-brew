@@ -12,6 +12,7 @@ pub mod manifest;
 pub mod media;
 pub mod media_map;
 pub mod overlay_source_document;
+pub mod safe_relative_path;
 pub mod source_document;
 pub mod source_includes;
 pub mod strict_yaml;

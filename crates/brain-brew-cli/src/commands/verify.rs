@@ -14,6 +14,7 @@ use crate::io::{
 };
 use crate::media_assets::{validate_media_assets, validate_media_references};
 use crate::output;
+use crate::path_authorization::PathAuthorizer;
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -35,13 +36,20 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         ));
     };
 
-    let base_deck_path = root.join(&manifest.base);
+    let base_deck_path = PathAuthorizer::new("package", &root)?
+        .authorize_read(&verify_args.manifest_path, "base", &manifest.base)
+        .map_err(|error| error.to_string())?
+        .into_path_buf();
     verify_canonical_deck_format(&base_deck_path)?;
     verify_included_media_map_format(
         &base_deck_path,
         &SourceContext {
             root: root.clone(),
-            include_roots: include_roots_from_manifest(&root, &manifest),
+            include_roots: include_roots_from_manifest(
+                &verify_args.manifest_path,
+                &root,
+                &manifest,
+            )?,
         },
     )?;
     let media_root = verify_args
@@ -327,9 +335,25 @@ fn verify_crowdanki_golden(
     golden_allowlist: &[String],
     deck: &CanonicalDeck,
 ) -> Result<(), String> {
-    let mut golden_path = root.join(golden);
+    let authorizer = PathAuthorizer::new("workspace", root)?;
+    let declaring = root.join("brainbrew.yaml");
+    let mut golden_path = authorizer
+        .authorize_read(
+            &declaring,
+            format!("targets.{target}.exports.crowdanki.golden"),
+            golden,
+        )
+        .map_err(|error| error.to_string())?
+        .into_path_buf();
     if golden_path.is_dir() {
-        golden_path = golden_path.join("deck.json");
+        golden_path = authorizer
+            .authorize_read(
+                &declaring,
+                format!("targets.{target}.exports.crowdanki.golden"),
+                &format!("{golden}/deck.json"),
+            )
+            .map_err(|error| error.to_string())?
+            .into_path_buf();
     }
     let expected = fs::read_to_string(&golden_path)
         .map_err(|error| format!("{}: {error}", golden_path.display()))?;

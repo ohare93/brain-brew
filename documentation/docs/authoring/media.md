@@ -20,6 +20,8 @@ notes:
 
 `!image` uses the media stable ID, not the file path. If `flags/france.svg` is later renamed, update only the `media:` declaration's `path`; field references remain stable.
 
+Media declaration paths use the same portable safe-relative syntax as package files. Absolute, drive, UNC, backslash, `.`/`..`, and empty-component forms fail before asset I/O. Asset reads and export destinations also require canonical containment, including when an existing parent is a symlink.
+
 ## Hoisting large media maps
 
 Deck files may keep the top-level media declaration in a separate media-map file:

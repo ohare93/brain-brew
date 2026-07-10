@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use brain_brew_formats::{media, media_map, strict_yaml};
 use serde_yaml::{Mapping, Value};
@@ -12,6 +12,7 @@ use crate::io::{
     top_level_media_include_path,
 };
 use crate::output;
+use crate::path_authorization::PathAuthorizer;
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if matches!(args, [flag] if flag == "--help" || flag == "-h")
@@ -281,7 +282,11 @@ fn collect_manifest_source_files(
         return Err("media command requires --all-targets or --target <target>".to_owned());
     };
 
-    let mut source_files = BTreeSet::from([root.join(&manifest.base)]);
+    let base_file = PathAuthorizer::new("package", &root)?
+        .authorize_read(manifest_path, "base", &manifest.base)
+        .map_err(|error| error.to_string())?
+        .into_path_buf();
+    let mut source_files = BTreeSet::from([base_file]);
     for target in &target_names {
         let plan = plan_manifest_target_with_packages(
             manifest_path,
@@ -357,15 +362,23 @@ fn update_media_hashes_in_mapping(
     media_root: &Path,
 ) -> Result<usize, String> {
     let mut updates = 0;
-    for (_id, entry) in media_entries {
+    let authorizer = PathAuthorizer::new("media", media_root)?;
+    for (id, entry) in media_entries {
         let Some(entry) = entry.as_mapping_mut() else {
             continue;
         };
         let Some(path) = string_field(entry, "path") else {
             continue;
         };
-        let relative_path = safe_media_relative_path(&path)?;
-        let full_path = media_root.join(relative_path);
+        let id = id.as_str().unwrap_or("<unknown>");
+        let full_path = authorizer
+            .authorize_read(
+                Path::new("<media declaration>"),
+                format!("media.{id}.path"),
+                &path,
+            )
+            .map_err(|error| error.to_string())?
+            .into_path_buf();
         let bytes =
             fs::read(&full_path).map_err(|error| format!("{}: {error}", full_path.display()))?;
         let actual = media::sha256_hex(&bytes);
@@ -614,16 +627,4 @@ fn string_field(mapping: &Mapping, key: &str) -> Option<String> {
         .get(Value::String(key.to_owned()))
         .and_then(Value::as_str)
         .map(str::to_owned)
-}
-
-fn safe_media_relative_path(path: &str) -> Result<PathBuf, String> {
-    let path = Path::new(path);
-    if path.is_absolute()
-        || path
-            .components()
-            .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
-    {
-        return Err(format!("unsafe media path {}", path.display()));
-    }
-    Ok(path.to_path_buf())
 }
