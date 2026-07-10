@@ -646,7 +646,7 @@ fn nested_include_directive(content: &str) -> Result<Option<String>, String> {
     }
 }
 
-fn is_scalar_content_path(path: &[String]) -> bool {
+pub(crate) fn is_scalar_content_path(path: &[String]) -> bool {
     let Some(last) = path.last().map(String::as_str) else {
         return false;
     };

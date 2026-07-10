@@ -4,12 +4,15 @@
 //! media helpers. It depends on `brain-brew-core`, but does not own domain
 //! behavior.
 
+pub mod canonical_source_document;
 pub mod canonical_yaml;
 pub mod crowdanki;
 pub mod lockfile;
 pub mod manifest;
 pub mod media;
 pub mod media_map;
+pub mod overlay_source_document;
+pub mod source_document;
 pub mod source_includes;
 pub mod strict_yaml;
 pub mod yaml_scalar;
