@@ -250,7 +250,7 @@ targets:
 > **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.
 
 ```yaml
-version: 1
+version: 2
 packages:
   upstream.package:
     manifest: brainbrew.yaml
@@ -263,6 +263,8 @@ packages:
     locked:
       type: git
       url: https://github.com/owner/repo.git
-      rev: abc123
-      nar_hash: sha256-...
+      rev: 0123456789abcdef0123456789abcdef01234567
+      nar_hash: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 ```
+
+Version 2 uses source-tagged path, Git, and tarball mappings. Every locked source requires one canonical SRI SHA-256 NAR hash; Git locks additionally require a full immutable commit ID. Unknown and source-inapplicable fields are rejected. See [Lock file reference](lockfile.md), including version 1 migration guidance.

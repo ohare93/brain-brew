@@ -120,6 +120,163 @@ fn lock_update_with_default_lock_path_writes_relative_path() {
     assert!(!lock_source.contains(&package.canonicalize().unwrap().display().to_string()));
 }
 
+#[test]
+fn lock_verify_rejects_a_manually_removed_hash_before_reading_the_package() {
+    let root = temp_dir("lock-removed-hash");
+    let package = root.join("package");
+    let consumer = root.join("consumer");
+    fs::create_dir_all(&package).unwrap();
+    fs::create_dir_all(&consumer).unwrap();
+    write_package(&package, "0.1.0", "authenticated source");
+    let lock_path = consumer.join("brainbrew.lock");
+    let cache = root.join("cache");
+
+    let update = run_with_cache(
+        [
+            "lock",
+            "update",
+            "--lock",
+            lock_path.to_str().unwrap(),
+            "--package",
+            "anki-geo.ultimate-geography",
+            "--path",
+            package.to_str().unwrap(),
+        ],
+        &cache,
+    );
+    assert!(update.status.success(), "stderr: {}", stderr(&update));
+
+    let weakened = fs::read_to_string(&lock_path)
+        .unwrap()
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("nar_hash:"))
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    fs::write(&lock_path, weakened).unwrap();
+    fs::write(package.join("brainbrew.yaml"), "not: a package manifest\n").unwrap();
+
+    let verify = run_with_cache(
+        ["lock", "verify", "--lock", lock_path.to_str().unwrap()],
+        &cache,
+    );
+    let error = stderr(&verify);
+    assert!(!verify.status.success());
+    assert!(error.contains("nar_hash"), "{error}");
+    assert!(!error.contains("no package metadata"), "{error}");
+}
+
+#[test]
+fn lock_verify_rejects_v1_with_regeneration_guidance() {
+    let root = temp_dir("lock-v1-migration");
+    let lock_path = root.join("brainbrew.lock");
+    fs::write(&lock_path, "version: 1\npackages:\n  old.package:\n    manifest: brainbrew.yaml\n    package:\n      version: 1.0.0\n    locked:\n      type: path\n      path: ../package\n").unwrap();
+
+    let verify = run_with_cache(
+        ["lock", "verify", "--lock", lock_path.to_str().unwrap()],
+        &root.join("cache"),
+    );
+    let error = stderr(&verify);
+    assert!(!verify.status.success());
+    assert!(error.contains("version 1"), "{error}");
+    assert!(error.contains("insecure"), "{error}");
+    assert!(error.contains("brainbrew lock update"), "{error}");
+
+    let update = run_with_cache(
+        [
+            "lock",
+            "update",
+            "--lock",
+            lock_path.to_str().unwrap(),
+            "--package",
+            "old.package",
+            "--path",
+            root.join("missing-package").to_str().unwrap(),
+        ],
+        &root.join("cache"),
+    );
+    let update_error = stderr(&update);
+    assert!(!update.status.success());
+    assert!(update_error.contains("version 1"), "{update_error}");
+    assert!(!update_error.contains("missing-package"), "{update_error}");
+}
+
+#[test]
+fn lock_verify_rehashes_and_rejects_a_tampered_cache_tree() {
+    let root = temp_dir("lock-cache-tamper");
+    let package = root.join("package");
+    let consumer = root.join("consumer");
+    fs::create_dir_all(&package).unwrap();
+    fs::create_dir_all(&consumer).unwrap();
+    write_package(&package, "0.1.0", "authenticated source");
+    let lock_path = consumer.join("brainbrew.lock");
+    let cache = root.join("cache");
+
+    let update = run_with_cache(
+        [
+            "lock",
+            "update",
+            "--lock",
+            lock_path.to_str().unwrap(),
+            "--package",
+            "anki-geo.ultimate-geography",
+            "--path",
+            package.to_str().unwrap(),
+        ],
+        &cache,
+    );
+    assert!(update.status.success(), "stderr: {}", stderr(&update));
+
+    let cache_entry = fs::read_dir(cache.join("sources"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    fs::write(cache_entry.join("source.txt"), "tampered cache bytes").unwrap();
+
+    let verify = run_with_cache(
+        ["lock", "verify", "--lock", lock_path.to_str().unwrap()],
+        &cache,
+    );
+    let error = stderr(&verify);
+    assert!(!verify.status.success());
+    assert!(error.contains("cached source"), "{error}");
+    assert!(error.contains("nar_hash mismatch"), "{error}");
+}
+
+#[test]
+fn lock_update_output_is_byte_idempotent() {
+    let root = temp_dir("lock-idempotent");
+    let package = root.join("package");
+    let consumer = root.join("consumer");
+    fs::create_dir_all(&package).unwrap();
+    fs::create_dir_all(&consumer).unwrap();
+    write_package(&package, "0.1.0", "authenticated source");
+    let lock_path = consumer.join("brainbrew.lock");
+    let cache = root.join("cache");
+
+    let update = run_with_cache(
+        [
+            "lock",
+            "update",
+            "--lock",
+            lock_path.to_str().unwrap(),
+            "--package",
+            "anki-geo.ultimate-geography",
+            "--path",
+            package.to_str().unwrap(),
+        ],
+        &cache,
+    );
+    assert!(update.status.success(), "stderr: {}", stderr(&update));
+    let once = fs::read(&lock_path).unwrap();
+
+    let format = run_with_cache(["fmt", lock_path.to_str().unwrap()], &cache);
+    assert!(format.status.success(), "stderr: {}", stderr(&format));
+    assert_eq!(fs::read(&lock_path).unwrap(), once);
+}
+
 fn run_with_cache<const N: usize>(args: [&str; N], cache: &Path) -> Output {
     Command::new(env!("CARGO_BIN_EXE_brainbrew"))
         .args(args)

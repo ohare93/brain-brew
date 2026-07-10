@@ -5,7 +5,7 @@ use brain_brew_formats::core::{
     StableId,
 };
 use brain_brew_formats::lockfile::{
-    FederationLock, LockedPackage, LockedPackageMetadata, LockedSource,
+    FederationLock, LockedPackage, LockedPackageMetadata, LockedSource, OriginalSource,
 };
 use brain_brew_formats::manifest::{
     BuildTarget, CrowdAnkiTargetExport, FederatedDeckManifest, MetadataCategory,
@@ -90,6 +90,13 @@ fn manifest_yaml_round_trips_hostile_scalars() {
 fn lockfile_yaml_round_trips_hostile_scalars() {
     for (case, value) in HOSTILE_STRINGS {
         let original = lockfile_with_value(value);
+        if value.is_empty() {
+            assert!(
+                lockfile::to_string(&original).is_err(),
+                "{case}: empty lock identity is rejected"
+            );
+            continue;
+        }
         let emitted = lockfile::to_string(&original).expect("lockfile emits");
         let parsed = lockfile::from_str(&emitted)
             .unwrap_or_else(|error| panic!("{case}: emitted lockfile parses: {error}\n{emitted}"));
@@ -119,14 +126,16 @@ fn emitted_yaml_is_idempotent_for_hostile_unit_cases() {
             "{case}: manifest format is byte-idempotent"
         );
 
-        let lockfile_once =
-            lockfile::to_string(&lockfile_with_value(value)).expect("lockfile emits");
-        assert_eq!(
-            lockfile::format_str(&lockfile_once)
-                .unwrap_or_else(|error| panic!("{case}: lockfile formats: {error}")),
-            lockfile_once,
-            "{case}: lockfile format is byte-idempotent"
-        );
+        if !value.is_empty() {
+            let lockfile_once =
+                lockfile::to_string(&lockfile_with_value(value)).expect("lockfile emits");
+            assert_eq!(
+                lockfile::format_str(&lockfile_once)
+                    .unwrap_or_else(|error| panic!("{case}: lockfile formats: {error}")),
+                lockfile_once,
+                "{case}: lockfile format is byte-idempotent"
+            );
+        }
     }
 }
 
@@ -232,7 +241,7 @@ fn manifest_with_value(value: &str) -> FederatedDeckManifest {
 
 fn lockfile_with_value(value: &str) -> FederationLock {
     FederationLock {
-        version: 1,
+        version: 2,
         packages: BTreeMap::from([(
             "package.hostile".to_owned(),
             LockedPackage {
@@ -240,7 +249,9 @@ fn lockfile_with_value(value: &str) -> FederationLock {
                 package: LockedPackageMetadata {
                     version: value.to_owned(),
                 },
-                original: Some(locked_source_with_value(value)),
+                original: OriginalSource::Path {
+                    path: value.to_owned(),
+                },
                 locked: locked_source_with_value(value),
             },
         )]),
@@ -248,13 +259,9 @@ fn lockfile_with_value(value: &str) -> FederationLock {
 }
 
 fn locked_source_with_value(value: &str) -> LockedSource {
-    LockedSource {
-        source_type: value.to_owned(),
-        url: Some(value.to_owned()),
-        path: Some(value.to_owned()),
-        reference: Some(value.to_owned()),
-        rev: Some(value.to_owned()),
-        nar_hash: Some(value.to_owned()),
+    LockedSource::Path {
+        path: value.to_owned(),
+        nar_hash: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_owned(),
     }
 }
 

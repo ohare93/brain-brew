@@ -7,7 +7,7 @@ use brain_brew_formats::core::{
     PropertyChange, StableId, StructuredMessage,
 };
 use brain_brew_formats::lockfile::{
-    FederationLock, LockedPackage, LockedPackageMetadata, LockedSource,
+    FederationLock, LockedPackage, LockedPackageMetadata, LockedSource, OriginalSource,
 };
 use brain_brew_formats::manifest::{
     BuildTarget, CrowdAnkiTargetExport, FederatedDeckManifest, MetadataCategory,
@@ -166,7 +166,7 @@ fn newline_containing_map_keys_are_rejected_cleanly() {
     assert!(error.to_string().contains("cannot be emitted safely"));
 
     let error = lockfile::from_str(
-        "version: 1\npackages:\n  ? \"bad\\nkey\"\n  : manifest: brainbrew.yaml\n    package:\n      version: '1'\n    locked:\n      type: path\n      path: .\n",
+        "version: 2\npackages:\n  ? \"bad\\nkey\"\n  : manifest: brainbrew.yaml\n    package:\n      version: '1'\n    original:\n      type: path\n      path: .\n    locked:\n      type: path\n      path: .\n      nar_hash: 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='\n",
     )
     .expect_err("lockfile rejects newline package keys");
     assert!(error.to_string().contains("cannot be emitted safely"));
@@ -397,14 +397,14 @@ fn manifest_with_map_key(key: &str) -> FederatedDeckManifest {
 
 fn lockfile_with_value(value: &str) -> FederationLock {
     FederationLock {
-        version: 1,
+        version: 2,
         packages: BTreeMap::from([("package.hostile".to_owned(), locked_package(value))]),
     }
 }
 
 fn lockfile_with_package_key(key: &str) -> FederationLock {
     FederationLock {
-        version: 1,
+        version: 2,
         packages: BTreeMap::from([(key.to_owned(), locked_package("value"))]),
     }
 }
@@ -415,19 +415,17 @@ fn locked_package(value: &str) -> LockedPackage {
         package: LockedPackageMetadata {
             version: value.to_owned(),
         },
-        original: Some(locked_source(value)),
+        original: OriginalSource::Path {
+            path: value.to_owned(),
+        },
         locked: locked_source(value),
     }
 }
 
 fn locked_source(value: &str) -> LockedSource {
-    LockedSource {
-        source_type: value.to_owned(),
-        url: Some(value.to_owned()),
-        path: Some(value.to_owned()),
-        reference: Some(value.to_owned()),
-        rev: Some(value.to_owned()),
-        nar_hash: Some(value.to_owned()),
+    LockedSource::Path {
+        path: value.to_owned(),
+        nar_hash: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_owned(),
     }
 }
 

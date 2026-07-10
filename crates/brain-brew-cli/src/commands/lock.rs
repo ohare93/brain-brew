@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use brain_brew_formats::lockfile::{
-    self, FederationLock, LockedPackage, LockedPackageMetadata, LockedSource,
+    self, FederationLock, LOCKFILE_VERSION, LockedPackage, LockedPackageMetadata, LockedSource,
+    OriginalSource,
 };
 use flate2::read::GzDecoder;
 use nix_nar::Encoder;
@@ -43,6 +44,9 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
 
 fn update(args: &[String]) -> Result<(), String> {
     let args = parse_lock_update_args(args)?;
+    // Existing locks must pass the current schema before any source is fetched
+    // or package manifest is loaded. This also makes v1 migration fail early.
+    let mut lock = read_lock_or_empty(&args.lock_path)?;
     let fetch_requested = args.source.to_fetch_source()?;
     let fetched = fetch_source(&fetch_requested, None)?;
     let requested = args.source.to_requested_source(&args.lock_path)?;
@@ -73,7 +77,6 @@ fn update(args: &[String]) -> Result<(), String> {
         ));
     }
 
-    let mut lock = read_lock_or_empty(&args.lock_path)?;
     lock.packages.insert(
         args.package_id.clone(),
         LockedPackage {
@@ -81,8 +84,8 @@ fn update(args: &[String]) -> Result<(), String> {
             package: LockedPackageMetadata {
                 version: package.version.clone(),
             },
-            original: Some(requested.original_source()),
-            locked: requested.locked_source(&fetched),
+            original: requested.original_source(),
+            locked: requested.locked_source(&fetched)?,
         },
     );
     let formatted = lockfile::to_string(&lock).map_err(|error| error.to_string())?;
@@ -108,9 +111,8 @@ fn verify(args: &[String]) -> Result<(), String> {
     let lock = read_lock(&args.lock_path)?;
     for (package_id, package) in &lock.packages {
         let fetched = fetch_locked_source_for_verify(&args.lock_path, package_id, &package.locked)?;
-        if let Some(expected_hash) = &package.locked.nar_hash
-            && &fetched.nar_hash != expected_hash
-        {
+        let expected_hash = package.locked.nar_hash();
+        if fetched.nar_hash != expected_hash {
             return Err(format!(
                 "locked package {package_id} nar_hash mismatch: expected {expected_hash}, found {}",
                 fetched.nar_hash
@@ -161,12 +163,8 @@ impl UpdateSource {
         match self {
             Self::Path(path) => {
                 let path = canonicalize_for_lock(path)?;
-                Ok(RequestedSource {
-                    source_type: "path".to_owned(),
-                    url: None,
-                    path: Some(path.display().to_string()),
-                    reference: None,
-                    rev: None,
+                Ok(RequestedSource::Path {
+                    path: path.display().to_string(),
                 })
             }
             _ => self.to_requested_source(Path::new(".")),
@@ -177,32 +175,20 @@ impl UpdateSource {
         match self {
             Self::Path(path) => {
                 let path = path_for_lock(path, lock_path)?;
-                Ok(RequestedSource {
-                    source_type: "path".to_owned(),
-                    url: None,
-                    path: Some(path.display().to_string()),
-                    reference: None,
-                    rev: None,
+                Ok(RequestedSource::Path {
+                    path: path.display().to_string(),
                 })
             }
             Self::Git {
                 url,
                 reference,
                 rev,
-            } => Ok(RequestedSource {
-                source_type: "git".to_owned(),
-                url: Some(url.clone()),
-                path: None,
+            } => Ok(RequestedSource::Git {
+                url: normalize_github_url(url),
                 reference: reference.clone(),
                 rev: rev.clone(),
             }),
-            Self::Tarball { url } => Ok(RequestedSource {
-                source_type: "tarball".to_owned(),
-                url: Some(url.clone()),
-                path: None,
-                reference: None,
-                rev: None,
-            }),
+            Self::Tarball { url } => Ok(RequestedSource::Tarball { url: url.clone() }),
         }
     }
 }
@@ -297,6 +283,9 @@ fn parse_lock_update_args(args: &[String]) -> Result<LockUpdateArgs, String> {
         }
         UpdateSource::Path(path)
     } else if let Some(url) = git {
+        if reference.is_some() && rev.is_some() {
+            return Err("--ref and --rev cannot be used together".to_owned());
+        }
         UpdateSource::Git {
             url,
             reference,
@@ -347,67 +336,64 @@ fn read_lock_or_empty(path: &Path) -> Result<FederationLock, String> {
         read_lock(path)
     } else {
         Ok(FederationLock {
-            version: 1,
+            version: LOCKFILE_VERSION,
             packages: BTreeMap::new(),
         })
     }
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct RequestedSource {
-    pub(crate) source_type: String,
-    pub(crate) url: Option<String>,
-    pub(crate) path: Option<String>,
-    pub(crate) reference: Option<String>,
-    pub(crate) rev: Option<String>,
+pub(crate) enum RequestedSource {
+    Path {
+        path: String,
+    },
+    Git {
+        url: String,
+        reference: Option<String>,
+        rev: Option<String>,
+    },
+    Tarball {
+        url: String,
+    },
 }
 
 impl RequestedSource {
-    fn original_source(&self) -> LockedSource {
-        LockedSource {
-            source_type: self.source_type.clone(),
-            url: self.url.clone(),
-            path: self.path.clone(),
-            reference: self.reference.clone(),
-            rev: self.rev.clone(),
-            nar_hash: None,
+    fn original_source(&self) -> OriginalSource {
+        match self {
+            Self::Path { path } => OriginalSource::Path { path: path.clone() },
+            Self::Git {
+                url,
+                reference,
+                rev,
+            } => OriginalSource::Git {
+                url: url.clone(),
+                reference: reference.clone(),
+                rev: rev.clone(),
+            },
+            Self::Tarball { url } => OriginalSource::Tarball { url: url.clone() },
         }
     }
 
-    fn locked_source(&self, fetched: &FetchedSource) -> LockedSource {
-        match self.source_type.as_str() {
-            "path" => LockedSource {
-                source_type: "path".to_owned(),
-                url: None,
-                path: self.path.clone(),
-                reference: None,
-                rev: None,
-                nar_hash: Some(fetched.nar_hash.clone()),
-            },
-            "git" => LockedSource {
-                source_type: "git".to_owned(),
-                url: self.url.clone(),
-                path: None,
-                reference: None,
-                rev: fetched.rev.clone().or_else(|| self.rev.clone()),
-                nar_hash: Some(fetched.nar_hash.clone()),
-            },
-            "tarball" => LockedSource {
-                source_type: "tarball".to_owned(),
-                url: self.url.clone(),
-                path: None,
-                reference: None,
-                rev: None,
-                nar_hash: Some(fetched.nar_hash.clone()),
-            },
-            other => LockedSource {
-                source_type: other.to_owned(),
-                url: self.url.clone(),
-                path: self.path.clone(),
-                reference: self.reference.clone(),
-                rev: self.rev.clone(),
-                nar_hash: Some(fetched.nar_hash.clone()),
-            },
+    fn locked_source(&self, fetched: &FetchedSource) -> Result<LockedSource, String> {
+        match self {
+            Self::Path { path } => Ok(LockedSource::Path {
+                path: path.clone(),
+                nar_hash: fetched.nar_hash.clone(),
+            }),
+            Self::Git { url, .. } => {
+                let rev = fetched.rev.clone().ok_or_else(|| {
+                    "GitHub source did not resolve to an immutable commit revision".to_owned()
+                })?;
+                Ok(LockedSource::Git {
+                    url: url.clone(),
+                    rev,
+                    nar_hash: fetched.nar_hash.clone(),
+                })
+            }
+            Self::Tarball { url } => Ok(LockedSource::Tarball {
+                url: url.clone(),
+                nar_hash: fetched.nar_hash.clone(),
+            }),
         }
     }
 }
@@ -452,24 +438,25 @@ fn fetch_locked_source_with_mode(
     source: &LockedSource,
     mode: FetchLockedMode,
 ) -> Result<FetchedSource, String> {
-    let expected_hash = source.nar_hash.as_deref();
-    if !(mode == FetchLockedMode::VerifyLivePath && source.source_type == "path")
-        && let Some(cached) = cached_source(expected_hash)?
-    {
+    let expected_hash = source.nar_hash();
+    let verify_live_path =
+        mode == FetchLockedMode::VerifyLivePath && matches!(source, LockedSource::Path { .. });
+    if !verify_live_path && let Some(cached) = cached_source(Some(expected_hash))? {
         return Ok(cached);
     }
 
-    let requested = RequestedSource {
-        source_type: source.source_type.clone(),
-        url: source.url.clone(),
-        path: source
-            .path
-            .as_deref()
-            .map(|path| lock_relative_path(lock_path, path).display().to_string()),
-        reference: source.reference.clone(),
-        rev: source.rev.clone(),
+    let requested = match source {
+        LockedSource::Path { path, .. } => RequestedSource::Path {
+            path: lock_relative_path(lock_path, path).display().to_string(),
+        },
+        LockedSource::Git { url, rev, .. } => RequestedSource::Git {
+            url: url.clone(),
+            reference: None,
+            rev: Some(rev.clone()),
+        },
+        LockedSource::Tarball { url, .. } => RequestedSource::Tarball { url: url.clone() },
     };
-    fetch_source(&requested, expected_hash)
+    fetch_source(&requested, Some(expected_hash))
         .map_err(|error| format!("locked package {package_id}: {error}"))
 }
 
@@ -482,9 +469,8 @@ pub(crate) fn locked_package_manifest_paths(lock_path: &Path) -> Result<Vec<Path
         .iter()
         .map(|(package_id, package)| {
             let fetched = fetch_locked_source(lock_path, package_id, &package.locked)?;
-            if let Some(expected_hash) = &package.locked.nar_hash
-                && &fetched.nar_hash != expected_hash
-            {
+            let expected_hash = package.locked.nar_hash();
+            if fetched.nar_hash != expected_hash {
                 return Err(format!(
                     "locked package {package_id} nar_hash mismatch: expected {expected_hash}, found {}",
                     fetched.nar_hash
@@ -508,21 +494,12 @@ fn fetch_source(
     source: &RequestedSource,
     expected_hash: Option<&str>,
 ) -> Result<FetchedSource, String> {
-    match source.source_type.as_str() {
-        "path" => {
-            let Some(path) = &source.path else {
-                return Err("path source requires path".to_owned());
-            };
+    match source {
+        RequestedSource::Path { path } => {
             snapshot_source_tree(Path::new(path), expected_hash, None)
         }
-        "git" => fetch_git_source(source, expected_hash),
-        "tarball" => {
-            let Some(url) = &source.url else {
-                return Err("tarball source requires url".to_owned());
-            };
-            fetch_tarball_source(url, expected_hash, None)
-        }
-        other => Err(format!("unsupported locked source type {other:?}")),
+        RequestedSource::Git { .. } => fetch_git_source(source, expected_hash),
+        RequestedSource::Tarball { url } => fetch_tarball_source(url, expected_hash, None),
     }
 }
 
@@ -530,18 +507,23 @@ fn fetch_git_source(
     source: &RequestedSource,
     expected_hash: Option<&str>,
 ) -> Result<FetchedSource, String> {
-    let Some(url) = &source.url else {
-        return Err("git source requires url".to_owned());
+    let RequestedSource::Git {
+        url,
+        reference,
+        rev,
+    } = source
+    else {
+        return Err("internal error: expected git source".to_owned());
     };
     let Some(repo) = GithubRepo::parse(url) else {
         return Err(format!(
             "native git locking currently supports GitHub HTTPS URLs; use --tarball for {url:?}"
         ));
     };
-    let rev = if let Some(rev) = &source.rev {
-        rev.clone()
-    } else {
-        resolve_github_rev(&repo, source.reference.as_deref())?
+    let rev = match rev {
+        Some(rev) if lockfile::is_full_git_commit(rev) => rev.clone(),
+        Some(rev) => resolve_github_rev(&repo, Some(rev))?,
+        None => resolve_github_rev(&repo, reference.as_deref())?,
     };
     let tarball = repo.codeload_tarball_url(&rev);
     fetch_tarball_source(&tarball, expected_hash, Some(rev))
@@ -589,7 +571,15 @@ fn snapshot_source_tree(
     }
 
     let cache_path = cache_source_path(&nar_hash);
-    if !cache_path.exists() {
+    if cache_path.exists() {
+        let cached_hash = nar_hash_path(&cache_path)?;
+        if cached_hash != nar_hash {
+            return Err(format!(
+                "cached source {} nar_hash mismatch: expected {nar_hash}, found {cached_hash}; remove the tampered cache entry before retrying",
+                cache_path.display()
+            ));
+        }
+    } else {
         if let Some(parent) = cache_path.parent() {
             fs::create_dir_all(parent).map_err(|error| format!("{}: {error}", parent.display()))?;
         }
@@ -616,15 +606,17 @@ fn cached_source(expected_hash: Option<&str>) -> Result<Option<FetchedSource>, S
         return Ok(None);
     }
     let actual_hash = nar_hash_path(&path)?;
-    if actual_hash == expected_hash {
-        return Ok(Some(FetchedSource {
-            source_path: path,
-            nar_hash: actual_hash,
-            rev: None,
-        }));
+    if actual_hash != expected_hash {
+        return Err(format!(
+            "cached source {} nar_hash mismatch: expected {expected_hash}, found {actual_hash}; remove the tampered cache entry before retrying",
+            path.display()
+        ));
     }
-    fs::remove_dir_all(&path).map_err(|error| format!("{}: {error}", path.display()))?;
-    Ok(None)
+    Ok(Some(FetchedSource {
+        source_path: path,
+        nar_hash: actual_hash,
+        rev: None,
+    }))
 }
 
 fn read_url_or_file(url: &str) -> Result<Vec<u8>, String> {
@@ -712,6 +704,10 @@ impl GithubRepo {
         Some(Self { owner, name })
     }
 
+    fn canonical_url(&self) -> String {
+        format!("https://github.com/{}/{}.git", self.owner, self.name)
+    }
+
     fn api_url(&self) -> String {
         format!("https://api.github.com/repos/{}/{}", self.owner, self.name)
     }
@@ -731,6 +727,12 @@ impl GithubRepo {
             self.owner, self.name, rev
         )
     }
+}
+
+fn normalize_github_url(url: &str) -> String {
+    GithubRepo::parse(url)
+        .map(|repo| repo.canonical_url())
+        .unwrap_or_else(|| url.to_owned())
 }
 
 fn resolve_github_rev(repo: &GithubRepo, reference: Option<&str>) -> Result<String, String> {
@@ -952,16 +954,15 @@ fn cache_source_path(nar_hash: &str) -> PathBuf {
 }
 
 fn cache_key(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect()
+    let mut key = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || byte == b'-' {
+            key.push(byte as char);
+        } else {
+            key.push_str(&format!("_{byte:02X}"));
+        }
+    }
+    key
 }
 
 fn cache_root() -> PathBuf {
@@ -1010,6 +1011,10 @@ mod tests {
             .expect("GitHub HTTP repo URL parses");
         assert_eq!(http_repo.owner, "anki-geo");
         assert_eq!(http_repo.name, "ultimate-geography");
+        assert_eq!(
+            normalize_github_url("http://github.com/anki-geo/ultimate-geography/"),
+            "https://github.com/anki-geo/ultimate-geography.git"
+        );
 
         assert!(
             GithubRepo::parse("https://github.com/anki-geo/ultimate-geography/tree/main").is_none()
@@ -1036,10 +1041,8 @@ mod tests {
 
     #[test]
     fn non_github_git_url_reports_native_locking_error() {
-        let source = RequestedSource {
-            source_type: "git".to_owned(),
-            url: Some("https://example.com/anki-geo/ultimate-geography.git".to_owned()),
-            path: None,
+        let source = RequestedSource::Git {
+            url: "https://example.com/anki-geo/ultimate-geography.git".to_owned(),
             reference: None,
             rev: Some("abc123".to_owned()),
         };
@@ -1098,14 +1101,12 @@ targets: {}
             package: LockedPackageMetadata {
                 version: "0.1.0".to_owned(),
             },
-            original: None,
-            locked: LockedSource {
-                source_type: "path".to_owned(),
-                url: None,
-                path: Some(".".to_owned()),
-                reference: None,
-                rev: None,
-                nar_hash: None,
+            original: OriginalSource::Path {
+                path: ".".to_owned(),
+            },
+            locked: LockedSource::Path {
+                path: ".".to_owned(),
+                nar_hash: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_owned(),
             },
         };
 

@@ -216,6 +216,7 @@ version = "1.0.0-alpha.1"
 name = "brain-brew-formats"
 version = "1.0.0-alpha.1"
 dependencies = [
+ "base64",
  "brain-brew-core",
  "serde",
  "serde_json",

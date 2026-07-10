@@ -10,6 +10,7 @@ description = "YAML and CrowdAnki codecs for Brain Brew local-first deck federat
 homepage = "https://github.com/jeprecated/brain-brew"
 
 [dependencies]
+base64 = "0.22"
 brain-brew-core.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

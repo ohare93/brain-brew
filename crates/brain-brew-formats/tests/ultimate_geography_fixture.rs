@@ -234,8 +234,8 @@ fn ultimate_geography_fixture_formatting_is_byte_idempotent() {
 packages:
   anki-geo.ultimate-geography:
     locked:
-      nar_hash: sha256-fixture
-      rev: ccf150a1b21e
+      nar_hash: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      rev: ccf150a1b21e0000000000000000000000000000
       url: https://github.com/anki-geo/ultimate-geography.git
       type: git
     original:
@@ -245,7 +245,7 @@ packages:
     package:
       version: 0.1.0
     manifest: brainbrew.yaml
-version: 1
+version: 2
 "#;
     let lock_once = lockfile::format_str(lock_source).expect("fixture-style lock formats");
     let lock_twice = lockfile::format_str(&lock_once).expect("fixture-style lock formats twice");

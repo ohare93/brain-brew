@@ -2484,25 +2484,23 @@ targets:
 "#,
     )
     .unwrap();
-    fs::write(
-        america.join("brainbrew.lock"),
-        format!(
-            r#"version: 1
-packages:
-  anki-geo.ultimate-geography:
-    manifest: brainbrew.yaml
-    package:
-      version: 0.1.0
-    locked:
-      type: path
-      path: '{}'
-"#,
-            ug.canonicalize().unwrap().display()
-        ),
-    )
-    .unwrap();
-    let resolved = root.join("resolved.yaml");
+    let lock_path = america.join("brainbrew.lock");
     let cache = root.join("cache");
+    let update = run_with_cache(
+        [
+            "lock",
+            "update",
+            "--lock",
+            lock_path.to_str().unwrap(),
+            "--package",
+            "anki-geo.ultimate-geography",
+            "--path",
+            ug.to_str().unwrap(),
+        ],
+        &cache,
+    );
+    assert!(update.status.success(), "stderr: {}", stderr(&update));
+    let resolved = root.join("resolved.yaml");
 
     let output = run_with_cache(
         [
@@ -2583,7 +2581,7 @@ fn lock_update_and_verify_path_package_without_nix() {
     );
 
     assert!(!mismatch.status.success());
-    assert!(stderr(&mismatch).contains("nar_hash mismatch"));
+    assert!(stderr(&mismatch).contains("canonical SRI SHA-256"));
 }
 
 #[test]
@@ -2631,6 +2629,25 @@ fn lock_update_and_verify_tarball_package_without_nix() {
 
     assert!(verify.status.success(), "stderr: {}", stderr(&verify));
     assert!(stdout(&verify).contains("verified 1 locked package"));
+
+    let cache_entry = fs::read_dir(cache.join("sources"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    fs::write(
+        cache_entry.join("brainbrew.yaml"),
+        "tampered cache manifest\n",
+    )
+    .unwrap();
+    let tampered = run_with_cache(
+        ["lock", "verify", "--lock", lock_path.to_str().unwrap()],
+        &cache,
+    );
+    assert!(!tampered.status.success());
+    assert!(stderr(&tampered).contains("cached source"));
+    assert!(stderr(&tampered).contains("nar_hash mismatch"));
 }
 
 #[test]
@@ -7190,7 +7207,7 @@ overlays:
 base: deck.yaml
 "#;
 
-const LOCK_YAML: &str = r#"version: 1
+const LOCK_YAML: &str = r#"version: 2
 packages:
   anki-geo.ultimate-geography:
     manifest: brainbrew.yaml
@@ -7203,15 +7220,15 @@ packages:
     locked:
       type: git
       url: https://github.com/anki-geo/ultimate-geography.git
-      rev: ccf150a1b21e
-      nar_hash: sha256-example
+      rev: ccf150a1b21e0000000000000000000000000000
+      nar_hash: 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
 "#;
 
 const MESSY_LOCK_YAML: &str = r#"packages:
   anki-geo.ultimate-geography:
     locked:
-      nar_hash: sha256-example
-      rev: ccf150a1b21e
+      nar_hash: 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+      rev: ccf150a1b21e0000000000000000000000000000
       url: https://github.com/anki-geo/ultimate-geography.git
       type: git
     original:
@@ -7221,7 +7238,7 @@ const MESSY_LOCK_YAML: &str = r#"packages:
     package:
       version: 0.1.0
     manifest: brainbrew.yaml
-version: 1
+version: 2
 "#;
 
 const MESSY_CANONICAL_YAML: &str = r#"deck:

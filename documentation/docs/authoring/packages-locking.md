@@ -71,7 +71,9 @@ brainbrew lock update --package pkg.id --tarball https://example.org/pkg.tar.gz
 brainbrew lock update --package pkg.id --git https://github.com/owner/repo.git --ref main
 ```
 
-The CLI computes `nar_hash` in Rust and does not require Nix at runtime. Path-based locks store portable paths relative to `brainbrew.lock` (for example, `path: ../pkg`) instead of absolute local paths. GitHub inputs should use `https://github.com/...`; `http://github.com/...` is also accepted for compatibility.
+The CLI emits lock schema version 2 and computes its mandatory canonical SRI SHA-256 `nar_hash` in Rust; Nix is not required at runtime. Path locks store portable paths relative to `brainbrew.lock` (for example, `path: ../pkg`). GitHub URLs are normalized to `https://github.com/owner/repo.git`, and the locked source records a full immutable commit ID.
+
+Version 1 locks are insecure and rejected rather than silently interpreted. Move or remove the old lock, then regenerate every package with its corresponding `brainbrew lock update` command.
 
 ## Review after updates
 
