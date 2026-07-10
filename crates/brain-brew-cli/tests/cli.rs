@@ -186,10 +186,8 @@ fn workbench_read_only_server_rejects_every_state_changing_route_without_writes(
             "--no-open",
         ],
         &[
-            ("BRAINBREW_ATOMIC_WRITE_FAIL_VALIDATE_INDEX", "0"),
-            ("BRAINBREW_ATOMIC_WRITE_FAIL_TEMP_INDEX", "0"),
-            ("BRAINBREW_ATOMIC_WRITE_FAIL_RENAME_INDEX", "0"),
-            ("BRAINBREW_ATOMIC_WRITE_SLEEP_BEFORE_RENAME_MS", "1"),
+            ("BRAINBREW_TRANSACTION_FAIL_POINT", "stage:0"),
+            ("BRAINBREW_TRANSACTION_SLEEP_BEFORE_REPLACE_MS", "1"),
         ],
     );
 
@@ -1108,6 +1106,124 @@ fn workbench_comparison_pane_summarizes_note_source_string_and_card_context() {
 
 #[cfg(feature = "workbench-write-dev")]
 #[test]
+fn workbench_rejects_source_edits_when_target_base_is_locked_dependency() {
+    let root = temp_dir("workbench-locked-base");
+    let dependency = root.join("dependency");
+    let workspace = root.join("workspace");
+    let cache = root.join("cache");
+    fs::create_dir_all(&dependency).unwrap();
+    fs::create_dir_all(&workspace).unwrap();
+    fs::write(dependency.join("deck.yaml"), SAMPLE_CANONICAL_YAML).unwrap();
+    fs::write(
+        dependency.join("brainbrew.yaml"),
+        "package:\n  id: example.locked-base\n  version: 1.0.0\nbase: deck.yaml\noverlays: {}\ntargets:\n  base:\n    overlays: []\n",
+    )
+    .unwrap();
+    fs::write(workspace.join("deck.yaml"), SAMPLE_CANONICAL_YAML).unwrap();
+    fs::write(
+        workspace.join("da.yaml"),
+        "id: overlay.translation.da\nkind: translation\ntranslations: {}\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.join("brainbrew.yaml"),
+        r#"package:
+  id: example.workbench-root
+  version: 1.0.0
+  depends_on:
+    - example.locked-base@1.0.0
+base: deck.yaml
+overlays:
+  overlay.translation.da:
+    file: da.yaml
+    kind: translation
+targets:
+  da-standard:
+    extends: example.locked-base:base
+    overlays:
+      - overlay.translation.da
+  en-standard:
+    extends: example.locked-base:base
+    overlays: []
+languages:
+  da:
+    display_name: Danish
+    translation_overlays:
+      base: overlay.translation.da
+    primary_target: standard
+    targets:
+      standard: da-standard
+  en:
+    display_name: English
+    source: true
+    primary_target: standard
+    targets:
+      standard: en-standard
+"#,
+    )
+    .unwrap();
+    let lock = run_with_env(
+        [
+            "lock",
+            "update",
+            "--lock",
+            workspace.join("brainbrew.lock").to_str().unwrap(),
+            "--package",
+            "example.locked-base",
+            "--path",
+            dependency.to_str().unwrap(),
+        ],
+        &[("BRAINBREW_CACHE_DIR", cache.to_str().unwrap())],
+    );
+    assert!(lock.status.success(), "stderr: {}", stderr(&lock));
+    let original_root = fs::read(workspace.join("deck.yaml")).unwrap();
+    let original_dependency = fs::read(dependency.join("deck.yaml")).unwrap();
+    let server = spawn_workbench_server_with_env(
+        [
+            "workbench",
+            "serve",
+            "--manifest",
+            workspace.join("brainbrew.yaml").to_str().unwrap(),
+            "--port",
+            "0",
+            "--no-open",
+        ],
+        &[("BRAINBREW_CACHE_DIR", cache.to_str().unwrap())],
+    );
+    let error = post_json_error(
+        &server.url("/api/workbench/apply"),
+        serde_json::json!({
+            "language": "da",
+            "target": "standard",
+            "overlay": "base",
+            "edits": [{
+                "kind": "source",
+                "path": "notes.note.finland.fields.field.country",
+                "source": "Finland",
+                "value": "Locked edit",
+                "scope": "field",
+                "impact_action": "stale_translation"
+            }]
+        }),
+    );
+    assert_eq!(error.0, 500);
+    assert!(
+        error.1.contains("read-only for locked source base"),
+        "{}",
+        error.1
+    );
+    assert_eq!(
+        fs::read(workspace.join("deck.yaml")).unwrap(),
+        original_root
+    );
+    assert_eq!(
+        fs::read(dependency.join("deck.yaml")).unwrap(),
+        original_dependency
+    );
+}
+
+#[cfg(feature = "workbench-write-dev")]
+#[test]
 fn workbench_apply_groups_multi_pane_edits_by_file_and_content_group() {
     let dir = temp_dir("workbench-multi-pane-apply");
     write_multi_language_workbench_workspace(&dir);
@@ -1196,7 +1312,7 @@ fn workbench_apply_groups_multi_pane_edits_by_file_and_content_group() {
 
 #[cfg(feature = "workbench-write-dev")]
 #[test]
-fn workbench_apply_validation_failure_leaves_all_targets_unchanged() {
+fn workbench_apply_journal_creation_failure_leaves_all_targets_unchanged() {
     let dir = temp_dir("workbench-atomic-validate");
     write_multi_language_workbench_workspace(&dir);
     let original_deck = fs::read(dir.join("deck.yaml")).unwrap();
@@ -1212,7 +1328,7 @@ fn workbench_apply_validation_failure_leaves_all_targets_unchanged() {
             "0",
             "--no-open",
         ],
-        &[("BRAINBREW_ATOMIC_WRITE_FAIL_VALIDATE_INDEX", "1")],
+        &[("BRAINBREW_TRANSACTION_FAIL_POINT", "create-journal")],
     );
 
     let error = post_json_error(
@@ -1222,7 +1338,7 @@ fn workbench_apply_validation_failure_leaves_all_targets_unchanged() {
 
     assert_eq!(error.0, 500);
     assert!(
-        error.1.contains("validation/serialization") || error.1.contains("validate"),
+        error.1.contains("transaction") || error.1.contains("journal"),
         "unexpected error body: {}",
         error.1
     );
@@ -1233,7 +1349,7 @@ fn workbench_apply_validation_failure_leaves_all_targets_unchanged() {
 
 #[cfg(feature = "workbench-write-dev")]
 #[test]
-fn workbench_apply_temp_write_failure_leaves_targets_unchanged() {
+fn workbench_apply_staging_failure_leaves_targets_unchanged() {
     let dir = temp_dir("workbench-atomic-temp-fail");
     write_multi_language_workbench_workspace(&dir);
     let original_deck = fs::read(dir.join("deck.yaml")).unwrap();
@@ -1249,7 +1365,7 @@ fn workbench_apply_temp_write_failure_leaves_targets_unchanged() {
             "0",
             "--no-open",
         ],
-        &[("BRAINBREW_ATOMIC_WRITE_FAIL_TEMP_INDEX", "1")],
+        &[("BRAINBREW_TRANSACTION_FAIL_POINT", "stage:1")],
     );
 
     let error = post_json_error(
@@ -1259,7 +1375,7 @@ fn workbench_apply_temp_write_failure_leaves_targets_unchanged() {
 
     assert_eq!(error.0, 500);
     assert!(
-        error.1.contains("write temporary") || error.1.contains("temp"),
+        error.1.contains("transaction") || error.1.contains("stage"),
         "unexpected error body: {}",
         error.1
     );
@@ -1270,9 +1386,63 @@ fn workbench_apply_temp_write_failure_leaves_targets_unchanged() {
 
 #[cfg(feature = "workbench-write-dev")]
 #[test]
-fn workbench_apply_rename_failure_reports_updated_and_not_updated_files() {
-    let dir = temp_dir("workbench-atomic-rename-fail");
+fn workbench_restart_recovers_interrupted_prepare_before_apply() {
+    let dir = temp_dir("workbench-transaction-recovery");
     write_multi_language_workbench_workspace(&dir);
+    let original_deck = fs::read(dir.join("deck.yaml")).unwrap();
+    {
+        let server = spawn_workbench_server_with_env(
+            [
+                "workbench",
+                "serve",
+                "--manifest",
+                dir.join("brainbrew.yaml").to_str().unwrap(),
+                "--port",
+                "0",
+                "--no-open",
+            ],
+            &[
+                ("BRAINBREW_TRANSACTION_FAIL_POINT", "stage:0"),
+                ("BRAINBREW_TRANSACTION_FAIL_MODE", "crash"),
+            ],
+        );
+        let error = post_json_error(
+            &server.url("/api/workbench/apply"),
+            atomic_multi_file_apply_request("interrupted prepare"),
+        );
+        assert_eq!(error.0, 500);
+        assert_eq!(fs::read(dir.join("deck.yaml")).unwrap(), original_deck);
+    }
+    assert!(
+        fs::read_dir(dir.join(".brainbrew-transactions"))
+            .unwrap()
+            .any(|entry| entry.unwrap().file_type().unwrap().is_dir())
+    );
+
+    let restarted = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+    let applied = post_json(
+        &restarted.url("/api/workbench/apply"),
+        atomic_multi_file_apply_request("after recovery"),
+    );
+    assert_eq!(applied["applied"], true);
+}
+
+#[cfg(feature = "workbench-write-dev")]
+#[test]
+fn workbench_apply_replace_failure_restores_every_original_file() {
+    let dir = temp_dir("workbench-transaction-replace-fail");
+    write_multi_language_workbench_workspace(&dir);
+    let original_deck = fs::read(dir.join("deck.yaml")).unwrap();
+    let original_da = fs::read(dir.join("da.yaml")).unwrap();
+    let original_nb = fs::read(dir.join("nb.yaml")).unwrap();
     let server = spawn_workbench_server_with_env(
         [
             "workbench",
@@ -1283,7 +1453,7 @@ fn workbench_apply_rename_failure_reports_updated_and_not_updated_files() {
             "0",
             "--no-open",
         ],
-        &[("BRAINBREW_ATOMIC_WRITE_FAIL_RENAME_INDEX", "1")],
+        &[("BRAINBREW_TRANSACTION_FAIL_POINT", "replace:1")],
     );
 
     let error = post_json_error(
@@ -1292,19 +1462,19 @@ fn workbench_apply_rename_failure_reports_updated_and_not_updated_files() {
     );
 
     assert_eq!(error.0, 500);
-    assert!(error.1.contains("rename phase failed"), "{}", error.1);
-    assert!(error.1.contains("updated files: deck.yaml"), "{}", error.1);
     assert!(
-        error.1.contains("not updated files: da.yaml, nb.yaml")
-            || error.1.contains("not updated files: nb.yaml, da.yaml"),
+        error.1.contains("restored the original workspace"),
         "{}",
         error.1
     );
+    assert_eq!(fs::read(dir.join("deck.yaml")).unwrap(), original_deck);
+    assert_eq!(fs::read(dir.join("da.yaml")).unwrap(), original_da);
+    assert_eq!(fs::read(dir.join("nb.yaml")).unwrap(), original_nb);
 }
 
 #[cfg(feature = "workbench-write-dev")]
 #[test]
-fn workbench_apply_uses_atomic_temp_rename_helper() {
+fn workbench_apply_uses_recoverable_workspace_transaction() {
     let dir = temp_dir("workbench-atomic-trace");
     write_multi_language_workbench_workspace(&dir);
     let trace_path = dir.join("atomic-trace.log");
@@ -1318,7 +1488,7 @@ fn workbench_apply_uses_atomic_temp_rename_helper() {
             "0",
             "--no-open",
         ],
-        &[("BRAINBREW_ATOMIC_WRITE_TRACE", trace_path.to_str().unwrap())],
+        &[("BRAINBREW_TRANSACTION_TRACE", trace_path.to_str().unwrap())],
     );
 
     let applied = post_json(
@@ -1327,13 +1497,14 @@ fn workbench_apply_uses_atomic_temp_rename_helper() {
     );
 
     assert_eq!(applied["applied"], true);
-    let trace = fs::read_to_string(trace_path).expect("atomic helper writes a trace");
+    let trace = fs::read_to_string(trace_path).expect("transaction writes a trace");
     assert!(trace.contains("transaction_begin"), "trace: {trace}");
-    assert!(trace.contains("temp_write"), "trace: {trace}");
-    assert!(trace.contains("rename"), "trace: {trace}");
+    assert!(trace.contains("transaction_end"), "trace: {trace}");
     assert!(
-        !trace.contains("write_target"),
-        "apply writes must not go directly to targets: {trace}"
+        fs::read_dir(dir.join(".brainbrew-transactions"))
+            .unwrap()
+            .all(|entry| !entry.unwrap().file_type().unwrap().is_dir()),
+        "completed Apply left a pending journal"
     );
 }
 
@@ -1355,8 +1526,8 @@ fn workbench_concurrent_apply_requests_are_serialized() {
             "--no-open",
         ],
         &[
-            ("BRAINBREW_ATOMIC_WRITE_TRACE", trace_path_text.as_str()),
-            ("BRAINBREW_ATOMIC_WRITE_SLEEP_BEFORE_RENAME_MS", "150"),
+            ("BRAINBREW_TRANSACTION_TRACE", trace_path_text.as_str()),
+            ("BRAINBREW_TRANSACTION_SLEEP_BEFORE_REPLACE_MS", "150"),
         ],
     );
     let first_url = server.url("/api/workbench/apply");
@@ -2029,6 +2200,14 @@ fn workbench_source_edits_can_migrate_keys_change_all_and_preserve_includes() {
     let deck = fs::read_to_string(dir.join("deck.yaml")).unwrap();
     assert!(deck.contains("field.capital: !include content/finland-capital.txt"));
     assert!(deck.contains("field.capital: Migrated capital"));
+    let canonical_before = fs::read(dir.join("deck.yaml")).unwrap();
+    let formatted = run(["fmt", dir.join("deck.yaml").to_str().unwrap()]);
+    assert!(formatted.status.success(), "stderr: {}", stderr(&formatted));
+    assert_eq!(
+        fs::read(dir.join("deck.yaml")).unwrap(),
+        canonical_before,
+        "Workbench output must already be canonical"
+    );
     assert_eq!(
         fs::read_to_string(dir.join("content/finland-capital.txt")).unwrap(),
         "Migrated capital"
@@ -4962,6 +5141,76 @@ targets:
 }
 
 #[test]
+fn media_hash_replace_failure_rolls_back_and_images_restart_recovers() {
+    let dir = temp_dir("media-transaction-failures");
+    fs::create_dir_all(dir.join("media/flags")).unwrap();
+    fs::write(dir.join("media/flags/fi.png"), b"flag-bytes").unwrap();
+    let deck = MEDIA_CANONICAL_YAML
+        .replace(
+            "14873f4faae48052921f9272d948a369f775b2406e57a9b8d55fb94452b73948",
+            "''",
+        )
+        .replace(
+            "field.flag: '<img src=\"flags/fi.png\">'",
+            "field.flag: '<img src=\"flags/fi.png\" />'",
+        );
+    fs::write(dir.join("deck.yaml"), &deck).unwrap();
+    fs::write(dir.join("brainbrew.yaml"), SIMPLE_MEDIA_MANIFEST_YAML).unwrap();
+
+    let failed_hash = run_with_env(
+        [
+            "media",
+            "hash",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--all-targets",
+            "--media-root",
+            dir.join("media").to_str().unwrap(),
+        ],
+        &[("BRAINBREW_TRANSACTION_FAIL_POINT", "replace:0")],
+    );
+    assert!(!failed_hash.status.success());
+    assert!(stderr(&failed_hash).contains("restored the original workspace"));
+    assert_eq!(fs::read(dir.join("deck.yaml")).unwrap(), deck.as_bytes());
+
+    let interrupted_images = run_with_env(
+        [
+            "media",
+            "images-to-refs",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--all-targets",
+        ],
+        &[
+            ("BRAINBREW_TRANSACTION_FAIL_POINT", "stage:0"),
+            ("BRAINBREW_TRANSACTION_FAIL_MODE", "crash"),
+        ],
+    );
+    assert!(!interrupted_images.status.success());
+    assert_eq!(fs::read(dir.join("deck.yaml")).unwrap(), deck.as_bytes());
+    assert!(
+        fs::read_dir(dir.join(".brainbrew-transactions"))
+            .unwrap()
+            .any(|entry| entry.unwrap().file_type().unwrap().is_dir()),
+        "interrupted media mutation must retain explicit recovery state"
+    );
+
+    let recovered = run([
+        "media",
+        "images-to-refs",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+    ]);
+    assert!(recovered.status.success(), "stderr: {}", stderr(&recovered));
+    assert!(
+        fs::read_to_string(dir.join("deck.yaml"))
+            .unwrap()
+            .contains("field.flag: !image media.flags-fi-png")
+    );
+}
+
+#[test]
 fn media_hash_updates_hoisted_media_map_and_noops_second_run() {
     let dir = temp_dir("media-hash-hoisted");
     fs::create_dir_all(dir.join("media/flags")).unwrap();
@@ -5853,6 +6102,122 @@ tombstones: []
 }
 
 #[test]
+fn import_crowdanki_refuses_existing_output_rejects_unknown_flags_and_force_replaces() {
+    let dir = temp_dir("crowdanki-safe-output");
+    let deck_path = dir.join("deck.yaml");
+    let export_dir = dir.join("crowdanki");
+    let imported_path = dir.join("imported.yaml");
+    fs::write(&deck_path, SAMPLE_CANONICAL_YAML).unwrap();
+    let export = run([
+        "export",
+        "crowdanki",
+        deck_path.to_str().unwrap(),
+        "--out",
+        export_dir.to_str().unwrap(),
+    ]);
+    assert!(export.status.success(), "stderr: {}", stderr(&export));
+
+    fs::write(&imported_path, b"do not overwrite\n").unwrap();
+    let refused = run([
+        "import",
+        "crowdanki",
+        export_dir.to_str().unwrap(),
+        "--accept-suggested-ids",
+        "--out",
+        imported_path.to_str().unwrap(),
+    ]);
+    assert!(!refused.status.success());
+    assert!(stderr(&refused).contains("refusing to overwrite"));
+    assert_eq!(fs::read(&imported_path).unwrap(), b"do not overwrite\n");
+
+    let unknown = run([
+        "import",
+        "crowdanki",
+        export_dir.to_str().unwrap(),
+        "--accept-suggested-ids",
+        "--out",
+        imported_path.to_str().unwrap(),
+        "--bogus",
+    ]);
+    assert!(!unknown.status.success());
+    assert!(stderr(&unknown).contains("unexpected import argument"));
+    assert_eq!(fs::read(&imported_path).unwrap(), b"do not overwrite\n");
+
+    let forced = run([
+        "import",
+        "crowdanki",
+        export_dir.to_str().unwrap(),
+        "--accept-suggested-ids",
+        "--force",
+        "--out",
+        imported_path.to_str().unwrap(),
+    ]);
+    assert!(forced.status.success(), "stderr: {}", stderr(&forced));
+    assert!(
+        fs::read_to_string(&imported_path)
+            .unwrap()
+            .contains("id: deck.ultimate-geography")
+    );
+    assert!(
+        fs::read_dir(dir.join(".brainbrew-transactions"))
+            .unwrap()
+            .all(|entry| !entry.unwrap().file_type().unwrap().is_dir()),
+        "completed import left a pending journal"
+    );
+}
+
+#[test]
+fn import_force_backup_interruption_is_recovered_before_retry() {
+    let dir = temp_dir("crowdanki-import-recovery");
+    let export_dir = dir.join("crowdanki");
+    let output_path = dir.join("imported.yaml");
+    fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML).unwrap();
+    let export = run([
+        "export",
+        "crowdanki",
+        dir.join("deck.yaml").to_str().unwrap(),
+        "--out",
+        export_dir.to_str().unwrap(),
+    ]);
+    assert!(export.status.success(), "stderr: {}", stderr(&export));
+    fs::write(&output_path, b"original import output\n").unwrap();
+
+    let interrupted = run_with_env(
+        [
+            "import",
+            "crowdanki",
+            export_dir.to_str().unwrap(),
+            "--accept-suggested-ids",
+            "--force",
+            "--out",
+            output_path.to_str().unwrap(),
+        ],
+        &[
+            ("BRAINBREW_TRANSACTION_FAIL_POINT", "backup:0"),
+            ("BRAINBREW_TRANSACTION_FAIL_MODE", "crash"),
+        ],
+    );
+    assert!(!interrupted.status.success());
+    assert_eq!(fs::read(&output_path).unwrap(), b"original import output\n");
+
+    let retry = run([
+        "import",
+        "crowdanki",
+        export_dir.to_str().unwrap(),
+        "--accept-suggested-ids",
+        "--force",
+        "--out",
+        output_path.to_str().unwrap(),
+    ]);
+    assert!(retry.status.success(), "stderr: {}", stderr(&retry));
+    assert!(
+        fs::read_to_string(output_path)
+            .unwrap()
+            .contains("id: deck.ultimate-geography")
+    );
+}
+
+#[test]
 fn export_and_import_crowdanki_deck_folder() {
     let dir = temp_dir("crowdanki-roundtrip");
     let deck_path = dir.join("deck.yaml");
@@ -6142,7 +6507,15 @@ fn post_json(url: &str, body: serde_json::Value) -> serde_json::Value {
     let response = ureq::post(url)
         .set("content-type", "application/json")
         .send_string(&body.to_string())
-        .expect("POST succeeds");
+        .unwrap_or_else(|error| match error {
+            ureq::Error::Status(status, response) => {
+                panic!(
+                    "POST failed with {status}: {}",
+                    response.into_string().unwrap()
+                )
+            }
+            other => panic!("POST failed: {other}"),
+        });
     assert_eq!(response.status(), 200);
     serde_json::from_str(&response.into_string().unwrap()).expect("response is JSON")
 }

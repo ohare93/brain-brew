@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{self, File, OpenOptions};
+use std::fs;
 use std::io::{self, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -14,16 +14,21 @@ use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use brain_brew_core::{
-    CanonicalDeck, CardTemplate, Note, NoteType, Overlay, OverlayKind, StableId, StaleTranslation,
+    CanonicalDeck, CardTemplate, Note, NoteType, Overlay, OverlayKind, StableId,
     TranslationCoverageCategory, TranslationCoverageEntry, TranslationDictionary,
     validate_deck_content,
 };
+use brain_brew_formats::canonical_source_document::CanonicalScalarTarget;
 use brain_brew_formats::manifest::{
     self, BuildTarget, FederatedDeckManifest, LanguageManifestEntry, MetadataCategory,
     OverlayManifestEntry, TargetExports,
 };
+use brain_brew_formats::overlay_source_document::{
+    OverlaySourceDocument, SourceTranslationImpact, TranslationDecision,
+};
 use brain_brew_formats::safe_relative_path::SafeRelativePath;
-use brain_brew_formats::{canonical_yaml, strict_yaml};
+use brain_brew_formats::source_document::{EditLocation, SourceDocumentEmission};
+use brain_brew_formats::{canonical_yaml, media};
 use include_dir::{Dir, include_dir};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -34,12 +39,14 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use crate::commands::translation_overlay::compose_lenient_translation_overlay;
 use crate::help;
-use crate::io::{manifest_root, read_manifest};
+use crate::io::{canonical_source_document, manifest_root, overlay_source_document, read_manifest};
 use crate::media_ownership::MediaRootSelections;
 use crate::path_authorization::PathAuthorizer;
 use crate::planner::{
-    ManifestRegistry, MediaDeclarationProvenance, PlannedOverlay, plan_manifest_target,
+    ManifestRegistry, MediaDeclarationProvenance, PlannedOverlay, RegistrySourceKind,
+    SourceProvenance as PlannedSourceProvenance, plan_manifest_target,
 };
+use crate::workspace_mutation::{PlannedWorkspaceFile, commit_workspace_files, recover_workspace};
 
 static EMBEDDED_WORKBENCH_ASSETS: Dir<'static> =
     include_dir!("$CARGO_MANIFEST_DIR/assets/workbench");
@@ -170,6 +177,9 @@ fn serve_sync(args: ServeArgs) -> Result<(), String> {
 }
 
 async fn serve(args: ServeArgs) -> Result<(), String> {
+    if args.enable_write {
+        recover_workspace(&manifest_root(&args.manifest_path))?;
+    }
     let manifest = read_manifest(&args.manifest_path)?;
     let metadata = Arc::new(WorkspaceMetadata::load(
         &args.manifest_path,
@@ -403,6 +413,7 @@ where
 }
 
 fn workbench_api_error(error: String) -> (StatusCode, String) {
+    eprintln!("Workbench API error: {error}");
     let status = if error.starts_with("invalid ")
         || error.starts_with("missing ")
         || error.starts_with("no ")
@@ -641,9 +652,9 @@ impl WorkspaceMetadata {
                 "development_build": cfg!(feature = "workbench-write-dev"),
                 "runtime_opt_in": self.write_enabled,
                 "warning": if self.write_enabled {
-                    "UNSAFE DEVELOPMENT MODE: Workbench writes can overwrite stale edits, partially commit, or produce non-canonical source. Do not use on irreplaceable work."
+                    "DEVELOPMENT WRITE MODE: source-document and recoverable transaction guards are enabled, but complete request CAS, preview binding, and security gates remain incomplete. Do not use on irreplaceable work."
                 } else {
-                    "Workbench is read-only while source mutation, complete compare-and-swap fingerprints, bound preview confirmation, recoverable transactions, and applicable security gates are incomplete."
+                    "Workbench is read-only while complete compare-and-swap fingerprints, bound preview confirmation, and applicable security gates are incomplete."
                 },
             },
         }))
@@ -861,6 +872,7 @@ impl WorkspaceMetadata {
 
     fn create_new_language_json(&self, request: NewLanguageRequest) -> Result<Value, String> {
         let _apply_guard = self.lock_apply()?;
+        recover_workspace(&self.manifest_root)?;
         let manifest = self.current_manifest()?;
         let (updated, overlay_writes) =
             apply_new_language_request(&self.manifest_root, &manifest, &request)?;
@@ -869,7 +881,6 @@ impl WorkspaceMetadata {
             .map_err(|error| format!("invalid generated manifest: {error}"))?;
 
         let mut writes = Vec::new();
-        let mut overlay_write_targets = Vec::new();
         for (relative_path, overlay) in overlay_writes {
             let path = PathAuthorizer::new("workspace", &self.manifest_root)?
                 .authorize_create(
@@ -879,27 +890,45 @@ impl WorkspaceMetadata {
                 )
                 .map_err(|error| error.to_string())?
                 .into_path_buf();
-            let overlay_yaml = canonical_yaml::overlay_to_string(&overlay)
-                .map_err(|error| format!("invalid generated overlay {relative_path}: {error}"))?;
-            canonical_yaml::overlay_from_str(&overlay_yaml)
-                .map_err(|error| format!("invalid generated overlay {relative_path}: {error}"))?;
-            overlay_write_targets.push(AtomicFileWrite::text(path, relative_path, overlay_yaml));
-        }
-        for write in &overlay_write_targets {
-            if write.path.exists() {
+            if path.exists() {
                 return Err(format!(
                     "invalid new language overlay file already exists: {}",
-                    write.path.display()
+                    path.display()
                 ));
             }
+            let provenance = brain_brew_formats::source_document::SourceProvenance::new(
+                path.display().to_string(),
+            )
+            .with_source_root(self.manifest_root.display().to_string());
+            let emission = OverlaySourceDocument::from_overlay(provenance, overlay)
+                .and_then(|document| document.emit())
+                .map_err(|error| format!("invalid generated overlay {relative_path}: {error}"))?;
+            let replacement = emission.root().text().as_bytes().to_vec();
+            writes.push(PlannedWorkspaceFile::validated_new(
+                path,
+                replacement,
+                |bytes| {
+                    let text = std::str::from_utf8(bytes).map_err(|error| error.to_string())?;
+                    canonical_yaml::overlay_from_str(text)
+                        .map(|_| ())
+                        .map_err(|error| error.to_string())
+                },
+            )?);
         }
-        writes.extend(overlay_write_targets);
-        writes.push(AtomicFileWrite::text(
+        let manifest_original = fs::read(&self.manifest_path)
+            .map_err(|error| format!("{}: {error}", self.manifest_path.display()))?;
+        writes.push(PlannedWorkspaceFile::validated(
             self.manifest_path.clone(),
-            workspace_path(&self.manifest_root, &self.manifest_path),
-            manifest_yaml,
-        ));
-        write_files_atomically(&writes)?;
+            manifest_original,
+            manifest_yaml.into_bytes(),
+            |bytes| {
+                let text = std::str::from_utf8(bytes).map_err(|error| error.to_string())?;
+                manifest::from_str(text)
+                    .map(|_| ())
+                    .map_err(|error| error.to_string())
+            },
+        )?);
+        commit_workspace_files(&self.manifest_root, writes)?;
         self.invalidate_workspace_cache_after_write()?;
 
         Ok(json!({
@@ -915,6 +944,9 @@ impl WorkspaceMetadata {
         } else {
             None
         };
+        if mode == ApplyMode::Write {
+            recover_workspace(&self.manifest_root)?;
+        }
         let manifest = self.current_manifest()?;
         let context = self.selected_translation_context(
             &manifest,
@@ -959,21 +991,26 @@ impl WorkspaceMetadata {
                 .push(edit.clone());
         }
 
-        let mut primary_overlay = read_overlay_for_rewrite(&context.selection.overlay_file)?;
+        let primary_planned = planned_overlay_for_path(&context, &context.selection.overlay_file)?;
+        ensure_root_source_mutable("Workbench translation edit", &primary_planned.source)?;
+        for include in &primary_planned.includes {
+            ensure_root_source_mutable("Workbench included overlay edit", include)?;
+        }
+        let mut primary_overlay_document = read_overlay_document(&context.selection.overlay_file)?;
+        let mut primary_overlay = primary_overlay_document.resolved_overlay().clone();
         let mut modified_base = context.base_deck.clone();
-        let base_file = PathAuthorizer::new("workspace", &self.manifest_root)?
-            .authorize_read(&self.manifest_path, "base", &manifest.base)
-            .map_err(|error| error.to_string())?
-            .into_path_buf();
+        let base_file = context.base_source.path.clone();
         let mut source_plan = apply_staged_source_edits(
             &mut modified_base,
             &mut primary_overlay,
+            &mut primary_overlay_document,
             &source_edits,
             &context,
             &base_file,
             &self.manifest_root,
         )?;
 
+        let mut validation_contexts = vec![context.clone()];
         let mut changes = Vec::new();
         for change in std::mem::take(&mut source_plan.changed_entries) {
             let file = if change["mode"] == "source" {
@@ -991,12 +1028,14 @@ impl WorkspaceMetadata {
 
         let mut validation_errors =
             validate_modified_base_and_overlay(&context, &modified_base, &primary_overlay).errors;
-        let mut overlay_writes = BTreeMap::<PathBuf, (String, Overlay, bool)>::new();
+        let mut overlay_writes =
+            BTreeMap::<PathBuf, (String, OverlaySourceDocument, Overlay, bool)>::new();
         if source_plan.overlay_changed {
             overlay_writes.insert(
                 context.selection.overlay_file.clone(),
                 (
                     context.selection.overlay_display_file.clone(),
+                    primary_overlay_document.clone(),
                     primary_overlay.clone(),
                     true,
                 ),
@@ -1004,11 +1043,20 @@ impl WorkspaceMetadata {
         }
 
         for (_, (group_context, translation_edits)) in translation_groups {
-            let mut overlay =
+            validation_contexts.push(group_context.clone());
+            let planned =
+                planned_overlay_for_path(&group_context, &group_context.selection.overlay_file)?;
+            ensure_root_source_mutable("Workbench translation edit", &planned.source)?;
+            for include in &planned.includes {
+                ensure_root_source_mutable("Workbench included overlay edit", include)?;
+            }
+            let (mut document, mut overlay) =
                 if group_context.selection.overlay_file == context.selection.overlay_file {
-                    primary_overlay.clone()
+                    (primary_overlay_document.clone(), primary_overlay.clone())
                 } else {
-                    read_overlay_for_rewrite(&group_context.selection.overlay_file)?
+                    let document = read_overlay_document(&group_context.selection.overlay_file)?;
+                    let overlay = document.resolved_overlay().clone();
+                    (document, overlay)
                 };
             let context_after_source = context_with_modified_base_and_overlay(
                 &group_context,
@@ -1017,6 +1065,7 @@ impl WorkspaceMetadata {
             )?;
             let group_changes = apply_staged_edits_to_overlay(
                 &mut overlay,
+                &mut document,
                 &translation_edits,
                 &context_after_source,
             )?;
@@ -1035,6 +1084,7 @@ impl WorkspaceMetadata {
                 group_context.selection.overlay_file.clone(),
                 (
                     group_context.selection.overlay_display_file.clone(),
+                    document,
                     overlay,
                     !translation_edits.is_empty(),
                 ),
@@ -1044,38 +1094,36 @@ impl WorkspaceMetadata {
         if changes.is_empty() {
             return Err("missing staged edits".to_owned());
         }
+        let mut outputs = source_plan.outputs.clone();
+        for (display_file, document, _overlay, changed) in overlay_writes.values() {
+            if !changed {
+                continue;
+            }
+            collect_document_emission(
+                document.emit().map_err(|error| {
+                    format!("invalid generated translation overlay {display_file}: {error}")
+                })?,
+                &mut outputs,
+            )?;
+        }
+        if let Err(error) = validate_complete_workbench_result(
+            &modified_base,
+            &overlay_writes,
+            &validation_contexts,
+        ) {
+            validation_errors.push(error);
+        }
         if mode == ApplyMode::Write && !validation_errors.is_empty() {
             return Err("validation failed; preview before applying".to_owned());
         }
         if mode == ApplyMode::Write {
-            let mut writes = source_apply_writes(
-                &source_plan,
-                &modified_base,
-                &base_file,
-                &self.manifest_root,
-            )?;
-            for (path, (display_file, overlay, changed)) in &overlay_writes {
-                if !changed {
-                    continue;
-                }
-                let overlay_yaml = canonical_yaml::overlay_to_string(overlay).map_err(|error| {
-                    format!("invalid generated translation overlay {display_file}: {error}")
-                })?;
-                canonical_yaml::overlay_from_str(&overlay_yaml).map_err(|error| {
-                    format!("invalid generated translation overlay {display_file}: {error}")
-                })?;
-                writes.push(AtomicFileWrite::text(
-                    path.clone(),
-                    display_file.clone(),
-                    overlay_yaml,
-                ));
-            }
-            write_files_atomically(&writes)?;
+            let writes = planned_workbench_outputs(&self.manifest_root, outputs)?;
+            commit_workspace_files(&self.manifest_root, writes)?;
             self.invalidate_workspace_cache_after_write()?;
         }
 
         let mut affected_files = source_plan.affected_files_json(&self.manifest_root);
-        for (path, (display_file, _overlay, changed)) in &overlay_writes {
+        for (path, (display_file, _document, _overlay, changed)) in &overlay_writes {
             if *changed {
                 push_unique_affected_file(
                     &mut affected_files,
@@ -1344,6 +1392,8 @@ impl WorkspaceMetadata {
                 ..selection
             },
             base_deck: plan.base,
+            base_source: plan.base_source,
+            base_includes: plan.base_includes,
             plan_overlays: plan.overlays,
             media_declarations: plan.media_declarations,
             source_deck,
@@ -1833,6 +1883,8 @@ struct OverlayBadge {
 struct SelectedTranslationContext {
     selection: WorkbenchSelection,
     base_deck: CanonicalDeck,
+    base_source: PlannedSourceProvenance,
+    base_includes: Vec<PlannedSourceProvenance>,
     plan_overlays: Vec<(PlannedOverlay, Overlay)>,
     media_declarations: BTreeMap<String, MediaDeclarationProvenance>,
     source_deck: CanonicalDeck,
@@ -3917,238 +3969,49 @@ fn media_content_type(path: &str) -> &'static str {
     }
 }
 
-fn read_overlay_for_rewrite(path: &Path) -> Result<Overlay, String> {
+fn read_overlay_document(path: &Path) -> Result<OverlaySourceDocument, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    canonical_yaml::overlay_from_str(&input).map_err(|error| error.to_string())
+    overlay_source_document(path, &input)
 }
 
-#[derive(Clone, Debug)]
-struct AtomicFileWrite {
-    path: PathBuf,
-    display_path: String,
-    contents: Vec<u8>,
-}
-
-impl AtomicFileWrite {
-    fn text(path: PathBuf, display_path: impl Into<String>, contents: String) -> Self {
-        Self {
-            path,
-            display_path: display_path.into(),
-            contents: contents.into_bytes(),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct PreparedAtomicWrite<'a> {
-    write: &'a AtomicFileWrite,
-    temp_path: PathBuf,
-}
-
-fn write_files_atomically(writes: &[AtomicFileWrite]) -> Result<(), String> {
-    if writes.is_empty() {
-        return Ok(());
-    }
-    validate_atomic_write_batch(writes)?;
-    for index in 0..writes.len() {
-        maybe_fail_atomic_write_hook("validate", index)?;
-    }
-    atomic_write_trace("transaction_begin", None, None);
-
-    let result = write_files_atomically_inner(writes);
-    atomic_write_trace("transaction_end", None, None);
-    result
-}
-
-fn write_files_atomically_inner(writes: &[AtomicFileWrite]) -> Result<(), String> {
-    let mut prepared = Vec::new();
-    for (index, write) in writes.iter().enumerate() {
-        maybe_fail_atomic_write_hook("temp", index)?;
-        let parent = write.path.parent().ok_or_else(|| {
-            format!(
-                "failed to prepare {}: target has no parent directory",
-                write.display_path
-            )
-        })?;
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
-        let temp_path = atomic_temp_path(&write.path, index)?;
-        atomic_write_trace("temp_write", Some(write), Some(&temp_path));
-        let mut temp = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp_path)
-            .map_err(|error| {
-                format!(
-                    "failed to create temporary file for {} at {}: {error}",
-                    write.display_path,
-                    temp_path.display()
-                )
-            })?;
-        temp.write_all(&write.contents).map_err(|error| {
-            format!(
-                "failed to write temporary file for {} at {}: {error}",
-                write.display_path,
-                temp_path.display()
-            )
-        })?;
-        temp.sync_all().map_err(|error| {
-            format!(
-                "failed to fsync temporary file for {} at {}: {error}",
-                write.display_path,
-                temp_path.display()
-            )
-        })?;
-        drop(temp);
-        fsync_directory(parent)?;
-        prepared.push(PreparedAtomicWrite { write, temp_path });
-    }
-
-    let mut updated = Vec::<String>::new();
-    for (index, prepared_write) in prepared.iter().enumerate() {
-        if let Err(error) = maybe_fail_atomic_write_hook("rename", index) {
-            return Err(rename_phase_error(error, &updated, &prepared[index..]));
-        }
-        atomic_write_trace(
-            "rename",
-            Some(prepared_write.write),
-            Some(&prepared_write.temp_path),
-        );
-        if let Err(error) = fs::rename(&prepared_write.temp_path, &prepared_write.write.path) {
-            return Err(rename_phase_error(
-                format!(
-                    "failed to rename {} over {}: {error}",
-                    prepared_write.temp_path.display(),
-                    prepared_write.write.display_path
-                ),
-                &updated,
-                &prepared[index..],
-            ));
-        }
-        if let Some(parent) = prepared_write.write.path.parent() {
-            fsync_directory(parent)?;
-        }
-        updated.push(prepared_write.write.display_path.clone());
-    }
-    Ok(())
-}
-
-fn validate_atomic_write_batch(writes: &[AtomicFileWrite]) -> Result<(), String> {
-    let mut seen = BTreeSet::new();
-    for write in writes {
-        if write.path.as_os_str().is_empty() {
-            return Err("invalid atomic write target: empty path".to_owned());
-        }
-        if !seen.insert(write.path.clone()) {
-            return Err(format!(
-                "invalid atomic write batch: duplicate target {}",
-                write.path.display()
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn atomic_temp_path(path: &Path, index: usize) -> Result<PathBuf, String> {
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| format!("invalid atomic write target {}", path.display()))?;
-    let suffix = format!(
-        ".brainbrew-tmp-{}-{}-{index}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_nanos())
-            .unwrap_or_default()
-    );
-    Ok(path.with_file_name(format!("{file_name}{suffix}")))
-}
-
-fn fsync_directory(path: &Path) -> Result<(), String> {
-    File::open(path)
-        .and_then(|directory| directory.sync_all())
-        .map_err(|error| format!("failed to fsync directory {}: {error}", path.display()))
-}
-
-fn rename_phase_error(
-    cause: String,
-    updated: &[String],
-    not_updated_writes: &[PreparedAtomicWrite<'_>],
-) -> String {
-    let not_updated = not_updated_writes
-        .iter()
-        .map(|write| write.write.display_path.clone())
-        .collect::<Vec<_>>();
-    format!(
-        "atomic write rename phase failed: {cause}; updated files: {}; not updated files: {}",
-        format_file_list(updated),
-        format_file_list(&not_updated),
-    )
-}
-
-fn format_file_list(files: &[String]) -> String {
-    if files.is_empty() {
-        "(none)".to_owned()
+fn ensure_root_source_mutable(
+    operation: &str,
+    source: &PlannedSourceProvenance,
+) -> Result<(), String> {
+    if source.registry_source == RegistrySourceKind::RootManifest {
+        Ok(())
     } else {
-        files.join(", ")
+        Err(format!(
+            "{operation} is read-only for {} source {} at {}; dependency/include/locked/cache sources cannot be selected for Workbench mutation",
+            source.registry_source.ownership_name(),
+            match source.kind {
+                crate::planner::PlanSourceKind::Base => "base",
+                crate::planner::PlanSourceKind::Overlay { .. } => "overlay",
+                crate::planner::PlanSourceKind::ScalarInclude { .. } => "scalar include",
+                crate::planner::PlanSourceKind::MediaInclude => "media include",
+            },
+            source.path.display()
+        ))
     }
 }
 
-fn maybe_fail_atomic_write_hook(phase: &str, index: usize) -> Result<(), String> {
-    let env_name = match phase {
-        "validate" => "BRAINBREW_ATOMIC_WRITE_FAIL_VALIDATE_INDEX",
-        "temp" => "BRAINBREW_ATOMIC_WRITE_FAIL_TEMP_INDEX",
-        "rename" => "BRAINBREW_ATOMIC_WRITE_FAIL_RENAME_INDEX",
-        _ => return Ok(()),
-    };
-    if std::env::var(env_name)
-        .ok()
-        .and_then(|value| value.parse::<usize>().ok())
-        == Some(index)
-    {
-        return Err(format!(
-            "injected atomic write {phase} failure at write index {index}"
-        ));
-    }
-    if phase == "rename"
-        && let Ok(value) = std::env::var("BRAINBREW_ATOMIC_WRITE_SLEEP_BEFORE_RENAME_MS")
-        && let Ok(milliseconds) = value.parse::<u64>()
-        && milliseconds > 0
-    {
-        std::thread::sleep(std::time::Duration::from_millis(milliseconds));
-    }
-    Ok(())
-}
-
-fn atomic_write_trace(event: &str, write: Option<&AtomicFileWrite>, temp_path: Option<&Path>) {
-    let Ok(trace_path) = std::env::var("BRAINBREW_ATOMIC_WRITE_TRACE") else {
-        return;
-    };
-    let mut line = event.to_owned();
-    if let Some(write) = write {
-        line.push(' ');
-        line.push_str(&write.display_path);
-    }
-    if let Some(temp_path) = temp_path {
-        line.push_str(" temp=");
-        line.push_str(&temp_path.display().to_string());
-    }
-    line.push('\n');
-    let _ = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(trace_path)
-        .and_then(|mut file| file.write_all(line.as_bytes()));
+fn planned_overlay_for_path<'a>(
+    context: &'a SelectedTranslationContext,
+    path: &Path,
+) -> Result<&'a PlannedOverlay, String> {
+    context
+        .plan_overlays
+        .iter()
+        .map(|(planned, _)| planned)
+        .find(|planned| planned.file == path)
+        .ok_or_else(|| format!("no planned overlay owns {}", path.display()))
 }
 
 #[derive(Default)]
 struct SourceApplyPlan {
     changed_entries: Vec<Value>,
     overlay_changed: bool,
-    deck_file_changed: bool,
-    deck_yaml_output: Option<String>,
-    include_writes: BTreeMap<PathBuf, String>,
+    outputs: BTreeMap<PathBuf, Vec<u8>>,
     affected_files: BTreeMap<PathBuf, String>,
 }
 
@@ -4169,6 +4032,7 @@ impl SourceApplyPlan {
 fn apply_staged_source_edits(
     modified_base: &mut CanonicalDeck,
     overlay: &mut Overlay,
+    overlay_document: &mut OverlaySourceDocument,
     edits: &[StagedWorkbenchEdit],
     context: &SelectedTranslationContext,
     base_file: &Path,
@@ -4179,24 +4043,13 @@ fn apply_staged_source_edits(
         return Ok(plan);
     }
 
+    ensure_root_source_mutable("Workbench source edit", &context.base_source)?;
+    for include in &context.base_includes {
+        ensure_root_source_mutable("Workbench included source edit", include)?;
+    }
     let raw_deck_yaml = fs::read_to_string(base_file)
         .map_err(|error| format!("{}: {error}", base_file.display()))?;
-    let raw_has_includes = raw_deck_yaml.contains("!include");
-    let mut raw_deck_value = if raw_has_includes {
-        strict_yaml::reject_duplicate_keys(&raw_deck_yaml)
-            .map_err(|error| format!("{}: {error}", base_file.display()))?;
-        Some(
-            serde_yaml::from_str::<serde_yaml::Value>(&raw_deck_yaml).map_err(|error| {
-                format!(
-                    "failed to parse {} while preserving includes: {error}",
-                    base_file.display()
-                )
-            })?,
-        )
-    } else {
-        None
-    };
-
+    let mut document = canonical_source_document(base_file, &raw_deck_yaml)?;
     let rows = main_field_rows(
         &context.source_deck,
         &context.selection,
@@ -4206,7 +4059,6 @@ fn apply_staged_source_edits(
         .iter()
         .map(|row| (row.path.clone(), row.clone()))
         .collect::<BTreeMap<_, _>>();
-    let mut changed_paths = BTreeSet::new();
 
     for edit in edits {
         if !edit.path.starts_with("notes.") || !edit.path.contains(".fields.") {
@@ -4247,28 +4099,26 @@ fn apply_staged_source_edits(
             .any(|row| row.source == edit.source && !target_path_set.contains(row.path.as_str()));
 
         for row in &target_rows {
+            let (note_id, field_id) = note_field_path(&row.path)?;
+            let location = document
+                .set_scalar(
+                    CanonicalScalarTarget::NoteField {
+                        note_id: StableId::new(note_id).map_err(|error| error.to_string())?,
+                        field_id: StableId::new(field_id).map_err(|error| error.to_string())?,
+                    },
+                    &edit.source,
+                    &edit.value,
+                )
+                .map_err(|error| error.to_string())?;
             set_deck_note_field(modified_base, &row.path, &edit.source, &edit.value)?;
-            changed_paths.insert(row.path.clone());
-            if let Some(raw_deck_value) = raw_deck_value.as_mut() {
-                match deck_field_include_path(raw_deck_value, &row.path)? {
-                    Some(include_path) => {
-                        let resolved =
-                            resolve_workbench_include_path(manifest_root, &include_path)?;
-                        plan.include_writes.insert(resolved, edit.value.clone());
-                    }
-                    None => {
-                        set_deck_field_yaml_scalar(
-                            raw_deck_value,
-                            &row.path,
-                            &edit.source,
-                            &edit.value,
-                        )?;
-                        plan.deck_file_changed = true;
-                    }
-                }
-            } else {
-                plan.deck_file_changed = true;
-            }
+            let changed_path = match location {
+                EditLocation::Root => base_file.to_path_buf(),
+                EditLocation::Included(provenance) => PathBuf::from(provenance.source_name()),
+            };
+            plan.affected_files.insert(
+                changed_path.clone(),
+                workspace_path(manifest_root, &changed_path),
+            );
             plan.changed_entries.push(json!({
                 "mode": "source",
                 "path": row.path,
@@ -4281,6 +4131,7 @@ fn apply_staged_source_edits(
 
         plan.overlay_changed |= apply_source_translation_impact(
             overlay,
+            overlay_document,
             edit,
             &target_rows,
             old_source_remains,
@@ -4289,31 +4140,18 @@ fn apply_staged_source_edits(
         )?;
     }
 
-    if plan.deck_file_changed {
-        plan.affected_files.insert(
-            base_file.to_path_buf(),
-            workspace_path(manifest_root, base_file),
-        );
-    }
-    for path in plan.include_writes.keys() {
-        plan.affected_files
-            .insert(path.clone(), workspace_path(manifest_root, path));
-    }
-    if let Some(raw_deck_value) = raw_deck_value
-        && plan.deck_file_changed
-    {
-        plan.deck_yaml_output = Some(serde_yaml::to_string(&raw_deck_value).map_err(|error| {
-            format!(
-                "failed to serialize {} while preserving includes: {error}",
-                base_file.display()
-            )
-        })?);
-    }
+    collect_document_emission(
+        document.emit().map_err(|error| error.to_string())?,
+        &mut plan.outputs,
+    )?;
+    plan.outputs
+        .retain(|path, _| plan.affected_files.contains_key(path));
     Ok(plan)
 }
 
 fn apply_source_translation_impact(
     overlay: &mut Overlay,
+    document: &mut OverlaySourceDocument,
     edit: &StagedWorkbenchEdit,
     target_rows: &[MainFieldRow],
     old_source_remains: bool,
@@ -4354,7 +4192,6 @@ fn apply_source_translation_impact(
     } else {
         target_rows.to_vec()
     };
-    let translations = overlay.translations.get_or_insert_with(Default::default);
     for row in impact_rows {
         let Some(target) = target_text_for_source_impact(&row) else {
             continue;
@@ -4364,67 +4201,39 @@ fn apply_source_translation_impact(
         } else {
             Some(contextual_path_for_row(&row, &context.report.entries))
         };
-        match edit.impact_action {
-            SourceImpactAction::StaleTranslation => {
-                if context_path.is_none() {
-                    translations.direct.remove(&edit.source);
-                    translations.no_change.remove(&edit.source);
-                    remove_contextual_source_everywhere(translations, &edit.source);
-                } else {
-                    remove_contextual_source_for_path(translations, &row.path, &edit.source);
-                }
-                upsert_stale_translation(
-                    translations,
-                    StaleTranslation {
-                        old_source: edit.source.clone(),
-                        new_source: edit.value.clone(),
-                        target: target.clone(),
-                        context: context_path.clone(),
-                    },
-                );
-                changed_entries.push(json!({
-                    "mode": "stale_translation",
-                    "path": row.path,
-                    "old_source": edit.source,
-                    "new_source": edit.value,
-                    "target": target,
-                    "context": context_path,
-                    "impact_action": "stale_translation",
-                    "available_impact_actions": ["stale_translation", "migrate_key"],
-                }));
-                changed = true;
-            }
-            SourceImpactAction::MigrateKey => {
-                if let Some(context_path) = &context_path {
-                    remove_contextual_source_for_path(translations, &row.path, &edit.source);
-                    translations
-                        .contextual
-                        .entry(context_path.clone())
-                        .or_default()
-                        .insert(edit.value.clone(), target.clone());
-                    remove_stale_translations_for_path_source(translations, &row.path, &edit.value);
-                } else {
-                    translations.direct.remove(&edit.source);
-                    translations.no_change.remove(&edit.source);
-                    remove_contextual_source_everywhere(translations, &edit.source);
-                    translations
-                        .direct
-                        .insert(edit.value.clone(), target.clone());
-                    remove_stale_translations_for_path_source(translations, &row.path, &edit.value);
-                }
-                changed_entries.push(json!({
-                    "mode": "migrate_key",
-                    "path": row.path,
-                    "old_source": edit.source,
-                    "new_source": edit.value,
-                    "target": target,
-                    "context": context_path,
-                    "impact_action": "migrate_key",
-                    "available_impact_actions": ["stale_translation", "migrate_key"],
-                }));
-                changed = true;
-            }
-        }
+        let impact = match edit.impact_action {
+            SourceImpactAction::StaleTranslation => SourceTranslationImpact::MarkStale {
+                target: target.clone(),
+                context: context_path.clone(),
+            },
+            SourceImpactAction::MigrateKey => SourceTranslationImpact::MigrateKey {
+                target: target.clone(),
+                context: context_path.clone(),
+            },
+        };
+        document
+            .apply_source_translation_impact(&row.path, &edit.source, &edit.value, impact)
+            .map_err(|error| error.to_string())?;
+        changed_entries.push(json!({
+            "mode": match edit.impact_action {
+                SourceImpactAction::StaleTranslation => "stale_translation",
+                SourceImpactAction::MigrateKey => "migrate_key",
+            },
+            "path": row.path,
+            "old_source": edit.source,
+            "new_source": edit.value,
+            "target": target,
+            "context": context_path,
+            "impact_action": match edit.impact_action {
+                SourceImpactAction::StaleTranslation => "stale_translation",
+                SourceImpactAction::MigrateKey => "migrate_key",
+            },
+            "available_impact_actions": ["stale_translation", "migrate_key"],
+        }));
+        changed = true;
+    }
+    if changed {
+        *overlay = document.resolved_overlay().clone();
     }
     Ok(changed)
 }
@@ -4436,32 +4245,6 @@ fn target_text_for_source_impact(row: &MainFieldRow) -> Option<String> {
         | TranslationCoverageCategory::NoChange
         | TranslationCoverageCategory::StaleTranslation => Some(row.translated.clone()),
         _ => None,
-    }
-}
-
-fn upsert_stale_translation(translations: &mut TranslationDictionary, record: StaleTranslation) {
-    translations.stale_translations.retain(|existing| {
-        !(existing.old_source == record.old_source
-            && existing.new_source == record.new_source
-            && existing.context == record.context)
-    });
-    translations.stale_translations.push(record);
-}
-
-fn remove_contextual_source_everywhere(translations: &mut TranslationDictionary, source: &str) {
-    let contexts = translations
-        .contextual
-        .iter()
-        .filter(|(_, replacements)| replacements.contains_key(source))
-        .map(|(context_path, _)| context_path.clone())
-        .collect::<Vec<_>>();
-    for context_path in contexts {
-        if let Some(replacements) = translations.contextual.get_mut(&context_path) {
-            replacements.remove(source);
-            if replacements.is_empty() {
-                translations.contextual.remove(&context_path);
-            }
-        }
     }
 }
 
@@ -4502,138 +4285,128 @@ fn note_field_path(path: &str) -> Result<(&str, &str), String> {
     Ok((note_id, field_id))
 }
 
-fn deck_field_include_path(
-    value: &serde_yaml::Value,
-    path: &str,
-) -> Result<Option<String>, String> {
-    let field = deck_field_yaml_value(value, path)?;
-    match field {
-        serde_yaml::Value::Tagged(tagged) if tagged.tag == "include" => match &tagged.value {
-            serde_yaml::Value::String(path) => Ok(Some(path.clone())),
-            _ => Err(format!("invalid !include at {path}: path must be a string")),
-        },
-        _ => Ok(None),
-    }
-}
-
-fn set_deck_field_yaml_scalar(
-    value: &mut serde_yaml::Value,
-    path: &str,
-    expected_source: &str,
-    new_value: &str,
+fn collect_document_emission(
+    emission: SourceDocumentEmission,
+    outputs: &mut BTreeMap<PathBuf, Vec<u8>>,
 ) -> Result<(), String> {
-    let field = deck_field_yaml_value_mut(value, path)?;
-    match field {
-        serde_yaml::Value::String(current) if current == expected_source => {
-            *current = new_value.to_owned();
-            Ok(())
-        }
-        serde_yaml::Value::String(current) => Err(format!(
-            "invalid source {:?} for {}; expected YAML value {:?}",
-            expected_source, path, current
-        )),
-        serde_yaml::Value::Tagged(tagged) if tagged.tag == "include" => Ok(()),
-        _ => Err(format!(
-            "source edit path {path:?} is not a scalar note field in deck YAML"
-        )),
+    collect_document_source(emission.root(), outputs)?;
+    for source in emission.included() {
+        collect_document_source(source, outputs)?;
     }
+    Ok(())
 }
 
-fn deck_field_yaml_value<'a>(
-    value: &'a serde_yaml::Value,
-    path: &str,
-) -> Result<&'a serde_yaml::Value, String> {
-    let (note_id, field_id) = note_field_path(path)?;
-    yaml_mapping_get(value, "notes")
-        .and_then(|notes| yaml_mapping_get(notes, note_id))
-        .and_then(|note| yaml_mapping_get(note, "fields"))
-        .and_then(|fields| yaml_mapping_get(fields, field_id))
-        .ok_or_else(|| format!("source edit path {path:?} is not present in deck YAML"))
+fn collect_document_source(
+    source: &brain_brew_formats::source_document::SourceFile,
+    outputs: &mut BTreeMap<PathBuf, Vec<u8>>,
+) -> Result<(), String> {
+    let path = PathBuf::from(source.provenance().source_name());
+    let bytes = source.text().as_bytes().to_vec();
+    if let Some(previous) = outputs.insert(path.clone(), bytes.clone())
+        && previous != bytes
+    {
+        return Err(format!(
+            "conflicting Workbench outputs for {}",
+            path.display()
+        ));
+    }
+    Ok(())
 }
 
-fn deck_field_yaml_value_mut<'a>(
-    value: &'a mut serde_yaml::Value,
-    path: &str,
-) -> Result<&'a mut serde_yaml::Value, String> {
-    let (note_id, field_id) = note_field_path(path)?;
-    yaml_mapping_get_mut(value, "notes")
-        .and_then(|notes| yaml_mapping_get_mut(notes, note_id))
-        .and_then(|note| yaml_mapping_get_mut(note, "fields"))
-        .and_then(|fields| yaml_mapping_get_mut(fields, field_id))
-        .ok_or_else(|| format!("source edit path {path:?} is not present in deck YAML"))
+fn planned_workbench_outputs(
+    workspace_root: &Path,
+    outputs: BTreeMap<PathBuf, Vec<u8>>,
+) -> Result<Vec<PlannedWorkspaceFile>, String> {
+    let canonical_root = fs::canonicalize(workspace_root)
+        .map_err(|error| format!("{}: {error}", workspace_root.display()))?;
+    outputs
+        .into_iter()
+        .map(|(path, replacement)| {
+            let canonical =
+                fs::canonicalize(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+            if !canonical.starts_with(&canonical_root) {
+                return Err(format!(
+                    "Workbench mutation target {} is outside root workspace {}",
+                    canonical.display(),
+                    canonical_root.display()
+                ));
+            }
+            let original = fs::read(&canonical)
+                .map_err(|error| format!("{}: {error}", canonical.display()))?;
+            PlannedWorkspaceFile::validated(canonical, original, replacement, |bytes| {
+                std::str::from_utf8(bytes)
+                    .map(|_| ())
+                    .map_err(|error| error.to_string())
+            })
+        })
+        .collect()
 }
 
-fn yaml_mapping_get<'a>(value: &'a serde_yaml::Value, key: &str) -> Option<&'a serde_yaml::Value> {
-    let serde_yaml::Value::Mapping(mapping) = value else {
-        return None;
-    };
-    mapping.get(serde_yaml::Value::String(key.to_owned()))
-}
-
-fn yaml_mapping_get_mut<'a>(
-    value: &'a mut serde_yaml::Value,
-    key: &str,
-) -> Option<&'a mut serde_yaml::Value> {
-    let serde_yaml::Value::Mapping(mapping) = value else {
-        return None;
-    };
-    mapping.get_mut(serde_yaml::Value::String(key.to_owned()))
-}
-
-fn resolve_workbench_include_path(root: &Path, include_path: &str) -> Result<PathBuf, String> {
-    PathAuthorizer::new("workspace", root)?
-        .authorize_read(&root.join("brainbrew.yaml"), "!include", include_path)
-        .map(|path| path.into_path_buf())
-        .map_err(|error| error.to_string())
-}
-
-fn source_apply_writes(
-    plan: &SourceApplyPlan,
+fn validate_complete_workbench_result(
     modified_base: &CanonicalDeck,
-    base_file: &Path,
-    manifest_root: &Path,
-) -> Result<Vec<AtomicFileWrite>, String> {
-    let mut writes = Vec::new();
-    if plan.deck_file_changed {
-        let output = match &plan.deck_yaml_output {
-            Some(output) => output.clone(),
-            None => canonical_yaml::to_string(modified_base).map_err(|error| error.to_string())?,
-        };
-        if plan.deck_yaml_output.is_some() {
-            strict_yaml::reject_duplicate_keys(&output).map_err(|error| {
+    overlays: &BTreeMap<PathBuf, (String, OverlaySourceDocument, Overlay, bool)>,
+    contexts: &[SelectedTranslationContext],
+) -> Result<(), String> {
+    canonical_yaml::to_string(modified_base).map_err(|error| error.to_string())?;
+    if !modified_base.media.is_empty() {
+        media::validate_references(modified_base).map_err(|error| error.to_string())?;
+    }
+    for (display, document, overlay, changed) in overlays.values() {
+        if !changed {
+            continue;
+        }
+        document
+            .emit()
+            .map_err(|error| format!("invalid generated translation overlay {display}: {error}"))?;
+        canonical_yaml::overlay_to_string(overlay)
+            .map_err(|error| format!("invalid generated translation overlay {display}: {error}"))?;
+    }
+    let mut validated = BTreeSet::new();
+    for context in contexts {
+        if !validated.insert(context.selection.target_id.clone()) {
+            continue;
+        }
+        let mut deck = modified_base.clone();
+        for (planned, original) in &context.plan_overlays {
+            let overlay = overlays
+                .get(&planned.file)
+                .filter(|(_, _, _, changed)| *changed)
+                .map(|(_, _, overlay, _)| overlay)
+                .unwrap_or(original);
+            deck = if overlay.translations.is_some() {
+                compose_lenient_translation_overlay(&deck, overlay)?
+            } else {
+                deck.compose(std::slice::from_ref(overlay)).map_err(|error| {
+                    format!(
+                        "failed to validate complete Workbench target {} at overlay {}: {error}",
+                        context.selection.target_id, planned.id
+                    )
+                })?
+            };
+        }
+        let rendered = deck.render_variables().map_err(|error| {
+            format!(
+                "failed to render complete Workbench target {}: {error}",
+                context.selection.target_id
+            )
+        })?;
+        let content = validate_deck_content(&rendered);
+        if !content.is_empty() {
+            return Err(format!(
+                "content validation failed for complete Workbench target {}: {content}",
+                context.selection.target_id
+            ));
+        }
+        if !deck.media.is_empty() {
+            media::validate_references(&deck).map_err(|error| {
                 format!(
-                    "invalid generated source deck {}: {error}",
-                    base_file.display()
-                )
-            })?;
-            serde_yaml::from_str::<serde_yaml::Value>(&output).map_err(|error| {
-                format!(
-                    "invalid generated source deck {}: {error}",
-                    base_file.display()
-                )
-            })?;
-        } else {
-            canonical_yaml::from_str(&output).map_err(|error| {
-                format!(
-                    "invalid generated source deck {}: {error}",
-                    base_file.display()
+                    "media validation failed for complete Workbench target {}: {error}",
+                    context.selection.target_id
                 )
             })?;
         }
-        writes.push(AtomicFileWrite::text(
-            base_file.to_path_buf(),
-            workspace_path(manifest_root, base_file),
-            output,
-        ));
     }
-    for (path, value) in &plan.include_writes {
-        writes.push(AtomicFileWrite::text(
-            path.clone(),
-            workspace_path(manifest_root, path),
-            value.clone(),
-        ));
-    }
-    Ok(writes)
+    Ok(())
 }
 
 fn push_unique_affected_file(
@@ -4756,11 +4529,11 @@ fn contextual_path_for_edit(
 
 fn apply_staged_edits_to_overlay(
     overlay: &mut Overlay,
+    document: &mut OverlaySourceDocument,
     edits: &[StagedWorkbenchEdit],
     context: &SelectedTranslationContext,
 ) -> Result<Vec<Value>, String> {
     let editable_sources = editable_sources_by_path(context);
-    let translations = overlay.translations.get_or_insert_with(Default::default);
     let mut changed = Vec::new();
     for edit in edits {
         if edit.source.is_empty() {
@@ -4778,14 +4551,19 @@ fn apply_staged_edits_to_overlay(
                 edit.source, edit.path, expected_source
             ));
         }
+        let translations = overlay.translations.as_ref();
         match edit.mode {
             EditMode::Direct => {
-                translations.no_change.remove(&edit.source);
-                remove_contextual_source_for_path(translations, &edit.path, &edit.source);
-                remove_stale_translations_for_path_source(translations, &edit.path, &edit.source);
                 let old = translations
-                    .direct
-                    .insert(edit.source.clone(), edit.value.clone());
+                    .and_then(|dictionary| dictionary.direct.get(&edit.source))
+                    .cloned();
+                document
+                    .set_translation_decision(
+                        &edit.path,
+                        &edit.source,
+                        TranslationDecision::Direct(edit.value.clone()),
+                    )
+                    .map_err(|error| error.to_string())?;
                 changed.push(json!({
                     "mode": "direct",
                     "path": edit.path,
@@ -4795,14 +4573,21 @@ fn apply_staged_edits_to_overlay(
                 }));
             }
             EditMode::Contextual => {
-                translations.no_change.remove(&edit.source);
                 let context_path = contextual_path_for_edit(context, edit)?;
-                remove_stale_translations_for_path_source(translations, &edit.path, &edit.source);
-                let replacements = translations
-                    .contextual
-                    .entry(context_path.clone())
-                    .or_default();
-                let old = replacements.insert(edit.source.clone(), edit.value.clone());
+                let old = translations
+                    .and_then(|dictionary| dictionary.contextual.get(&context_path))
+                    .and_then(|replacements| replacements.get(&edit.source))
+                    .cloned();
+                document
+                    .set_translation_decision(
+                        &edit.path,
+                        &edit.source,
+                        TranslationDecision::Contextual {
+                            context: context_path.clone(),
+                            target: edit.value.clone(),
+                        },
+                    )
+                    .map_err(|error| error.to_string())?;
                 changed.push(json!({
                     "mode": "contextual",
                     "path": context_path,
@@ -4813,60 +4598,27 @@ fn apply_staged_edits_to_overlay(
                 }));
             }
             EditMode::NoChange => {
-                translations.direct.remove(&edit.source);
-                remove_contextual_source_for_path(translations, &edit.path, &edit.source);
-                let inserted = translations.no_change.insert(edit.source.clone());
+                let existed = translations
+                    .is_some_and(|dictionary| dictionary.no_change.contains(&edit.source));
+                document
+                    .set_translation_decision(
+                        &edit.path,
+                        &edit.source,
+                        TranslationDecision::NoChange,
+                    )
+                    .map_err(|error| error.to_string())?;
                 changed.push(json!({
                     "mode": "no_change",
                     "path": edit.path,
                     "source": edit.source,
-                    "old": if inserted { Value::Null } else { json!(edit.source) },
+                    "old": if existed { json!(edit.source) } else { Value::Null },
                     "new": edit.source,
                 }));
             }
         }
+        *overlay = document.resolved_overlay().clone();
     }
     Ok(changed)
-}
-
-fn remove_stale_translations_for_path_source(
-    translations: &mut TranslationDictionary,
-    path: &str,
-    source: &str,
-) {
-    translations.stale_translations.retain(|record| {
-        !(record.new_source == source
-            && record.context.as_deref().is_none_or(|context| {
-                path == context
-                    || path
-                        .strip_prefix(context)
-                        .is_some_and(|suffix| suffix.starts_with('.'))
-            }))
-    });
-}
-
-fn remove_contextual_source_for_path(
-    translations: &mut TranslationDictionary,
-    path: &str,
-    source: &str,
-) {
-    let contexts = translations
-        .contextual
-        .iter()
-        .filter(|(context_path, replacements)| {
-            replacements.contains_key(source)
-                && (context_path.as_str() == path || path.starts_with(&format!("{context_path}.")))
-        })
-        .map(|(context_path, _)| context_path.clone())
-        .collect::<Vec<_>>();
-    for context_path in contexts {
-        if let Some(replacements) = translations.contextual.get_mut(&context_path) {
-            replacements.remove(source);
-            if replacements.is_empty() {
-                translations.contextual.remove(&context_path);
-            }
-        }
-    }
 }
 
 fn validate_modified_base_and_overlay(
@@ -4945,6 +4697,8 @@ fn context_with_modified_base_and_overlay(
     Ok(SelectedTranslationContext {
         selection: context.selection.clone(),
         base_deck: modified_base,
+        base_source: context.base_source.clone(),
+        base_includes: context.base_includes.clone(),
         plan_overlays: context.plan_overlays.clone(),
         media_declarations: context.media_declarations.clone(),
         source_deck,

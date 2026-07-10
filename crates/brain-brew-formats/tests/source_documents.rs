@@ -263,6 +263,61 @@ fn overlay_document_preserves_includes_and_supports_translation_field_media_and_
 }
 
 #[test]
+fn overlay_translation_edits_route_included_targets_and_migrated_keys() {
+    let root = source(
+        "overlays/da.yaml",
+        "id: overlay.translation.da\nkind: translation\ntranslations:\n  direct:\n    Before: !include content/target.txt\n",
+    );
+    let mut document = OverlaySourceDocument::parse_with_includes(root, |request| {
+        assert_eq!(request.target(), "content/target.txt");
+        Ok(source("content/target.txt", "Før"))
+    })
+    .unwrap();
+
+    document
+        .set_translation_decision(
+            "notes.note.one.fields.field.front",
+            "Before",
+            TranslationDecision::Direct("Efter".to_owned()),
+        )
+        .unwrap();
+    let emission = document.emit().unwrap();
+    assert!(
+        emission
+            .root()
+            .text()
+            .contains("Before: !include content/target.txt")
+    );
+    assert_eq!(
+        emission
+            .included_source("content/target.txt")
+            .unwrap()
+            .text(),
+        "Efter"
+    );
+
+    document
+        .apply_source_translation_impact(
+            "notes.note.one.fields.field.front",
+            "Before",
+            "After",
+            SourceTranslationImpact::MigrateKey {
+                target: "Efter".to_owned(),
+                context: None,
+            },
+        )
+        .unwrap();
+    let emission = document.emit().unwrap();
+    assert!(
+        emission
+            .root()
+            .text()
+            .contains("After: !include content/target.txt")
+    );
+    assert!(!emission.root().text().contains("Before:"));
+}
+
+#[test]
 fn overlay_stale_resolution_removes_shadowed_record_without_overwriting_current_decision() {
     let mut document = OverlaySourceDocument::parse(source(
         "overlays/da.yaml",

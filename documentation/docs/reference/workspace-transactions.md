@@ -4,7 +4,7 @@ title: Workspace transaction contract
 
 # Workspace transaction contract
 
-`brainbrew` owns a journaled filesystem transaction module for source mutations. `fmt` and `translations --apply`/`--resolve` use it today; Workbench, media, import, lock, compose, and export migrations are tracked separately. Existing sequential-write behavior in those remaining command families must not be described as batch-atomic.
+`brainbrew` owns a journaled filesystem transaction module for source mutations. `fmt`, `translations --apply`/`--resolve`, `media hash`, `media images-to-refs`, CrowdAnki import, and development-only Workbench Apply/new-language writes use it today. Lock, compose, and export migrations are tracked separately. No multi-file sequence is described as an atomic rename; these operations are fingerprint-checked and recoverable.
 
 ## Interface
 
@@ -25,7 +25,7 @@ One plan is authorized under one canonical existing workspace root. Validation r
 - an empty plan or empty, absolute, parent-relative, current-relative, or non-UTF-8 target paths;
 - targets under the reserved `.brainbrew-transactions` control directory;
 - duplicate targets after canonical parent resolution;
-- a missing target parent (the transaction does not create user-owned directory structure);
+- a missing target parent at transaction-plan validation. The shared mutation adapter may create missing in-root parents only for planned-new outputs (currently Workbench new-language overlays), removes those directories after ordinary pre-commit/commit failure when still empty, and never creates parents for replacement writes;
 - a parent symlink that resolves outside the canonical workspace root;
 - target symlinks, directories, devices, sockets, FIFOs, and other non-regular file types;
 - a target parent or existing target with a filesystem/device ID different from the root;

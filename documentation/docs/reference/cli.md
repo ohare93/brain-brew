@@ -93,10 +93,11 @@ Computes SHA-256 values for declared media files and writes missing/stale hashes
 ## `import crowdanki`
 
 ```bash
-brainbrew import crowdanki build/crowdanki/en-standard --out deck.yaml
+brainbrew import crowdanki build/crowdanki/en-standard --accept-suggested-ids --out deck.yaml
+brainbrew import crowdanki build/crowdanki/en-standard --accept-suggested-ids --force --out deck.yaml
 ```
 
-Imports a CrowdAnki folder into Canonical Deck YAML. Import writes a complete deck file and re-inlines the `media:` block; it does not preserve a previously hoisted `media: !include ...` source layout.
+Imports a CrowdAnki folder into typed, canonical Deck YAML. By default import creates a new output and refuses an existing file, directory, or symlink. `--force` may replace an existing regular file; Brain Brew fingerprints and backs up that file and commits the replacement through one recoverable workspace transaction. Import writes a complete deck file and re-inlines the `media:` block; it does not preserve a previously hoisted `media: !include ...` source layout.
 
 ## `diff`
 

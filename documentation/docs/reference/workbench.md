@@ -18,13 +18,11 @@ The server binds `127.0.0.1` on an available port by default and serves JSON API
 
 Staged edits remain in that browser profile's `localStorage` across navigation and refresh. They are not copied to canonical YAML while the Workbench is read-only. Keep the browser profile or copy important draft text before clearing site data. The UI displays the server-provided `write_capability` from `/api/workspace`; it never guesses capability from build type or an environment variable.
 
-This containment can be removed only after all of these conditions land and are tested together:
+Source-document mutation now preserves canonical source/includes, and development writes now use one fingerprint-checked recoverable transaction with startup and pre-Apply recovery. Normal builds remain contained until all remaining conditions land and are tested together:
 
-1. source-document mutation preserves canonical source and includes (canonical-source-integrity 0060, tracked as `.frontloop/canonical-source-integrity/ready/0060-migrate-media-import-and-workbench-writes-to-safe-mutation-modules.md`);
-2. every Apply input has complete compare-and-swap fingerprints (Workbench hardening 0040);
-3. Confirm is bound to an immutable, validated preview token (Workbench hardening 0050);
-4. writes use a recoverable transaction with startup recovery (Workbench hardening 0060); and
-5. the applicable Workbench security gate is complete for the accepted threat model.
+1. every Apply input has complete compare-and-swap fingerprints (Workbench hardening 0040);
+2. Confirm is bound to an immutable, validated preview token (Workbench hardening 0050); and
+3. the applicable Workbench security gate is complete for the accepted threat model.
 
 There is no promised removal date.
 
@@ -59,7 +57,7 @@ cargo build -p brainbrew --features workbench-write-dev
   --enable-write
 ```
 
-The server and UI identify this as `development_write` mode and show a prominent unsafe-development warning. A normal binary rejects `--enable-write`; there is no environment-variable bypass. Cargo's default feature set is empty, and release/cargo-dist commands do not enable `workbench-write-dev`, so distributed artifacts cannot enter write mode.
+The server and UI identify this as `development_write` mode and show a prominent development warning. Apply, source edits, translation edits, and new-language overlays emit through typed source documents, reject non-root dependency/locked/cache source ownership, and commit the complete validated file set through the workspace journal. Recovery runs at startup and immediately before each write. A normal binary rejects `--enable-write`; there is no environment-variable bypass. Cargo's default feature set is empty, and release/cargo-dist commands do not enable `workbench-write-dev`, so distributed artifacts cannot enter write mode.
 
 The target Workbench interaction model is documented in [ADR-015: Use Lazy Single-Work-Item Workbench Editing](decisions/0015-use-lazy-single-work-item-workbench-editing.md). In short: pivots should be compact paginated navigation lists, editing should happen in one selected item detail pane at a time, multilingual context should be lazy and selected-item scoped, and browser-local staged edits remain unapplied until explicit Apply.
 

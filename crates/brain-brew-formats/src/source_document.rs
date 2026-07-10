@@ -280,6 +280,24 @@ impl IncludeState {
             .map(|include| include.source.provenance.clone())
     }
 
+    pub(crate) fn scalar_sentinel(&self, path: &str) -> Option<&str> {
+        self.scalar
+            .get(path)
+            .map(|include| include.sentinel.as_str())
+    }
+
+    pub(crate) fn remove_scalar(&mut self, path: &str) -> bool {
+        self.scalar.remove(path).is_some()
+    }
+
+    pub(crate) fn move_scalar(&mut self, from: &str, to: String) -> bool {
+        let Some(include) = self.scalar.remove(from) else {
+            return false;
+        };
+        self.scalar.insert(to, include);
+        true
+    }
+
     pub(crate) fn edit_scalar(
         &mut self,
         path: &str,

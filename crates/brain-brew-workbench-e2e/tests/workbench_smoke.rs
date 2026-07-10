@@ -3049,7 +3049,7 @@ notes:
     fields:
       field.capital: Helsinki
       field.country: Finland
-      field.flag: '<img src="fi.png">'
+      field.flag: '<img src="flags/fi.png">'
     tags:
       - Europe
       - Nordic

@@ -292,16 +292,6 @@ pub(crate) fn parse_overlay_out_media(args: &[String]) -> Result<ExportArgs, Str
     })
 }
 
-pub(crate) fn parse_required_out(args: &[String]) -> Result<PathBuf, String> {
-    let Some(index) = args.iter().position(|arg| arg == "--out") else {
-        return Err("missing --out".to_owned());
-    };
-    let Some(path) = args.get(index + 1) else {
-        return Err("--out requires a path".to_owned());
-    };
-    Ok(PathBuf::from(path))
-}
-
 pub(crate) fn parse_diff_overlay_args(args: &[String]) -> Result<DiffOverlayArgs, String> {
     let mut paths = Vec::new();
     let mut id = None;
