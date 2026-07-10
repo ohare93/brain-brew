@@ -98,8 +98,8 @@ Inside overlays, individual changes declare an intent:
 | `remove` | remove an entity/value, requiring an expected base |
 | `override` | intentionally override another overlay, requiring an expected base |
 
-`replace`, `remove`, and `override` require `expected_base` so stale overlays fail loudly. To change an existing non-blank field value, use `replace` with `expected_base`; field-level `merge`, `add`, and `fill` operations are for blank-field fills and fail closed when the field already has content.
+`replace`, `remove`, and `override` require `expected_base` so stale overlays fail loudly. Sparse properties use the exact prior typed value. Complete note, note-type, field-definition, card-template, and media operations use a [canonical entity fingerprint](../reference/entity-fingerprints.md). Presence-only `entity_present` baselines are rejected. To change an existing non-blank field value, use `replace` with `expected_base`; field-level `merge`, `add`, and `fill` operations are for blank-field fills and fail closed when the field already has content.
 
-A full `note:` or `note_type:` body is valid only with `intent: add`. For existing entities, use sparse field or sub-entity changes instead; a non-`add` change carrying a full entity body fails closed with a diagnostic that the full body is only valid with `add`.
+A full `note:` or `note_type:` body is valid with `intent: add`, or with fingerprint-protected `replace`/`override`. Prefer sparse field or sub-entity changes for ordinary edits. A `merge` carrying a full note or note-type body fails closed.
 
 A non-`add` field-definition change must target an existing field definition. If the field definition is absent, composition fails with `MissingOverlayTarget` instead of creating it implicitly.

@@ -6,12 +6,14 @@
 
 mod compose;
 mod content_validation;
+mod fingerprint;
 mod messages;
 mod model;
 mod translation;
 mod validate;
 
 pub use content_validation::*;
+pub use fingerprint::*;
 pub use model::*;
 pub use translation::glob_matches;
 

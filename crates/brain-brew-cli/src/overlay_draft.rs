@@ -2,8 +2,9 @@ use std::collections::BTreeMap;
 
 use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplateChange, ChangeIntent, DeckChange,
-    ExpectedBase, FieldChange, FieldDefinitionChange, MediaChange, MediaReference, NoteChange,
-    NoteTypeChange, Overlay, OverlayKind, PropertyChange, StableId, TagChange,
+    ExpectedBase, FieldChange, FieldDefinitionChange, MediaChange, NoteChange, NoteTypeChange,
+    Overlay, OverlayKind, PropertyChange, StableId, TagChange, fingerprint_media_reference,
+    fingerprint_note, fingerprint_note_type,
 };
 
 pub(crate) fn draft_overlay_from_diff(
@@ -23,7 +24,7 @@ pub(crate) fn draft_overlay_from_diff(
     };
 
     draft_deck_changes(left, right, &mut overlay);
-    draft_note_type_adapter_changes(left, right, &mut overlay);
+    draft_note_type_changes(left, right, &mut overlay)?;
     draft_note_changes(left, right, &mut overlay);
     draft_media_changes(left, right, &mut overlay);
 
@@ -66,18 +67,66 @@ fn draft_deck_changes(left: &CanonicalDeck, right: &CanonicalDeck, overlay: &mut
     }
 }
 
-fn draft_note_type_adapter_changes(
+fn draft_note_type_changes(
     left: &CanonicalDeck,
     right: &CanonicalDeck,
     overlay: &mut Overlay,
-) {
+) -> Result<(), String> {
+    if let Some(note_type_id) = left
+        .note_types
+        .keys()
+        .find(|note_type_id| !right.note_types.contains_key(*note_type_id))
+    {
+        return Err(format!(
+            "diff --as-overlay cannot yet order removal of note type {note_type_id} after dependent note removals"
+        ));
+    }
+
+    for (note_type_id, right_note_type) in &right.note_types {
+        if !left.note_types.contains_key(note_type_id) {
+            overlay.note_type_changes.insert(
+                note_type_id.clone(),
+                NoteTypeChange {
+                    intent: ChangeIntent::Add,
+                    note_type: Some(right_note_type.clone()),
+                    name: None,
+                    variables: BTreeMap::new(),
+                    styling: None,
+                    fields: BTreeMap::new(),
+                    card_templates: BTreeMap::new(),
+                    adapter_ids: BTreeMap::new(),
+                    expected_base: None,
+                },
+            );
+        }
+    }
+
     for (note_type_id, left_note_type) in &left.note_types {
         let Some(right_note_type) = right.note_types.get(note_type_id) else {
             continue;
         };
         let adapter_ids =
             adapter_id_changes(&left_note_type.adapter_ids, &right_note_type.adapter_ids);
-        if !adapter_ids.is_empty() {
+        let mut right_without_adapter_changes = right_note_type.clone();
+        right_without_adapter_changes.adapter_ids = left_note_type.adapter_ids.clone();
+        if &right_without_adapter_changes != left_note_type {
+            overlay.note_type_changes.insert(
+                note_type_id.clone(),
+                NoteTypeChange {
+                    intent: ChangeIntent::Replace,
+                    note_type: Some(right_note_type.clone()),
+                    name: None,
+                    variables: BTreeMap::new(),
+                    styling: None,
+                    fields: BTreeMap::new(),
+                    card_templates: BTreeMap::new(),
+                    adapter_ids: BTreeMap::new(),
+                    expected_base: Some(ExpectedBase::EntityFingerprint(fingerprint_note_type(
+                        left_note_type,
+                    ))),
+                },
+            );
+        } else if !adapter_ids.is_empty() {
             overlay.note_type_changes.insert(
                 note_type_id.clone(),
                 NoteTypeChange {
@@ -94,6 +143,7 @@ fn draft_note_type_adapter_changes(
             );
         }
     }
+    Ok(())
 }
 
 fn draft_note_changes(left: &CanonicalDeck, right: &CanonicalDeck, overlay: &mut Overlay) {
@@ -108,13 +158,35 @@ fn draft_note_changes(left: &CanonicalDeck, right: &CanonicalDeck, overlay: &mut
                     fields: BTreeMap::new(),
                     tags: BTreeMap::new(),
                     adapter_ids: BTreeMap::new(),
-                    expected_base: Some(ExpectedBase::EntityPresent),
+                    expected_base: Some(ExpectedBase::EntityFingerprint(fingerprint_note(
+                        left_note,
+                    ))),
                 },
             );
             continue;
         }
 
         let right_note = &right.notes[note_id];
+        let can_be_sparse = left_note.note_type_id == right_note.note_type_id
+            && left_note.variables == right_note.variables
+            && left_note.fields.keys().eq(right_note.fields.keys());
+        if !can_be_sparse {
+            overlay.note_changes.insert(
+                note_id.clone(),
+                NoteChange {
+                    intent: ChangeIntent::Replace,
+                    note: Some(right_note.clone()),
+                    variables: BTreeMap::new(),
+                    fields: BTreeMap::new(),
+                    tags: BTreeMap::new(),
+                    adapter_ids: BTreeMap::new(),
+                    expected_base: Some(ExpectedBase::EntityFingerprint(fingerprint_note(
+                        left_note,
+                    ))),
+                },
+            );
+            continue;
+        }
         let mut fields = BTreeMap::new();
         for (field_id, left_value) in &left_note.fields {
             let Some(right_value) = right_note.fields.get(field_id) else {
@@ -138,7 +210,7 @@ fn draft_note_changes(left: &CanonicalDeck, right: &CanonicalDeck, overlay: &mut
                 tag.clone(),
                 TagChange {
                     intent: ChangeIntent::Remove,
-                    expected_base: Some(ExpectedBase::EntityPresent),
+                    expected_base: Some(ExpectedBase::Value(tag.clone())),
                 },
             );
         }
@@ -197,9 +269,9 @@ fn draft_media_changes(left: &CanonicalDeck, right: &CanonicalDeck, overlay: &mu
                     MediaChange {
                         intent: ChangeIntent::Replace,
                         media: Some(right_media.clone()),
-                        expected_base: Some(ExpectedBase::Value(media_reference_summary(
-                            left_media,
-                        ))),
+                        expected_base: Some(ExpectedBase::EntityFingerprint(
+                            fingerprint_media_reference(left_media),
+                        )),
                     },
                 );
             }
@@ -210,9 +282,9 @@ fn draft_media_changes(left: &CanonicalDeck, right: &CanonicalDeck, overlay: &mu
                     MediaChange {
                         intent: ChangeIntent::Remove,
                         media: None,
-                        expected_base: Some(ExpectedBase::Value(media_reference_summary(
-                            left_media,
-                        ))),
+                        expected_base: Some(ExpectedBase::EntityFingerprint(
+                            fingerprint_media_reference(left_media),
+                        )),
                     },
                 );
             }
@@ -284,10 +356,6 @@ fn adapter_id_changes(left: &AdapterIds, right: &AdapterIds) -> BTreeMap<String,
     }
 
     changes
-}
-
-fn media_reference_summary(media: &MediaReference) -> String {
-    format!("path={};sha256={}", media.path, media.sha256)
 }
 
 fn replace_property_change(before: &str, after: &str) -> PropertyChange {

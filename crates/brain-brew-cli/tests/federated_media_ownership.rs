@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use brain_brew_core::{MediaReference, StableId, fingerprint_media_reference};
 use brain_brew_formats::media::sha256_hex;
 
 fn run(args: &[&str]) -> Output {
@@ -263,11 +264,16 @@ fn cross_package_path_collisions_and_ambiguous_ownership_transitions_fail() {
         stderr(&ambiguous)
     );
 
+    let dependency_fingerprint = fingerprint_media_reference(&MediaReference {
+        id: StableId::new("media.shared").unwrap(),
+        path: "shared.png".to_owned(),
+        sha256: sha256_hex(b"dep"),
+    });
     fs::write(
         root.join("media-overlay.yaml"),
         format!(
-            "id: overlay.media\nkind: extension\nmedia:\n  media.shared:\n    intent: replace\n    path: root.png\n    sha256: '{}'\n    expected_base: entity_present\n",
-            sha256_hex(b"root")
+            "id: overlay.media\nkind: extension\nmedia:\n  media.shared:\n    intent: replace\n    path: root.png\n    sha256: '{}'\n    expected_base:\n      fingerprint: {}\n",
+            sha256_hex(b"root"), dependency_fingerprint
         ),
     )
     .unwrap();

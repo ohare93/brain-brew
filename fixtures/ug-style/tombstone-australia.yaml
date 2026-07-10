@@ -3,4 +3,5 @@ kind: patch
 notes:
   note.australia:
     intent: remove
-    expected_base: entity_present
+    expected_base:
+      fingerprint: sha256:v1:8900303950e47b92eb5b525abc5344ce27f16244e31a45373fd099edd5b9386c

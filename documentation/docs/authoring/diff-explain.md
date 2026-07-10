@@ -20,7 +20,7 @@ For tools and UIs:
 brainbrew explain --manifest brainbrew.yaml --target de-extended --json
 ```
 
-If `explain --json` fails during target composition, it writes the version-1 `{ "error": ... }` envelope to stdout with a non-zero exit and empty stderr. Structured failures and target/base/overlay context live in `error.details` (and are mirrored directly during the compatibility window).
+If `explain --json` fails during target composition, it writes the version-1 `{ "error": ... }` envelope to stdout with a non-zero exit and empty stderr. Structured failures and target/base/overlay context live in `error.details` (and are mirrored directly during the compatibility window). Precondition entries include `code`, `category`, `deck_path`, `entity_kind`, `intent`, `overlay`, `expected`, and `actual`.
 
 ## Semantic diff
 
@@ -65,4 +65,4 @@ brainbrew diff deck.yaml edited.yaml \
   --kind patch > overlays/patches/capitals.yaml
 ```
 
-Review the generated overlay before committing. Destructive changes include `expected_base` values.
+Review the generated overlay before committing. Sparse destructive changes include exact typed `expected_base.value` values. Complete replacements/removals include tooling-generated `expected_base.fingerprint` values and reapply only to the exact input deck. See [Canonical entity fingerprints](../reference/entity-fingerprints.md).

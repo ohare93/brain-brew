@@ -7,6 +7,8 @@ use brain_brew_core::{
     MessageComponent, Note, NoteChange, NoteType, NoteTypeChange, Overlay, OverlayKind,
     PropertyChange, StableId, StaleTranslation, StructuredMessage, TagChange, TargetAdaptation,
     TranslationCoverageCategory, TranslationDictionary, ValidationErrorKind,
+    fingerprint_card_template, fingerprint_field_definition, fingerprint_media_reference,
+    fingerprint_note, fingerprint_note_type,
 };
 
 fn target_adaptation(
@@ -2074,7 +2076,7 @@ fn overlay_can_change_note_tags_and_media_references() {
                         "Nordic".to_owned(),
                         TagChange {
                             intent: ChangeIntent::Remove,
-                            expected_base: Some(ExpectedBase::EntityPresent),
+                            expected_base: Some(ExpectedBase::Value("Nordic".to_owned())),
                         },
                     ),
                 ]),
@@ -2150,7 +2152,9 @@ fn remove_overlay_can_tombstone_an_unused_note_type() {
                 fields: BTreeMap::new(),
                 card_templates: BTreeMap::new(),
                 adapter_ids: BTreeMap::new(),
-                expected_base: Some(ExpectedBase::EntityPresent),
+                expected_base: Some(ExpectedBase::EntityFingerprint(fingerprint_note_type(
+                    &base.note_types[&sid("note-type.region")],
+                ))),
             },
         )]),
         media_changes: BTreeMap::new(),
@@ -2179,7 +2183,9 @@ fn remove_overlay_records_a_tombstone_without_erasing_the_entity_from_resolved_d
                 fields: BTreeMap::new(),
                 tags: BTreeMap::new(),
                 adapter_ids: BTreeMap::new(),
-                expected_base: Some(ExpectedBase::EntityPresent),
+                expected_base: Some(ExpectedBase::EntityFingerprint(fingerprint_note(
+                    &base.notes[&sid("note.finland")],
+                ))),
             },
         )]),
         note_type_changes: BTreeMap::new(),
@@ -2209,7 +2215,9 @@ fn tombstoned_notes_do_not_block_note_type_removal_and_validate_accepts_result()
                 fields: BTreeMap::new(),
                 tags: BTreeMap::new(),
                 adapter_ids: BTreeMap::new(),
-                expected_base: Some(ExpectedBase::EntityPresent),
+                expected_base: Some(ExpectedBase::EntityFingerprint(fingerprint_note(
+                    &base.notes[&sid("note.finland")],
+                ))),
             },
         )]),
         note_type_changes: BTreeMap::new(),
@@ -2232,7 +2240,9 @@ fn tombstoned_notes_do_not_block_note_type_removal_and_validate_accepts_result()
                 fields: BTreeMap::new(),
                 card_templates: BTreeMap::new(),
                 adapter_ids: BTreeMap::new(),
-                expected_base: Some(ExpectedBase::EntityPresent),
+                expected_base: Some(ExpectedBase::EntityFingerprint(fingerprint_note_type(
+                    &base.note_types[&sid("note-type.country")],
+                ))),
             },
         )]),
         media_changes: BTreeMap::new(),
@@ -2271,7 +2281,9 @@ fn non_tombstoned_note_still_blocks_note_type_removal_and_validation() {
                     fields: BTreeMap::new(),
                     card_templates: BTreeMap::new(),
                     adapter_ids: BTreeMap::new(),
-                    expected_base: Some(ExpectedBase::EntityPresent),
+                    expected_base: Some(ExpectedBase::EntityFingerprint(fingerprint_note_type(
+                        &base.note_types[&sid("note-type.country")],
+                    ))),
                 },
             )]),
             media_changes: BTreeMap::new(),
@@ -2294,12 +2306,13 @@ fn non_tombstoned_note_still_blocks_note_type_removal_and_validation() {
 }
 
 #[test]
-fn full_note_body_is_only_valid_with_add_intent() {
-    for intent in [
-        ChangeIntent::Merge,
-        ChangeIntent::Replace,
-        ChangeIntent::Override,
-    ] {
+fn complete_note_replace_and_override_require_the_current_fingerprint() {
+    for intent in [ChangeIntent::Replace, ChangeIntent::Override] {
+        let base = ug_style_deck();
+        let mut replacement = base.notes[&sid("note.finland")].clone();
+        replacement
+            .fields
+            .insert(sid("field.capital"), "Helsingfors");
         let overlay = Overlay {
             id: sid("overlay.patch.full-note-body"),
             kind: OverlayKind::Patch,
@@ -2309,39 +2322,36 @@ fn full_note_body_is_only_valid_with_add_intent() {
                 sid("note.finland"),
                 NoteChange {
                     intent,
-                    note: Some(sweden_note()),
+                    note: Some(replacement),
                     variables: BTreeMap::new(),
                     fields: BTreeMap::new(),
                     tags: BTreeMap::new(),
                     adapter_ids: BTreeMap::new(),
-                    expected_base: expected_base_for(intent),
+                    expected_base: Some(ExpectedBase::EntityFingerprint(fingerprint_note(
+                        &base.notes[&sid("note.finland")],
+                    ))),
                 },
             )]),
             note_type_changes: BTreeMap::new(),
             media_changes: BTreeMap::new(),
         };
 
-        let report = ug_style_deck()
+        let resolved = base
             .compose(&[overlay])
-            .expect_err("non-add note bodies are rejected");
-
-        assert!(report.has_kind(ComposeErrorKind::ValidationFailed));
-        assert!(report.errors.iter().any(|error| {
-            error.message
-                == "a full entity body is only valid with intent `add`; use add, or express edits as field/sub-changes"
-        }));
+            .expect("matching note fingerprint applies");
+        assert_eq!(
+            resolved.notes[&sid("note.finland")].fields[&sid("field.capital")],
+            "Helsingfors"
+        );
     }
 }
 
 #[test]
-fn full_note_type_body_is_only_valid_with_add_intent() {
-    let note_type_body = ug_style_deck().note_types[&sid("note-type.country")].clone();
-
-    for intent in [
-        ChangeIntent::Merge,
-        ChangeIntent::Replace,
-        ChangeIntent::Override,
-    ] {
+fn complete_note_type_replace_and_override_require_the_current_fingerprint() {
+    for intent in [ChangeIntent::Replace, ChangeIntent::Override] {
+        let base = ug_style_deck();
+        let mut replacement = base.note_types[&sid("note-type.country")].clone();
+        replacement.name = "Countries updated".to_owned();
         let overlay = Overlay {
             id: sid("overlay.patch.full-note-type-body"),
             kind: OverlayKind::Patch,
@@ -2352,28 +2362,28 @@ fn full_note_type_body_is_only_valid_with_add_intent() {
                 sid("note-type.country"),
                 NoteTypeChange {
                     intent,
-                    note_type: Some(note_type_body.clone()),
+                    note_type: Some(replacement),
                     name: None,
                     variables: BTreeMap::new(),
                     styling: None,
                     fields: BTreeMap::new(),
                     card_templates: BTreeMap::new(),
                     adapter_ids: BTreeMap::new(),
-                    expected_base: expected_base_for(intent),
+                    expected_base: Some(ExpectedBase::EntityFingerprint(fingerprint_note_type(
+                        &base.note_types[&sid("note-type.country")],
+                    ))),
                 },
             )]),
             media_changes: BTreeMap::new(),
         };
 
-        let report = ug_style_deck()
+        let resolved = base
             .compose(&[overlay])
-            .expect_err("non-add note-type bodies are rejected");
-
-        assert!(report.has_kind(ComposeErrorKind::ValidationFailed));
-        assert!(report.errors.iter().any(|error| {
-            error.message
-                == "a full entity body is only valid with intent `add`; use add, or express edits as field/sub-changes"
-        }));
+            .expect("matching note-type fingerprint applies");
+        assert_eq!(
+            resolved.note_types[&sid("note-type.country")].name,
+            "Countries updated"
+        );
     }
 }
 
@@ -2503,7 +2513,12 @@ fn missing_field_definition_rejects_merge_replace_and_override() {
                                 id: sid("field.population"),
                                 name: "Population".to_owned(),
                             }),
-                            expected_base: expected_base_for(intent),
+                            expected_base: Some(ExpectedBase::EntityFingerprint(
+                                fingerprint_field_definition(
+                                    &ug_style_deck().note_types[&sid("note-type.country")].fields
+                                        [0],
+                                ),
+                            )),
                         },
                     )]),
                     card_templates: BTreeMap::new(),
@@ -2518,7 +2533,7 @@ fn missing_field_definition_rejects_merge_replace_and_override() {
             .compose(&[overlay])
             .expect_err("non-add field definition changes require an existing target");
 
-        assert!(report.has_kind(ComposeErrorKind::MissingOverlayTarget));
+        assert!(report.has_kind(ComposeErrorKind::ExpectedBaseMismatch));
         assert!(
             report.errors.iter().any(|error| {
                 error.path == "note_types.note-type.country.fields.field.population"
@@ -2606,10 +2621,13 @@ fn destructive_operation_matrix_covers_core_change_families() {
     base.variables
         .insert("deck.locale".to_owned(), "en".to_owned());
 
+    let field_definition = &base.note_types[&sid("note-type.country")].fields[2];
     let mut remove_field_definition = field_definition_overlay(
         ChangeIntent::Remove,
         None,
-        Some(ExpectedBase::EntityPresent),
+        Some(ExpectedBase::EntityFingerprint(
+            fingerprint_field_definition(field_definition),
+        )),
     );
     remove_field_definition.note_changes = BTreeMap::from([(
         sid("note.finland"),
@@ -2622,7 +2640,9 @@ fn destructive_operation_matrix_covers_core_change_families() {
                 FieldChange {
                     intent: ChangeIntent::Remove,
                     value: None,
-                    expected_base: Some(ExpectedBase::EntityPresent),
+                    expected_base: Some(ExpectedBase::FieldValue(
+                        base.notes[&sid("note.finland")].fields[&sid("field.flag")].clone(),
+                    )),
                 },
             )]),
             tags: BTreeMap::new(),
@@ -2647,7 +2667,9 @@ fn destructive_operation_matrix_covers_core_change_families() {
                 id: sid("field.flag"),
                 name: "Flag image".to_owned(),
             }),
-            Some(ExpectedBase::EntityPresent),
+            Some(ExpectedBase::EntityFingerprint(
+                fingerprint_field_definition(field_definition),
+            )),
         )])
         .expect("field definition replace composes");
     assert_eq!(
@@ -2659,7 +2681,9 @@ fn destructive_operation_matrix_covers_core_change_families() {
         .compose(&[card_template_overlay(
             ChangeIntent::Remove,
             None,
-            Some(ExpectedBase::EntityPresent),
+            Some(ExpectedBase::EntityFingerprint(fingerprint_card_template(
+                &base.note_types[&sid("note-type.country")].card_templates[0],
+            ))),
         )])
         .expect("card template remove composes");
     assert!(
@@ -2679,7 +2703,9 @@ fn destructive_operation_matrix_covers_core_change_families() {
                 answer_format: "{{Capital}}".to_owned(),
                 adapter_ids: AdapterIds::new(),
             }),
-            Some(ExpectedBase::EntityPresent),
+            Some(ExpectedBase::EntityFingerprint(fingerprint_card_template(
+                &base.note_types[&sid("note-type.country")].card_templates[0],
+            ))),
         )])
         .expect("card template replace composes");
     assert_eq!(
@@ -2691,7 +2717,9 @@ fn destructive_operation_matrix_covers_core_change_families() {
         .compose(&[media_overlay(
             ChangeIntent::Remove,
             None,
-            Some(ExpectedBase::EntityPresent),
+            Some(ExpectedBase::EntityFingerprint(
+                fingerprint_media_reference(&base.media[&sid("media.flag.finland")]),
+            )),
         )])
         .expect("media remove composes");
     assert!(!media_removed.media.contains_key(&sid("media.flag.finland")));
@@ -2704,7 +2732,9 @@ fn destructive_operation_matrix_covers_core_change_families() {
                 path: "flags/fi-new.png".to_owned(),
                 sha256: "fedcba".to_owned(),
             }),
-            Some(ExpectedBase::EntityPresent),
+            Some(ExpectedBase::EntityFingerprint(
+                fingerprint_media_reference(&base.media[&sid("media.flag.finland")]),
+            )),
         )])
         .expect("media replace composes");
     assert_eq!(
@@ -2716,7 +2746,7 @@ fn destructive_operation_matrix_covers_core_change_families() {
         .compose(&[deck_name_overlay(
             ChangeIntent::Remove,
             None,
-            Some(ExpectedBase::EntityPresent),
+            Some(ExpectedBase::Value("Ultimate Geography".to_owned())),
         )])
         .expect("string property remove composes");
     assert!(name_removed.name.is_empty());
@@ -2734,7 +2764,7 @@ fn destructive_operation_matrix_covers_core_change_families() {
         .compose(&[deck_variable_overlay(
             ChangeIntent::Remove,
             None,
-            Some(ExpectedBase::EntityPresent),
+            Some(ExpectedBase::Value("en".to_owned())),
         )])
         .expect("variable remove composes");
     assert!(!variable_removed.variables.contains_key("deck.locale"));
@@ -2750,6 +2780,150 @@ fn destructive_operation_matrix_covers_core_change_families() {
 }
 
 #[test]
+fn entity_precondition_matrix_rejects_missing_stale_presence_only_and_ordered_overrides() {
+    let base = ug_style_deck();
+    let media_id = sid("media.flag.finland");
+    let original = &base.media[&media_id];
+    let original_fingerprint = fingerprint_media_reference(original);
+    let replacement = MediaReference {
+        id: media_id.clone(),
+        path: "flags/fi-v2.png".to_owned(),
+        sha256: "v2".to_owned(),
+    };
+
+    let mut matching = media_overlay(
+        ChangeIntent::Replace,
+        Some(replacement.clone()),
+        Some(ExpectedBase::EntityFingerprint(
+            original_fingerprint.clone(),
+        )),
+    );
+    matching.id = sid("overlay.patch.media.first");
+    let resolved = base
+        .compose(&[matching.clone()])
+        .expect("matching fingerprint applies");
+    assert_eq!(resolved.media[&media_id], replacement);
+
+    let mut wrong_present = media_overlay(
+        ChangeIntent::Replace,
+        Some(replacement.clone()),
+        Some(ExpectedBase::EntityFingerprint(
+            fingerprint_media_reference(&MediaReference {
+                id: media_id.clone(),
+                path: "flags/wrong.png".to_owned(),
+                sha256: "wrong".to_owned(),
+            }),
+        )),
+    );
+    wrong_present.id = sid("overlay.patch.media.wrong");
+    let report = base
+        .compose(&[wrong_present])
+        .expect_err("wrong-but-present fingerprint fails");
+    let error = report
+        .errors
+        .iter()
+        .find(|error| error.kind == ComposeErrorKind::ExpectedBaseMismatch)
+        .unwrap();
+    assert_eq!(
+        error.deck_path.as_ref().unwrap().to_string(),
+        "media.media.flag.finland"
+    );
+    assert_eq!(error.entity_kind.unwrap().as_str(), "media_reference");
+    assert_eq!(error.intent, Some(ChangeIntent::Replace));
+    assert_eq!(
+        error.overlay_id.as_ref().unwrap(),
+        &sid("overlay.patch.media.wrong")
+    );
+    assert!(error.expected.is_some() && error.actual.is_some());
+
+    let report = base
+        .compose(&[media_overlay(
+            ChangeIntent::Replace,
+            Some(replacement.clone()),
+            Some(ExpectedBase::EntityFingerprint(fingerprint_note(
+                &base.notes[&sid("note.finland")],
+            ))),
+        )])
+        .expect_err("fingerprint from the wrong entity kind cannot match");
+    assert!(report.has_kind(ComposeErrorKind::ExpectedBaseMismatch));
+
+    let mut missing = base.clone();
+    missing.media.remove(&media_id);
+    let report = missing
+        .compose(&[matching.clone()])
+        .expect_err("missing current entity fails the fingerprint precondition");
+    assert!(report.has_kind(ComposeErrorKind::ExpectedBaseMismatch));
+    assert!(matches!(
+        report.errors[0].actual,
+        Some(brain_brew_core::ComposePrecondition::Missing)
+    ));
+
+    let report = base
+        .compose(&[media_overlay(
+            ChangeIntent::Remove,
+            None,
+            Some(ExpectedBase::EntityPresent),
+        )])
+        .expect_err("legacy presence-only baseline fails closed");
+    assert!(report.has_kind(ComposeErrorKind::InvalidExpectedBase));
+
+    let mut valid_override = media_overlay(
+        ChangeIntent::Override,
+        Some(MediaReference {
+            id: media_id.clone(),
+            path: "flags/fi-v3-valid.png".to_owned(),
+            sha256: "v3-valid".to_owned(),
+        }),
+        Some(ExpectedBase::EntityFingerprint(
+            fingerprint_media_reference(&replacement),
+        )),
+    );
+    valid_override.id = sid("overlay.patch.media.valid-override");
+    let resolved = base
+        .compose(&[matching.clone(), valid_override])
+        .expect("override resolves provenance after its current-state fingerprint matches");
+    assert_eq!(resolved.media[&media_id].path, "flags/fi-v3-valid.png");
+
+    let mut stale_replace = media_overlay(
+        ChangeIntent::Replace,
+        Some(MediaReference {
+            id: media_id.clone(),
+            path: "flags/fi-concurrent.png".to_owned(),
+            sha256: "concurrent".to_owned(),
+        }),
+        Some(ExpectedBase::EntityFingerprint(
+            original_fingerprint.clone(),
+        )),
+    );
+    stale_replace.id = sid("overlay.patch.media.concurrent");
+    let report = base
+        .compose(&[matching.clone(), stale_replace])
+        .expect_err("concurrent ordered overlay checks the mutated current entity");
+    assert!(report.has_kind(ComposeErrorKind::ExpectedBaseMismatch));
+    assert!(!report.has_kind(ComposeErrorKind::Conflict));
+
+    let mut stale_override = media_overlay(
+        ChangeIntent::Override,
+        Some(MediaReference {
+            id: media_id,
+            path: "flags/fi-v3.png".to_owned(),
+            sha256: "v3".to_owned(),
+        }),
+        Some(ExpectedBase::EntityFingerprint(original_fingerprint)),
+    );
+    stale_override.id = sid("overlay.patch.media.stale-override");
+    let report = base
+        .compose(&[matching, stale_override])
+        .expect_err("override cannot bypass stale current state");
+    assert!(report.has_kind(ComposeErrorKind::ExpectedBaseMismatch));
+    assert!(!report.has_kind(ComposeErrorKind::Conflict));
+    assert_eq!(
+        report.errors[0].overlay_id.as_ref().unwrap(),
+        &sid("overlay.patch.media.stale-override")
+    );
+}
+
+#[test]
 fn merge_and_override_variants_compose_where_supported() {
     let mut base = ug_style_deck();
     base.variables
@@ -2762,7 +2936,9 @@ fn merge_and_override_variants_compose_where_supported() {
                 id: sid("field.flag"),
                 name: "Flag merged".to_owned(),
             }),
-            None,
+            Some(ExpectedBase::EntityFingerprint(
+                fingerprint_field_definition(&base.note_types[&sid("note-type.country")].fields[2]),
+            )),
         )])
         .expect("field definition merge composes on existing field");
     assert_eq!(
@@ -2781,7 +2957,9 @@ fn merge_and_override_variants_compose_where_supported() {
                 answer_format: "{{Capital}}".to_owned(),
                 adapter_ids: AdapterIds::new(),
             }),
-            None,
+            Some(ExpectedBase::EntityFingerprint(fingerprint_card_template(
+                &base.note_types[&sid("note-type.country")].card_templates[0],
+            ))),
         )])
         .expect("card template merge composes");
     assert_eq!(
@@ -2797,7 +2975,9 @@ fn merge_and_override_variants_compose_where_supported() {
                 path: "flags/fi-merge.png".to_owned(),
                 sha256: "merge".to_owned(),
             }),
-            None,
+            Some(ExpectedBase::EntityFingerprint(
+                fingerprint_media_reference(&base.media[&sid("media.flag.finland")]),
+            )),
         )])
         .expect("media merge composes");
     assert_eq!(
@@ -3111,15 +3291,6 @@ fn sweden_note() -> Note {
         .into(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: AdapterIds::new(),
-    }
-}
-
-fn expected_base_for(intent: ChangeIntent) -> Option<ExpectedBase> {
-    match intent {
-        ChangeIntent::Replace | ChangeIntent::Remove | ChangeIntent::Override => {
-            Some(ExpectedBase::EntityPresent)
-        }
-        ChangeIntent::Add | ChangeIntent::Merge => None,
     }
 }
 

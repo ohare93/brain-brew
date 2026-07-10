@@ -923,7 +923,8 @@ notes:
         intent: add
       Nordic:
         intent: remove
-        expected_base: entity_present
+        expected_base:
+          value: Nordic
 media:
   media.flag.sweden:
     intent: add
@@ -940,7 +941,7 @@ media:
     );
     assert_eq!(
         note_change.tags.get("Nordic").unwrap().expected_base,
-        Some(ExpectedBase::EntityPresent)
+        Some(ExpectedBase::Value("Nordic".to_owned()))
     );
 
     let media_change = overlay
@@ -952,21 +953,40 @@ media:
 }
 
 #[test]
-fn parses_remove_overlay_with_entity_present_expected_base() {
+fn parses_remove_overlay_with_canonical_entity_fingerprint() {
     let overlay = canonical_yaml::overlay_from_str(
         r#"id: overlay.patch.remove-finland
 kind: patch
 notes:
   note.finland:
     intent: remove
-    expected_base: entity_present
+    expected_base:
+      fingerprint: sha256:v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 "#,
     )
     .expect("overlay parses");
 
     let note_change = overlay.note_changes.get(&sid("note.finland")).unwrap();
     assert_eq!(note_change.intent, ChangeIntent::Remove);
-    assert_eq!(note_change.expected_base, Some(ExpectedBase::EntityPresent));
+    assert!(matches!(
+        note_change.expected_base,
+        Some(ExpectedBase::EntityFingerprint(_))
+    ));
+}
+
+#[test]
+fn rejects_legacy_presence_only_expected_base_with_migration_help() {
+    let error = canonical_yaml::overlay_from_str(
+        "id: overlay.patch.remove-finland\nkind: patch\nnotes:\n  note.finland:\n    intent: remove\n    expected_base: entity_present\n",
+    )
+    .expect_err("presence-only expected bases fail closed");
+
+    assert!(
+        error
+            .to_string()
+            .contains("entity_present is no longer accepted")
+    );
+    assert!(error.to_string().contains("diff --as-overlay"));
 }
 
 #[test]

@@ -3,6 +3,8 @@ use std::fmt;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
+use crate::fingerprint::EntityFingerprint;
+
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 
 /// Human-readable identity for a deck entity inside a CanonicalDeck.
@@ -980,14 +982,53 @@ pub enum ChangeIntent {
     Override,
 }
 
-/// Base value or condition an overlay expects before applying a destructive change.
+impl ChangeIntent {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Add => "add",
+            Self::Merge => "merge",
+            Self::Replace => "replace",
+            Self::Remove => "remove",
+            Self::Override => "override",
+        }
+    }
+}
+
+/// Exact prior state an overlay expects before applying a destructive change.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ExpectedBase {
     /// A scalar property value. For note fields this matches only a scalar field value.
     Value(String),
     /// A structured note-field value expected atomically.
     FieldValue(FieldValue),
+    /// A stable fingerprint for a complete entity replacement, override, or removal.
+    EntityFingerprint(EntityFingerprint),
+    /// Legacy presence-only marker retained for migration diagnostics. It never authorizes a
+    /// destructive operation; canonical YAML authors must replace it with an exact value or a
+    /// tooling-generated entity fingerprint.
     EntityPresent,
+}
+
+/// Complete entity families protected by canonical fingerprints.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EntityKind {
+    NoteType,
+    FieldDefinition,
+    CardTemplate,
+    Note,
+    MediaReference,
+}
+
+impl EntityKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NoteType => "note_type",
+            Self::FieldDefinition => "field_definition",
+            Self::CardTemplate => "card_template",
+            Self::Note => "note",
+            Self::MediaReference => "media_reference",
+        }
+    }
 }
 
 /// Sparse change for deck-level metadata.
@@ -1470,21 +1511,65 @@ impl fmt::Display for ComposeReport {
 
 impl std::error::Error for ComposeReport {}
 
+/// Typed expected or actual state attached to a composition precondition diagnostic.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ComposePrecondition {
+    Fingerprint(EntityFingerprint),
+    Value(String),
+    FieldValue(FieldValue),
+    Missing,
+}
+
 /// One overlay composition error.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ComposeError {
     pub kind: ComposeErrorKind,
     pub path: String,
+    pub deck_path: Option<DeckPath>,
+    pub entity_kind: Option<EntityKind>,
+    pub intent: Option<ChangeIntent>,
+    pub overlay_id: Option<StableId>,
+    pub expected: Option<ComposePrecondition>,
+    pub actual: Option<ComposePrecondition>,
     pub message: String,
 }
 
 impl ComposeError {
     pub(crate) fn new(kind: ComposeErrorKind, path: String, message: String) -> Self {
+        let deck_path = path.parse().ok();
         Self {
             kind,
             path,
+            deck_path,
+            entity_kind: None,
+            intent: None,
+            overlay_id: None,
+            expected: None,
+            actual: None,
             message,
         }
+    }
+
+    pub(crate) fn precondition(
+        kind: ComposeErrorKind,
+        path: String,
+        intent: ChangeIntent,
+        overlay_id: StableId,
+        expected: Option<ComposePrecondition>,
+        actual: ComposePrecondition,
+        message: String,
+    ) -> Self {
+        let mut error = Self::new(kind, path, message);
+        error.intent = Some(intent);
+        error.overlay_id = Some(overlay_id);
+        error.expected = expected;
+        error.actual = Some(actual);
+        error
+    }
+
+    pub(crate) fn with_entity_kind(mut self, entity_kind: EntityKind) -> Self {
+        self.entity_kind = Some(entity_kind);
+        self
     }
 }
 
@@ -1492,6 +1577,7 @@ impl ComposeError {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ComposeErrorKind {
     MissingExpectedBase,
+    InvalidExpectedBase,
     ExpectedBaseMismatch,
     Conflict,
     MissingOverlayTarget,
@@ -1500,6 +1586,37 @@ pub enum ComposeErrorKind {
     MissingTranslation,
     StaleTranslationEntry,
     ValidationFailed,
+}
+
+impl ComposeErrorKind {
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::MissingExpectedBase => "missing_expected_base",
+            Self::InvalidExpectedBase => "invalid_expected_base",
+            Self::ExpectedBaseMismatch => "expected_base_mismatch",
+            Self::Conflict => "overlay_conflict",
+            Self::MissingOverlayTarget => "missing_overlay_target",
+            Self::AlreadyExists => "entity_already_exists",
+            Self::MissingOverlayPayload => "missing_overlay_payload",
+            Self::MissingTranslation => "missing_translation",
+            Self::StaleTranslationEntry => "stale_translation_entry",
+            Self::ValidationFailed => "validation_failed",
+        }
+    }
+
+    pub fn category(self) -> &'static str {
+        match self {
+            Self::MissingExpectedBase | Self::InvalidExpectedBase | Self::ExpectedBaseMismatch => {
+                "precondition"
+            }
+            Self::Conflict => "conflict",
+            Self::MissingOverlayTarget | Self::AlreadyExists | Self::MissingOverlayPayload => {
+                "overlay"
+            }
+            Self::MissingTranslation | Self::StaleTranslationEntry => "translation",
+            Self::ValidationFailed => "validation",
+        }
+    }
 }
 
 /// A semantic comparison between two CanonicalDeck values.

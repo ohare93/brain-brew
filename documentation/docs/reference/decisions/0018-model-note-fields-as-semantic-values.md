@@ -39,4 +39,4 @@ This ADR supersedes only ADR-016's parallel-map core representation. ADR-016's Y
 - Core APIs cannot express split or dual field representations.
 - Source-document edits mutate scalar variants only and preserve image/message variants.
 - Media include-preserving formatting must retain enough synthetic declaration context to run canonical unknown-media validation before restoring the include directive.
-- Complete entity-level expected-base fingerprints and typed tombstones remain separate follow-up work.
+- Complete entity-level expected-base fingerprints are defined by ADR-019; typed tombstones remain separate follow-up work.

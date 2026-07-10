@@ -6,7 +6,8 @@ use brain_brew_formats::core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplateChange, ChangeIntent, DeckChange,
     ExpectedBase, FieldChange, FieldDefinition, FieldDefinitionChange, MediaChange, MediaReference,
     Note, NoteChange, NoteTypeChange, Overlay, OverlayKind, PropertyChange, StableId, TagChange,
-    TranslationDictionary,
+    TranslationDictionary, fingerprint_field_definition, fingerprint_media_reference,
+    fingerprint_note,
 };
 use brain_brew_formats::{
     canonical_yaml, crowdanki, lockfile, manifest, media, media_map, source_includes,
@@ -813,7 +814,15 @@ fn ug_regression_field_definition_changes_flow_to_crowdanki_for_every_target() {
                     id: field_id,
                     name: new_name.clone(),
                 }),
-                expected_base: Some(ExpectedBase::EntityPresent),
+                expected_base: Some(ExpectedBase::EntityFingerprint(
+                    fingerprint_field_definition(
+                        note_type
+                            .fields
+                            .iter()
+                            .find(|field| field.id == sid("field.capital"))
+                            .unwrap(),
+                    ),
+                )),
             },
         );
         let mut overlay = empty_overlay(&format!("overlay.regression.field-name.{target}"));
@@ -1222,7 +1231,7 @@ fn ug_regression_note_changes_flow_to_crowdanki_for_every_target() {
         );
         let mut note_change = empty_note_change();
         note_change.intent = ChangeIntent::Remove;
-        note_change.expected_base = Some(ExpectedBase::EntityPresent);
+        note_change.expected_base = Some(ExpectedBase::EntityFingerprint(fingerprint_note(note)));
         let mut overlay = empty_overlay(&format!("overlay.regression.note-removal.{target}"));
         overlay.note_changes.insert(note_id.clone(), note_change);
         MutationExpectation::new(
@@ -1386,7 +1395,9 @@ fn ug_regression_media_changes_flow_to_crowdanki_for_every_target() {
                     path: new_path.clone(),
                     sha256: media.sha256.clone(),
                 }),
-                expected_base: Some(ExpectedBase::EntityPresent),
+                expected_base: Some(ExpectedBase::EntityFingerprint(
+                    fingerprint_media_reference(media),
+                )),
             },
         );
         let mut expected = vec![expected_json(

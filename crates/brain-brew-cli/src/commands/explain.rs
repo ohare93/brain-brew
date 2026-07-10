@@ -1,4 +1,5 @@
-use serde_json::json;
+use brain_brew_core::ComposePrecondition;
+use serde_json::{Value, json};
 
 use crate::args::{parse_manifest_target_args, split_json_flag};
 use crate::output::{self, one_line, package_json, semantic_kind_name};
@@ -151,7 +152,15 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                     .map(|error| {
                         json!({
                             "kind": format!("{:?}", error.kind),
+                            "code": error.kind.code(),
+                            "category": error.kind.category(),
                             "path": error.path,
+                            "deck_path": error.deck_path.as_ref().map(ToString::to_string),
+                            "entity_kind": error.entity_kind.map(|kind| kind.as_str()),
+                            "intent": error.intent.map(|intent| intent.as_str()),
+                            "overlay": error.overlay_id.as_ref().map(ToString::to_string),
+                            "expected": error.expected.as_ref().map(precondition_json),
+                            "actual": error.actual.as_ref().map(precondition_json),
                             "message": error.message,
                         })
                     })
@@ -178,5 +187,18 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                 Err("target composition failed".to_owned())
             }
         }
+    }
+}
+
+fn precondition_json(value: &ComposePrecondition) -> Value {
+    match value {
+        ComposePrecondition::Fingerprint(fingerprint) => {
+            json!({"kind": "entity_fingerprint", "value": fingerprint.to_string()})
+        }
+        ComposePrecondition::Value(value) => json!({"kind": "value", "value": value}),
+        ComposePrecondition::FieldValue(value) => {
+            json!({"kind": "field_value", "value": format!("{value:?}")})
+        }
+        ComposePrecondition::Missing => json!({"kind": "missing"}),
     }
 }

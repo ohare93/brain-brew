@@ -211,6 +211,9 @@ dependencies = [
 [[package]]
 name = "brain-brew-core"
 version = "1.0.0-alpha.1"
+dependencies = [
+ "sha2",
+]
 
 [[package]]
 name = "brain-brew-formats"

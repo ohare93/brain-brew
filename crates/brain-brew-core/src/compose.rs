@@ -251,18 +251,22 @@ fn apply_note_type_remove(
     errors: &mut Vec<ComposeError>,
 ) {
     let path = note_type_path(note_type_id);
+    let actual = resolved
+        .note_types
+        .get(note_type_id)
+        .map(fingerprint_note_type);
+    if !check_entity_expected_base(
+        &change.expected_base,
+        actual,
+        EntityKind::NoteType,
+        &path,
+        overlay,
+        change.intent,
+        errors,
+    ) {
+        return;
+    }
     if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
-        return;
-    }
-    if !has_expected_base(&change.expected_base, path.clone(), errors) {
-        return;
-    }
-    if !resolved.note_types.contains_key(note_type_id) {
-        errors.push(ComposeError::new(
-            ComposeErrorKind::MissingOverlayTarget,
-            path,
-            format!("note type {note_type_id} does not exist"),
-        ));
         return;
     }
     if resolved.notes.iter().any(|(note_id, note)| {
@@ -272,14 +276,6 @@ fn apply_note_type_remove(
             ComposeErrorKind::ValidationFailed,
             path,
             format!("cannot remove note type {note_type_id} while notes still reference it"),
-        ));
-        return;
-    }
-    if let Some(ExpectedBase::Value(expected_value)) = &change.expected_base {
-        errors.push(ComposeError::new(
-            ComposeErrorKind::ExpectedBaseMismatch,
-            path,
-            format!("note type removal expected an entity marker, not value {expected_value:?}"),
         ));
         return;
     }
@@ -297,18 +293,66 @@ fn apply_note_type_change(
 ) -> Vec<(StableId, StableId)> {
     let mut added_fields = Vec::new();
     let path = note_type_path(note_type_id);
-    if change.note_type.is_some() {
-        errors.push(ComposeError::new(
-            ComposeErrorKind::ValidationFailed,
-            path,
-            "a full entity body is only valid with intent `add`; use add, or express edits as field/sub-changes".to_owned(),
-        ));
+    if let Some(replacement) = &change.note_type {
+        if change.intent == ChangeIntent::Merge {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::ValidationFailed,
+                path,
+                "a complete note type requires intent `replace` or `override`; use sparse sub-changes for merge"
+                    .to_owned(),
+            ));
+            return added_fields;
+        }
+        let actual = resolved
+            .note_types
+            .get(note_type_id)
+            .map(fingerprint_note_type);
+        if !check_entity_expected_base(
+            &change.expected_base,
+            actual,
+            EntityKind::NoteType,
+            &path,
+            overlay,
+            change.intent,
+            errors,
+        ) {
+            return added_fields;
+        }
+        if &replacement.id != note_type_id {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::ValidationFailed,
+                path,
+                format!(
+                    "note type payload id {} does not match target {note_type_id}",
+                    replacement.id
+                ),
+            ));
+            return added_fields;
+        }
+        if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+            return added_fields;
+        }
+        resolved
+            .note_types
+            .insert(note_type_id.clone(), replacement.clone());
         return added_fields;
     }
-    if requires_expected_base(change.intent)
-        && !has_expected_base(&change.expected_base, note_type_path(note_type_id), errors)
-    {
-        return added_fields;
+    if requires_expected_base(change.intent) {
+        let actual = resolved
+            .note_types
+            .get(note_type_id)
+            .map(fingerprint_note_type);
+        if !check_entity_expected_base(
+            &change.expected_base,
+            actual,
+            EntityKind::NoteType,
+            &path,
+            overlay,
+            change.intent,
+            errors,
+        ) {
+            return added_fields;
+        }
     }
 
     let Some(note_type) = resolved.note_types.get_mut(note_type_id) else {
@@ -398,16 +442,27 @@ fn apply_card_template_change(
     errors: &mut Vec<ComposeError>,
 ) {
     let path = card_template_path(note_type_id, template_id);
-    if requires_expected_base(change.intent)
-        && !has_expected_base(&change.expected_base, path.clone(), errors)
-    {
-        return;
-    }
-
     let existing_index = note_type
         .card_templates
         .iter()
         .position(|template| &template.id == template_id);
+    let complete_or_destructive = change.intent != ChangeIntent::Add
+        && (change.template.is_some() || change.intent == ChangeIntent::Remove);
+    if complete_or_destructive {
+        let actual =
+            existing_index.map(|index| fingerprint_card_template(&note_type.card_templates[index]));
+        if !check_entity_expected_base(
+            &change.expected_base,
+            actual,
+            EntityKind::CardTemplate,
+            &path,
+            overlay,
+            change.intent,
+            errors,
+        ) {
+            return;
+        }
+    }
 
     match change.intent {
         ChangeIntent::Add if existing_index.is_some() => {
@@ -597,9 +652,13 @@ fn apply_string_property_change(
         match expected_base {
             ExpectedBase::Value(expected_value) => {
                 if value != expected_value {
-                    errors.push(ComposeError::new(
+                    errors.push(ComposeError::precondition(
                         ComposeErrorKind::ExpectedBaseMismatch,
                         path,
+                        change.intent,
+                        overlay.id.clone(),
+                        Some(ComposePrecondition::Value(expected_value.clone())),
+                        ComposePrecondition::Value(value.clone()),
                         format!(
                             "expected base value {:?}, found {:?}",
                             expected_value, value
@@ -609,14 +668,12 @@ fn apply_string_property_change(
                 }
             }
             ExpectedBase::EntityPresent => {
-                if value.is_empty() {
-                    errors.push(ComposeError::new(
-                        ComposeErrorKind::ExpectedBaseMismatch,
-                        path,
-                        "expected property to be present".to_owned(),
-                    ));
-                    return;
-                }
+                errors.push(legacy_presence_expected_base_error(path));
+                return;
+            }
+            ExpectedBase::EntityFingerprint(fingerprint) => {
+                errors.push(fingerprint_on_sparse_value_error(path, fingerprint));
+                return;
             }
             ExpectedBase::FieldValue(expected) => {
                 errors.push(ComposeError::new(
@@ -700,9 +757,16 @@ fn apply_map_string_property_change(
             ExpectedBase::Value(expected_value) => {
                 let current_value = values.get(key);
                 if current_value != Some(expected_value) {
-                    errors.push(ComposeError::new(
+                    errors.push(ComposeError::precondition(
                         ComposeErrorKind::ExpectedBaseMismatch,
                         path,
+                        change.intent,
+                        overlay.id.clone(),
+                        Some(ComposePrecondition::Value(expected_value.clone())),
+                        current_value
+                            .cloned()
+                            .map(ComposePrecondition::Value)
+                            .unwrap_or(ComposePrecondition::Missing),
                         format!(
                             "expected base value {:?}, found {:?}",
                             expected_value, current_value
@@ -712,14 +776,12 @@ fn apply_map_string_property_change(
                 }
             }
             ExpectedBase::EntityPresent => {
-                if !values.contains_key(key) {
-                    errors.push(ComposeError::new(
-                        ComposeErrorKind::ExpectedBaseMismatch,
-                        path,
-                        format!("expected variable {key} to be present"),
-                    ));
-                    return;
-                }
+                errors.push(legacy_presence_expected_base_error(path));
+                return;
+            }
+            ExpectedBase::EntityFingerprint(fingerprint) => {
+                errors.push(fingerprint_on_sparse_value_error(path, fingerprint));
+                return;
             }
             ExpectedBase::FieldValue(expected) => {
                 errors.push(ComposeError::new(
@@ -784,9 +846,15 @@ fn apply_adapter_id_change(
             ExpectedBase::Value(expected_value) => {
                 let current_value = adapter_ids.get(key);
                 if current_value != Some(expected_value.as_str()) {
-                    errors.push(ComposeError::new(
+                    errors.push(ComposeError::precondition(
                         ComposeErrorKind::ExpectedBaseMismatch,
                         path,
+                        change.intent,
+                        overlay.id.clone(),
+                        Some(ComposePrecondition::Value(expected_value.clone())),
+                        current_value
+                            .map(|value| ComposePrecondition::Value(value.to_owned()))
+                            .unwrap_or(ComposePrecondition::Missing),
                         format!(
                             "expected base value {:?}, found {:?}",
                             expected_value, current_value
@@ -796,14 +864,12 @@ fn apply_adapter_id_change(
                 }
             }
             ExpectedBase::EntityPresent => {
-                if !adapter_ids.contains_key(key) {
-                    errors.push(ComposeError::new(
-                        ComposeErrorKind::ExpectedBaseMismatch,
-                        path,
-                        format!("expected adapter id {key} to be present"),
-                    ));
-                    return;
-                }
+                errors.push(legacy_presence_expected_base_error(path));
+                return;
+            }
+            ExpectedBase::EntityFingerprint(fingerprint) => {
+                errors.push(fingerprint_on_sparse_value_error(path, fingerprint));
+                return;
             }
             ExpectedBase::FieldValue(expected) => {
                 errors.push(ComposeError::new(
@@ -856,20 +922,28 @@ fn apply_field_definition_change(
     errors: &mut Vec<ComposeError>,
 ) -> bool {
     let path = field_definition_path(note_type_id, field_id);
-    if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
-        return false;
-    }
-
-    if requires_expected_base(change.intent)
-        && !has_expected_base(&change.expected_base, path.clone(), errors)
-    {
-        return false;
-    }
-
     let existing_index = note_type
         .fields
         .iter()
         .position(|field| &field.id == field_id);
+    if change.intent != ChangeIntent::Add {
+        let actual =
+            existing_index.map(|index| fingerprint_field_definition(&note_type.fields[index]));
+        if !check_entity_expected_base(
+            &change.expected_base,
+            actual,
+            EntityKind::FieldDefinition,
+            &path,
+            overlay,
+            change.intent,
+            errors,
+        ) {
+            return false;
+        }
+    }
+    if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+        return false;
+    }
     match change.intent {
         ChangeIntent::Add if existing_index.is_some() => {
             errors.push(ComposeError::new(
@@ -987,20 +1061,69 @@ fn apply_note_merge(
     errors: &mut Vec<ComposeError>,
 ) {
     let path = note_path(note_id);
-    if change.note.is_some() {
+    if let Some(replacement) = &change.note {
+        if change.intent == ChangeIntent::Merge {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::ValidationFailed,
+                path,
+                "a complete note requires intent `replace` or `override`; use sparse sub-changes for merge"
+                    .to_owned(),
+            ));
+            return;
+        }
+        let actual = live_note(resolved, note_id).map(fingerprint_note);
+        if !check_entity_expected_base(
+            &change.expected_base,
+            actual,
+            EntityKind::Note,
+            &path,
+            overlay,
+            change.intent,
+            errors,
+        ) {
+            return;
+        }
+        if &replacement.id != note_id {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::ValidationFailed,
+                path,
+                format!(
+                    "note payload id {} does not match target {note_id}",
+                    replacement.id
+                ),
+            ));
+            return;
+        }
+        if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
+            return;
+        }
+        resolved.notes.insert(note_id.clone(), replacement.clone());
+        resolved.tombstones.remove(note_id);
+        return;
+    }
+    if requires_expected_base(change.intent) {
+        let actual = live_note(resolved, note_id).map(fingerprint_note);
+        if !check_entity_expected_base(
+            &change.expected_base,
+            actual,
+            EntityKind::Note,
+            &path,
+            overlay,
+            change.intent,
+            errors,
+        ) {
+            return;
+        }
+    }
+
+    if resolved.tombstones.contains(note_id) {
         errors.push(ComposeError::new(
-            ComposeErrorKind::ValidationFailed,
-            path,
-            "a full entity body is only valid with intent `add`; use add, or express edits as field/sub-changes".to_owned(),
+            ComposeErrorKind::MissingOverlayTarget,
+            note_path(note_id),
+            format!("note {note_id} is removed"),
         ));
         return;
     }
-    if requires_expected_base(change.intent)
-        && !has_expected_base(&change.expected_base, note_path(note_id), errors)
-    {
-        return;
-    }
-
     let Some(note) = resolved.notes.get_mut(note_id) else {
         errors.push(ComposeError::new(
             ComposeErrorKind::MissingOverlayTarget,
@@ -1079,20 +1202,26 @@ fn apply_tag_change(
     if let Some(expected_base) = &change.expected_base {
         match expected_base {
             ExpectedBase::EntityPresent => {
-                if !note.tags.contains(tag) {
-                    errors.push(ComposeError::new(
-                        ComposeErrorKind::ExpectedBaseMismatch,
-                        path,
-                        format!("expected tag {tag} to be present"),
-                    ));
-                    return;
-                }
+                errors.push(legacy_presence_expected_base_error(path));
+                return;
+            }
+            ExpectedBase::EntityFingerprint(fingerprint) => {
+                errors.push(fingerprint_on_sparse_value_error(path, fingerprint));
+                return;
             }
             ExpectedBase::Value(expected_value) => {
                 if expected_value != tag || !note.tags.contains(tag) {
-                    errors.push(ComposeError::new(
+                    errors.push(ComposeError::precondition(
                         ComposeErrorKind::ExpectedBaseMismatch,
                         path,
+                        change.intent,
+                        overlay.id.clone(),
+                        Some(ComposePrecondition::Value(expected_value.clone())),
+                        if note.tags.contains(tag) {
+                            ComposePrecondition::Value(tag.to_owned())
+                        } else {
+                            ComposePrecondition::Missing
+                        },
                         format!("expected tag value {:?} to be present", expected_value),
                     ));
                     return;
@@ -1156,12 +1285,33 @@ fn apply_field_change(
                 current_value == Some(&FieldValue::Scalar(expected.clone()))
             }
             ExpectedBase::FieldValue(expected) => current_value == Some(expected),
-            ExpectedBase::EntityPresent => current_value.is_some(),
+            ExpectedBase::EntityPresent => {
+                errors.push(legacy_presence_expected_base_error(path));
+                return;
+            }
+            ExpectedBase::EntityFingerprint(fingerprint) => {
+                errors.push(fingerprint_on_sparse_value_error(path, fingerprint));
+                return;
+            }
         };
         if !matches {
-            errors.push(ComposeError::new(
+            let expected = match expected_base {
+                ExpectedBase::Value(value) => ComposePrecondition::Value(value.clone()),
+                ExpectedBase::FieldValue(value) => ComposePrecondition::FieldValue(value.clone()),
+                ExpectedBase::EntityPresent | ExpectedBase::EntityFingerprint(_) => {
+                    unreachable!("invalid sparse expected bases returned above")
+                }
+            };
+            errors.push(ComposeError::precondition(
                 ComposeErrorKind::ExpectedBaseMismatch,
                 path,
+                change.intent,
+                overlay.id.clone(),
+                Some(expected),
+                current_value
+                    .cloned()
+                    .map(ComposePrecondition::FieldValue)
+                    .unwrap_or(ComposePrecondition::Missing),
                 format!(
                     "expected base value {:?}, found {:?}",
                     expected_base, current_value
@@ -1230,51 +1380,25 @@ fn apply_media_change(
     errors: &mut Vec<ComposeError>,
 ) {
     let path = media_path(media_id);
+    if change.intent != ChangeIntent::Add {
+        let actual = resolved
+            .media
+            .get(media_id)
+            .map(fingerprint_media_reference);
+        if !check_entity_expected_base(
+            &change.expected_base,
+            actual,
+            EntityKind::MediaReference,
+            &path,
+            overlay,
+            change.intent,
+            errors,
+        ) {
+            return;
+        }
+    }
     if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
         return;
-    }
-
-    if requires_expected_base(change.intent)
-        && !has_expected_base(&change.expected_base, path.clone(), errors)
-    {
-        return;
-    }
-
-    if let Some(expected_base) = &change.expected_base {
-        match expected_base {
-            ExpectedBase::EntityPresent => {
-                if !resolved.media.contains_key(media_id) {
-                    errors.push(ComposeError::new(
-                        ComposeErrorKind::ExpectedBaseMismatch,
-                        path,
-                        format!("expected media reference {media_id} to be present"),
-                    ));
-                    return;
-                }
-            }
-            ExpectedBase::Value(expected_value) => {
-                let current_value = resolved.media.get(media_id).map(media_reference_summary);
-                if current_value.as_deref() != Some(expected_value.as_str()) {
-                    errors.push(ComposeError::new(
-                        ComposeErrorKind::ExpectedBaseMismatch,
-                        path,
-                        format!(
-                            "expected base value {:?}, found {:?}",
-                            expected_value, current_value
-                        ),
-                    ));
-                    return;
-                }
-            }
-            ExpectedBase::FieldValue(expected) => {
-                errors.push(ComposeError::new(
-                    ComposeErrorKind::ExpectedBaseMismatch,
-                    path,
-                    format!("semantic field expected base {expected:?} cannot apply to media"),
-                ));
-                return;
-            }
-        }
     }
 
     match change.intent {
@@ -1571,10 +1695,6 @@ fn tombstone_path(id: &StableId) -> String {
     DeckPath::Tombstone { id: id.clone() }.to_string()
 }
 
-fn media_reference_summary(media: &MediaReference) -> String {
-    format!("path={};sha256={}", media.path, media.sha256)
-}
-
 fn apply_note_remove(
     resolved: &mut CanonicalDeck,
     overlay: &Overlay,
@@ -1584,29 +1704,19 @@ fn apply_note_remove(
     errors: &mut Vec<ComposeError>,
 ) {
     let path = note_path(note_id);
+    let actual = live_note(resolved, note_id).map(fingerprint_note);
+    if !check_entity_expected_base(
+        &change.expected_base,
+        actual,
+        EntityKind::Note,
+        &path,
+        overlay,
+        change.intent,
+        errors,
+    ) {
+        return;
+    }
     if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
-        return;
-    }
-
-    if !has_expected_base(&change.expected_base, path.clone(), errors) {
-        return;
-    }
-
-    if !resolved.notes.contains_key(note_id) {
-        errors.push(ComposeError::new(
-            ComposeErrorKind::MissingOverlayTarget,
-            path,
-            format!("note {note_id} does not exist"),
-        ));
-        return;
-    }
-
-    if let Some(ExpectedBase::Value(expected_value)) = &change.expected_base {
-        errors.push(ComposeError::new(
-            ComposeErrorKind::ExpectedBaseMismatch,
-            path,
-            format!("note removal expected an entity marker, not value {expected_value:?}"),
-        ));
         return;
     }
 
@@ -1636,6 +1746,112 @@ pub(crate) fn record_change_path(
 
     changed_paths.insert(path.to_owned(), overlay.id.clone());
     true
+}
+
+fn live_note<'a>(resolved: &'a CanonicalDeck, note_id: &StableId) -> Option<&'a Note> {
+    (!resolved.tombstones.contains(note_id))
+        .then(|| resolved.notes.get(note_id))
+        .flatten()
+}
+
+fn check_entity_expected_base(
+    expected_base: &Option<ExpectedBase>,
+    actual: Option<EntityFingerprint>,
+    entity_kind: EntityKind,
+    path: &str,
+    overlay: &Overlay,
+    intent: ChangeIntent,
+    errors: &mut Vec<ComposeError>,
+) -> bool {
+    let actual_state = actual
+        .clone()
+        .map(ComposePrecondition::Fingerprint)
+        .unwrap_or(ComposePrecondition::Missing);
+    let Some(expected_base) = expected_base else {
+        errors.push(
+            ComposeError::precondition(
+                ComposeErrorKind::MissingExpectedBase,
+                path.to_owned(),
+                intent,
+                overlay.id.clone(),
+                None,
+                actual_state,
+                format!(
+                    "complete {} {intent:?} must declare an entity fingerprint",
+                    entity_kind.as_str()
+                ),
+            )
+            .with_entity_kind(entity_kind),
+        );
+        return false;
+    };
+    let ExpectedBase::EntityFingerprint(expected) = expected_base else {
+        let expected_state = match expected_base {
+            ExpectedBase::Value(value) => ComposePrecondition::Value(value.clone()),
+            ExpectedBase::FieldValue(value) => ComposePrecondition::FieldValue(value.clone()),
+            ExpectedBase::EntityPresent => ComposePrecondition::Value("entity_present".to_owned()),
+            ExpectedBase::EntityFingerprint(_) => unreachable!(),
+        };
+        errors.push(
+            ComposeError::precondition(
+                ComposeErrorKind::InvalidExpectedBase,
+                path.to_owned(),
+                intent,
+                overlay.id.clone(),
+                Some(expected_state),
+                actual_state,
+                "presence-only and value baselines cannot authorize complete entity changes; regenerate the overlay with `brainbrew diff --as-overlay` to obtain a fingerprint".to_owned(),
+            )
+            .with_entity_kind(entity_kind),
+        );
+        return false;
+    };
+    if actual.as_ref() != Some(expected) {
+        errors.push(
+            ComposeError::precondition(
+                ComposeErrorKind::ExpectedBaseMismatch,
+                path.to_owned(),
+                intent,
+                overlay.id.clone(),
+                Some(ComposePrecondition::Fingerprint(expected.clone())),
+                actual_state,
+                format!(
+                    "{} fingerprint precondition failed: expected {}, found {}",
+                    entity_kind.as_str(),
+                    expected,
+                    actual
+                        .as_ref()
+                        .map(ToString::to_string)
+                        .unwrap_or_else(|| "missing".to_owned())
+                ),
+            )
+            .with_entity_kind(entity_kind),
+        );
+        return false;
+    }
+    true
+}
+
+fn legacy_presence_expected_base_error(path: String) -> ComposeError {
+    ComposeError::new(
+        ComposeErrorKind::InvalidExpectedBase,
+        path,
+        "presence-only expected_base is no longer accepted for destructive changes; use the exact prior value, or regenerate complete entity changes with `brainbrew diff --as-overlay`"
+            .to_owned(),
+    )
+}
+
+fn fingerprint_on_sparse_value_error(
+    path: String,
+    fingerprint: &EntityFingerprint,
+) -> ComposeError {
+    ComposeError::new(
+        ComposeErrorKind::InvalidExpectedBase,
+        path,
+        format!(
+            "entity fingerprint {fingerprint} cannot guard a sparse property; use its exact typed prior value"
+        ),
+    )
 }
 
 fn has_expected_base(

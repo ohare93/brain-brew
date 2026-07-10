@@ -5570,6 +5570,44 @@ fn explain_reports_json_conflicts_for_ui_consumers() {
 }
 
 #[test]
+fn explain_json_reports_typed_entity_precondition_details() {
+    let dir = temp_dir("explain-entity-precondition-json");
+    fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML).unwrap();
+    fs::write(
+        dir.join("stale-media.yaml"),
+        "id: patch.media.stale\nkind: patch\nmedia:\n  media.flags-fi-png:\n    intent: override\n    path: flags/fi-v2.png\n    sha256: new\n    expected_base:\n      fingerprint: sha256:v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        "package:\n  id: example.precondition\n  version: 1.0.0\nbase: deck.yaml\noverlays:\n  patch.media.stale:\n    file: stale-media.yaml\n    kind: patch\ntargets:\n  stale:\n    overlays:\n      - patch.media.stale\n",
+    )
+    .unwrap();
+
+    let output = run([
+        "explain",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "stale",
+        "--json",
+    ]);
+
+    assert!(!output.status.success());
+    assert!(stderr(&output).is_empty());
+    let json: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    let error = &json["error"]["errors"][0];
+    assert_eq!(error["code"], "expected_base_mismatch");
+    assert_eq!(error["category"], "precondition");
+    assert_eq!(error["deck_path"], "media.media.flags-fi-png");
+    assert_eq!(error["entity_kind"], "media_reference");
+    assert_eq!(error["intent"], "override");
+    assert_eq!(error["overlay"], "patch.media.stale");
+    assert_eq!(error["expected"]["kind"], "entity_fingerprint");
+    assert_eq!(error["actual"]["kind"], "entity_fingerprint");
+}
+
+#[test]
 fn explain_reports_overlay_conflicts_with_stack_context() {
     let dir = temp_dir("explain-conflict");
     write_manifest_workspace(&dir);
@@ -5647,11 +5685,9 @@ fn diff_as_overlay_emits_tag_and_adapter_id_changes() {
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let out = stdout(&output);
     assert!(out.contains("      Baltic:\n        intent: add"));
-    assert!(
-        out.contains(
-            "      Nordic:\n        intent: remove\n        expected_base: entity_present"
-        )
-    );
+    assert!(out.contains(
+        "      Nordic:\n        intent: remove\n        expected_base:\n          value: Nordic"
+    ));
     assert!(out.contains("      crowdanki:guid:\n        intent: replace"));
     assert!(out.contains("        value: ug-finland-guid-v2"));
 }
@@ -5684,6 +5720,72 @@ fn diff_as_overlay_emits_media_reference_changes() {
     let out = stdout(&output);
     assert!(out.contains("media:\n  media.flags-se-png:\n    intent: add"));
     assert!(out.contains("    path: flags/se.png"));
+}
+
+#[test]
+fn generated_entity_fingerprint_overlay_reapplies_only_to_the_exact_base() {
+    let dir = temp_dir("diff-as-overlay-fingerprint-reapply");
+    let left = dir.join("left.yaml");
+    let right = dir.join("right.yaml");
+    let stale = dir.join("stale.yaml");
+    let overlay = dir.join("overlay.yaml");
+    let resolved = dir.join("resolved.yaml");
+    fs::write(&left, SAMPLE_CANONICAL_YAML).unwrap();
+    fs::write(
+        &right,
+        SAMPLE_CANONICAL_YAML.replace("path: flags/fi.png", "path: flags/fi-v2.png"),
+    )
+    .unwrap();
+    fs::write(
+        &stale,
+        SAMPLE_CANONICAL_YAML.replace("sha256: ''", "sha256: stale-upstream-hash"),
+    )
+    .unwrap();
+
+    let generated = run([
+        "diff",
+        left.to_str().unwrap(),
+        right.to_str().unwrap(),
+        "--as-overlay",
+        "--id",
+        "overlay.patch.media-fingerprint",
+    ]);
+    assert!(generated.status.success(), "stderr: {}", stderr(&generated));
+    let generated_source = stdout(&generated);
+    assert!(generated_source.contains("fingerprint: sha256:v1:"));
+    fs::write(&overlay, generated_source).unwrap();
+
+    let exact = run([
+        "compose",
+        left.to_str().unwrap(),
+        "--overlay",
+        overlay.to_str().unwrap(),
+        "--out",
+        resolved.to_str().unwrap(),
+    ]);
+    assert!(exact.status.success(), "stderr: {}", stderr(&exact));
+    let comparison = run(["diff", resolved.to_str().unwrap(), right.to_str().unwrap()]);
+    assert!(
+        comparison.status.success(),
+        "stderr: {}",
+        stderr(&comparison)
+    );
+    assert!(stdout(&comparison).contains("no semantic changes"));
+
+    let stale_apply = run([
+        "compose",
+        stale.to_str().unwrap(),
+        "--overlay",
+        overlay.to_str().unwrap(),
+        "--out",
+        dir.join("stale-result.yaml").to_str().unwrap(),
+    ]);
+    assert!(!stale_apply.status.success());
+    assert!(
+        stderr(&stale_apply).contains("fingerprint precondition failed"),
+        "{}",
+        stderr(&stale_apply)
+    );
 }
 
 #[test]
@@ -5732,10 +5834,9 @@ fn diff_as_overlay_emits_note_additions_and_removals() {
         "stderr: {}",
         stderr(&remove_output)
     );
-    assert!(
-        stdout(&remove_output)
-            .contains("  note.finland:\n    intent: remove\n    expected_base: entity_present")
-    );
+    assert!(stdout(&remove_output).contains(
+        "  note.finland:\n    intent: remove\n    expected_base:\n      fingerprint: sha256:v1:"
+    ));
 }
 
 #[test]

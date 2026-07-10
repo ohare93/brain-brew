@@ -149,6 +149,17 @@ stale_translations:
 
 A target-adaptation path may be present in either the top-level `target_adaptations` map or the legacy `translations.target_adaptations` map, but not both. Duplicating the same path in both places is rejected as an invalid translation dictionary.
 
+## Expected bases and complete entity fingerprints
+
+Sparse destructive changes use the exact prior typed value under `expected_base.value`. Complete note, note-type, field-definition, card-template, and media replacement/override/removal uses:
+
+```yaml
+expected_base:
+  fingerprint: sha256:v1:<64 lowercase hexadecimal digits>
+```
+
+`expected_base: entity_present` is no longer valid. Generate fingerprints from the intended exact prior deck with `brainbrew diff --as-overlay`; do not derive hashes by hand. Algorithm/version/digest shape is validated while decoding, and composition compares the actual current entity immediately before mutation. See [Canonical entity fingerprints](entity-fingerprints.md) for the byte-level specification and migration.
+
 ## Field additions
 
 Adds field definitions and optionally fills those new fields. Notes that omit a newly added field receive a blank value automatically.

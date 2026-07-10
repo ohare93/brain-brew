@@ -3,11 +3,11 @@ use std::fmt::{self, Write as _};
 
 use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, ChangeIntent,
-    DeckChange, ExpectedBase, FieldChange, FieldDefinition, FieldDefinitionChange,
-    FieldImageReference, FieldValue, InvalidStableId, MediaChange, MediaReference,
-    MessageComponent, Note, NoteChange, NoteType, NoteTypeChange, Overlay, OverlayKind,
-    PropertyChange, StableId, StaleTranslation, StructuredMessage, TagChange, TargetAdaptation,
-    TranslationDictionary, ValidationReport,
+    DeckChange, EntityFingerprint, ExpectedBase, FieldChange, FieldDefinition,
+    FieldDefinitionChange, FieldImageReference, FieldValue, InvalidStableId, MediaChange,
+    MediaReference, MessageComponent, Note, NoteChange, NoteType, NoteTypeChange, Overlay,
+    OverlayKind, PropertyChange, StableId, StaleTranslation, StructuredMessage, TagChange,
+    TargetAdaptation, TranslationDictionary, ValidationReport,
 };
 use serde::{Deserialize, Deserializer};
 use serde_yaml::Value;
@@ -1221,6 +1221,13 @@ fn write_card_template_payload(out: &mut String, indent: &str, template: &CardTe
 
 fn write_expected_base(out: &mut String, indent: &str, expected_base: &ExpectedBase) {
     match expected_base {
+        ExpectedBase::EntityFingerprint(fingerprint) => {
+            writeln!(
+                out,
+                "{indent}expected_base:\n{indent}  fingerprint: {fingerprint}"
+            )
+            .expect("writing to a string cannot fail");
+        }
         ExpectedBase::EntityPresent => {
             writeln!(out, "{indent}expected_base: entity_present")
                 .expect("writing to a string cannot fail");
@@ -1652,6 +1659,78 @@ fn validate_overlay_yaml_keys(overlay: &Overlay) -> Result<(), CanonicalYamlErro
 }
 
 fn validate_overlay_representations(overlay: &Overlay) -> Result<(), CanonicalYamlError> {
+    let reject = |expected_base: &Option<ExpectedBase>| {
+        if matches!(expected_base, Some(ExpectedBase::EntityPresent)) {
+            Err(CanonicalYamlError::InvalidExpectedBase(
+                "entity_present is no longer accepted for destructive changes; use an exact typed value or generate an entity fingerprint with `brainbrew diff --as-overlay`"
+                    .to_owned(),
+            ))
+        } else {
+            Ok(())
+        }
+    };
+    if let Some(change) = &overlay.deck_change {
+        for property in change.name.iter().chain(change.description.iter()) {
+            reject(&property.expected_base)?;
+        }
+        for property in change.variables.values() {
+            reject(&property.expected_base)?;
+        }
+        for adapter in change.adapter_ids.values() {
+            reject(&adapter.expected_base)?;
+        }
+    }
+    for change in overlay.note_type_changes.values() {
+        reject(&change.expected_base)?;
+        for property in change
+            .name
+            .iter()
+            .chain(change.styling.iter())
+            .chain(change.variables.values())
+        {
+            reject(&property.expected_base)?;
+        }
+        for field in change.fields.values() {
+            reject(&field.expected_base)?;
+        }
+        for template in change.card_templates.values() {
+            reject(&template.expected_base)?;
+            for property in template
+                .name
+                .iter()
+                .chain(template.question_format.iter())
+                .chain(template.answer_format.iter())
+                .chain(template.variables.values())
+            {
+                reject(&property.expected_base)?;
+            }
+            for adapter in template.adapter_ids.values() {
+                reject(&adapter.expected_base)?;
+            }
+        }
+        for adapter in change.adapter_ids.values() {
+            reject(&adapter.expected_base)?;
+        }
+    }
+    for change in overlay.note_changes.values() {
+        reject(&change.expected_base)?;
+        for property in change.variables.values() {
+            reject(&property.expected_base)?;
+        }
+        for field in change.fields.values() {
+            reject(&field.expected_base)?;
+        }
+        for tag in change.tags.values() {
+            reject(&tag.expected_base)?;
+        }
+        for adapter in change.adapter_ids.values() {
+            reject(&adapter.expected_base)?;
+        }
+    }
+    for change in overlay.media_changes.values() {
+        reject(&change.expected_base)?;
+    }
+
     for (note_id, change) in &overlay.note_changes {
         if let Some(note) = &change.note {
             validate_note_representations(note, &format!("notes.{note_id}.note"))?;
@@ -2633,6 +2712,7 @@ impl MediaChangeYaml {
 enum ExpectedBaseYaml {
     Marker(String),
     Value { value: FieldValueYaml },
+    Fingerprint(EntityFingerprint),
 }
 
 impl<'de> Deserialize<'de> for ExpectedBaseYaml {
@@ -2646,7 +2726,7 @@ impl<'de> Deserialize<'de> for ExpectedBaseYaml {
         }
         let Value::Mapping(mut mapping) = value else {
             return Err(serde::de::Error::custom(
-                "expected base must be entity_present or a single value mapping",
+                "expected base must be a single fingerprint or value mapping",
             ));
         };
         if mapping.len() != 1 {
@@ -2654,9 +2734,20 @@ impl<'de> Deserialize<'de> for ExpectedBaseYaml {
                 "expected base must contain exactly one value",
             ));
         }
+        if let Some(value) = mapping.remove(Value::String("fingerprint".to_owned())) {
+            let Value::String(value) = value else {
+                return Err(serde::de::Error::custom(
+                    "expected base fingerprint must be a canonical string",
+                ));
+            };
+            return value
+                .parse::<EntityFingerprint>()
+                .map(Self::Fingerprint)
+                .map_err(serde::de::Error::custom);
+        }
         let Some(value) = mapping.remove(Value::String("value".to_owned())) else {
             return Err(serde::de::Error::custom(
-                "expected base mapping must contain value",
+                "expected base mapping must contain fingerprint or value",
             ));
         };
         field_value_from_yaml_value(value)
@@ -2668,8 +2759,14 @@ impl<'de> Deserialize<'de> for ExpectedBaseYaml {
 impl ExpectedBaseYaml {
     fn into_expected_base(self) -> Result<ExpectedBase, CanonicalYamlError> {
         match self {
-            Self::Marker(marker) if marker == "entity_present" => Ok(ExpectedBase::EntityPresent),
+            Self::Marker(marker) if marker == "entity_present" => Err(
+                CanonicalYamlError::InvalidExpectedBase(
+                    "entity_present is no longer accepted for destructive changes; use an exact typed value or generate an entity fingerprint with `brainbrew diff --as-overlay`"
+                        .to_owned(),
+                ),
+            ),
             Self::Marker(marker) => Err(CanonicalYamlError::InvalidExpectedBase(marker)),
+            Self::Fingerprint(fingerprint) => Ok(ExpectedBase::EntityFingerprint(fingerprint)),
             Self::Value {
                 value: FieldValueYaml::Scalar(value),
             } => Ok(ExpectedBase::Value(value)),
