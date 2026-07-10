@@ -3,6 +3,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use brain_brew_core::{CanonicalDeck, Overlay};
+use brain_brew_formats::canonical_source_document::CanonicalSourceDocument;
+use brain_brew_formats::overlay_source_document::OverlaySourceDocument;
+use brain_brew_formats::source_document::{IncludeRequest, SourceFile, SourceProvenance};
 use brain_brew_formats::{canonical_yaml, lockfile, manifest, media_map, source_includes};
 use serde_json::json;
 use serde_yaml::Value;
@@ -46,6 +49,54 @@ pub(crate) fn format_source_at(_path: &Path, input: &str) -> Result<String, Stri
     format_source(input)
 }
 
+pub(crate) fn canonical_source_document(
+    path: &Path,
+    input: &str,
+) -> Result<CanonicalSourceDocument, String> {
+    let context = source_context_for_path(path)?;
+    CanonicalSourceDocument::parse_with_includes(source_file(path, input, &context)?, |request| {
+        load_source_include(request, &context)
+    })
+    .map_err(|error| error.to_string())
+}
+
+pub(crate) fn overlay_source_document(
+    path: &Path,
+    input: &str,
+) -> Result<OverlaySourceDocument, String> {
+    let context = source_context_for_path(path)?;
+    OverlaySourceDocument::parse_with_includes(source_file(path, input, &context)?, |request| {
+        load_source_include(request, &context)
+    })
+    .map_err(|error| error.to_string())
+}
+
+fn source_file(path: &Path, input: &str, context: &SourceContext) -> Result<SourceFile, String> {
+    let absolute =
+        fs::canonicalize(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    Ok(SourceFile::new(
+        SourceProvenance::new(absolute.display().to_string())
+            .with_source_root(context.root.display().to_string()),
+        input,
+    ))
+}
+
+fn load_source_include(
+    request: &IncludeRequest,
+    context: &SourceContext,
+) -> Result<SourceFile, String> {
+    let path = resolve_include_target_for_context(request.target(), context)?;
+    let absolute =
+        fs::canonicalize(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let text = fs::read_to_string(&absolute)
+        .map_err(|error| format!("{}: {error}", absolute.display()))?;
+    Ok(SourceFile::new(
+        SourceProvenance::new(absolute.display().to_string())
+            .with_source_root(context.root.display().to_string()),
+        text,
+    ))
+}
+
 pub(crate) fn read_deck(path: &Path) -> Result<CanonicalDeck, String> {
     let context = source_context_for_path(path)?;
     read_deck_with_context(path, &context)
@@ -87,7 +138,20 @@ fn read_overlay_from_package(
 
 fn read_overlay_with_context(path: &Path, context: &SourceContext) -> Result<Overlay, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    let input = resolve_source_includes(&input, path, context)?;
+    overlay_from_source_text_with_context(path, &input, context)
+}
+
+pub(crate) fn overlay_from_source_text(path: &Path, input: &str) -> Result<Overlay, String> {
+    let context = source_context_for_path(path)?;
+    overlay_from_source_text_with_context(path, input, &context)
+}
+
+fn overlay_from_source_text_with_context(
+    path: &Path,
+    input: &str,
+    context: &SourceContext,
+) -> Result<Overlay, String> {
+    let input = resolve_source_includes(input, path, context)?;
     canonical_yaml::overlay_from_str(&input).map_err(|error| format!("{}: {error}", path.display()))
 }
 
@@ -570,8 +634,12 @@ pub(crate) struct SourceContext {
     pub(crate) include_roots: Vec<PathBuf>,
 }
 
+pub(crate) fn workspace_root_for_source_path(path: &Path) -> PathBuf {
+    nearest_manifest_root(path).unwrap_or_else(|| manifest_root(path))
+}
+
 pub(crate) fn source_context_for_path(path: &Path) -> Result<SourceContext, String> {
-    let root = nearest_manifest_root(path).unwrap_or_else(|| manifest_root(path));
+    let root = workspace_root_for_source_path(path);
     let manifest_path = root.join("brainbrew.yaml");
     let include_roots = if manifest_path.exists() {
         let manifest = read_manifest(&manifest_path)?;

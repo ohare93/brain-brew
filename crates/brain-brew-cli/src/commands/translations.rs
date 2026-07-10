@@ -7,18 +7,22 @@ use std::path::{Path, PathBuf};
 use brain_brew_core::{
     Overlay, OverlayKind, TranslationContextUnit, TranslationContextView,
     TranslationCoverageCategory, TranslationCoverageEntry, TranslationCoverageReport,
-    TranslationDictionary, TranslationMessageContext,
+    TranslationMessageContext,
 };
 use brain_brew_formats::manifest::FederatedDeckManifest;
+use brain_brew_formats::overlay_source_document::{OverlaySourceDocument, TranslationStubs};
 use brain_brew_formats::yaml_scalar::scalar as yaml_scalar;
-use brain_brew_formats::{canonical_yaml, source_includes};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use serde_json::json;
 
 use crate::commands::translation_overlay::compose_lenient_translation_overlay;
 use crate::help;
-use crate::io::{PlannedOverlay, plan_manifest_target_with_packages, read_manifest};
+use crate::io::{
+    PlannedOverlay, manifest_root, overlay_from_source_text, overlay_source_document,
+    plan_manifest_target_with_packages, read_manifest,
+};
 use crate::output;
+use crate::workspace_mutation::{PlannedWorkspaceFile, commit_workspace_files, recover_workspace};
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -42,6 +46,10 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         let mut reader = stdin.lock();
         let mut writer = stdout.lock();
         configure_interactively(&mut args, &mut reader, &mut writer, raw_mode)?;
+    }
+
+    if args.apply || args.resolve_action.is_some() {
+        recover_workspace(&manifest_root(&args.manifest_path))?;
     }
 
     let reports = collect_translation_reports(&args)?;
@@ -85,13 +93,11 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         }
     }
 
-    let mut applied = BTreeMap::new();
-    for (path, edits) in &edits_by_file {
-        let count = apply_overlay_edits(path, edits)?;
-        if count > 0 {
-            applied.insert(path.display().to_string(), count);
-        }
-    }
+    let planned = edits_by_file
+        .iter()
+        .map(|(path, edits)| plan_overlay_edits(path, edits))
+        .collect::<Result<Vec<_>, String>>()?;
+    let applied = commit_translation_documents(&args, planned)?;
 
     if args.context {
         if args.json_output {
@@ -1154,14 +1160,11 @@ fn resolve_stale_translations(
         return Err(stale_resolution_no_match_error(args));
     }
 
-    let mut applied = BTreeMap::new();
-    for (path, resolutions) in resolutions_by_file {
-        let count = apply_stale_resolutions_to_overlay(&path, action, &resolutions)?;
-        if count > 0 {
-            applied.insert(path.display().to_string(), count);
-        }
-    }
-    Ok(applied)
+    let planned = resolutions_by_file
+        .into_iter()
+        .map(|(path, resolutions)| plan_stale_resolutions(&path, action, &resolutions))
+        .collect::<Result<Vec<_>, String>>()?;
+    commit_translation_documents(args, planned)
 }
 
 fn entry_can_shadow_stale_translation(entry: &TranslationCoverageEntry) -> bool {
@@ -1248,100 +1251,35 @@ fn stale_resolution_no_match_error(args: &TranslationArgs) -> String {
     }
 }
 
-fn apply_stale_resolutions_to_overlay(
+fn plan_stale_resolutions(
     path: &Path,
     action: StaleResolveAction,
     resolutions: &BTreeSet<StaleResolution>,
-) -> Result<usize, String> {
-    if resolutions.is_empty() {
-        return Ok(0);
-    }
+) -> Result<PlannedTranslationDocument, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    let output = source_includes::format_preserving_file_includes(&input, |source| {
-        let mut overlay =
-            canonical_yaml::overlay_from_str(source).map_err(|error| error.to_string())?;
-        let translations = overlay
-            .translations
-            .as_mut()
-            .ok_or_else(|| format!("{} has no translations dictionary", path.display()))?;
-        for resolution in resolutions {
-            apply_stale_resolution(translations, resolution, action, path)?;
-        }
-        canonical_yaml::overlay_to_string(&overlay).map_err(|error| error.to_string())
-    })?;
-    if output != input {
-        fs::write(path, output).map_err(|error| format!("{}: {error}", path.display()))?;
-    }
-    Ok(resolutions.len())
-}
-
-fn apply_stale_resolution(
-    translations: &mut TranslationDictionary,
-    resolution: &StaleResolution,
-    action: StaleResolveAction,
-    path: &Path,
-) -> Result<(), String> {
-    let position = translations
-        .stale_translations
-        .iter()
-        .position(|record| {
-            record.old_source == resolution.old_source
-                && record.new_source == resolution.new_source
-                && record.context == resolution.context
-        })
-        .ok_or_else(|| {
-            format!(
-                "stale translation old_source={:?} new_source={:?} context={:?} was not found in {}",
-                resolution.old_source,
-                resolution.new_source,
-                resolution.context,
-                path.display()
+    let mut document = overlay_source_document(path, &input)?;
+    for resolution in resolutions {
+        let replacement = (action == StaleResolveAction::Replace).then(|| {
+            resolution
+                .replacement
+                .as_deref()
+                .expect("replace action requires replacement translation")
+        });
+        document
+            .resolve_stale_translation(
+                &resolution.old_source,
+                &resolution.new_source,
+                resolution.context.as_deref(),
+                replacement,
             )
-        })?;
-    let shadowed = stale_record_shadowed_by_existing_entry(translations, position);
-    let record = translations.stale_translations.remove(position);
-    if shadowed {
-        return Ok(());
+            .map_err(|error| error.to_string())?;
     }
-
-    let replacement = if action == StaleResolveAction::Replace {
-        resolution
-            .replacement
-            .as_ref()
-            .expect("replace action requires replacement translation")
-            .clone()
-    } else {
-        record.target
-    };
-    if let Some(context) = record.context {
-        translations
-            .contextual
-            .entry(context)
-            .or_default()
-            .insert(record.new_source, replacement);
-    } else {
-        translations.direct.insert(record.new_source, replacement);
-    }
-    Ok(())
-}
-
-fn stale_record_shadowed_by_existing_entry(
-    translations: &TranslationDictionary,
-    stale_index: usize,
-) -> bool {
-    let record = &translations.stale_translations[stale_index];
-    translations.direct.contains_key(&record.new_source)
-        || translations.no_change.contains(&record.new_source)
-        || translations
-            .contextual
-            .iter()
-            .any(|(context, replacements)| {
-                replacements.contains_key(&record.new_source)
-                    && record.context.as_deref().is_none_or(|stale_context| {
-                        context_matches_path(context, stale_context)
-                            || context_matches_path(stale_context, context)
-                    })
-            })
+    Ok(PlannedTranslationDocument {
+        path: path.to_path_buf(),
+        input,
+        document,
+        count: resolutions.len(),
+    })
 }
 
 fn direct_stub_edits_from_reports(
@@ -2679,254 +2617,132 @@ fn category_counts_refs(entries: &[&TranslationCoverageEntry]) -> BTreeMap<&'sta
     counts
 }
 
-fn apply_overlay_edits(path: &Path, edits: &OverlayEdits) -> Result<usize, String> {
-    if edits.is_empty() {
-        return Ok(0);
-    }
+struct PlannedTranslationDocument {
+    path: PathBuf,
+    input: String,
+    document: OverlaySourceDocument,
+    count: usize,
+}
+
+fn plan_overlay_edits(
+    path: &Path,
+    edits: &OverlayEdits,
+) -> Result<PlannedTranslationDocument, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    let mut output = input.clone();
-    if !edits.ignore_paths.is_empty() {
-        output = insert_ignore_path_lines(&output, &edits.ignore_paths);
-    }
-    if !edits.direct.is_empty() {
-        output = insert_direct_stub_lines(&output, &edits.direct);
-    }
-    if !edits.contextual.is_empty() {
-        output = insert_contextual_stub_lines(&output, &edits.contextual);
-    }
-    if !edits.no_change.is_empty() {
-        output = insert_no_change_lines(&output, &edits.no_change);
-    }
-    if output != input {
-        fs::write(path, output).map_err(|error| format!("{}: {error}", path.display()))?;
-    }
-    Ok(edits.count())
-}
-
-fn insert_direct_stub_lines(input: &str, stubs: &BTreeSet<String>) -> String {
-    let entries = stubs
-        .iter()
-        .map(|source| format!("    {}: {}\n", yaml_scalar(source), yaml_scalar(source)))
-        .collect::<String>();
-    insert_translation_section(
+    let mut document = overlay_source_document(path, &input)?;
+    document
+        .add_translation_stubs(TranslationStubs {
+            direct: edits.direct.clone(),
+            contextual: edits.contextual.clone(),
+            no_change: edits.no_change.clone(),
+            ignore_paths: edits.ignore_paths.clone(),
+        })
+        .map_err(|error| error.to_string())?;
+    Ok(PlannedTranslationDocument {
+        path: path.to_path_buf(),
         input,
-        "direct",
-        &entries,
-        &["ignore_paths", "require_complete"],
-    )
-}
-
-fn insert_contextual_stub_lines(input: &str, stubs: &BTreeMap<String, BTreeSet<String>>) -> String {
-    let mut entries = String::new();
-    for (context, sources) in stubs {
-        entries.push_str(&format!("    {}:\n", yaml_scalar(context)));
-        for source in sources {
-            entries.push_str(&format!(
-                "      {}: {}\n",
-                yaml_scalar(source),
-                yaml_scalar(source)
-            ));
-        }
-    }
-    insert_translation_section(
-        input,
-        "contextual",
-        &entries,
-        &["direct", "ignore_paths", "require_complete"],
-    )
-}
-
-fn insert_no_change_lines(input: &str, sources: &BTreeSet<String>) -> String {
-    let entries = sources
-        .iter()
-        .map(|source| format!("    - {}\n", yaml_scalar(source)))
-        .collect::<String>();
-    insert_translation_section(
-        input,
-        "no_change",
-        &entries,
-        &["contextual", "direct", "ignore_paths", "require_complete"],
-    )
-}
-
-fn insert_ignore_path_lines(input: &str, paths: &BTreeSet<String>) -> String {
-    let entries = paths
-        .iter()
-        .map(|path| format!("    - {}\n", yaml_scalar(path)))
-        .collect::<String>();
-    insert_translation_section(input, "ignore_paths", &entries, &["require_complete"])
-}
-
-fn insert_translation_section(
-    input: &str,
-    section_name: &str,
-    entries: &str,
-    preferred_after_sections: &[&str],
-) -> String {
-    let spans = line_spans(input);
-    let Some(translations_index) = find_translations_line(input, &spans) else {
-        let insert_after = spans
-            .iter()
-            .find(|(start, end)| input[*start..*end].trim_start().starts_with("kind:"))
-            .map(|(_, end)| *end)
-            .or_else(|| spans.first().map(|(_, end)| *end))
-            .unwrap_or(0);
-        return insert_at_byte(
-            input,
-            insert_after,
-            &format!("translations:\n  {section_name}:\n{entries}"),
-        );
-    };
-
-    if let Some(rewritten) =
-        rewrite_inline_empty_translations_line(input, &spans, translations_index)
-    {
-        return insert_translation_section(
-            &rewritten,
-            section_name,
-            entries,
-            preferred_after_sections,
-        );
-    }
-
-    if let Some(section_index) =
-        find_translation_section(input, &spans, translations_index, section_name)
-    {
-        let insert_at = translation_section_end(input, &spans, section_index);
-        return insert_at_byte(input, insert_at, entries);
-    }
-
-    for anchor in preferred_after_sections {
-        if let Some(section_index) =
-            find_translation_section(input, &spans, translations_index, anchor)
-        {
-            let insert_at = translation_section_end(input, &spans, section_index);
-            return insert_at_byte(input, insert_at, &format!("  {section_name}:\n{entries}"));
-        }
-    }
-
-    let insert_at = spans[translations_index].1;
-    insert_at_byte(input, insert_at, &format!("  {section_name}:\n{entries}"))
-}
-
-fn find_translations_line(input: &str, spans: &[(usize, usize)]) -> Option<usize> {
-    spans.iter().position(|(start, end)| {
-        let line = &input[*start..*end];
-        is_translations_header_line(line)
+        document,
+        count: edits.count(),
     })
 }
 
-fn is_translations_header_line(line: &str) -> bool {
-    let trimmed = line.trim();
-    trimmed == "translations:"
-        || trimmed
-            .strip_prefix("translations:")
-            .is_some_and(|rest| rest.trim_start().starts_with('#'))
-        || trimmed == "translations: {}"
-        || trimmed
-            .strip_prefix("translations: {}")
-            .is_some_and(|rest| rest.trim_start().starts_with('#'))
-}
+fn commit_translation_documents(
+    args: &TranslationArgs,
+    planned: Vec<PlannedTranslationDocument>,
+) -> Result<BTreeMap<String, usize>, String> {
+    let mut outputs = Vec::new();
+    let mut updated_overlays = BTreeMap::new();
+    let mut applied = BTreeMap::new();
 
-fn rewrite_inline_empty_translations_line(
-    input: &str,
-    spans: &[(usize, usize)],
-    translations_index: usize,
-) -> Option<String> {
-    let (start, end) = spans[translations_index];
-    let line = &input[start..end];
-    let trimmed = line.trim();
-    if !(trimmed == "translations: {}"
-        || trimmed
-            .strip_prefix("translations: {}")
-            .is_some_and(|rest| rest.trim_start().starts_with('#')))
-    {
-        return None;
+    for planned_document in planned {
+        if planned_document.count == 0 {
+            continue;
+        }
+        let emission = planned_document
+            .document
+            .emit()
+            .map_err(|error| error.to_string())?;
+        if !emission.included().is_empty() {
+            return Err(format!(
+                "{}: translation dictionary operation unexpectedly edited an included source",
+                planned_document.path.display()
+            ));
+        }
+        let output = emission.root().text().to_owned();
+        let canonical_path = fs::canonicalize(&planned_document.path)
+            .map_err(|error| format!("{}: {error}", planned_document.path.display()))?;
+        let overlay = overlay_from_source_text(&planned_document.path, &output)?;
+        updated_overlays.insert(canonical_path, overlay);
+        if output != planned_document.input {
+            let validation_path = planned_document.path.clone();
+            outputs.push(PlannedWorkspaceFile::validated(
+                &planned_document.path,
+                planned_document.input.into_bytes(),
+                output.into_bytes(),
+                move |bytes| {
+                    let source = std::str::from_utf8(bytes).map_err(|error| {
+                        format!(
+                            "{}: replacement is not UTF-8: {error}",
+                            validation_path.display()
+                        )
+                    })?;
+                    overlay_source_document(&validation_path, source).and_then(|document| {
+                        document
+                            .emit()
+                            .map(|_| ())
+                            .map_err(|error| error.to_string())
+                    })
+                },
+            )?);
+        }
+        applied.insert(
+            planned_document.path.display().to_string(),
+            planned_document.count,
+        );
     }
 
-    let line_without_newline = line.trim_end_matches(['\r', '\n']);
-    let newline = &line[line_without_newline.len()..];
-    let prefix_len = line_without_newline
-        .find("translations:")
-        .expect("translations header line contains key");
-    let prefix = &line_without_newline[..prefix_len];
-    let after_empty = line_without_newline[prefix_len + "translations: {}".len()..].trim_start();
-    let comment = if after_empty.starts_with('#') {
-        after_empty
-    } else {
-        ""
-    };
-    let replacement = if comment.is_empty() {
-        format!("{prefix}translations:{newline}")
-    } else {
-        format!("{prefix}translations: {comment}{newline}")
-    };
-
-    let mut output = String::with_capacity(input.len() + replacement.len());
-    output.push_str(&input[..start]);
-    output.push_str(&replacement);
-    output.push_str(&input[end..]);
-    Some(output)
+    validate_final_translation_composition(args, &updated_overlays)?;
+    commit_workspace_files(&manifest_root(&args.manifest_path), outputs)?;
+    Ok(applied)
 }
 
-fn find_translation_section(
-    input: &str,
-    spans: &[(usize, usize)],
-    translations_index: usize,
-    section_name: &str,
-) -> Option<usize> {
-    let needle = format!("  {section_name}:");
-    spans
-        .iter()
-        .enumerate()
-        .skip(translations_index + 1)
-        .take_while(|(_, (start, end))| {
-            let line = &input[*start..*end];
-            line.trim().is_empty() || line.trim_start().starts_with('#') || line.starts_with(' ')
-        })
-        .find(|(_, (start, end))| input[*start..*end].trim_end() == needle)
-        .map(|(index, _)| index)
-}
-
-fn translation_section_end(input: &str, spans: &[(usize, usize)], section_index: usize) -> usize {
-    spans
-        .iter()
-        .enumerate()
-        .skip(section_index + 1)
-        .find(|(_, (start, end))| {
-            let line = &input[*start..*end];
-            !line.trim().is_empty()
-                && !line.trim_start().starts_with('#')
-                && ((line.starts_with("  ") && !line.starts_with("    ")) || !line.starts_with(' '))
-        })
-        .map(|(_, (start, _))| *start)
-        .unwrap_or(input.len())
-}
-
-fn insert_at_byte(input: &str, index: usize, insertion: &str) -> String {
-    let mut output = String::with_capacity(input.len() + insertion.len() + 1);
-    output.push_str(&input[..index]);
-    if index > 0 && !input[..index].ends_with('\n') {
-        output.push('\n');
+fn validate_final_translation_composition(
+    args: &TranslationArgs,
+    updated_overlays: &BTreeMap<PathBuf, Overlay>,
+) -> Result<(), String> {
+    if updated_overlays.is_empty() {
+        return Ok(());
     }
-    output.push_str(insertion);
-    output.push_str(&input[index..]);
-    output
-}
-
-fn line_spans(input: &str) -> Vec<(usize, usize)> {
-    let mut spans = Vec::new();
-    let mut start = 0;
-    for (index, ch) in input.char_indices() {
-        if ch == '\n' {
-            spans.push((start, index + 1));
-            start = index + 1;
+    let manifest = read_manifest(&args.manifest_path)?;
+    for target in selected_target_names(&manifest, args) {
+        let plan = plan_manifest_target_with_packages(
+            &args.manifest_path,
+            &target,
+            &args.include_paths,
+            &args.package_roots,
+        )?;
+        let mut current = plan.base.clone();
+        for (planned, original_overlay) in &plan.overlays {
+            let canonical_path = fs::canonicalize(&planned.file)
+                .map_err(|error| format!("{}: {error}", planned.file.display()))?;
+            let overlay = updated_overlays
+                .get(&canonical_path)
+                .unwrap_or(original_overlay);
+            if overlay.translations.is_some() {
+                current = compose_lenient_translation_overlay(&current, overlay)?;
+            } else {
+                current = current
+                    .compose(std::slice::from_ref(overlay))
+                    .map_err(|error| {
+                        format!(
+                            "failed to validate final translation composition for target {target} at overlay {}: {error}",
+                            planned.id
+                        )
+                    })?;
+            }
         }
     }
-    if start < input.len() || input.is_empty() {
-        spans.push((start, input.len()));
-    }
-    spans
+    Ok(())
 }
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -3231,48 +3047,6 @@ fn color_enabled(is_terminal: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const HOSTILE_STRINGS: &[(&str, &str)] = &[
-        ("empty", ""),
-        ("leading space", " leading"),
-        ("trailing space", "trailing "),
-        ("yaml yes", "yes"),
-        ("yaml no", "no"),
-        ("yaml null", "null"),
-        ("yaml tilde", "~"),
-        ("yaml float", "1.0"),
-        ("yaml hex", "0x1F"),
-        ("single quote", "L'Anse aux Meadows"),
-        ("double quote", "said \"hello\""),
-        ("colon space", "capital: Helsinki"),
-        ("trailing colon", "label:"),
-        ("hash", "text # not a comment"),
-        ("accented", "Québec"),
-        ("cjk", "日本語"),
-        ("hebrew rtl", "עברית"),
-        ("newline", "first line\nsecond line"),
-        ("lone newline", "\n"),
-    ];
-
-    #[test]
-    fn translation_yaml_stub_emission_round_trips_hostile_scalars() {
-        for (case, value) in HOSTILE_STRINGS {
-            let input = "id: overlay.translation.hostile\nkind: translation\ntranslations:\n";
-            let output = insert_direct_stub_lines(input, &BTreeSet::from([(*value).to_owned()]));
-            let overlay = brain_brew_formats::canonical_yaml::overlay_from_str(&output)
-                .unwrap_or_else(|error| {
-                    panic!("{case}: emitted overlay parses: {error}\n{output}")
-                });
-            let translations = overlay
-                .translations
-                .unwrap_or_else(|| panic!("{case}: emitted overlay has translations"));
-            assert_eq!(
-                translations.direct.get(*value).map(String::as_str),
-                Some(*value),
-                "{case}: direct translation source and value round trip"
-            );
-        }
-    }
 
     #[test]
     fn raw_mode_uses_crlf_line_endings() {

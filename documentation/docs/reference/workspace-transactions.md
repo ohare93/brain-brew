@@ -4,7 +4,7 @@ title: Workspace transaction contract
 
 # Workspace transaction contract
 
-`brainbrew` owns a journaled filesystem transaction module for future multi-file source mutations. The module is intentionally not yet wired into Workbench, media, import, format, lock, compose, or export commands; those migrations are tracked separately. Existing sequential-write behavior must not be described as batch-atomic.
+`brainbrew` owns a journaled filesystem transaction module for source mutations. `fmt` and `translations --apply`/`--resolve` use it today; Workbench, media, import, lock, compose, and export migrations are tracked separately. Existing sequential-write behavior in those remaining command families must not be described as batch-atomic.
 
 ## Interface
 

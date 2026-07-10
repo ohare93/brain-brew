@@ -263,6 +263,29 @@ fn overlay_document_preserves_includes_and_supports_translation_field_media_and_
 }
 
 #[test]
+fn overlay_stale_resolution_removes_shadowed_record_without_overwriting_current_decision() {
+    let mut document = OverlaySourceDocument::parse(source(
+        "overlays/da.yaml",
+        "id: overlay.translation.da\nkind: translation\ntranslations:\n  direct:\n    New source: Current target\nstale_translations:\n  - old_source: Old source\n    new_source: New source\n    target: Retained stale target\n",
+    ))
+    .unwrap();
+
+    document
+        .resolve_stale_translation("Old source", "New source", None, Some("replacement"))
+        .unwrap();
+
+    let output = document.emit().unwrap();
+    assert!(
+        output
+            .root()
+            .text()
+            .contains("New source: Current target\n")
+    );
+    assert!(!output.root().text().contains("replacement"));
+    assert!(!output.root().text().contains("stale_translations"));
+}
+
+#[test]
 fn source_document_errors_are_source_and_schema_aware() {
     let duplicate = deck_source().replace(
         "      field.front: Before\n",

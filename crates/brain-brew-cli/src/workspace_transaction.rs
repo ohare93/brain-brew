@@ -4,7 +4,7 @@
 //! makes each replacement individually atomic, records enough durable state to undo every
 //! replacement, and requires restart recovery before another cooperating writer may proceed.
 
-// This module intentionally lands before mutator migration (tasks 0050/0060).
+// Failure-injection seams remain test-only while command families migrate incrementally.
 #![allow(dead_code)]
 
 use fs2::FileExt;

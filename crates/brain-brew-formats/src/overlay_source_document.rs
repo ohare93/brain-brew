@@ -316,18 +316,21 @@ impl OverlaySourceDocument {
                     "matching stale translation was not found",
                 )
             })?;
+        let shadowed = stale_record_is_shadowed(translations, position);
         let mut record = translations.stale_translations.remove(position);
-        if let Some(replacement) = replacement {
-            record.target = replacement.to_owned();
-        }
-        if let Some(context) = record.context {
-            translations
-                .contextual
-                .entry(context)
-                .or_default()
-                .insert(record.new_source, record.target);
-        } else {
-            translations.direct.insert(record.new_source, record.target);
+        if !shadowed {
+            if let Some(replacement) = replacement {
+                record.target = replacement.to_owned();
+            }
+            if let Some(context) = record.context {
+                translations
+                    .contextual
+                    .entry(context)
+                    .or_default()
+                    .insert(record.new_source, record.target);
+            } else {
+                translations.direct.insert(record.new_source, record.target);
+            }
         }
         next.validate()?;
         *self = next;
@@ -507,6 +510,27 @@ fn remove_contextual_everywhere(translations: &mut TranslationDictionary, source
             }
         }
     }
+}
+
+fn stale_record_is_shadowed(translations: &TranslationDictionary, index: usize) -> bool {
+    let record = &translations.stale_translations[index];
+    translations.direct.contains_key(&record.new_source)
+        || translations.no_change.contains(&record.new_source)
+        || translations
+            .contextual
+            .iter()
+            .any(|(context, replacements)| {
+                replacements.contains_key(&record.new_source)
+                    && record.context.as_deref().is_none_or(|stale_context| {
+                        context == stale_context
+                            || context
+                                .strip_prefix(stale_context)
+                                .is_some_and(|suffix| suffix.starts_with('.'))
+                            || stale_context
+                                .strip_prefix(context)
+                                .is_some_and(|suffix| suffix.starts_with('.'))
+                    })
+            })
 }
 
 fn remove_stale_for_path_source(

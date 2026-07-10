@@ -254,6 +254,150 @@ translations: {} # empty scaffold
     canonical_yaml::overlay_from_str(&overlay).expect("rewritten overlay parses");
 }
 
+#[test]
+fn apply_preserves_unrelated_scalar_include_and_canonically_rewrites_overlay() {
+    let dir = temp_dir("translations-apply-include");
+    fs::create_dir_all(dir.join("content")).unwrap();
+    fs::write(dir.join("content/finland.txt"), "Finland på dansk\n").unwrap();
+    write_workspace(
+        &dir,
+        "Helsinki",
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Finland: !include content/finland.txt
+"#,
+    );
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--source",
+        "Helsinki",
+        "--apply",
+        "--full",
+        "--no-interactive",
+    ]);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+
+    let overlay = fs::read_to_string(dir.join("da.yaml")).unwrap();
+    assert!(overlay.contains("Finland: !include content/finland.txt\n"));
+    assert!(overlay.contains("Helsinki: Helsinki\n"));
+    let formatted_again = run(["fmt", dir.join("da.yaml").to_str().unwrap()]);
+    assert!(
+        formatted_again.status.success(),
+        "stderr: {}",
+        stderr(&formatted_again)
+    );
+    assert_eq!(fs::read_to_string(dir.join("da.yaml")).unwrap(), overlay);
+    assert_eq!(
+        fs::read_to_string(dir.join("content/finland.txt")).unwrap(),
+        "Finland på dansk\n"
+    );
+}
+
+#[test]
+fn mutating_translation_command_requires_recovery_before_planning() {
+    let dir = temp_dir("translations-recovery-first");
+    write_workspace(
+        &dir,
+        "Helsinki",
+        "id: overlay.translation.da\nkind: translation\ntranslations: {}\n",
+    );
+    let overlay_path = dir.join("da.yaml");
+    let before = fs::read(&overlay_path).unwrap();
+    let pending = dir.join(".brainbrew-transactions/txn-corrupt");
+    fs::create_dir_all(&pending).unwrap();
+    fs::write(pending.join("journal.json"), b"not a journal").unwrap();
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--apply",
+        "--full",
+        "--no-interactive",
+    ]);
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("workspace transaction recovery failed"));
+    assert_eq!(fs::read(overlay_path).unwrap(), before);
+    assert!(pending.exists(), "explicit recovery state must be retained");
+}
+
+#[test]
+fn all_target_apply_commits_every_overlay_as_one_recoverable_workspace_plan() {
+    let dir = temp_dir("translations-multi-file-plan");
+    write_workspace(
+        &dir,
+        "Helsinki",
+        "id: overlay.translation.da\nkind: translation\ntranslations: {}\n",
+    );
+    fs::write(
+        dir.join("nb.yaml"),
+        "id: overlay.translation.nb\nkind: translation\ntranslations: {}\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.translation.da:
+    file: da.yaml
+    kind: translation
+  overlay.translation.nb:
+    file: nb.yaml
+    kind: translation
+targets:
+  da-standard:
+    overlays:
+      - overlay.translation.da
+  nb-standard:
+    overlays:
+      - overlay.translation.nb
+"#,
+    )
+    .unwrap();
+
+    let output = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--all-targets",
+        "--source",
+        "Helsinki",
+        "--apply",
+        "--full",
+        "--no-interactive",
+    ]);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    for overlay in ["da.yaml", "nb.yaml"] {
+        let source = fs::read_to_string(dir.join(overlay)).unwrap();
+        assert!(
+            source.contains("Helsinki: Helsinki\n"),
+            "{overlay}: {source}"
+        );
+        assert_eq!(canonical_yaml::overlay_format_str(&source).unwrap(), source);
+    }
+    let control = dir.join(".brainbrew-transactions");
+    if control.exists() {
+        let pending = fs::read_dir(control)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+            .collect::<Vec<_>>();
+        assert!(
+            pending.is_empty(),
+            "completed transaction left a pending journal"
+        );
+    }
+}
+
 fn write_workspace(dir: &Path, current_capital: &str, overlay: &str) {
     fs::write(
         dir.join("deck.yaml"),

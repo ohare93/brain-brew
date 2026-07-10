@@ -6,6 +6,7 @@ use std::process::{Child, ChildStdout, Command, Stdio};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use brain_brew_formats::canonical_yaml;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use tar::Builder;
@@ -3705,7 +3706,7 @@ fn translations_interactive_apply_can_insert_contextual_stub() {
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let updated = fs::read_to_string(overlay_path).unwrap();
-    assert!(updated.contains("    notes.note.sweden:\n      Sweden: Sweden\n"));
+    assert!(updated.contains("      sweden:\n        Sweden: Sweden\n"));
 }
 
 #[test]
@@ -3799,7 +3800,7 @@ fn translations_reports_missing_stale_contextual_and_adaptations_without_modifyi
 }
 
 #[test]
-fn translations_apply_inserts_sorted_direct_stubs_and_preserves_comments() {
+fn translations_apply_canonically_rewrites_overlay_and_inserts_sorted_direct_stubs() {
     let dir = temp_dir("translations-apply");
     write_translation_workspace(&dir);
     let overlay_path = dir.join("da.yaml");
@@ -3816,9 +3817,17 @@ fn translations_apply_inserts_sorted_direct_stubs_and_preserves_comments() {
     ]);
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    let updated = fs::read_to_string(overlay_path).unwrap();
-    assert!(updated.contains("# translator note kept"));
+    let updated = fs::read_to_string(&overlay_path).unwrap();
+    assert!(
+        !updated.contains("# translator note kept"),
+        "typed source-document emission intentionally performs a canonical rewrite"
+    );
     assert!(updated.contains("    Sweden: Sweden\n"));
+    assert_eq!(
+        canonical_yaml::overlay_format_str(&updated).unwrap(),
+        updated,
+        "translation writes leave canonical overlay source"
+    );
 }
 
 #[test]
