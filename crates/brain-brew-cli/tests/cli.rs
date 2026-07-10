@@ -207,6 +207,11 @@ fn workbench_read_only_server_rejects_every_state_changing_route_without_writes(
     );
     assert_eq!(status, 403);
     assert!(body.contains("Workbench is read-only"));
+    let error: serde_json::Value = serde_json::from_str(&body).expect("Workbench error is JSON");
+    assert_eq!(error["error"]["schema_version"], 1);
+    assert_eq!(error["error"]["code"], "workbench_read_only");
+    assert_eq!(error["error"]["category"], "authorization");
+    assert!(error["error"]["diagnostics"].is_array());
 
     let apply_request = serde_json::json!({
         "language": "da",

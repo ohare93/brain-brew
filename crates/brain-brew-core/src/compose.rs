@@ -19,20 +19,22 @@ impl CanonicalDeck {
             return Err(ComposeReport { errors });
         }
 
-        resolved.validate().map_err(|report| ComposeReport {
-            errors: report
-                .errors
-                .into_iter()
-                .map(|error| {
-                    let mut compose_error = ComposeError::new(
-                        ComposeErrorKind::ValidationFailed,
-                        error.path,
-                        error.message,
-                    );
-                    compose_error.field_graph_error = error.field_graph_error;
-                    compose_error
-                })
-                .collect(),
+        resolved.validate().map_err(|report| {
+            let first = report.errors.first();
+            let mut error = ComposeError::new(
+                ComposeErrorKind::ValidationFailed,
+                first.map(|issue| issue.path.clone()).unwrap_or_default(),
+                format!(
+                    "composed deck failed final validation with {} issue{}",
+                    report.errors.len(),
+                    if report.errors.len() == 1 { "" } else { "s" }
+                ),
+            );
+            error.source_id = Some(self.id.clone());
+            error.validation_errors = report.errors;
+            ComposeReport {
+                errors: vec![error],
+            }
         })?;
 
         Ok(resolved)
@@ -156,6 +158,12 @@ fn apply_overlay(
 
     for (media_id, change) in &overlay.media_changes {
         apply_media_change(resolved, overlay, media_id, change, changed_paths, errors);
+    }
+
+    for error in &mut errors[errors_before..] {
+        if error.overlay_id.is_none() {
+            error.overlay_id = Some(overlay.id.clone());
+        }
     }
 
     if errors.len() == errors_before {
@@ -1892,14 +1900,18 @@ pub(crate) fn record_change_path(
     if let Some(previous_overlay_id) = changed_paths.get(path)
         && intent != ChangeIntent::Override
     {
-        errors.push(ComposeError::new(
+        let mut error = ComposeError::new(
             ComposeErrorKind::Conflict,
             path.to_owned(),
             format!(
                 "overlay {} conflicts with earlier overlay {} at {path}",
                 overlay.id, previous_overlay_id
             ),
-        ));
+        );
+        error.overlay_id = Some(overlay.id.clone());
+        error.first_conflict_participant = Some(previous_overlay_id.clone());
+        error.current_conflict_participant = Some(overlay.id.clone());
+        errors.push(error);
         return false;
     }
 

@@ -1,6 +1,9 @@
 use std::str::FromStr;
 
-use super::{CRATE_NAME, DeckPath, StableId, glob_matches};
+use super::{
+    CRATE_NAME, ComposeError, ComposeErrorKind, DeckPath, DiagnosticCategory, StableId,
+    ValidationError, ValidationErrorKind, glob_matches,
+};
 
 fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
@@ -383,6 +386,120 @@ fn deck_path_parses_non_stable_id_keys_by_first_container_split() {
         "note_types.note-type.country.variables.note-type.name"
     );
     assert_eq!(DeckPath::from_str(&path.to_string()).unwrap(), path);
+}
+
+#[test]
+fn diagnostic_projection_is_complete_for_every_public_error_kind() {
+    let compose_cases = [
+        (
+            ComposeErrorKind::MissingExpectedBase,
+            "missing_expected_base",
+            DiagnosticCategory::Precondition,
+        ),
+        (
+            ComposeErrorKind::InvalidExpectedBase,
+            "invalid_expected_base",
+            DiagnosticCategory::Precondition,
+        ),
+        (
+            ComposeErrorKind::ExpectedBaseMismatch,
+            "expected_base_mismatch",
+            DiagnosticCategory::Precondition,
+        ),
+        (
+            ComposeErrorKind::Conflict,
+            "overlay_conflict",
+            DiagnosticCategory::Conflict,
+        ),
+        (
+            ComposeErrorKind::MissingOverlayTarget,
+            "missing_overlay_target",
+            DiagnosticCategory::Overlay,
+        ),
+        (
+            ComposeErrorKind::AlreadyExists,
+            "entity_already_exists",
+            DiagnosticCategory::Overlay,
+        ),
+        (
+            ComposeErrorKind::MissingOverlayPayload,
+            "missing_overlay_payload",
+            DiagnosticCategory::Overlay,
+        ),
+        (
+            ComposeErrorKind::MissingTranslation,
+            "missing_translation",
+            DiagnosticCategory::Translation,
+        ),
+        (
+            ComposeErrorKind::StaleTranslationEntry,
+            "stale_translation_entry",
+            DiagnosticCategory::Translation,
+        ),
+        (
+            ComposeErrorKind::ValidationFailed,
+            "validation_failed",
+            DiagnosticCategory::Validation,
+        ),
+        (
+            ComposeErrorKind::TombstonedAddressReuse,
+            "tombstoned_address_reuse",
+            DiagnosticCategory::Tombstone,
+        ),
+    ];
+    for (kind, code, category) in compose_cases {
+        let diagnostic =
+            ComposeError::new(kind, "deck.name".to_owned(), "message".to_owned()).diagnostic();
+        assert_eq!(diagnostic.code, code);
+        assert_eq!(diagnostic.category, category);
+        assert_eq!(diagnostic.path, Some(DeckPath::DeckName));
+    }
+
+    let validation_cases = [
+        (ValidationErrorKind::MissingNoteType, "missing_note_type"),
+        (ValidationErrorKind::UnknownNoteField, "unknown_note_field"),
+        (ValidationErrorKind::MissingNoteField, "missing_note_field"),
+        (
+            ValidationErrorKind::MismatchedEntityId,
+            "mismatched_entity_id",
+        ),
+        (
+            ValidationErrorKind::DuplicateFieldDefinition,
+            "duplicate_field_definition",
+        ),
+        (
+            ValidationErrorKind::DuplicateCardTemplate,
+            "duplicate_card_template",
+        ),
+        (
+            ValidationErrorKind::InvalidMessageReference,
+            "invalid_message_reference",
+        ),
+        (
+            ValidationErrorKind::InvalidMessageTargetRepresentation,
+            "invalid_message_target_representation",
+        ),
+        (
+            ValidationErrorKind::MessageDependencyCycle,
+            "message_dependency_cycle",
+        ),
+        (ValidationErrorKind::InvalidStableId, "invalid_stable_id"),
+        (
+            ValidationErrorKind::ConflictingFieldRepresentation,
+            "conflicting_field_representation",
+        ),
+        (
+            ValidationErrorKind::UnknownMediaReference,
+            "unknown_media_reference",
+        ),
+    ];
+    for (kind, code) in validation_cases {
+        let diagnostic =
+            ValidationError::new(kind, "deck.name".to_owned(), "message".to_owned()).diagnostic();
+        assert_eq!(diagnostic.code, code);
+        assert_eq!(diagnostic.category, DiagnosticCategory::Validation);
+        assert_eq!(diagnostic.path, Some(DeckPath::DeckName));
+    }
 }
 
 #[test]

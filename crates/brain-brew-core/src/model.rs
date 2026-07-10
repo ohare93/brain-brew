@@ -2032,7 +2032,7 @@ impl fmt::Display for ComposeReport {
             if index > 0 {
                 writeln!(f)?;
             }
-            write!(f, "{}: {}", error.path, error.message)?;
+            write!(f, "{}", error.diagnostic())?;
         }
         Ok(())
     }
@@ -2049,6 +2049,71 @@ pub enum ComposePrecondition {
     Missing,
 }
 
+/// Stable top-level classification shared by every domain diagnostic.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DiagnosticCategory {
+    Validation,
+    Precondition,
+    Conflict,
+    Overlay,
+    Translation,
+    Tombstone,
+}
+
+impl DiagnosticCategory {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Validation => "validation",
+            Self::Precondition => "precondition",
+            Self::Conflict => "conflict",
+            Self::Overlay => "overlay",
+            Self::Translation => "translation",
+            Self::Tombstone => "tombstone",
+        }
+    }
+}
+
+/// Canonical, format-independent projection consumed by CLI and HTTP adapters.
+///
+/// `message` is supplemental human text. Consumers branch on `code`, `category`,
+/// and the typed metadata instead of parsing it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DomainDiagnostic {
+    pub code: &'static str,
+    pub category: DiagnosticCategory,
+    pub path: Option<DeckPath>,
+    /// Canonical textual address, retained for non-DeckPath domains such as dictionary entries.
+    pub address: String,
+    pub overlay_id: Option<StableId>,
+    pub source_id: Option<StableId>,
+    pub intent: Option<ChangeIntent>,
+    pub entity_kind: Option<EntityKind>,
+    pub expected: Option<ComposePrecondition>,
+    pub actual: Option<ComposePrecondition>,
+    pub first_conflict_participant: Option<StableId>,
+    pub current_conflict_participant: Option<StableId>,
+    pub original_removal: Option<TombstoneRecord>,
+    pub field_graph_error: Option<FieldGraphError>,
+    pub children: Vec<DomainDiagnostic>,
+    pub message: String,
+}
+
+impl fmt::Display for DomainDiagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let path = self
+            .path
+            .as_ref()
+            .map(ToString::to_string)
+            .filter(|path| !path.is_empty())
+            .unwrap_or_else(|| self.address.clone());
+        write!(f, "{path}: {}", self.message)?;
+        for child in &self.children {
+            write!(f, "\n  {child}")?;
+        }
+        Ok(())
+    }
+}
+
 /// One overlay composition error.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ComposeError {
@@ -2058,12 +2123,19 @@ pub struct ComposeError {
     pub entity_kind: Option<EntityKind>,
     pub intent: Option<ChangeIntent>,
     pub overlay_id: Option<StableId>,
+    /// Canonical source identity for source/final-validation diagnostics.
+    pub source_id: Option<StableId>,
     pub expected: Option<ComposePrecondition>,
     pub actual: Option<ComposePrecondition>,
     /// Original removal record when a later overlay attempts to reuse its address.
     pub original_removal: Option<TombstoneRecord>,
     /// Structured graph diagnostics when composition fails during field dependency planning.
     pub field_graph_error: Option<FieldGraphError>,
+    /// First and current participants for a federation conflict.
+    pub first_conflict_participant: Option<StableId>,
+    pub current_conflict_participant: Option<StableId>,
+    /// Original validation variants retained by final composition validation.
+    pub validation_errors: Vec<ValidationError>,
     pub message: String,
 }
 
@@ -2077,10 +2149,14 @@ impl ComposeError {
             entity_kind: None,
             intent: None,
             overlay_id: None,
+            source_id: None,
             expected: None,
             actual: None,
             original_removal: None,
             field_graph_error: None,
+            first_conflict_participant: None,
+            current_conflict_participant: None,
+            validation_errors: Vec::new(),
             message,
         }
     }
@@ -2105,6 +2181,32 @@ impl ComposeError {
     pub(crate) fn with_entity_kind(mut self, entity_kind: EntityKind) -> Self {
         self.entity_kind = Some(entity_kind);
         self
+    }
+
+    /// Project this error into the canonical machine-readable diagnostic model.
+    pub fn diagnostic(&self) -> DomainDiagnostic {
+        DomainDiagnostic {
+            code: self.kind.code(),
+            category: self.kind.category(),
+            path: self.deck_path.clone(),
+            address: self.path.clone(),
+            overlay_id: self.overlay_id.clone(),
+            source_id: self.source_id.clone(),
+            intent: self.intent,
+            entity_kind: self.entity_kind,
+            expected: self.expected.clone(),
+            actual: self.actual.clone(),
+            first_conflict_participant: self.first_conflict_participant.clone(),
+            current_conflict_participant: self.current_conflict_participant.clone(),
+            original_removal: self.original_removal.clone(),
+            field_graph_error: self.field_graph_error.clone(),
+            children: self
+                .validation_errors
+                .iter()
+                .map(ValidationError::diagnostic)
+                .collect(),
+            message: self.message.clone(),
+        }
     }
 }
 
@@ -2141,18 +2243,20 @@ impl ComposeErrorKind {
         }
     }
 
-    pub fn category(self) -> &'static str {
+    pub fn category(self) -> DiagnosticCategory {
         match self {
             Self::MissingExpectedBase | Self::InvalidExpectedBase | Self::ExpectedBaseMismatch => {
-                "precondition"
+                DiagnosticCategory::Precondition
             }
-            Self::Conflict => "conflict",
+            Self::Conflict => DiagnosticCategory::Conflict,
             Self::MissingOverlayTarget | Self::AlreadyExists | Self::MissingOverlayPayload => {
-                "overlay"
+                DiagnosticCategory::Overlay
             }
-            Self::MissingTranslation | Self::StaleTranslationEntry => "translation",
-            Self::ValidationFailed => "validation",
-            Self::TombstonedAddressReuse => "tombstone",
+            Self::MissingTranslation | Self::StaleTranslationEntry => {
+                DiagnosticCategory::Translation
+            }
+            Self::ValidationFailed => DiagnosticCategory::Validation,
+            Self::TombstonedAddressReuse => DiagnosticCategory::Tombstone,
         }
     }
 }
@@ -2318,7 +2422,7 @@ impl fmt::Display for ValidationReport {
             if index > 0 {
                 writeln!(f)?;
             }
-            write!(f, "{}: {}", error.path, error.message)?;
+            write!(f, "{}", error.diagnostic())?;
         }
         Ok(())
     }
@@ -2331,6 +2435,7 @@ impl std::error::Error for ValidationReport {}
 pub struct ValidationError {
     pub kind: ValidationErrorKind,
     pub path: String,
+    pub deck_path: Option<DeckPath>,
     pub message: String,
     /// Structured graph diagnostics when this validation failure came from a field dependency.
     pub field_graph_error: Option<FieldGraphError>,
@@ -2338,9 +2443,11 @@ pub struct ValidationError {
 
 impl ValidationError {
     pub fn new(kind: ValidationErrorKind, path: String, message: String) -> Self {
+        let deck_path = path.parse().ok();
         Self {
             kind,
             path,
+            deck_path,
             message,
             field_graph_error: None,
         }
@@ -2359,11 +2466,35 @@ impl ValidationError {
             | FieldGraphErrorKind::TombstonedDependency
             | FieldGraphErrorKind::InvalidMessage => ValidationErrorKind::InvalidMessageReference,
         };
+        let path = error.consuming_path.clone();
         Self {
             kind,
-            path: error.consuming_path.clone(),
+            deck_path: path.parse().ok(),
+            path,
             message: error.message.clone(),
             field_graph_error: Some(error),
+        }
+    }
+
+    /// Project this issue into the canonical machine-readable diagnostic model.
+    pub fn diagnostic(&self) -> DomainDiagnostic {
+        DomainDiagnostic {
+            code: self.kind.code(),
+            category: DiagnosticCategory::Validation,
+            path: self.deck_path.clone(),
+            address: self.path.clone(),
+            overlay_id: None,
+            source_id: None,
+            intent: None,
+            entity_kind: None,
+            expected: None,
+            actual: None,
+            first_conflict_participant: None,
+            current_conflict_participant: None,
+            original_removal: None,
+            field_graph_error: self.field_graph_error.clone(),
+            children: Vec::new(),
+            message: self.message.clone(),
         }
     }
 }
@@ -2383,4 +2514,27 @@ pub enum ValidationErrorKind {
     InvalidStableId,
     ConflictingFieldRepresentation,
     UnknownMediaReference,
+}
+
+impl ValidationErrorKind {
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::MissingNoteType => "missing_note_type",
+            Self::UnknownNoteField => "unknown_note_field",
+            Self::MissingNoteField => "missing_note_field",
+            Self::MismatchedEntityId => "mismatched_entity_id",
+            Self::DuplicateFieldDefinition => "duplicate_field_definition",
+            Self::DuplicateCardTemplate => "duplicate_card_template",
+            Self::InvalidMessageReference => "invalid_message_reference",
+            Self::InvalidMessageTargetRepresentation => "invalid_message_target_representation",
+            Self::MessageDependencyCycle => "message_dependency_cycle",
+            Self::InvalidStableId => "invalid_stable_id",
+            Self::ConflictingFieldRepresentation => "conflicting_field_representation",
+            Self::UnknownMediaReference => "unknown_media_reference",
+        }
+    }
+
+    pub fn category(self) -> DiagnosticCategory {
+        DiagnosticCategory::Validation
+    }
 }

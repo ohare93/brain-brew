@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use brain_brew_core::{ComposeReport, ValidationReport};
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::args::{parse_manifest_target_args, split_json_flag};
 use crate::help;
@@ -136,50 +136,36 @@ fn report_validation(
             Ok(())
         }
         Err(report) => {
+            let diagnostics = report
+                .errors
+                .iter()
+                .map(|error| error.diagnostic())
+                .collect::<Vec<_>>();
             if json_output {
-                report_json_validation_failure(report, "invalid deck")
+                report_json_diagnostics("invalid deck", diagnostics)
             } else {
-                eprintln!("{report}");
+                eprintln!("{}", output::render_diagnostics(&diagnostics));
                 Err("invalid deck".to_owned())
             }
         }
     }
 }
 
-fn report_json_validation_failure(report: ValidationReport, message: &str) -> Result<(), String> {
-    let errors = report
-        .errors
-        .iter()
-        .map(|error| {
-            json!({
-                "kind": format!("{:?}", error.kind),
-                "path": error.path,
-                "message": error.message,
-            })
-        })
-        .collect::<Vec<_>>();
-    report_json_errors(message, errors)
-}
-
 fn report_json_compose_failure(report: ComposeReport, message: &str) -> Result<(), String> {
-    let errors = report
-        .errors
-        .iter()
-        .map(|error| {
-            json!({
-                "kind": format!("{:?}", error.kind),
-                "path": error.path,
-                "message": error.message,
-            })
-        })
-        .collect::<Vec<_>>();
-    report_json_errors(message, errors)
+    report_json_diagnostics(
+        message,
+        report
+            .errors
+            .iter()
+            .map(|error| error.diagnostic())
+            .collect(),
+    )
 }
 
-fn report_json_errors(message: &str, errors: Vec<serde_json::Value>) -> Result<(), String> {
-    output::print_json_error_value(json!({
-        "message": message,
-        "errors": errors,
-    }));
+fn report_json_diagnostics(
+    message: &str,
+    diagnostics: Vec<brain_brew_core::DomainDiagnostic>,
+) -> Result<(), String> {
+    output::print_json_diagnostic_error("validate", Value::Null, message, &diagnostics);
     Err(output::JSON_ERROR_ALREADY_PRINTED.to_owned())
 }

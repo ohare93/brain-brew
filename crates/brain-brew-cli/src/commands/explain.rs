@@ -153,7 +153,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                         json!({
                             "kind": format!("{:?}", error.kind),
                             "code": error.kind.code(),
-                            "category": error.kind.category(),
+                            "category": error.kind.category().as_str(),
                             "path": error.path,
                             "deck_path": error.deck_path.as_ref().map(ToString::to_string),
                             "entity_kind": error.entity_kind.map(|kind| kind.as_str()),

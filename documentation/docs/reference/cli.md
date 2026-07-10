@@ -15,29 +15,30 @@ Whenever `--json` is selected, including `translations` and every existing JSON 
 ```json
 {
   "error": {
-    "version": 1,
+    "schema_version": 1,
+    "command": "validate",
+    "context": null,
     "code": "validation_failed",
     "category": "validation",
-    "message": "target composition failed",
-    "source": "deck.yaml",
-    "path": "notes.note.france.fields.field.capital",
-    "details": {
-      "errors": [
-        {
-          "kind": "ExpectedBaseMismatch",
-          "path": "notes.note.france.fields.field.capital",
-          "message": "field-level merge may only fill a blank value"
-        }
-      ],
-      "target": "de-standard",
-      "base": "deck.yaml",
-      "overlay_stack": []
-    }
+    "path": "notes.note.france.note_type_id",
+    "message": "invalid deck",
+    "diagnostics": [{
+      "code": "validation_failed",
+      "category": "validation",
+      "source": "deck.main",
+      "children": [{
+        "code": "missing_note_type",
+        "category": "validation",
+        "path": "notes.note.france.note_type_id",
+        "message": "note references missing note type note-type.country"
+      }]
+    }],
+    "details": {}
   }
 }
 ```
 
-`version`, `code`, `category`, `message`, `source`, `path`, and `details` are always present; unavailable source/path values are `null`. Validation/composition details retain typed `kind`, machine `path`, and message values in `details.errors[]`. During the version-1 compatibility window those route-specific detail keys are also mirrored directly under `error`.
+See [Diagnostic and error contracts](diagnostics.md) for stable codes, typed metadata, ordering, versioning, and migration. `message` is supplemental and must not be parsed.
 
 ## `targets`
 

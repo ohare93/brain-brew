@@ -3975,15 +3975,38 @@ fn apply_result_text(heading: &str, value: &Value) -> String {
 
 #[cfg(target_arch = "wasm32")]
 async fn post_json(url: &str, body: &Value) -> Result<Value, String> {
-    gloo_net::http::Request::post(url)
+    let response = gloo_net::http::Request::post(url)
         .json(body)
         .map_err(|error| error.to_string())?
         .send()
         .await
-        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())?;
+    let status = response.status();
+    let ok = response.ok();
+    let value = response
         .json::<Value>()
         .await
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    if ok {
+        Ok(value)
+    } else {
+        Err(structured_api_error(status, &value))
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn structured_api_error(status: u16, value: &Value) -> String {
+    let error = &value["error"];
+    let code = error["code"].as_str().unwrap_or("request_failed");
+    let path = error["diagnostics"]
+        .as_array()
+        .and_then(|items| items.first())
+        .and_then(|item| item["path"].as_str());
+    let message = error["message"].as_str().unwrap_or("request failed");
+    match path {
+        Some(path) => format!("{code} ({status}) at {path}: {message}"),
+        None => format!("{code} ({status}): {message}"),
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -4324,13 +4347,21 @@ async fn get_workbench_json(base_url: &str, params: Vec<String>) -> Result<Value
     } else {
         format!("{}?{}", base_url, params.join("&"))
     };
-    gloo_net::http::Request::get(&url)
+    let response = gloo_net::http::Request::get(&url)
         .send()
         .await
-        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())?;
+    let status = response.status();
+    let ok = response.ok();
+    let value = response
         .json::<Value>()
         .await
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    if ok {
+        Ok(value)
+    } else {
+        Err(structured_api_error(status, &value))
+    }
 }
 
 #[cfg(target_arch = "wasm32")]

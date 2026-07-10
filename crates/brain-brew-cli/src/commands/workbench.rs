@@ -10,7 +10,7 @@ use std::time::SystemTime;
 use axum::body::Body;
 use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::{StatusCode, Uri, header};
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use brain_brew_core::{
@@ -251,6 +251,36 @@ fn app(metadata: Arc<WorkspaceMetadata>, dev_assets: Option<PathBuf>) -> Router 
     }
 }
 
+#[derive(Debug)]
+struct WorkbenchApiError {
+    status: StatusCode,
+    code: String,
+    category: String,
+    message: String,
+    diagnostics: Vec<Value>,
+}
+
+type WorkbenchResult<T> = Result<T, WorkbenchApiError>;
+
+impl IntoResponse for WorkbenchApiError {
+    fn into_response(self) -> Response {
+        let diagnostics = self.diagnostics;
+        (
+            self.status,
+            Json(json!({
+                "error": {
+                    "schema_version": crate::output::DIAGNOSTIC_SCHEMA_VERSION,
+                    "code": self.code,
+                    "category": self.category,
+                    "message": self.message,
+                    "diagnostics": diagnostics,
+                }
+            })),
+        )
+            .into_response()
+    }
+}
+
 async fn health(State(metadata): State<Arc<WorkspaceMetadata>>) -> Json<Value> {
     Json(json!({
         "status": "ok",
@@ -258,101 +288,94 @@ async fn health(State(metadata): State<Arc<WorkspaceMetadata>>) -> Json<Value> {
     }))
 }
 
-async fn workspace(
-    State(metadata): State<Arc<WorkspaceMetadata>>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+async fn workspace(State(metadata): State<Arc<WorkspaceMetadata>>) -> WorkbenchResult<Json<Value>> {
     task::spawn_blocking(move || metadata.workspace_json().map(Json))
         .await
-        .map_err(|error| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("workbench task failed: {error}"),
-            )
-        })?
-        .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error))
+        .map_err(|error| workbench_internal_error(format!("workbench task failed: {error}")))?
+        .map_err(workbench_internal_error)
 }
 
 async fn note_list(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<NoteListQuery>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+) -> WorkbenchResult<Json<Value>> {
     run_workbench_blocking(move || metadata.note_list_json(&query).map(Json)).await
 }
 
 async fn note_detail(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<NoteDetailQuery>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+) -> WorkbenchResult<Json<Value>> {
     run_workbench_blocking(move || metadata.note_detail_json(&query).map(Json)).await
 }
 
 async fn card_list(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<CardListQuery>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+) -> WorkbenchResult<Json<Value>> {
     run_workbench_blocking(move || metadata.card_list_json(&query).map(Json)).await
 }
 
 async fn source_string_list(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<SourceStringListQuery>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+) -> WorkbenchResult<Json<Value>> {
     run_workbench_blocking(move || metadata.source_string_list_json(&query).map(Json)).await
 }
 
 async fn optional_metadata_list(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<OptionalMetadataListQuery>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+) -> WorkbenchResult<Json<Value>> {
     run_workbench_blocking(move || metadata.optional_metadata_list_json(&query).map(Json)).await
 }
 
 async fn note_pivot(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<NotePivotQuery>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+) -> WorkbenchResult<Json<Value>> {
     run_workbench_blocking(move || metadata.note_pivot_json(&query).map(Json)).await
 }
 
 async fn source_string_pivot(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<SourceStringPivotQuery>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+) -> WorkbenchResult<Json<Value>> {
     run_workbench_blocking(move || metadata.source_string_pivot_json(&query).map(Json)).await
 }
 
 async fn card_pivot(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<CardPivotQuery>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+) -> WorkbenchResult<Json<Value>> {
     run_workbench_blocking(move || metadata.card_pivot_json(&query).map(Json)).await
 }
 
 async fn comparison_pane(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<ComparisonPaneQuery>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+) -> WorkbenchResult<Json<Value>> {
     run_workbench_blocking(move || metadata.comparison_pane_json(&query).map(Json)).await
 }
 
 async fn optional_metadata(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<OptionalMetadataQuery>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+) -> WorkbenchResult<Json<Value>> {
     run_workbench_blocking(move || metadata.optional_metadata_json(&query).map(Json)).await
 }
 
 async fn new_language_preview(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Query(query): Query<NewLanguagePreviewQuery>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+) -> WorkbenchResult<Json<Value>> {
     run_workbench_blocking(move || metadata.new_language_preview_json(&query).map(Json)).await
 }
 
 async fn create_new_language(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Json(request): Json<NewLanguageRequest>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+) -> WorkbenchResult<Json<Value>> {
     metadata.require_write_capability()?;
     run_workbench_blocking(move || metadata.create_new_language_json(request).map(Json)).await
 }
@@ -360,7 +383,7 @@ async fn create_new_language(
 async fn apply_preview(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Json(request): Json<ApplyRequest>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+) -> WorkbenchResult<Json<Value>> {
     run_workbench_blocking(move || {
         metadata
             .apply_request_json(request, ApplyMode::Preview)
@@ -372,7 +395,7 @@ async fn apply_preview(
 async fn apply_edits(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Json(request): Json<ApplyRequest>,
-) -> Result<Json<Value>, (StatusCode, String)> {
+) -> WorkbenchResult<Json<Value>> {
     metadata.require_write_capability()?;
     run_workbench_blocking(move || {
         metadata
@@ -385,7 +408,7 @@ async fn apply_edits(
 async fn media_asset(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     AxumPath(path): AxumPath<String>,
-) -> Result<Response, (StatusCode, String)> {
+) -> WorkbenchResult<Response> {
     run_workbench_blocking(move || metadata.media_response(&path)).await
 }
 
@@ -396,34 +419,85 @@ async fn favicon() -> Response {
         .unwrap_or_else(|_| Response::new(Body::empty()))
 }
 
-async fn run_workbench_blocking<T, F>(operation: F) -> Result<T, (StatusCode, String)>
+async fn run_workbench_blocking<T, F>(operation: F) -> WorkbenchResult<T>
 where
     T: Send + 'static,
     F: FnOnce() -> Result<T, String> + Send + 'static,
 {
     task::spawn_blocking(operation)
         .await
-        .map_err(|error| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("workbench task failed: {error}"),
-            )
-        })?
+        .map_err(|error| workbench_internal_error(format!("workbench task failed: {error}")))?
         .map_err(workbench_api_error)
 }
 
-fn workbench_api_error(error: String) -> (StatusCode, String) {
+fn workbench_api_error(error: String) -> WorkbenchApiError {
+    const DOMAIN_PREFIX: &str = "__brainbrew_domain_diagnostics__:";
     eprintln!("Workbench API error: {error}");
-    let status = if error.starts_with("invalid ")
+    if let Some(payload) = error.strip_prefix(DOMAIN_PREFIX)
+        && let Ok(value) = serde_json::from_str::<Value>(payload)
+    {
+        let diagnostics = value["diagnostics"].as_array().cloned().unwrap_or_default();
+        let code = diagnostics
+            .first()
+            .and_then(|item| item["code"].as_str())
+            .unwrap_or("composition_failed");
+        let category = diagnostics
+            .first()
+            .and_then(|item| item["category"].as_str())
+            .unwrap_or("composition");
+        return WorkbenchApiError {
+            status: StatusCode::UNPROCESSABLE_ENTITY,
+            code: code.to_owned(),
+            category: category.to_owned(),
+            message: value["message"]
+                .as_str()
+                .unwrap_or("composition failed")
+                .to_owned(),
+            diagnostics,
+        };
+    }
+    let client_error = error.starts_with("invalid ")
         || error.starts_with("missing ")
         || error.starts_with("no ")
-        || error.starts_with("unknown ")
-    {
-        StatusCode::BAD_REQUEST
-    } else {
-        StatusCode::INTERNAL_SERVER_ERROR
-    };
-    (status, error)
+        || error.starts_with("unknown ");
+    WorkbenchApiError {
+        status: if client_error {
+            StatusCode::BAD_REQUEST
+        } else {
+            StatusCode::INTERNAL_SERVER_ERROR
+        },
+        code: if client_error {
+            "invalid_request"
+        } else {
+            "workbench_failed"
+        }
+        .to_owned(),
+        category: if client_error { "request" } else { "adapter" }.to_owned(),
+        message: error,
+        diagnostics: Vec::new(),
+    }
+}
+
+fn workbench_compose_error(context: &str, report: &brain_brew_core::ComposeReport) -> String {
+    let diagnostics = report
+        .errors
+        .iter()
+        .map(|error| crate::output::diagnostic_json(&error.diagnostic()))
+        .collect::<Vec<_>>();
+    format!(
+        "__brainbrew_domain_diagnostics__:{}",
+        serde_json::to_string(&json!({"message": context, "diagnostics": diagnostics})).unwrap()
+    )
+}
+
+fn workbench_internal_error(message: String) -> WorkbenchApiError {
+    WorkbenchApiError {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        code: "workbench_internal_error".to_owned(),
+        category: "adapter".to_owned(),
+        message,
+        diagnostics: Vec::new(),
+    }
 }
 
 async fn embedded_asset(uri: Uri) -> Response {
@@ -538,14 +612,18 @@ impl WorkspaceMetadata {
         })
     }
 
-    fn require_write_capability(&self) -> Result<(), (StatusCode, String)> {
+    fn require_write_capability(&self) -> WorkbenchResult<()> {
         if self.write_enabled {
             Ok(())
         } else {
-            Err((
-                StatusCode::FORBIDDEN,
-                "Workbench is read-only; source mutation is unavailable in this server".to_owned(),
-            ))
+            Err(WorkbenchApiError {
+                status: StatusCode::FORBIDDEN,
+                code: "workbench_read_only".to_owned(),
+                category: "authorization".to_owned(),
+                message: "Workbench is read-only; source mutation is unavailable in this server"
+                    .to_owned(),
+                diagnostics: Vec::new(),
+            })
         }
     }
 
@@ -1374,7 +1452,12 @@ impl WorkspaceMetadata {
             } else {
                 current
                     .compose(std::slice::from_ref(overlay))
-                    .map_err(|error| format!("failed to compose overlay {}: {error}", planned.id))?
+                    .map_err(|error| {
+                        workbench_compose_error(
+                            &format!("failed to compose overlay {}", planned.id),
+                            &error,
+                        )
+                    })?
             };
         }
 
@@ -4536,12 +4619,16 @@ fn validate_complete_workbench_result(
             deck = if overlay.translations.is_some() {
                 compose_lenient_translation_overlay(&deck, overlay)?
             } else {
-                deck.compose(std::slice::from_ref(overlay)).map_err(|error| {
-                    format!(
-                        "failed to validate complete Workbench target {} at overlay {}: {error}",
-                        context.selection.target_id, planned.id
-                    )
-                })?
+                deck.compose(std::slice::from_ref(overlay))
+                    .map_err(|error| {
+                        workbench_compose_error(
+                            &format!(
+                                "failed to validate complete Workbench target {} at overlay {}",
+                                context.selection.target_id, planned.id
+                            ),
+                            &error,
+                        )
+                    })?
             };
         }
         let rendered = deck.render_variables().map_err(|error| {

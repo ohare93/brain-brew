@@ -4,6 +4,8 @@ title: Deck Workbench
 
 # Deck Workbench
 
+Workbench API failures use the versioned structured contract documented in [Diagnostic and error contracts](diagnostics.md). Browser clients consume `code`, `category`, paths, and attribution; `message` is display-only.
+
 The Deck Workbench is launched locally:
 
 ```bash

@@ -1,12 +1,16 @@
 use std::env;
 use std::io::{self, IsTerminal};
 
-use brain_brew_core::{CanonicalDeck, SemanticChangeKind, SemanticDiff, TombstoneAddress};
+use brain_brew_core::{
+    CanonicalDeck, ComposePrecondition, DomainDiagnostic, FieldValue, SemanticChangeKind,
+    SemanticDiff, TombstoneAddress,
+};
 use brain_brew_formats::manifest;
 use serde_json::{Value, json};
 
 pub(crate) const JSON_ERROR_ALREADY_PRINTED: &str = "__brainbrew_json_error_already_printed";
 pub(crate) const DIFFERENCES_FOUND: &str = "__brainbrew_differences_found";
+pub(crate) const DIAGNOSTIC_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Clone, Debug)]
 pub(crate) struct CliError {
@@ -91,6 +95,7 @@ impl CliError {
 
     fn json(&self) -> Value {
         let mut value = json!({
+            "schema_version": self.version,
             "version": self.version,
             "code": self.code,
             "category": self.category,
@@ -145,6 +150,111 @@ fn diagnostic_location(message: &str) -> (Option<String>, Option<String>) {
         .filter(|path| !path.is_empty())
         .map(str::to_owned);
     (source, path)
+}
+
+pub(crate) fn diagnostic_json(diagnostic: &DomainDiagnostic) -> Value {
+    let graph = diagnostic.field_graph_error.as_ref().map(|error| {
+        json!({
+            "kind": format!("{:?}", error.kind),
+            "note_id": error.note_id.as_str(),
+            "field_id": error.field_id.as_str(),
+            "consuming_path": error.consuming_path,
+            "dependency": error.dependency,
+            "representation": error.representation.map(|kind| kind.as_str()),
+            "cycle": error.cycle,
+        })
+    });
+    json!({
+        "code": diagnostic.code,
+        "category": diagnostic.category.as_str(),
+        "path": diagnostic.path.as_ref().map(ToString::to_string).unwrap_or_else(|| diagnostic.address.clone()),
+        "address": diagnostic.address,
+        "overlay": diagnostic.overlay_id.as_ref().map(|id| id.as_str()),
+        "source": diagnostic.source_id.as_ref().map(|id| id.as_str()),
+        "intent": diagnostic.intent.map(|intent| intent.as_str()),
+        "entity_kind": diagnostic.entity_kind.map(|kind| kind.as_str()),
+        "expected": diagnostic.expected.as_ref().map(precondition_json),
+        "actual": diagnostic.actual.as_ref().map(precondition_json),
+        "conflict": (diagnostic.first_conflict_participant.is_some()
+            || diagnostic.current_conflict_participant.is_some()).then(|| json!({
+                "first": diagnostic.first_conflict_participant.as_ref().map(|id| id.as_str()),
+                "current": diagnostic.current_conflict_participant.as_ref().map(|id| id.as_str()),
+            })),
+        "original_removal": diagnostic.original_removal.as_ref().map(|record| record.address.to_string()),
+        "field_graph": graph,
+        "details": {},
+        "children": diagnostic.children.iter().map(diagnostic_json).collect::<Vec<_>>(),
+        "message": diagnostic.message,
+    })
+}
+
+fn precondition_json(value: &ComposePrecondition) -> Value {
+    match value {
+        ComposePrecondition::Fingerprint(value) => {
+            json!({"kind": "fingerprint", "value": value.to_string()})
+        }
+        ComposePrecondition::Value(value) => json!({"kind": "value", "value": value}),
+        ComposePrecondition::FieldValue(value) => match value {
+            FieldValue::Scalar(value) => {
+                json!({"kind": "field_value", "representation": "scalar", "value": value})
+            }
+            FieldValue::Images(images) => json!({
+                "kind": "field_value",
+                "representation": "images",
+                "media_ids": images.iter().map(|image| image.media_id.as_str()).collect::<Vec<_>>(),
+            }),
+            FieldValue::Message(_) => json!({"kind": "field_value", "representation": "message"}),
+        },
+        ComposePrecondition::Missing => json!({"kind": "missing"}),
+    }
+}
+
+pub(crate) fn render_diagnostics(diagnostics: &[DomainDiagnostic]) -> String {
+    let mut lines = Vec::new();
+    for diagnostic in diagnostics {
+        let path = diagnostic
+            .path
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or_else(|| diagnostic.address.clone());
+        lines.push(format!("{path}: {}", diagnostic.message));
+        for child in &diagnostic.children {
+            let child_path = child
+                .path
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| child.address.clone());
+            lines.push(format!("  {child_path}: {}", child.message));
+        }
+    }
+    lines.join("\n")
+}
+
+pub(crate) fn print_json_diagnostic_error(
+    command: &str,
+    context: Value,
+    message: &str,
+    diagnostics: &[DomainDiagnostic],
+) {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json!({
+            "error": {
+                "schema_version": DIAGNOSTIC_SCHEMA_VERSION,
+                "version": DIAGNOSTIC_SCHEMA_VERSION,
+                "command": command,
+                "context": context,
+                "code": diagnostics.first().map(|item| item.code).unwrap_or("command_failed"),
+                "category": diagnostics.first().map(|item| item.category.as_str()).unwrap_or("command"),
+                "path": diagnostics.first().map(|item| item.path.as_ref().map(ToString::to_string).unwrap_or_else(|| item.address.clone())),
+                "source": diagnostics.first().and_then(|item| item.source_id.as_ref()).map(|id| id.as_str()),
+                "message": message,
+                "diagnostics": diagnostics.iter().map(diagnostic_json).collect::<Vec<_>>(),
+                "details": {},
+            }
+        }))
+        .unwrap()
+    );
 }
 
 pub(crate) fn print_json_diff(diff: &SemanticDiff) {

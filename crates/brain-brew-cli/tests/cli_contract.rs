@@ -58,7 +58,10 @@ fn assert_json_error(output: &Output, expected_message: &str) {
     assert!(stderr(output).is_empty(), "stderr: {}", stderr(output));
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("stdout is JSON");
     let error = &json["error"];
-    assert_eq!(error["version"], 1, "JSON error version: {json}");
+    assert_eq!(
+        error["schema_version"], 1,
+        "JSON error schema version: {json}"
+    );
     assert!(error["code"].is_string(), "JSON error code: {json}");
     assert!(error["category"].is_string(), "JSON error category: {json}");
     assert!(error.get("source").is_some(), "JSON error source: {json}");
@@ -128,9 +131,15 @@ fn validate_stdout_stderr_contract_covers_human_and_json_success_and_error() {
     ]);
     assert_json_error(&json_error, "invalid deck");
     let json: serde_json::Value = serde_json::from_slice(&json_error.stdout).unwrap();
-    assert_eq!(json["error"]["errors"][0]["kind"], "ValidationFailed");
+    assert_eq!(json["error"]["schema_version"], 1);
+    assert_eq!(json["error"]["command"], "validate");
+    assert_eq!(json["error"]["diagnostics"][0]["code"], "validation_failed");
     assert_eq!(
-        json["error"]["errors"][0]["path"],
+        json["error"]["diagnostics"][0]["children"][0]["code"],
+        "missing_note_type"
+    );
+    assert_eq!(
+        json["error"]["diagnostics"][0]["children"][0]["path"],
         "notes.note.invalid.note_type_id"
     );
 }

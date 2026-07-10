@@ -863,10 +863,24 @@ fn noop_target_adaptation_reserves_change_path_for_later_overlay_conflicts() {
         .expect_err("no-op target adaptation still reserves the path");
 
     assert!(report.has_kind(ComposeErrorKind::Conflict));
-    assert!(report.errors.iter().any(|error| {
-        error.kind == ComposeErrorKind::Conflict
-            && error.path == "notes.note.finland.fields.field.capital"
-    }));
+    let conflict = report
+        .errors
+        .iter()
+        .find(|error| error.kind == ComposeErrorKind::Conflict)
+        .expect("typed conflict exists");
+    assert_eq!(conflict.path, "notes.note.finland.fields.field.capital");
+    assert_eq!(
+        conflict.first_conflict_participant.as_ref(),
+        Some(&sid("overlay.translation.zh"))
+    );
+    assert_eq!(
+        conflict.current_conflict_participant.as_ref(),
+        Some(&sid("overlay.patch.capital"))
+    );
+    assert_eq!(
+        conflict.overlay_id.as_ref(),
+        conflict.current_conflict_participant.as_ref()
+    );
 }
 
 #[test]
@@ -2517,6 +2531,32 @@ fn non_tombstoned_note_still_blocks_note_type_removal_and_validation() {
         .validate()
         .expect_err("live missing note type reference fails validation");
     assert!(validation.has_kind(ValidationErrorKind::MissingNoteType));
+}
+
+#[test]
+fn final_validation_preserves_original_typed_children_and_source_attribution() {
+    let mut invalid = ug_style_deck();
+    invalid.note_types.remove(&sid("note-type.country"));
+
+    let report = invalid
+        .compose(&[])
+        .expect_err("final validation rejects the invalid canonical source");
+    assert_eq!(report.errors.len(), 1);
+    let error = &report.errors[0];
+    assert_eq!(error.kind, ComposeErrorKind::ValidationFailed);
+    assert_eq!(error.source_id.as_ref(), Some(&invalid.id));
+    assert!(error.validation_errors.iter().any(|issue| {
+        issue.kind == ValidationErrorKind::MissingNoteType
+            && issue.deck_path.as_ref().map(ToString::to_string).as_deref()
+                == Some("notes.note.finland.note_type_id")
+    }));
+    let diagnostic = error.diagnostic();
+    assert!(
+        diagnostic
+            .children
+            .iter()
+            .any(|child| child.code == "missing_note_type")
+    );
 }
 
 #[test]
