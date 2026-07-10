@@ -258,6 +258,7 @@ dependencies = [
  "flate2",
  "fs2",
  "include_dir",
+ "libc",
  "nix-nar",
  "serde",
  "serde_json",

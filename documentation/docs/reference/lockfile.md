@@ -86,7 +86,17 @@ sha256-<standard padded base64 encoding of exactly 32 digest bytes>
 
 Missing, empty, malformed, noncanonical, duplicate, or unknown-algorithm hashes fail while parsing the lock, before any package manifest is loaded. Brain Brew computes this hash over deterministic Nix Archive (NAR) serialization in Rust and does not require the `nix` command at runtime.
 
-A cached tree is rehashed before every use. A mismatching cache entry is rejected with instructions to remove it; Brain Brew does not silently consume or repair tampered cached content.
+A cached tree is revalidated and rehashed before every use. A mismatching or policy-invalid cache entry is rejected with instructions to remove it; Brain Brew does not silently consume or repair tampered cached content.
+
+## Package tree entry policy
+
+Fetched and locked package trees contain **regular files and directories only**. Brain Brew rejects every symlink, including links whose text appears to stay inside the package. It also rejects filesystem hard links and special files, and rejects archive hard links, devices, FIFOs, sparse/continuous/unknown entries, unsafe raw paths, and duplicate or colliding normalized targets. This policy is identical for local path snapshots, GitHub source archives, tarballs, staging trees, and warm cache trees.
+
+Archives are inspected entry-by-entry and are never passed to a general-purpose unpack operation. Files are created in a private temporary tree with create-new semantics, ownership and set-ID metadata are discarded, and permissions are normalized to `0644`/`0755`. The complete tree is validated before hashing. Cache publication copies and revalidates that exact tree in the cache filesystem, checks its hash again, and atomically renames it to the content-addressed destination while holding a publication lock. A failed extraction or publication removes its private temporary state and does not replace an existing valid cache entry.
+
+### Symlink migration
+
+Locks/caches produced from package sources containing symlinks are no longer usable, even if an older release accepted them or the links were lexically contained. `lock update` and cached use report the rejected relative entry and the reject-all-symlinks policy. Replace each link with a real regular file or directory in the package source, remove the rejected cache entry if instructed, and regenerate the package lock with `brainbrew lock update`. There is no compatibility switch that preserves links.
 
 ## Package paths and containment
 
@@ -118,4 +128,4 @@ Locked sources are cached in the platform cache directory. Override it for CI or
 BRAINBREW_CACHE_DIR=/tmp/brainbrew-cache brainbrew lock verify
 ```
 
-Remote packages can be used from a valid warm cache without a network request. Network transport and archive extraction budgets remain a separate hardening concern.
+Remote packages can be used from a valid warm cache without a network request. Network transport budgets and archive download/expanded-size/entry-count limits remain a separate hardening concern; entry types and paths are already fail-closed here.

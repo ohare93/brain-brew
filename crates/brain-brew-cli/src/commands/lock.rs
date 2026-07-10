@@ -11,15 +11,16 @@ use brain_brew_formats::lockfile::{
     OriginalSource,
 };
 use flate2::read::GzDecoder;
+use fs2::FileExt as _;
 use nix_nar::Encoder;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use tar::Archive;
 use tempfile::TempDir;
 
 use crate::help;
 use crate::io::read_manifest;
 use crate::output;
+use crate::package_tree;
 use crate::path_authorization::PathAuthorizer;
 
 const USER_AGENT: &str = concat!("brainbrew/", env!("CARGO_PKG_VERSION"));
@@ -162,7 +163,13 @@ impl UpdateSource {
     fn to_fetch_source(&self) -> Result<RequestedSource, String> {
         match self {
             Self::Path(path) => {
-                let path = canonicalize_for_lock(path)?;
+                let path = if path.is_absolute() {
+                    path.clone()
+                } else {
+                    env::current_dir()
+                        .map_err(|error| format!("cannot resolve current directory: {error}"))?
+                        .join(path)
+                };
                 Ok(RequestedSource::Path {
                     path: path.display().to_string(),
                 })
@@ -540,8 +547,9 @@ fn fetch_tarball_source(
 
     let bytes = read_url_or_file(url)?;
     let extracted = TempDir::new().map_err(|error| error.to_string())?;
-    unpack_tarball(&bytes, extracted.path())?;
-    let source_root = normalized_extracted_root(extracted.path())?;
+    let extracted_tree = extracted.path().join("archive");
+    unpack_tarball(&bytes, &extracted_tree)?;
+    let source_root = normalized_extracted_root(&extracted_tree)?;
     snapshot_source_tree(&source_root, expected_hash, rev)
 }
 
@@ -550,17 +558,12 @@ fn snapshot_source_tree(
     expected_hash: Option<&str>,
     rev: Option<String>,
 ) -> Result<FetchedSource, String> {
-    let source_path = source_path
-        .canonicalize()
-        .map_err(|error| format!("{}: {error}", source_path.display()))?;
-    if !source_path.is_dir() {
-        return Err(format!("{} is not a directory", source_path.display()));
-    }
+    package_tree::validate(source_path, "selected source package tree")?;
 
     let staging = TempDir::new().map_err(|error| error.to_string())?;
     let staged_source = staging.path().join("source");
-    copy_source_tree_filtered(&source_path, &staged_source)?;
-    let nar_hash = nar_hash_path(&staged_source)?;
+    package_tree::copy_filtered(source_path, &staged_source)?;
+    let nar_hash = validated_nar_hash(&staged_source, "staged package tree")?;
 
     if let Some(expected_hash) = expected_hash
         && nar_hash != expected_hash
@@ -570,26 +573,7 @@ fn snapshot_source_tree(
         ));
     }
 
-    let cache_path = cache_source_path(&nar_hash);
-    if cache_path.exists() {
-        let cached_hash = nar_hash_path(&cache_path)?;
-        if cached_hash != nar_hash {
-            return Err(format!(
-                "cached source {} nar_hash mismatch: expected {nar_hash}, found {cached_hash}; remove the tampered cache entry before retrying",
-                cache_path.display()
-            ));
-        }
-    } else {
-        if let Some(parent) = cache_path.parent() {
-            fs::create_dir_all(parent).map_err(|error| format!("{}: {error}", parent.display()))?;
-        }
-        fs::rename(&staged_source, &cache_path).or_else(|_| {
-            copy_source_tree_filtered(&staged_source, &cache_path)?;
-            fs::remove_dir_all(&staged_source)
-                .map_err(|error| format!("{}: {error}", staged_source.display()))
-        })?;
-    }
-
+    let cache_path = publish_cache_tree(&staged_source, &nar_hash)?;
     Ok(FetchedSource {
         source_path: cache_path,
         nar_hash,
@@ -605,7 +589,7 @@ fn cached_source(expected_hash: Option<&str>) -> Result<Option<FetchedSource>, S
     if !path.exists() {
         return Ok(None);
     }
-    let actual_hash = nar_hash_path(&path)?;
+    let actual_hash = validated_nar_hash(&path, "cached package tree")?;
     if actual_hash != expected_hash {
         return Err(format!(
             "cached source {} nar_hash mismatch: expected {expected_hash}, found {actual_hash}; remove the tampered cache entry before retrying",
@@ -656,18 +640,12 @@ fn read_json_url(url: &str) -> Result<Value, String> {
 
 fn unpack_tarball(bytes: &[u8], destination: &Path) -> Result<(), String> {
     if bytes.starts_with(&[0x1f, 0x8b]) {
-        let decoder = GzDecoder::new(Cursor::new(bytes));
-        let mut archive = Archive::new(decoder);
-        archive
-            .unpack(destination)
-            .map_err(|error| format!("failed to unpack tar.gz: {error}"))?;
+        package_tree::extract_tar(GzDecoder::new(Cursor::new(bytes)), destination)
+            .map_err(|error| format!("failed to extract tar.gz: {error}"))
     } else {
-        let mut archive = Archive::new(Cursor::new(bytes));
-        archive
-            .unpack(destination)
-            .map_err(|error| format!("failed to unpack tar archive: {error}"))?;
+        package_tree::extract_tar(Cursor::new(bytes), destination)
+            .map_err(|error| format!("failed to extract tar archive: {error}"))
     }
-    Ok(())
 }
 
 fn normalized_extracted_root(path: &Path) -> Result<PathBuf, String> {
@@ -792,6 +770,13 @@ fn verify_locked_manifest_metadata(
     Ok(())
 }
 
+fn validated_nar_hash(path: &Path, tree_name: &str) -> Result<String, String> {
+    package_tree::validate(path, tree_name)?;
+    let hash = nar_hash_path(path)?;
+    package_tree::validate(path, tree_name)?;
+    Ok(hash)
+}
+
 fn nar_hash_path(path: &Path) -> Result<String, String> {
     let mut encoder = Encoder::new(path).map_err(|error| format!("{}: {error}", path.display()))?;
     let mut hasher = Sha256::new();
@@ -811,87 +796,100 @@ fn nar_hash_path(path: &Path) -> Result<String, String> {
     ))
 }
 
-fn copy_source_tree_filtered(source: &Path, destination: &Path) -> Result<(), String> {
-    if destination.exists() {
-        fs::remove_dir_all(destination)
-            .map_err(|error| format!("{}: {error}", destination.display()))?;
-    }
-    fs::create_dir_all(destination)
-        .map_err(|error| format!("{}: {error}", destination.display()))?;
-    copy_dir_contents(source, destination)
-}
+fn publish_cache_tree(staged_source: &Path, nar_hash: &str) -> Result<PathBuf, String> {
+    let cache_path = cache_source_path(nar_hash);
+    let parent = cache_path
+        .parent()
+        .ok_or_else(|| format!("cache path {} has no parent", cache_path.display()))?;
+    fs::create_dir_all(parent).map_err(|error| format!("{}: {error}", parent.display()))?;
 
-fn copy_dir_contents(source: &Path, destination: &Path) -> Result<(), String> {
-    for entry in fs::read_dir(source).map_err(|error| format!("{}: {error}", source.display()))? {
-        let entry = entry.map_err(|error| error.to_string())?;
-        let file_name = entry.file_name();
-        if should_skip_source_entry(&file_name.to_string_lossy()) {
-            continue;
-        }
-        let source_path = entry.path();
-        let destination_path = destination.join(&file_name);
-        let metadata = fs::symlink_metadata(&source_path)
-            .map_err(|error| format!("{}: {error}", source_path.display()))?;
-        if metadata.file_type().is_symlink() {
-            copy_symlink(&source_path, &destination_path)?;
-        } else if metadata.is_dir() {
-            fs::create_dir_all(&destination_path)
-                .map_err(|error| format!("{}: {error}", destination_path.display()))?;
-            copy_dir_contents(&source_path, &destination_path)?;
-        } else if metadata.is_file() {
-            fs::copy(&source_path, &destination_path).map_err(|error| {
-                format!(
-                    "failed to copy {} to {}: {error}",
-                    source_path.display(),
-                    destination_path.display()
-                )
-            })?;
-            let permissions = metadata.permissions();
-            fs::set_permissions(&destination_path, permissions)
-                .map_err(|error| format!("{}: {error}", destination_path.display()))?;
-        }
-    }
-    Ok(())
-}
+    let lock_path = parent
+        .parent()
+        .unwrap_or(parent)
+        .join(".sources-publish.lock");
+    let publication_lock = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .map_err(|error| format!("{}: {error}", lock_path.display()))?;
+    publication_lock
+        .lock_exclusive()
+        .map_err(|error| format!("failed to lock {}: {error}", lock_path.display()))?;
 
-fn should_skip_source_entry(name: &str) -> bool {
-    matches!(name, ".git" | ".jj" | ".hg" | ".svn" | "target" | "result")
-        || name.starts_with("result-")
+    let result = (|| {
+        if cache_path.exists() {
+            let cached_hash = validated_nar_hash(&cache_path, "cached package tree")?;
+            if cached_hash != nar_hash {
+                return Err(format!(
+                    "cached source {} nar_hash mismatch: expected {nar_hash}, found {cached_hash}; remove the tampered cache entry before retrying",
+                    cache_path.display()
+                ));
+            }
+            return Ok(cache_path.clone());
+        }
+
+        let publication = tempfile::Builder::new()
+            .prefix(".publish-")
+            .tempdir_in(parent)
+            .map_err(|error| format!("failed to create private cache publication tree: {error}"))?;
+        let candidate = publication.path().join("source");
+        package_tree::copy_complete(staged_source, &candidate)?;
+        let candidate_hash = validated_nar_hash(&candidate, "publication package tree")?;
+        if candidate_hash != nar_hash {
+            return Err(format!(
+                "publication package tree hash changed: expected {nar_hash}, found {candidate_hash}"
+            ));
+        }
+        fs::rename(&candidate, &cache_path).map_err(|error| {
+            format!(
+                "failed to atomically publish {} to {}: {error}",
+                candidate.display(),
+                cache_path.display()
+            )
+        })?;
+
+        match validated_nar_hash(&cache_path, "cached package tree") {
+            Ok(published_hash) if published_hash == nar_hash => {
+                sync_directory(parent)?;
+                Ok(cache_path.clone())
+            }
+            Ok(published_hash) => {
+                let _ = fs::remove_dir_all(&cache_path);
+                Err(format!(
+                    "published cache {} nar_hash mismatch: expected {nar_hash}, found {published_hash}; incomplete publication was removed",
+                    cache_path.display()
+                ))
+            }
+            Err(error) => {
+                let _ = fs::remove_dir_all(&cache_path);
+                Err(format!(
+                    "published cache {} failed validation: {error}; incomplete publication was removed",
+                    cache_path.display()
+                ))
+            }
+        }
+    })();
+    let unlock_result = fs2::FileExt::unlock(&publication_lock)
+        .map_err(|error| format!("failed to unlock {}: {error}", lock_path.display()));
+    match (result, unlock_result) {
+        (Err(error), _) => Err(error),
+        (Ok(_), Err(error)) => Err(error),
+        (Ok(path), Ok(())) => Ok(path),
+    }
 }
 
 #[cfg(unix)]
-fn copy_symlink(source: &Path, destination: &Path) -> Result<(), String> {
-    use std::os::unix::fs::symlink;
-
-    let target = fs::read_link(source).map_err(|error| format!("{}: {error}", source.display()))?;
-    symlink(&target, destination).map_err(|error| {
-        format!(
-            "failed to copy symlink {} to {}: {error}",
-            source.display(),
-            destination.display()
-        )
-    })
+fn sync_directory(path: &Path) -> Result<(), String> {
+    fs::File::open(path)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| format!("failed to sync cache directory {}: {error}", path.display()))
 }
 
-#[cfg(windows)]
-fn copy_symlink(source: &Path, destination: &Path) -> Result<(), String> {
-    use std::os::windows::fs::{symlink_dir, symlink_file};
-
-    let target = fs::read_link(source).map_err(|error| format!("{}: {error}", source.display()))?;
-    let metadata =
-        fs::metadata(source).map_err(|error| format!("{}: {error}", source.display()))?;
-    if metadata.is_dir() {
-        symlink_dir(&target, destination)
-    } else {
-        symlink_file(&target, destination)
-    }
-    .map_err(|error| {
-        format!(
-            "failed to copy symlink {} to {}: {error}",
-            source.display(),
-            destination.display()
-        )
-    })
+#[cfg(not(unix))]
+fn sync_directory(_path: &Path) -> Result<(), String> {
+    Ok(())
 }
 
 fn path_for_lock(path: &Path, lock_path: &Path) -> Result<PathBuf, String> {
@@ -1063,10 +1061,13 @@ mod tests {
             "result",
             "result-doc",
         ] {
-            assert!(should_skip_source_entry(name), "{name} should be skipped");
+            assert!(package_tree::should_skip(name), "{name} should be skipped");
         }
         for name in ["deck.yaml", "results", "target-notes", ".github"] {
-            assert!(!should_skip_source_entry(name), "{name} should be included");
+            assert!(
+                !package_tree::should_skip(name),
+                "{name} should be included"
+            );
         }
     }
 

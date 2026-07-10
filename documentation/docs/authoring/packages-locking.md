@@ -75,6 +75,8 @@ The CLI emits lock schema version 2 and computes its mandatory canonical SRI SHA
 
 Version 1 locks are insecure and rejected rather than silently interpreted. Move or remove the old lock, then regenerate every package with its corresponding `brainbrew lock update` command.
 
+Package snapshots use a reject-all-symlinks policy for path, GitHub, and tarball sources. Only regular files and directories may enter staging or the content-addressed cache; hard links and special entries are rejected too. If an older package or cache contains a symlink, replace it with real package-owned content, remove the rejected cache entry if the diagnostic requests that, and rerun `brainbrew lock update`. Even an apparently contained symlink is intentionally rejected.
+
 ## Review after updates
 
 When upstream changes, rerun:
