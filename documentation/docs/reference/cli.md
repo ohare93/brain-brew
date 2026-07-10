@@ -84,11 +84,12 @@ Produces a resolved Canonical Deck. Missing output parents below the selected ou
 ## `export crowdanki`
 
 ```bash
-brainbrew export crowdanki --manifest brainbrew.yaml --target en-standard
-brainbrew export crowdanki --manifest brainbrew.yaml --target en-standard --force
+brainbrew export crowdanki --manifest brainbrew.yaml --target en-standard --media-root media/
+brainbrew export crowdanki --manifest brainbrew.yaml --target en-standard --media-mode reference-only
+brainbrew export crowdanki --manifest brainbrew.yaml --target en-standard --media-root media/ --force --json
 ```
 
-Exports a CrowdAnki folder. Without `--out`, manifest-target exports default to `build/crowdanki/<target>` unless the target configures `exports.crowdanki.out`. Existing output is refused unless `--force` is explicit. Brain Brew serializes `deck.json`, validates and reads every selected media byte, stages the complete clean tree privately, then publishes it by directory rename. Forced replacement first renames the old complete tree to a recovery backup; ordinary failure restores it, and interruption leaves a sibling recovery journal rather than a mixed tree. Without `--media-root`, media declarations are reported but assets are intentionally not copied.
+Exports a CrowdAnki folder. Media targets are strict by default and require all package owner roots, canonical hashes, and matching bytes. `--media-mode reference-only` is the explicit development-only path for producing `deck.json` without byte copy; it still validates all references/collisions and reports `NOT RELEASE-READY`. A missing root never selects it. `--json` returns structured `media.mode`, `media.release_ready`, copy counts, and warnings. Without `--out`, manifest-target exports default to `build/crowdanki/<target>` unless the target configures `exports.crowdanki.out`. Existing output is refused unless `--force` is explicit. Brain Brew validates everything before it stages the complete clean tree privately and publishes it by directory rename. Forced replacement first renames the old complete tree to a recovery backup; ordinary failure restores it, and interruption leaves a sibling recovery journal rather than a mixed tree.
 
 ## `media hash`
 
@@ -156,12 +157,13 @@ Release builds serve embedded Leptos/WASM assets from the `brainbrew` binary; du
 ## `verify`
 
 ```bash
-brainbrew verify --manifest brainbrew.yaml --all-targets
 brainbrew verify --manifest brainbrew.yaml --all-targets --media-root media/
+brainbrew verify --manifest brainbrew.yaml --all-targets --media-mode reference-only
+brainbrew verify --manifest brainbrew.yaml --all-targets --media-root media/ --json
 brainbrew verify --manifest brainbrew.yaml --target legacy-target --skip-content-validation
 ```
 
-Runs the workspace verification gate. Rendered deck descriptions and card templates are checked as lightweight HTML fragments, and note-type styling is checked for balanced CSS structure; `--skip-content-validation` is the escape hatch for legacy Anki content that renders correctly despite a false positive. Referenced-but-undeclared media is always an error; declared-but-unreferenced media is a warning. With `--media-root`, missing files, empty hashes, and stale hashes are errors. Stale translation records warn by default and fail when the target or command uses strict translation coverage (`translation_coverage: strict` or `--translation-coverage strict`).
+Runs the workspace verification gate. Rendered deck descriptions and card templates are checked as lightweight HTML fragments, and note-type styling is checked for balanced CSS structure; `--skip-content-validation` is the escape hatch for legacy Anki content that renders correctly despite a false positive. Referenced-but-undeclared media is always an error and unused media warns. Any media target is strict by default: all owner roots, canonical non-empty hashes, and matching bytes are required. `--media-mode reference-only` is explicit development mode, still checks references/collisions/path and present-hash syntax, and reports `media.release_ready: false` under `--json`; it cannot be combined with roots. Targets without media are unaffected. Stale translation records warn by default and fail when the target or command uses strict translation coverage (`translation_coverage: strict` or `--translation-coverage strict`).
 
 ## `lock`
 

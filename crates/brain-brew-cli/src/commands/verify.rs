@@ -11,7 +11,7 @@ use crate::io::{
     resolve_include_target_for_context, top_level_media_include_path, verify_canonical_deck_format,
     verify_manifest_format, verify_overlay_format,
 };
-use crate::media_assets::{validate_media_references, validate_owned_media_assets};
+use crate::media_assets::verify_owned_media;
 use crate::media_ownership::MediaRootSelections;
 use crate::output;
 use crate::path_authorization::PathAuthorizer;
@@ -23,6 +23,11 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         return Ok(());
     }
     let verify_args = parse_verify_args(args)?;
+    if verify_args.media_mode == crate::media_verification::MediaVerificationMode::ReferenceOnly
+        && !verify_args.media_roots.is_empty()
+    {
+        return Err("--media-mode reference-only cannot be combined with --media-root because reference-only mode intentionally skips all media root and byte validation".to_owned());
+    }
     verify_manifest_format(&verify_args.manifest_path)?;
     let manifest = read_manifest(&verify_args.manifest_path)?;
     let root = manifest_root(&verify_args.manifest_path);
@@ -68,6 +73,8 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         },
     )?;
     let media_roots = MediaRootSelections::parse(&registry, &verify_args.media_roots, &root)?;
+    let mut warnings = Vec::new();
+    let mut media_targets = Vec::new();
     for target in &target_names {
         let target_reference = if verify_args.all_targets {
             registry
@@ -88,15 +95,22 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                 .map(|target| target.translation_coverage)
                 .unwrap_or_default()
         });
-        verify_translation_coverage_policy(&plan, policy)?;
+        verify_translation_coverage_policy(&plan, policy, &mut warnings)?;
         let deck = plan.compose()?;
         deck.validate().map_err(|error| error.to_string())?;
-        plan.media_reference_bindings(&deck)?;
-        if media_roots.supplied() {
-            validate_owned_media_assets(&plan, &deck, &media_roots)?;
-        } else {
-            validate_media_references(&deck)?;
-        }
+        let result = verify_owned_media(&plan, &deck, &media_roots, verify_args.media_mode, false)?;
+        warnings.extend(
+            result
+                .warnings
+                .into_iter()
+                .map(|warning| format!("target {target}: {warning}")),
+        );
+        media_targets.push(serde_json::json!({
+            "target": target,
+            "declarations": deck.media.len(),
+            "mode": verify_args.media_mode.name(),
+            "release_ready": verify_args.media_mode.release_ready(deck.media.len()),
+        }));
         if !verify_args.skip_content_validation {
             verify_deck_content(target, &deck)?;
         }
@@ -108,15 +122,47 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         )?;
     }
 
-    let suffix = if target_names.len() == 1 { "" } else { "s" };
-    let mut details = vec![("manifest", verify_args.manifest_path.display().to_string())];
-    if media_roots.supplied() {
-        details.push(("media roots", verify_args.media_roots.join(", ")));
+    let release_ready = media_targets
+        .iter()
+        .all(|target| target["release_ready"].as_bool() == Some(true));
+    if verify_args.json_output {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "status": "verified",
+                "manifest": verify_args.manifest_path.display().to_string(),
+                "targets": target_names.len(),
+                "media": {
+                    "mode": verify_args.media_mode.name(),
+                    "release_ready": release_ready,
+                    "targets": media_targets,
+                },
+                "warnings": warnings,
+            }))
+            .expect("verify status JSON serializes")
+        );
+    } else {
+        for warning in &warnings {
+            eprintln!("warning: {warning}");
+        }
+        let suffix = if target_names.len() == 1 { "" } else { "s" };
+        let mut details = vec![("manifest", verify_args.manifest_path.display().to_string())];
+        details.push((
+            "media verification",
+            if release_ready {
+                verify_args.media_mode.name().to_owned()
+            } else {
+                "reference_only (NOT RELEASE-READY)".to_owned()
+            },
+        ));
+        if media_roots.supplied() {
+            details.push(("media roots", verify_args.media_roots.join(", ")));
+        }
+        output::print_success(
+            format!("verified {} target{suffix}", target_names.len()),
+            &details,
+        );
     }
-    output::print_success(
-        format!("verified {} target{suffix}", target_names.len()),
-        &details,
-    );
     Ok(())
 }
 
@@ -190,6 +236,7 @@ fn verify_plan_source_formats(plan: &TargetPlan) -> Result<(), String> {
 fn verify_translation_coverage_policy(
     plan: &TargetPlan,
     policy: manifest::TranslationCoveragePolicy,
+    warnings: &mut Vec<String>,
 ) -> Result<(), String> {
     let mut current = plan.base.clone();
     for (planned, overlay) in &plan.overlays {
@@ -230,7 +277,7 @@ fn verify_translation_coverage_policy(
                 if policy == manifest::TranslationCoveragePolicy::Strict {
                     return Err(format!("translation stale strict policy failed: {message}"));
                 }
-                eprintln!("warning: {message}");
+                warnings.push(message);
             }
         }
         current = current.compose(std::slice::from_ref(overlay)).map_err(|error| {
@@ -243,8 +290,20 @@ fn verify_translation_coverage_policy(
     Ok(())
 }
 
+pub(crate) fn stale_translation_warnings(plan: &TargetPlan) -> Result<Vec<String>, String> {
+    stale_translation_warning_messages(plan)
+}
+
+pub(crate) fn stale_translation_warnings_for_overlays(
+    target: &str,
+    base: &CanonicalDeck,
+    overlays: &[(String, Overlay)],
+) -> Result<Vec<String>, String> {
+    stale_translation_warning_messages_for_overlays(target, base, overlays)
+}
+
 pub(crate) fn emit_stale_translation_warnings(plan: &TargetPlan) -> Result<(), String> {
-    for message in stale_translation_warning_messages(plan)? {
+    for message in stale_translation_warnings(plan)? {
         eprintln!("warning: {message}");
     }
     Ok(())
@@ -255,7 +314,7 @@ pub(crate) fn emit_stale_translation_warnings_for_overlays(
     base: &CanonicalDeck,
     overlays: &[(String, Overlay)],
 ) -> Result<(), String> {
-    for message in stale_translation_warning_messages_for_overlays(target, base, overlays)? {
+    for message in stale_translation_warnings_for_overlays(target, base, overlays)? {
         eprintln!("warning: {message}");
     }
     Ok(())

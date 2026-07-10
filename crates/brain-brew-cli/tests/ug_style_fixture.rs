@@ -31,6 +31,8 @@ fn ug_style_fixture_composes_exports_imports_and_diffs_semantically() {
         "--manifest",
         fixture.join("brainbrew.yaml").to_str().unwrap(),
         "--all-targets",
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(
         verify_output.status.success(),
@@ -64,6 +66,8 @@ fn ug_style_fixture_composes_exports_imports_and_diffs_semantically() {
         "export",
         "crowdanki",
         resolved_path.to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
         "--out",
         export_dir.to_str().unwrap(),
     ]);

@@ -47,8 +47,9 @@ cleanup() {
 trap cleanup EXIT
 
 # Fixture-relevant UG source files. Full media binaries are intentionally
-# excluded: tests validate declared media references from deck/overlay source,
-# not asset bytes. If a fixture test needs actual media bytes later, add the
+# excluded: tests explicitly select reference-only development mode to validate
+# declared media/reference structure, not release asset integrity. If a fixture
+# test needs actual media bytes later, add the
 # narrow path(s) here rather than copying UG's entire media directory by habit.
 cp -a "$ug_checkout/brainbrew.yaml" "$tmp/"
 cp -a "$ug_checkout/brainbrew-hardcore.yaml" "$tmp/"

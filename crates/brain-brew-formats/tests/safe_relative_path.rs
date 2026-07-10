@@ -7,6 +7,8 @@ fn accepts_only_portable_normal_relative_components() {
         "overlays/languages/de.yaml",
         "percent/%2e%2e/literal.yaml",
         "unicode/․․/file.yaml",
+        "media/旗 & map #1?.svg",
+        "media/quote\"and'apostrophe.png",
     ] {
         let path = SafeRelativePath::new(valid)
             .unwrap_or_else(|error| panic!("{valid:?} should be safe: {error}"));
@@ -38,6 +40,19 @@ fn rejects_empty_absolute_dot_parent_drive_unc_and_separator_ambiguity() {
         ("a//deck.yaml", SafeRelativePathError::EmptyComponent),
         ("deck.yaml/", SafeRelativePathError::EmptyComponent),
         ("nul\0name", SafeRelativePathError::Nul),
+        ("line\nfeed.png", SafeRelativePathError::Control),
+        ("tab\tname.png", SafeRelativePathError::Control),
+        ("http:asset.png", SafeRelativePathError::UrlSchemeDelimiter),
+        ("bidi\u{202e}name.png", SafeRelativePathError::FormatControl),
+        (
+            "trailing-space /file.png",
+            SafeRelativePathError::TrailingDotOrSpace,
+        ),
+        (
+            "trailing-dot./file.png",
+            SafeRelativePathError::TrailingDotOrSpace,
+        ),
+        ("CON.png", SafeRelativePathError::WindowsReservedName),
     ];
 
     for (raw, expected) in cases {

@@ -19,12 +19,16 @@ trap 'rm -rf "$out_dir"' EXIT
   --out "$out_dir/full-demo.yaml"
 test -s "$out_dir/full-demo.yaml"
 
+# The fast ug-style fixture intentionally omits media bytes and hashes. This is
+# structural/reference coverage only, never release media-integrity evidence.
 "$brainbrew_bin" export crowdanki \
   --manifest "$manifest" \
   --target full-demo \
+  --media-mode reference-only \
   --out "$out_dir/crowdanki"
 test -s "$out_dir/crowdanki/deck.json"
 
 "$brainbrew_bin" verify \
   --manifest "$manifest" \
-  --all-targets
+  --all-targets \
+  --media-mode reference-only

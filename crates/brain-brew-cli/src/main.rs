@@ -10,6 +10,7 @@ mod help;
 mod io;
 mod media_assets;
 mod media_ownership;
+mod media_verification;
 mod output;
 mod output_transaction;
 mod overlay_draft;

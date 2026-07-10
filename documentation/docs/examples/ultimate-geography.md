@@ -46,21 +46,24 @@ brainbrew targets --manifest fixtures/ultimate-geography/brainbrew-hardcore.yaml
 Verify both manifests so the main UG targets and the standalone Hardcore companion targets stay covered:
 
 ```bash
-brainbrew verify --manifest fixtures/ultimate-geography/brainbrew.yaml --all-targets
-brainbrew verify --manifest fixtures/ultimate-geography/brainbrew-hardcore.yaml --all-targets
+brainbrew verify --manifest fixtures/ultimate-geography/brainbrew.yaml --all-targets --media-mode reference-only
+brainbrew verify --manifest fixtures/ultimate-geography/brainbrew-hardcore.yaml --all-targets --media-mode reference-only
 ```
 
 Illustrative output, regenerated against the fixture on 2026-07-04 after measuring the upstream target listings:
 
 ```text
+warning: target ...: MEDIA REFERENCE-ONLY DEVELOPMENT MODE: ... NOT RELEASE-READY
 ✓ verified 74 targets
   manifest: fixtures/ultimate-geography/brainbrew.yaml
+  media verification: reference_only (NOT RELEASE-READY)
 
 ✓ verified 26 targets
   manifest: fixtures/ultimate-geography/brainbrew-hardcore.yaml
+  media verification: reference_only (NOT RELEASE-READY)
 ```
 
-If upstream Ultimate Geography adds languages or target families, rerun the target listing for each manifest and refresh this example instead of copying the old numbers.
+The repository fixture intentionally excludes the external Ultimate Geography media tree and has hashless declarations, so these commands prove formatting, composition, and reference structure only. They are not byte-integrity or release-readiness evidence. A real UG release must use default strict mode with package owner roots and real hashed bytes. If upstream adds languages or target families, rerun the target listing for each manifest and refresh this example instead of copying the old numbers.
 
 ## Export one target
 
@@ -68,6 +71,7 @@ If upstream Ultimate Geography adds languages or target families, rerun the targ
 brainbrew export crowdanki \
   --manifest fixtures/ultimate-geography/brainbrew.yaml \
   --target de-extended \
+  --media-mode reference-only \
   --out /tmp/de-extended-crowdanki
 ```
 

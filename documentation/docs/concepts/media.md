@@ -30,19 +30,20 @@ note_types:
 
 ## Verify media
 
-Without a media root, Brain Brew can check that references are internally consistent.
-
-```bash
-brainbrew verify --manifest brainbrew.yaml --all-targets
-```
-
-Referenced-but-undeclared media fails verification. Declared-but-unreferenced media is reported as a warning.
-
-With `--media-root`, it also checks that files exist and declared hashes are non-empty and current:
+Targets without media verify normally. For any target with declared or referenced media, `verify` is release-strict by default: referenced-but-undeclared media fails, unused declarations warn, every owning package needs an explicit `--media-root`, hashes must be canonical 64-character lowercase SHA-256, and every file must exist and match.
 
 ```bash
 brainbrew verify --manifest brainbrew.yaml --all-targets --media-root media/
 ```
+
+Hashless fixtures that intentionally test only source structure must opt into clearly non-release development behavior:
+
+```bash
+brainbrew verify --manifest brainbrew.yaml --all-targets \
+  --media-mode reference-only
+```
+
+Reference-only mode still validates declarations, references, collisions, safe paths, and any non-empty hash syntax. Human and JSON output prominently report that it is not release-ready. A missing root never selects this mode implicitly.
 
 ## Refresh hashes
 
@@ -60,7 +61,7 @@ CrowdAnki import suggests stable media IDs from media file paths. If two differe
 
 ## Export media
 
-CrowdAnki export copies declared media into the export folder's `media/` subdirectory when a media root is supplied:
+Strict CrowdAnki export copies validated declared media into the export folder's `media/` subdirectory and requires the owner roots for every media target:
 
 ```bash
 brainbrew export crowdanki \
@@ -70,7 +71,7 @@ brainbrew export crowdanki \
   --out build/crowdanki/en-standard
 ```
 
-Because export is authoritative for declared media, downstream scripts can drop blanket `cp media/*` steps. Undeclared files in the media root are not copied.
+Because export is authoritative for declared media, downstream scripts can drop blanket `cp media/*` steps. Undeclared files in the media root are not copied. `--media-mode reference-only` may produce a development `deck.json` without copying bytes, but still rejects undeclared references and path/output collisions and reports `NOT RELEASE-READY`.
 
 ## Why references instead of embedded files?
 

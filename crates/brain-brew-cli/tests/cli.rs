@@ -3134,6 +3134,8 @@ fn export_crowdanki_uses_manifest_target_configured_out() {
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--target",
         "patched-via-dependency",
+        "--media-mode",
+        "reference-only",
     ]);
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -3152,6 +3154,8 @@ fn export_crowdanki_defaults_manifest_target_out_to_build_crowdanki_target() {
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--target",
         "patched-via-dependency",
+        "--media-mode",
+        "reference-only",
     ]);
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -3174,6 +3178,8 @@ fn export_crowdanki_uses_manifest_target() {
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--target",
         "patched-via-dependency",
+        "--media-mode",
+        "reference-only",
         "--out",
         export_dir.to_str().unwrap(),
     ]);
@@ -3200,6 +3206,8 @@ fn verify_compares_configured_crowdanki_golden() {
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--target",
         "patched-via-dependency",
+        "--media-mode",
+        "reference-only",
         "--out",
         golden_dir.to_str().unwrap(),
     ]);
@@ -3214,6 +3222,8 @@ fn verify_compares_configured_crowdanki_golden() {
         "--manifest",
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--all-targets",
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(
         verify_output.status.success(),
@@ -3235,6 +3245,8 @@ fn verify_compares_configured_crowdanki_golden() {
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--target",
         "patched-via-dependency",
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(!mismatch_output.status.success());
     assert!(stderr(&mismatch_output).contains("CrowdAnki golden mismatch"));
@@ -3261,6 +3273,8 @@ fn verify_allows_configured_crowdanki_golden_paths() {
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--target",
         "patched-via-dependency",
+        "--media-mode",
+        "reference-only",
         "--out",
         golden_dir.to_str().unwrap(),
     ]);
@@ -3286,6 +3300,8 @@ fn verify_allows_configured_crowdanki_golden_paths() {
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--target",
         "patched-via-dependency",
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(
         verify_output.status.success(),
@@ -3304,6 +3320,8 @@ fn verify_checks_all_manifest_targets() {
         "--manifest",
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--all-targets",
+        "--media-mode",
+        "reference-only",
     ]);
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -3330,6 +3348,8 @@ fn verify_checks_rendered_html_and_css_content_with_escape_hatch() {
         "--manifest",
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--all-targets",
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(!failed.status.success());
     let err = stderr(&failed);
@@ -3341,6 +3361,8 @@ fn verify_checks_rendered_html_and_css_content_with_escape_hatch() {
         "--manifest",
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--all-targets",
+        "--media-mode",
+        "reference-only",
         "--skip-content-validation",
     ]);
     assert!(skipped.status.success(), "stderr: {}", stderr(&skipped));
@@ -4206,6 +4228,8 @@ target_adaptations:
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--target",
         "da-standard",
+        "--media-mode",
+        "reference-only",
         "--translation-coverage",
         "lenient",
     ]);
@@ -4221,6 +4245,8 @@ target_adaptations:
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--target",
         "da-release",
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(!strict_output.status.success());
     assert!(stderr(&strict_output).contains("translation coverage strict policy failed"));
@@ -4259,6 +4285,8 @@ target_adaptations:
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--target",
         "da-release",
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(
         strict_output.status.success(),
@@ -4308,6 +4336,8 @@ stale_translations:
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--target",
         "da-standard",
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(
         lenient_verify.status.success(),
@@ -4368,6 +4398,8 @@ stale_translations:
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--target",
         "da-release",
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(!strict_verify.status.success());
     assert!(stderr(&strict_verify).contains("translation stale strict policy failed"));
@@ -4409,6 +4441,8 @@ stale_translations:
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--target",
         "da-standard",
+        "--media-mode",
+        "reference-only",
         "--out",
         export_dir.to_str().unwrap(),
     ]);
@@ -4710,6 +4744,8 @@ fn verify_accepts_declared_structured_image_media_id() {
         "--manifest",
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--all-targets",
+        "--media-mode",
+        "reference-only",
     ]);
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -4782,6 +4818,8 @@ targets:
         "--manifest",
         dir.join("brainbrew.yaml").to_str().unwrap(),
         "--all-targets",
+        "--media-mode",
+        "reference-only",
     ]);
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -4836,6 +4874,8 @@ fn verify_accepts_hoisted_media_map_and_rejects_bad_includes() {
         "--manifest",
         accepted.join("brainbrew.yaml").to_str().unwrap(),
         "--all-targets",
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
 
@@ -6112,6 +6152,8 @@ fn import_crowdanki_refuses_existing_output_rejects_unknown_flags_and_force_repl
         "export",
         "crowdanki",
         deck_path.to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
         "--out",
         export_dir.to_str().unwrap(),
     ]);
@@ -6176,6 +6218,8 @@ fn import_force_backup_interruption_is_recovered_before_retry() {
         "export",
         "crowdanki",
         dir.join("deck.yaml").to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
         "--out",
         export_dir.to_str().unwrap(),
     ]);
@@ -6229,6 +6273,8 @@ fn export_and_import_crowdanki_deck_folder() {
         "export",
         "crowdanki",
         deck_path.to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
         "--out",
         export_dir.to_str().unwrap(),
     ]);

@@ -1107,6 +1107,34 @@ fn render_variables_lowers_structured_images_to_exact_img_html() {
 }
 
 #[test]
+fn render_variables_url_encodes_and_html_escapes_structured_image_paths() {
+    let mut deck = ug_style_deck();
+    deck.media.get_mut(&sid("media.flag.finland")).unwrap().path =
+        "flags/旗 & quote\" #1?.svg".to_owned();
+    let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
+    note.fields.insert(sid("field.flag"), String::new());
+    note.field_images.insert(
+        sid("field.flag"),
+        vec![FieldImageReference {
+            media_id: sid("media.flag.finland"),
+        }],
+    );
+
+    let rendered = deck
+        .render_variables()
+        .expect("hostile filename renders safely");
+
+    assert_eq!(
+        rendered.notes[&sid("note.finland")].fields[&sid("field.flag")],
+        "<img src=\"flags/%E6%97%97%20%26%20quote%22%20%231%3F.svg\" />"
+    );
+    assert_eq!(
+        rendered.media[&sid("media.flag.finland")].path,
+        "flags/旗 & quote\" #1?.svg"
+    );
+}
+
+#[test]
 fn render_variables_lowers_multi_image_fields_without_separators() {
     let mut deck = ug_style_deck();
     deck.media.insert(

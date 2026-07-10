@@ -20,7 +20,7 @@ notes:
 
 `!image` uses the media stable ID, not the file path. If `flags/france.svg` is later renamed, update only the `media:` declaration's `path`; field references remain stable.
 
-Media declaration paths use the same portable safe-relative syntax as package files. Absolute, drive, UNC, backslash, `.`/`..`, and empty-component forms fail before asset I/O. Asset reads and export destinations also require canonical containment, including when an existing parent is a symlink.
+Media declaration paths use portable safe-relative syntax. Absolute, drive, UNC, backslash, `.`/`..`, empty components, controls/NUL, URL-scheme colons, bidi/zero-width format controls, trailing dots/spaces, and Windows device names fail before asset I/O. Spaces, Unicode, quotes, ampersands, `#`, `?`, and literal `%` are valid filename characters and are encoded safely when rendered. Asset reads and export destinations also require canonical containment, including when an existing parent is a symlink.
 
 ## Hoisting large media maps
 
@@ -83,7 +83,7 @@ field.flag:
   - !image media.flag.bali
 ```
 
-Brain Brew renders these to Anki-compatible HTML during export, for example `<img src="flags/france.svg" />`. Multi-image fields render as adjacent image tags with no separator.
+Brain Brew renders these to Anki-compatible HTML during export, for example `<img src="flags/france.svg" />`. Multi-image fields render as adjacent image tags with no separator. Rendering UTF-8 percent-encodes every byte except RFC 3986 unreserved characters and `/`, then HTML-attribute escapes the result. For example the declared filesystem/CrowdAnki filename `flags/旗 & #1?.svg` renders as `flags/%E6%97%97%20%26%20%231%3F.svg`; the declaration and `media_files` entry remain unchanged. Raw HTML/CSS scanners decode HTML entities and percent escapes before comparing references to declarations and reject malformed or unsafe encodings.
 
 ## When to keep raw HTML
 
@@ -97,7 +97,27 @@ A field should be either raw text/HTML, a structured message, or structured imag
 
 ## Verification and migration
 
-`brainbrew verify` fails if an `!image` references an unknown media ID. It still checks that the resolved media path is declared, hashed, and present when `--media-root` is supplied.
+### Migrating from optional media roots
+
+Older commands treated an omitted `--media-root` as reference-only checking. That implicit downgrade is removed. For every media-bearing release target:
+
+1. run `brainbrew media hash` against each owning package's real root;
+2. commit canonical 64-character lowercase hashes (never placeholders);
+3. pass the root package root plus each dependency root as `<package-id>=<directory>` to verify/export;
+4. remove blanket release-script `cp media/*` steps and let strict export stage only declarations;
+5. use `--media-mode reference-only` only for fixtures/development checks that are explicitly not byte-integrity evidence.
+
+Hashless fixtures do not need fake hashes: empty hashes are permitted only in reference-only mode. Any non-empty hash must still be canonical. Existing output is not touched when any media check fails.
+
+`brainbrew verify` fails if an `!image` references an unknown media ID. Strict release verification is the default whenever the composed target has media: every final owning package needs an explicit root, every hash must be exactly 64 lowercase hexadecimal characters, and every byte must exist and match. A missing root never downgrades validation.
+
+For a fixture or development workspace that deliberately has no media bytes, select the explicit non-release mode:
+
+```bash
+brainbrew verify --manifest brainbrew.yaml --all-targets --media-mode reference-only
+```
+
+Reference-only mode still checks structured IDs, raw rendered references, declaration collisions, safe paths, and canonical syntax for every non-empty hash. It skips roots/bytes and prints `NOT RELEASE-READY` in human output; `--json` reports `media.release_ready: false`. It cannot be combined with `--media-root`.
 
 To migrate existing strict image-only fields, run:
 

@@ -30,7 +30,7 @@ Verification checks:
 8. rendered content validation for deck descriptions, card-template HTML fragments, and note-type CSS styling;
 9. translation coverage policy, when configured or passed with `--translation-coverage`;
 10. stale translations, warning by default and failing under strict translation coverage;
-11. media references always, plus media file existence and SHA-256 hashes when `--media-root` is passed;
+11. release-strict media integrity by default for every media target: references, owner roots, canonical SHA-256 declarations, file existence, and matching bytes;
 12. configured CrowdAnki golden checks.
 
 For path-based package sources, `verify` re-hashes the live source tree instead of trusting only a cached source hash. If a local package source drifts after locking, `verify` reports the hash mismatch so CI catches the change.
@@ -60,13 +60,19 @@ Prefer fixing the source when possible; the flag skips only this HTML/CSS struct
 brainbrew verify --manifest brainbrew.yaml --all-targets --media-root media/
 ```
 
-Without `--media-root`, Brain Brew checks rendered field/template media references (`<img src>`, `[sound:]`, and related URL forms) against declarations. Referenced-but-undeclared media is an error; declared-but-unreferenced media is a warning.
-
-With `--media-root`, Brain Brew also checks that every declared media file exists and that every declaration has a non-empty SHA-256 matching the file. In a federation, unqualified `--media-root media/` maps only the root package. Repeat the option as `--media-root <package-id>=<directory>` for every dependency that owns a final declaration; duplicate, unknown, and missing package mappings fail before reads. Refresh hashes after intentional root-workspace media edits with:
+Referenced-but-undeclared media is an error and declared-but-unreferenced media is a warning. For a target with media, omitting a root is also an error: strict mode never silently degrades. Every declaration must have a canonical 64-character lowercase hexadecimal SHA-256 matching the file. In a federation, unqualified `--media-root media/` maps only the root package. Repeat the option as `--media-root <package-id>=<directory>` for every dependency that owns a final declaration; duplicate, unknown, and missing package mappings fail before reads. Refresh hashes after intentional root-workspace media edits with:
 
 ```bash
 brainbrew media hash --manifest brainbrew.yaml --all-targets --media-root media/
 ```
+
+For hashless/source-only fixtures, explicitly select development reference checking:
+
+```bash
+brainbrew verify --manifest brainbrew.yaml --all-targets --media-mode reference-only
+```
+
+This mode still validates all structured/raw references, declaration/output collisions, portable paths, and syntax of non-empty hashes. It skips roots and bytes, emits a prominent `NOT RELEASE-READY` warning/status in human and JSON output, and cannot be combined with `--media-root`. Targets without media are unaffected.
 
 ## Export CrowdAnki
 
@@ -74,6 +80,7 @@ brainbrew media hash --manifest brainbrew.yaml --all-targets --media-root media/
 brainbrew export crowdanki \
   --manifest brainbrew.yaml \
   --target de-standard \
+  --media-root media/ \
   --out build/crowdanki/de-standard
 ```
 
@@ -89,7 +96,7 @@ brainbrew export crowdanki \
   --out build/crowdanki/de-standard
 ```
 
-Export copies the declared media set itself, so release scripts do not need a separate `cp media/*` step. Files present under a media root but not declared are not exported. Each declaration is read only from its final declaring package's authorized root; a same-named file under the root package cannot satisfy a dependency declaration.
+Export copies the declared media set itself, so release scripts do not need a separate `cp media/*` step. Files present under a media root but not declared are not exported. Each declaration is read only from its final declaring package's authorized root; a same-named file under the root package cannot satisfy a dependency declaration. A development export without bytes requires `--media-mode reference-only`; it still rejects undeclared references and collisions before staging and reports that the artifact is not release-ready.
 
 Export refuses an existing output directory by default. To rerun intentionally, pass `--force`: Brain Brew validates and stages the complete new tree, moves the old complete tree to a recovery backup, and publishes the stage as one clean directory replacement. This removes stale files without ever copying into the live output tree.
 

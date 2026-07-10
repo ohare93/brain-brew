@@ -3,12 +3,16 @@ use std::path::PathBuf;
 use brain_brew_core::{OverlayKind, StableId};
 use brain_brew_formats::manifest::TranslationCoveragePolicy;
 
+use crate::media_verification::MediaVerificationMode;
+
 pub(crate) struct ManifestTargetArgs {
     pub(crate) manifest_path: PathBuf,
     pub(crate) target: String,
     pub(crate) out_path: Option<PathBuf>,
     pub(crate) force: bool,
     pub(crate) media_roots: Vec<String>,
+    pub(crate) media_mode: MediaVerificationMode,
+    pub(crate) json_output: bool,
     pub(crate) include_paths: Vec<PathBuf>,
     pub(crate) package_roots: Vec<PathBuf>,
 }
@@ -18,6 +22,8 @@ pub(crate) struct VerifyArgs {
     pub(crate) target: Option<String>,
     pub(crate) all_targets: bool,
     pub(crate) media_roots: Vec<String>,
+    pub(crate) media_mode: MediaVerificationMode,
+    pub(crate) json_output: bool,
     pub(crate) include_paths: Vec<PathBuf>,
     pub(crate) package_roots: Vec<PathBuf>,
     pub(crate) translation_coverage: Option<TranslationCoveragePolicy>,
@@ -28,6 +34,8 @@ pub(crate) struct ExportArgs {
     pub(crate) overlay_paths: Vec<String>,
     pub(crate) out_path: Option<PathBuf>,
     pub(crate) media_root: Option<PathBuf>,
+    pub(crate) media_mode: MediaVerificationMode,
+    pub(crate) json_output: bool,
     pub(crate) force: bool,
 }
 
@@ -89,24 +97,34 @@ pub(crate) fn parse_targets_args(args: &[String]) -> Result<TargetsArgs, String>
 }
 
 pub(crate) fn parse_manifest_target_args(args: &[String]) -> Result<ManifestTargetArgs, String> {
-    parse_manifest_target_args_with_force(args, false)
+    parse_manifest_target_args_with_force(args, false, false)
 }
 
 pub(crate) fn parse_manifest_target_output_args(
     args: &[String],
 ) -> Result<ManifestTargetArgs, String> {
-    parse_manifest_target_args_with_force(args, true)
+    parse_manifest_target_args_with_force(args, true, false)
+}
+
+pub(crate) fn parse_manifest_target_export_args(
+    args: &[String],
+) -> Result<ManifestTargetArgs, String> {
+    parse_manifest_target_args_with_force(args, true, true)
 }
 
 fn parse_manifest_target_args_with_force(
     args: &[String],
     allow_force: bool,
+    allow_media_policy: bool,
 ) -> Result<ManifestTargetArgs, String> {
     let mut manifest_path = None;
     let mut target = None;
     let mut out_path = None;
     let mut force = false;
     let mut media_roots = Vec::new();
+    let mut media_mode = MediaVerificationMode::Strict;
+    let mut media_mode_selected = false;
+    let mut json_output = false;
     let mut include_paths = Vec::new();
     let mut package_roots = Vec::new();
     let mut index = 0;
@@ -148,6 +166,24 @@ fn parse_manifest_target_args_with_force(
                 media_roots.push(path.clone());
                 index += 2;
             }
+            "--media-mode" if allow_media_policy && !media_mode_selected => {
+                let Some(mode) = args.get(index + 1) else {
+                    return Err("--media-mode requires strict or reference-only".to_owned());
+                };
+                media_mode = MediaVerificationMode::parse(mode)?;
+                media_mode_selected = true;
+                index += 2;
+            }
+            "--media-mode" if allow_media_policy => {
+                return Err("duplicate argument \"--media-mode\"".to_owned());
+            }
+            "--json" if allow_media_policy && !json_output => {
+                json_output = true;
+                index += 1;
+            }
+            "--json" if allow_media_policy => {
+                return Err("duplicate argument \"--json\"".to_owned());
+            }
             "--include" => {
                 let Some(path) = args.get(index + 1) else {
                     return Err("--include requires a path".to_owned());
@@ -174,6 +210,8 @@ fn parse_manifest_target_args_with_force(
         out_path,
         force,
         media_roots,
+        media_mode,
+        json_output,
         include_paths,
         package_roots,
     })
@@ -184,6 +222,9 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
     let mut target = None;
     let mut all_targets = false;
     let mut media_roots = Vec::new();
+    let mut media_mode = MediaVerificationMode::Strict;
+    let mut media_mode_selected = false;
+    let mut json_output = false;
     let mut include_paths = Vec::new();
     let mut package_roots = Vec::new();
     let mut translation_coverage = None;
@@ -216,6 +257,20 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
                 media_roots.push(path.clone());
                 index += 2;
             }
+            "--media-mode" if !media_mode_selected => {
+                let Some(mode) = args.get(index + 1) else {
+                    return Err("--media-mode requires strict or reference-only".to_owned());
+                };
+                media_mode = MediaVerificationMode::parse(mode)?;
+                media_mode_selected = true;
+                index += 2;
+            }
+            "--media-mode" => return Err("duplicate argument \"--media-mode\"".to_owned()),
+            "--json" if !json_output => {
+                json_output = true;
+                index += 1;
+            }
+            "--json" => return Err("duplicate argument \"--json\"".to_owned()),
             "--include" => {
                 let Some(path) = args.get(index + 1) else {
                     return Err("--include requires a path".to_owned());
@@ -252,6 +307,8 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
         target,
         all_targets,
         media_roots,
+        media_mode,
+        json_output,
         include_paths,
         package_roots,
         translation_coverage,
@@ -276,6 +333,11 @@ pub(crate) fn parse_overlay_and_optional_out(
     if export_args.media_root.is_some() {
         return Err("--media-root is only supported for media-aware commands".to_owned());
     }
+    if export_args.media_mode != MediaVerificationMode::Strict || export_args.json_output {
+        return Err(
+            "--media-mode and --json are only supported for media-aware commands".to_owned(),
+        );
+    }
     Ok((
         export_args.overlay_paths,
         export_args.out_path,
@@ -287,6 +349,9 @@ pub(crate) fn parse_overlay_out_media(args: &[String]) -> Result<ExportArgs, Str
     let mut overlay_paths = Vec::new();
     let mut out_path = None;
     let mut media_root = None;
+    let mut media_mode = MediaVerificationMode::Strict;
+    let mut media_mode_selected = false;
+    let mut json_output = false;
     let mut force = false;
     let mut index = 0;
     while index < args.len() {
@@ -312,11 +377,28 @@ pub(crate) fn parse_overlay_out_media(args: &[String]) -> Result<ExportArgs, Str
                 media_root = Some(PathBuf::from(path));
                 index += 2;
             }
+            "--media-mode" if !media_mode_selected => {
+                let Some(mode) = args.get(index + 1) else {
+                    return Err("--media-mode requires strict or reference-only".to_owned());
+                };
+                media_mode = MediaVerificationMode::parse(mode)?;
+                media_mode_selected = true;
+                index += 2;
+            }
+            "--json" if !json_output => {
+                json_output = true;
+                index += 1;
+            }
             "--force" if !force => {
                 force = true;
                 index += 1;
             }
-            duplicate if matches!(duplicate, "--media-root" | "--force" | "--out") => {
+            duplicate
+                if matches!(
+                    duplicate,
+                    "--media-root" | "--media-mode" | "--json" | "--force" | "--out"
+                ) =>
+            {
                 return Err(format!("duplicate argument {duplicate:?}"));
             }
             other => return Err(format!("unexpected argument {other:?}")),
@@ -326,6 +408,8 @@ pub(crate) fn parse_overlay_out_media(args: &[String]) -> Result<ExportArgs, Str
         overlay_paths,
         out_path,
         media_root,
+        media_mode,
+        json_output,
         force,
     })
 }

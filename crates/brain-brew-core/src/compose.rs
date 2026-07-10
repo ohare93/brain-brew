@@ -1797,13 +1797,44 @@ fn render_image_fields(
                 field_has_error = true;
                 continue;
             };
-            rendered.push_str(&format!("<img src=\"{media_path}\" />"));
+            let encoded_path = encode_media_path_for_url(media_path);
+            rendered.push_str("<img src=\"");
+            rendered.push_str(&escape_html_attribute(&encoded_path));
+            rendered.push_str("\" />");
         }
         if !field_has_error {
             note.fields.insert(field_id.clone(), rendered);
             note.field_images.remove(&field_id);
         }
     }
+}
+
+fn encode_media_path_for_url(path: &str) -> String {
+    let mut encoded = String::with_capacity(path.len());
+    for byte in path.as_bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(*byte, b'-' | b'.' | b'_' | b'~' | b'/') {
+            encoded.push(char::from(*byte));
+        } else {
+            use std::fmt::Write as _;
+            write!(&mut encoded, "%{byte:02X}").expect("writing to String cannot fail");
+        }
+    }
+    encoded
+}
+
+fn escape_html_attribute(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '&' => escaped.push_str("&amp;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&#39;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
 }
 
 fn render_message_variables(

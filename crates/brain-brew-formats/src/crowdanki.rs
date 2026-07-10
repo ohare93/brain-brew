@@ -18,6 +18,7 @@ pub struct CrowdAnkiExport {
 /// Export a CanonicalDeck to deterministic normalized CrowdAnki `deck.json` bytes.
 pub fn export_deck(deck: &CanonicalDeck) -> Result<CrowdAnkiExport, CrowdAnkiError> {
     deck.validate().map_err(CrowdAnkiError::Validation)?;
+    media::validate_paths(deck).map_err(CrowdAnkiError::Media)?;
     let rendered_deck = deck
         .render_variables()
         .map_err(CrowdAnkiError::VariableRender)?;
@@ -784,6 +785,7 @@ pub enum CrowdAnkiError {
     Unsupported(String),
     Validation(ValidationReport),
     VariableRender(VariableRenderReport),
+    Media(media::MediaValidationReport),
 }
 
 impl fmt::Display for CrowdAnkiError {
@@ -797,6 +799,7 @@ impl fmt::Display for CrowdAnkiError {
             Self::Unsupported(message) => write!(f, "unsupported CrowdAnki data: {message}"),
             Self::Validation(report) => write!(f, "imported deck failed validation: {report}"),
             Self::VariableRender(report) => write!(f, "deck variable rendering failed: {report}"),
+            Self::Media(report) => write!(f, "CrowdAnki media path validation failed: {report}"),
         }
     }
 }
@@ -947,6 +950,7 @@ impl CrowdAnkiDeckJson {
             adapter_ids: deck_adapter_ids,
         };
         deck.validate().map_err(CrowdAnkiError::Validation)?;
+        media::validate_paths(&deck).map_err(CrowdAnkiError::Media)?;
         Ok(deck)
     }
 }

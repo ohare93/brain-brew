@@ -9,7 +9,7 @@ use brain_brew_core::{
 };
 use brain_brew_formats::{
     canonical_yaml,
-    media::{self, MediaValidationErrorKind},
+    media::{self, MediaHashPolicy, MediaValidationErrorKind},
     source_includes,
 };
 
@@ -126,6 +126,99 @@ fn validation_accepts_declared_media_references() {
 }
 
 #[test]
+fn reference_scanner_decodes_rendered_url_and_html_attribute_paths() {
+    let paths = media::extract_media_references_from_rendered_field(
+        r#"<img SRC = "flags/flag%20%26%20map%20%231%3F.svg" /><link href = "styles/a&amp;b.css"><style>.x { background: URL('地図/%E6%97%A5%E6%9C%AC.svg'); }</style>"#,
+    );
+
+    assert_eq!(
+        paths,
+        BTreeSet::from([
+            "flags/flag & map #1?.svg".to_owned(),
+            "styles/a&b.css".to_owned(),
+            "地図/日本.svg".to_owned(),
+        ])
+    );
+}
+
+#[test]
+fn declaration_validation_requires_canonical_hashes_only_in_release_mode() {
+    let mut deck = media_deck();
+    deck.media
+        .get_mut(&sid("media.flags-fi-png"))
+        .unwrap()
+        .sha256 = String::new();
+    deck.media
+        .get_mut(&sid("media.audio-fi-mp3"))
+        .unwrap()
+        .sha256 = "ABCDEF".repeat(10) + "ABCD";
+
+    let reference_only = media::validate_declarations(&deck, MediaHashPolicy::Optional)
+        .expect_err("a present noncanonical hash still fails");
+    assert!(reference_only.has_kind(MediaValidationErrorKind::InvalidHash));
+
+    deck.media
+        .get_mut(&sid("media.audio-fi-mp3"))
+        .unwrap()
+        .sha256 = media::sha256_hex(b"audio");
+    assert!(media::validate_declarations(&deck, MediaHashPolicy::Optional).is_ok());
+
+    let strict = media::validate_declarations(&deck, MediaHashPolicy::Required)
+        .expect_err("release mode requires every hash");
+    assert!(strict.has_kind(MediaValidationErrorKind::EmptyHash));
+}
+
+#[test]
+fn conflicting_declaration_output_paths_fail_even_without_asset_bytes() {
+    let mut deck = media_deck();
+    deck.media.insert(
+        sid("media.collision"),
+        MediaReference {
+            id: sid("media.collision"),
+            path: "flags/fi.png".to_owned(),
+            sha256: media::sha256_hex(b"different bytes"),
+        },
+    );
+
+    let report = media::validate_references(&deck).expect_err("output collision must fail");
+    assert!(report.has_kind(MediaValidationErrorKind::PathCollision));
+}
+
+#[test]
+fn unsafe_or_ambiguous_media_paths_fail_reference_validation() {
+    for path in [
+        "line\nfeed.png",
+        "https:payload.png",
+        r"flags\escape.png",
+        "bidi\u{202e}.png",
+    ] {
+        let mut deck = media_deck();
+        deck.media.get_mut(&sid("media.flags-fi-png")).unwrap().path = path.to_owned();
+        let report = media::validate_references(&deck).expect_err("unsafe path must fail");
+        assert!(
+            report.has_kind(MediaValidationErrorKind::UnsafePath),
+            "{path:?}: {report}"
+        );
+    }
+}
+
+#[test]
+fn malformed_encoded_raw_reference_fails_instead_of_becoming_undeclared_noise() {
+    let mut deck = media_deck();
+    deck.notes
+        .get_mut(&sid("note.finland"))
+        .unwrap()
+        .fields
+        .insert(
+            sid("field.flag"),
+            r#"<img src="flags/%ZZ.png" />"#.to_owned(),
+        );
+
+    let report = media::validate_references(&deck).expect_err("bad URL encoding must fail");
+    assert!(report.has_kind(MediaValidationErrorKind::InvalidReferenceEncoding));
+}
+
+#[test]
 fn media_validation_follows_structural_media_include() {
     let dir = temp_fixture_dir("media-validation-follows-include");
     fs::write(
@@ -231,7 +324,7 @@ fn validation_warns_about_unused_media_references_without_failing() {
         MediaReference {
             id: sid("media.unused"),
             path: "unused.png".to_owned(),
-            sha256: "abc".to_owned(),
+            sha256: media::sha256_hex(b"unused"),
         },
     );
 
@@ -371,7 +464,7 @@ fn media_deck() -> CanonicalDeck {
                 MediaReference {
                     id: sid("media.flags-fi-png"),
                     path: "flags/fi.png".to_owned(),
-                    sha256: "abc".to_owned(),
+                    sha256: media::sha256_hex(b"flag-bytes"),
                 },
             ),
             (
@@ -379,7 +472,7 @@ fn media_deck() -> CanonicalDeck {
                 MediaReference {
                     id: sid("media.audio-fi-mp3"),
                     path: "audio/fi.mp3".to_owned(),
-                    sha256: "def".to_owned(),
+                    sha256: media::sha256_hex(b"audio-bytes"),
                 },
             ),
             (
@@ -387,7 +480,7 @@ fn media_deck() -> CanonicalDeck {
                 MediaReference {
                     id: sid("media.maps-fi-svg"),
                     path: "maps/fi.svg".to_owned(),
-                    sha256: "ghi".to_owned(),
+                    sha256: media::sha256_hex(b"map-bytes"),
                 },
             ),
         ]),

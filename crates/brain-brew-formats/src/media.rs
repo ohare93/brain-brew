@@ -4,6 +4,8 @@ use std::fmt;
 use brain_brew_core::{CanonicalDeck, DeckPath};
 use sha2::{Digest, Sha256};
 
+use crate::safe_relative_path::SafeRelativePath;
+
 /// Extract paths from a whole-field sequence of strict Anki image tags.
 ///
 /// Accepted syntax matches the CrowdAnki import and source migration contract:
@@ -27,7 +29,7 @@ pub fn strict_image_tag_paths(value: &str) -> Option<Vec<String>> {
         }
         let after_quote = &after_prefix[quote_index + 1..];
         let after_tag = after_quote.strip_prefix(" />")?;
-        paths.push(path.to_owned());
+        paths.push(normalize_rendered_reference(path).ok()?);
 
         rest = trim_start_ascii_whitespace(after_tag);
         if rest.is_empty() {
@@ -38,36 +40,7 @@ pub fn strict_image_tag_paths(value: &str) -> Option<Vec<String>> {
 
 /// Extract Anki-compatible media paths used by note fields and card templates.
 pub fn referenced_paths(deck: &CanonicalDeck) -> BTreeSet<String> {
-    let mut paths = BTreeSet::new();
-
-    for note in deck.notes.values() {
-        for value in note.fields.values() {
-            paths.extend(extract_media_references_from_rendered_field(value));
-        }
-        for images in note.field_images.values() {
-            for image in images {
-                if let Some(media) = deck.media.get(&image.media_id) {
-                    paths.insert(media.path.clone());
-                }
-            }
-        }
-    }
-
-    for note_type in deck.note_types.values() {
-        paths.extend(extract_media_references_from_rendered_field(
-            &note_type.styling,
-        ));
-        for template in &note_type.card_templates {
-            paths.extend(extract_media_references_from_rendered_field(
-                &template.question_format,
-            ));
-            paths.extend(extract_media_references_from_rendered_field(
-                &template.answer_format,
-            ));
-        }
-    }
-
-    paths
+    collect_references(deck).paths
 }
 
 /// Extract media paths from rendered Anki-compatible field/template text.
@@ -75,15 +48,68 @@ pub fn referenced_paths(deck: &CanonicalDeck) -> BTreeSet<String> {
 /// This intentionally centralizes today's string scanner so future structured media
 /// references can replace the extraction internals without changing callers.
 pub fn extract_media_references_from_rendered_field(text: &str) -> BTreeSet<String> {
-    let mut paths = BTreeSet::new();
-    extract_from_text(text, &mut paths);
-    paths
+    let mut collected = CollectedReferences::default();
+    extract_from_text(text, "rendered content", &mut collected);
+    collected.paths
 }
 
 /// Compute a lowercase SHA-256 hex digest.
 pub fn sha256_hex(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// Whether declaration hashes are mandatory or optional development metadata.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MediaHashPolicy {
+    Required,
+    Optional,
+}
+
+/// Validate portable declaration paths without imposing a release hash policy.
+pub fn validate_paths(deck: &CanonicalDeck) -> Result<(), MediaValidationReport> {
+    let errors = deck
+        .media
+        .values()
+        .filter_map(|media| {
+            SafeRelativePath::new(&media.path)
+                .err()
+                .map(|error| MediaValidationError {
+                    kind: MediaValidationErrorKind::UnsafePath,
+                    path: media.path.clone(),
+                    message: format!(
+                        "media entry {} has unsafe non-portable path {:?}: {error}",
+                        media.id, media.path
+                    ),
+                })
+        })
+        .collect::<Vec<_>>();
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(MediaValidationReport { errors })
+    }
+}
+
+/// Validate portable declaration paths and canonical lowercase SHA-256 syntax.
+pub fn validate_declarations(
+    deck: &CanonicalDeck,
+    hash_policy: MediaHashPolicy,
+) -> Result<(), MediaValidationReport> {
+    let errors = declaration_errors(deck, hash_policy);
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(MediaValidationReport { errors })
+    }
+}
+
+/// Return whether a hash is exactly 64 lowercase hexadecimal characters.
+pub fn is_canonical_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
 }
 
 /// Validate content hashes using caller-supplied media asset bytes.
@@ -99,6 +125,17 @@ pub fn validate_hashes(
                 kind: MediaValidationErrorKind::EmptyHash,
                 path: media.path.clone(),
                 message: format!("media entry {} ({}) has empty sha256", media.id, media.path),
+            });
+            continue;
+        }
+        if !is_canonical_sha256(&media.sha256) {
+            errors.push(MediaValidationError {
+                kind: MediaValidationErrorKind::InvalidHash,
+                path: media.path.clone(),
+                message: format!(
+                    "media entry {} ({}) sha256 must be exactly 64 lowercase hexadecimal characters",
+                    media.id, media.path
+                ),
             });
             continue;
         }
@@ -135,13 +172,16 @@ pub fn validate_hashes(
 
 /// Build a media reference report with missing declarations as errors and unused declarations as warnings.
 pub fn reference_report(deck: &CanonicalDeck) -> MediaReferenceReport {
-    let used = referenced_paths(deck);
+    let collected = collect_references(deck);
+    let used = collected.paths;
     let declared = deck
         .media
         .values()
         .map(|media| media.path.clone())
         .collect::<BTreeSet<_>>();
-    let mut errors = structured_image_reference_errors(deck);
+    let mut errors = declaration_errors(deck, MediaHashPolicy::Optional);
+    errors.extend(collected.errors);
+    errors.extend(structured_image_reference_errors(deck));
     let mut warnings = Vec::new();
 
     for path in used.difference(&declared) {
@@ -161,6 +201,115 @@ pub fn reference_report(deck: &CanonicalDeck) -> MediaReferenceReport {
     }
 
     MediaReferenceReport { errors, warnings }
+}
+
+fn declaration_errors(
+    deck: &CanonicalDeck,
+    hash_policy: MediaHashPolicy,
+) -> Vec<MediaValidationError> {
+    let mut errors = Vec::new();
+    let mut paths = BTreeMap::<&str, (&str, &str)>::new();
+    for media in deck.media.values() {
+        if let Err(error) = SafeRelativePath::new(&media.path) {
+            errors.push(MediaValidationError {
+                kind: MediaValidationErrorKind::UnsafePath,
+                path: media.path.clone(),
+                message: format!(
+                    "media entry {} has unsafe non-portable path {:?}: {error}",
+                    media.id, media.path
+                ),
+            });
+        }
+        if let Some((previous_id, previous_hash)) =
+            paths.insert(&media.path, (media.id.as_str(), &media.sha256))
+            && previous_hash != media.sha256
+        {
+            errors.push(MediaValidationError {
+                kind: MediaValidationErrorKind::PathCollision,
+                path: media.path.clone(),
+                message: format!(
+                    "media declarations {previous_id} and {} collide at output path {:?} with different hashes",
+                    media.id, media.path
+                ),
+            });
+        }
+        if media.sha256.is_empty() {
+            if hash_policy == MediaHashPolicy::Required {
+                errors.push(MediaValidationError {
+                    kind: MediaValidationErrorKind::EmptyHash,
+                    path: media.path.clone(),
+                    message: format!("media entry {} ({}) has empty sha256", media.id, media.path),
+                });
+            }
+        } else if !is_canonical_sha256(&media.sha256) {
+            errors.push(MediaValidationError {
+                kind: MediaValidationErrorKind::InvalidHash,
+                path: media.path.clone(),
+                message: format!(
+                    "media entry {} ({}) sha256 must be exactly 64 lowercase hexadecimal characters",
+                    media.id, media.path
+                ),
+            });
+        }
+    }
+    errors
+}
+
+#[derive(Default)]
+struct CollectedReferences {
+    paths: BTreeSet<String>,
+    errors: Vec<MediaValidationError>,
+}
+
+fn collect_references(deck: &CanonicalDeck) -> CollectedReferences {
+    let mut collected = CollectedReferences::default();
+    extract_from_text(&deck.description, "deck.description", &mut collected);
+    for (note_id, note) in &deck.notes {
+        for (field_id, value) in &note.fields {
+            extract_from_text(
+                value,
+                &DeckPath::NoteField {
+                    note_id: note_id.clone(),
+                    field_id: field_id.clone(),
+                }
+                .to_string(),
+                &mut collected,
+            );
+        }
+        for images in note.field_images.values() {
+            for image in images {
+                if let Some(media) = deck.media.get(&image.media_id) {
+                    collected.paths.insert(media.path.clone());
+                }
+            }
+        }
+    }
+    for (note_type_id, note_type) in &deck.note_types {
+        extract_from_text(
+            &note_type.styling,
+            &format!("note_types.{note_type_id}.styling"),
+            &mut collected,
+        );
+        for template in &note_type.card_templates {
+            extract_from_text(
+                &template.question_format,
+                &format!(
+                    "note_types.{note_type_id}.card_templates.{}.question_format",
+                    template.id
+                ),
+                &mut collected,
+            );
+            extract_from_text(
+                &template.answer_format,
+                &format!(
+                    "note_types.{note_type_id}.card_templates.{}.answer_format",
+                    template.id
+                ),
+                &mut collected,
+            );
+        }
+    }
+    collected
 }
 
 fn structured_image_reference_errors(deck: &CanonicalDeck) -> Vec<MediaValidationError> {
@@ -209,51 +358,86 @@ fn trim_start_ascii_whitespace(value: &str) -> &str {
     value.trim_start_matches(|ch: char| ch.is_ascii_whitespace())
 }
 
-fn extract_from_text(text: &str, paths: &mut BTreeSet<String>) {
-    extract_sound_references(text, paths);
-    extract_attribute_references(text, "src=", paths);
-    extract_attribute_references(text, "href=", paths);
-    extract_css_url_references(text, paths);
+fn extract_from_text(text: &str, context: &str, collected: &mut CollectedReferences) {
+    extract_sound_references(text, context, collected);
+    extract_attribute_references(text, "src", context, collected);
+    extract_attribute_references(text, "href", context, collected);
+    extract_css_url_references(text, context, collected);
 }
 
-fn extract_sound_references(text: &str, paths: &mut BTreeSet<String>) {
+fn extract_sound_references(text: &str, context: &str, collected: &mut CollectedReferences) {
     let mut rest = text;
     while let Some(start) = rest.find("[sound:") {
         rest = &rest[start + "[sound:".len()..];
         let Some(end) = rest.find(']') else {
             break;
         };
-        let path = rest[..end].trim();
-        if !path.is_empty() {
-            paths.insert(path.to_owned());
-        }
+        insert_media_path(rest[..end].trim(), context, collected);
         rest = &rest[end + 1..];
     }
 }
 
-fn extract_attribute_references(text: &str, attribute: &str, paths: &mut BTreeSet<String>) {
-    let mut rest = text;
-    while let Some(start) = rest.find(attribute) {
-        rest = &rest[start + attribute.len()..];
-        let Some((path, consumed)) = consume_media_path(rest, |ch| ch.is_whitespace() || ch == '>')
+fn extract_attribute_references(
+    text: &str,
+    attribute: &str,
+    context: &str,
+    collected: &mut CollectedReferences,
+) {
+    let bytes = text.as_bytes();
+    let attribute = attribute.as_bytes();
+    let mut search = 0;
+    while search + attribute.len() <= bytes.len() {
+        let Some(relative) = bytes[search..]
+            .windows(attribute.len())
+            .position(|candidate| candidate.eq_ignore_ascii_case(attribute))
         else {
             break;
         };
-        insert_media_path(path, paths);
-        rest = &rest[consumed..];
+        let start = search + relative;
+        let boundary_before = start == 0
+            || !matches!(bytes[start - 1], b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'-');
+        let mut cursor = start + attribute.len();
+        let boundary_after = cursor == bytes.len()
+            || !matches!(bytes[cursor], b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'-');
+        if !boundary_before || !boundary_after {
+            search = start + attribute.len();
+            continue;
+        }
+        while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        if bytes.get(cursor) != Some(&b'=') {
+            search = start + attribute.len();
+            continue;
+        }
+        cursor += 1;
+        let Some((path, consumed)) =
+            consume_media_path(&text[cursor..], |ch| ch.is_whitespace() || ch == '>')
+        else {
+            break;
+        };
+        insert_media_path(path, context, collected);
+        search = cursor + consumed;
     }
 }
 
-fn extract_css_url_references(text: &str, paths: &mut BTreeSet<String>) {
+fn extract_css_url_references(text: &str, context: &str, collected: &mut CollectedReferences) {
     let mut rest = text;
-    while let Some(start) = rest.find("url(") {
+    while let Some(start) = find_ascii_case_insensitive(rest, "url(") {
         rest = &rest[start + "url(".len()..];
         let Some((path, consumed)) = consume_media_path(rest, |ch| ch == ')') else {
             break;
         };
-        insert_media_path(path, paths);
+        insert_media_path(path, context, collected);
         rest = &rest[consumed..];
     }
+}
+
+fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .position(|candidate| candidate.eq_ignore_ascii_case(needle.as_bytes()))
 }
 
 fn consume_media_path(rest: &str, unquoted_end: impl Fn(char) -> bool) -> Option<(&str, usize)> {
@@ -272,10 +456,99 @@ fn consume_media_path(rest: &str, unquoted_end: impl Fn(char) -> bool) -> Option
     Some((path.trim(), consumed_whitespace + consumed))
 }
 
-fn insert_media_path(path: &str, paths: &mut BTreeSet<String>) {
-    if !path.is_empty() && !path.starts_with("#") && !has_uri_scheme(path) {
-        paths.insert(path.to_owned());
+fn insert_media_path(path: &str, context: &str, collected: &mut CollectedReferences) {
+    if path.is_empty() || path.starts_with('#') || has_uri_scheme(path) {
+        return;
     }
+    match normalize_rendered_reference(path) {
+        Ok(path) => {
+            collected.paths.insert(path);
+        }
+        Err(reason) => collected.errors.push(MediaValidationError {
+            kind: MediaValidationErrorKind::InvalidReferenceEncoding,
+            path: context.to_owned(),
+            message: format!(
+                "media reference {path:?} at {context} cannot round trip to a safe declared path: {reason}"
+            ),
+        }),
+    }
+}
+
+fn normalize_rendered_reference(path: &str) -> Result<String, String> {
+    let html_decoded = decode_html_attribute_entities(path)?;
+    let decoded = percent_decode_utf8(&html_decoded)?;
+    SafeRelativePath::new(&decoded).map_err(|error| error.to_string())?;
+    Ok(decoded)
+}
+
+fn percent_decode_utf8(value: &str) -> Result<String, String> {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            if index + 2 >= bytes.len() {
+                return Err("incomplete percent escape".to_owned());
+            }
+            let high =
+                hex_value(bytes[index + 1]).ok_or_else(|| "invalid percent escape".to_owned())?;
+            let low =
+                hex_value(bytes[index + 2]).ok_or_else(|| "invalid percent escape".to_owned())?;
+            decoded.push((high << 4) | low);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(decoded).map_err(|_| "percent-decoded path is not UTF-8".to_owned())
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn decode_html_attribute_entities(value: &str) -> Result<String, String> {
+    let mut decoded = String::with_capacity(value.len());
+    let mut rest = value;
+    while let Some(index) = rest.find('&') {
+        decoded.push_str(&rest[..index]);
+        rest = &rest[index..];
+        let Some(end) = rest.find(';') else {
+            decoded.push('&');
+            rest = &rest[1..];
+            continue;
+        };
+        let entity = &rest[1..end];
+        let character = match entity {
+            "amp" => '&',
+            "quot" => '"',
+            "apos" | "#39" => '\'',
+            "lt" => '<',
+            "gt" => '>',
+            _ if entity.starts_with("#x") || entity.starts_with("#X") => {
+                let value = u32::from_str_radix(&entity[2..], 16)
+                    .map_err(|_| format!("invalid HTML entity &{entity};"))?;
+                char::from_u32(value).ok_or_else(|| format!("invalid HTML entity &{entity};"))?
+            }
+            _ if entity.starts_with('#') => {
+                let value = entity[1..]
+                    .parse::<u32>()
+                    .map_err(|_| format!("invalid HTML entity &{entity};"))?;
+                char::from_u32(value).ok_or_else(|| format!("invalid HTML entity &{entity};"))?
+            }
+            _ => return Err(format!("unsupported or ambiguous HTML entity &{entity};")),
+        };
+        decoded.push(character);
+        rest = &rest[end + 1..];
+    }
+    decoded.push_str(rest);
+    Ok(decoded)
 }
 
 fn has_uri_scheme(path: &str) -> bool {
@@ -351,4 +624,8 @@ pub enum MediaValidationErrorKind {
     MissingAsset,
     EmptyHash,
     HashMismatch,
+    InvalidHash,
+    UnsafePath,
+    InvalidReferenceEncoding,
+    PathCollision,
 }

@@ -109,6 +109,38 @@ fn import_emits_strict_image_fields_as_structured_references() {
 }
 
 #[test]
+fn import_decodes_safe_rendered_image_url_back_to_original_media_filename() {
+    let mut deck_json = expected_crowdanki_json_value();
+    let original = "images/旗 & quote\" #1?.svg";
+    deck_json["media_files"] = serde_json::json!([original]);
+    deck_json["notes"][0]["fields"] = serde_json::json!([
+        "Finland",
+        "Helsinki",
+        r#"<img src="images/%E6%97%97%20%26%20quote%22%20%231%3F.svg" />"#
+    ]);
+
+    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect("encoded strict image path imports");
+    let note = imported.notes.get(&sid("note.finland")).unwrap();
+    assert!(note.field_images.contains_key(&sid("field.flag")));
+    assert_eq!(imported.media.values().next().unwrap().path, original);
+}
+
+#[test]
+fn import_and_export_reject_unsafe_media_filenames() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["media_files"] = serde_json::json!(["line\nfeed.png"]);
+    let import_error = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect_err("unsafe CrowdAnki filename must fail");
+    assert!(import_error.to_string().contains("control character"));
+
+    let mut deck = ug_style_deck();
+    deck.media.values_mut().next().unwrap().path = "https:payload.png".to_owned();
+    let export_error = crowdanki::export_deck(&deck).expect_err("unsafe deck filename must fail");
+    assert!(export_error.to_string().contains("URL scheme delimiter"));
+}
+
+#[test]
 fn import_keeps_non_strict_or_ambiguous_image_html_as_raw_fields() {
     let cases = [
         ("Extra Attribute", "<img src=\"x.png\" alt=\"y\" />"),
