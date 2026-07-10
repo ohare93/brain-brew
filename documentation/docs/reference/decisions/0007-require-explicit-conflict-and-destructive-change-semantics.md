@@ -38,7 +38,7 @@ Brain Brew supports explicit change intents such as add, merge, replace, remove,
 
 ## Implications
 
-- Composition must carry enough provenance to detect incompatible overlay changes.
+- Composition must carry enough provenance to detect incompatible overlay changes; ADR-020 defines typed/path-addressed removal provenance and forbids address reuse.
 - Validation should fail closed for stale expected bases, non-blank field fills, and merge changes that carry a full entity body; ADR-019 governs fingerprint-protected complete replacement.
 - Diffs and CLI reports should show before/after values for destructive changes.
 - Overlay authoring docs should teach change intent as part of the source format.

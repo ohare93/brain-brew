@@ -290,9 +290,11 @@ fn deck_path_display_and_parse_round_trip_current_grammar() {
         ),
         (
             DeckPath::Tombstone {
-                id: note_id.clone(),
+                address: super::TombstoneAddress::Note {
+                    note_id: note_id.clone(),
+                },
             },
-            "tombstones.note.finland",
+            "tombstones.notes.note.finland",
         ),
     ];
 

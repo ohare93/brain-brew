@@ -6,7 +6,7 @@ title: Canonical Deck
 
 A Canonical Deck is Brain Brew' format-independent representation of an Anki-compatible deck.
 
-It includes deck metadata, note types, card templates, notes, tags, media references, tombstones, stable IDs, and adapter IDs.
+It includes deck metadata, note types, card templates, notes, tags, media references, typed path tombstones, stable IDs, and adapter IDs.
 
 It excludes review history and scheduling state.
 
@@ -50,6 +50,10 @@ notes:
 media: {}
 tombstones: []
 ```
+
+## Removal history
+
+A non-empty tombstone identifies an exact entity/value kind and its full containing path, rather than only a Stable ID. It also retains the removing overlay and operation when composition produced it. This prevents a removed identity from being silently reintroduced while allowing identical ID text in another kind or parent scope. See [Typed tombstones](../reference/yaml.md#typed-tombstones) and [ADR-020](../reference/decisions/0020-address-removals-with-typed-path-tombstones.md).
 
 ## Strict source
 

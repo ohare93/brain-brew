@@ -28,6 +28,44 @@ Important rules:
 - scalar content fields may use `!include package/relative/path` as an authoring convenience;
 - deck files may use the single structural include `media: !include <media-map.yaml>` for the top-level media map.
 
+### Typed tombstones
+
+Non-empty tombstones are explicit typed records. `path` is the complete canonical DeckPath, including every nested owner:
+
+```yaml
+tombstones:
+  - kind: note
+    path: notes.note.finland
+    removed_by: overlay.patch.remove-finland
+    operation: remove
+  - kind: field_definition
+    path: note_types.note-type.country.fields.field.flag
+  - kind: note_field
+    path: notes.note.finland.fields.field.flag
+  - kind: card_template
+    path: note_types.note-type.country.card_templates.template.flag-country
+  - kind: media_reference
+    path: media.media.flag.finland
+```
+
+`removed_by` and `operation` are emitted together when composition provenance is available; compatibility records can omit both. `operation` is currently always `remove`. Records are ordered by typed address, duplicate exact addresses fail, and `kind` must agree with `path`.
+
+A container removal writes one container record. It does not synthesize descendant records, but every descendant mutation checks its ancestors, so a later overlay cannot bypass a removed note, note type, or card template. The same StableId text in another kind or under another parent is independent. Reintroduction fails with code `tombstoned_address_reuse`, including the attempted intent/overlay and original removal provenance. `override` cannot clear provenance.
+
+The flat form is read only for migration:
+
+```yaml
+tombstones: [note.finland]
+```
+
+Brain Brew infers only a retained top-level note, note type, or media reference, and only when exactly one kind matches. Unknown IDs, IDs shared across kinds, and bare nested field/template IDs fail with guidance. Migrate an unambiguous file with:
+
+```bash
+brainbrew fmt deck.yaml
+```
+
+For a rejected record, replace the bare ID manually with the intended `kind` and full `path`, then rerun `fmt`. Canonical output never writes flat IDs; empty output remains `tombstones: []`.
+
 ## Overlay file
 
 Top-level keys:

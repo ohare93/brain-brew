@@ -3,11 +3,12 @@ use std::fmt::{self, Write as _};
 
 use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, ChangeIntent,
-    DeckChange, EntityFingerprint, ExpectedBase, FieldChange, FieldDefinition,
+    DeckChange, DeckPath, EntityFingerprint, ExpectedBase, FieldChange, FieldDefinition,
     FieldDefinitionChange, FieldImageReference, FieldValue, InvalidStableId, MediaChange,
     MediaReference, MessageComponent, Note, NoteChange, NoteType, NoteTypeChange, Overlay,
-    OverlayKind, PropertyChange, StableId, StaleTranslation, StructuredMessage, TagChange,
-    TargetAdaptation, TranslationDictionary, ValidationReport,
+    OverlayKind, PropertyChange, RemovalProvenance, StableId, StaleTranslation, StructuredMessage,
+    TagChange, TargetAdaptation, TombstoneAddress, TombstoneRecord, Tombstones,
+    TranslationDictionary, ValidationReport,
 };
 use serde::{Deserialize, Deserializer};
 use serde_yaml::Value;
@@ -192,8 +193,21 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
         writeln!(out, "tombstones: []").expect("writing to a string cannot fail");
     } else {
         writeln!(out, "tombstones:").expect("writing to a string cannot fail");
-        for tombstone in &deck.tombstones {
-            writeln!(out, "  - {tombstone}").expect("writing to a string cannot fail");
+        for tombstone in deck.tombstones.iter() {
+            writeln!(out, "  - kind: {}", tombstone.address.kind())
+                .expect("writing to a string cannot fail");
+            writeln!(out, "    path: {}", tombstone.address)
+                .expect("writing to a string cannot fail");
+            if let Some(provenance) = &tombstone.provenance {
+                writeln!(out, "    removed_by: {}", provenance.overlay_id)
+                    .expect("writing to a string cannot fail");
+                writeln!(
+                    out,
+                    "    operation: {}",
+                    change_intent_name(provenance.operation)
+                )
+                .expect("writing to a string cannot fail");
+            }
         }
     }
 
@@ -2805,49 +2819,179 @@ struct CanonicalDeckYaml {
     #[serde(default)]
     media: BTreeMap<String, MediaYaml>,
     #[serde(default)]
-    tombstones: Vec<String>,
+    tombstones: Vec<TombstoneYaml>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum TombstoneYaml {
+    Legacy(String),
+    Typed(TypedTombstoneYaml),
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TypedTombstoneYaml {
+    kind: String,
+    path: String,
+    #[serde(default)]
+    removed_by: Option<String>,
+    #[serde(default)]
+    operation: Option<String>,
 }
 
 impl CanonicalDeckYaml {
     fn into_deck(self) -> Result<CanonicalDeck, CanonicalYamlError> {
-        let deck = CanonicalDeck {
+        let note_types = self
+            .note_types
+            .into_iter()
+            .map(|(id, note_type)| {
+                let stable_id = sid(&id)?;
+                Ok((stable_id.clone(), note_type.into_note_type(stable_id)?))
+            })
+            .collect::<Result<BTreeMap<_, _>, CanonicalYamlError>>()?;
+        let notes = self
+            .notes
+            .into_iter()
+            .map(|(id, note)| {
+                let stable_id = sid(&id)?;
+                Ok((stable_id.clone(), note.into_note(stable_id)?))
+            })
+            .collect::<Result<BTreeMap<_, _>, CanonicalYamlError>>()?;
+        let media = self
+            .media
+            .into_iter()
+            .map(|(id, media)| {
+                let stable_id = sid(&id)?;
+                Ok((stable_id.clone(), media.into_media(stable_id)))
+            })
+            .collect::<Result<BTreeMap<_, _>, CanonicalYamlError>>()?;
+        let tombstones = parse_tombstones(self.tombstones, &note_types, &notes, &media)?;
+        Ok(CanonicalDeck {
             id: sid(&self.deck.id)?,
             name: self.deck.name,
             description: self.deck.description,
             variables: self.deck.variables,
-            note_types: self
-                .note_types
-                .into_iter()
-                .map(|(id, note_type)| {
-                    let stable_id = sid(&id)?;
-                    Ok((stable_id.clone(), note_type.into_note_type(stable_id)?))
-                })
-                .collect::<Result<_, CanonicalYamlError>>()?,
-            notes: self
-                .notes
-                .into_iter()
-                .map(|(id, note)| {
-                    let stable_id = sid(&id)?;
-                    Ok((stable_id.clone(), note.into_note(stable_id)?))
-                })
-                .collect::<Result<_, CanonicalYamlError>>()?,
-            media: self
-                .media
-                .into_iter()
-                .map(|(id, media)| {
-                    let stable_id = sid(&id)?;
-                    Ok((stable_id.clone(), media.into_media(stable_id)))
-                })
-                .collect::<Result<_, CanonicalYamlError>>()?,
-            tombstones: self
-                .tombstones
-                .into_iter()
-                .map(|id| sid(&id))
-                .collect::<Result<BTreeSet<_>, _>>()?,
+            note_types,
+            notes,
+            media,
+            tombstones,
             adapter_ids: adapter_ids_from_map(self.deck.adapter_ids),
-        };
-        Ok(deck)
+        })
     }
+}
+
+fn parse_tombstones(
+    values: Vec<TombstoneYaml>,
+    note_types: &BTreeMap<StableId, NoteType>,
+    notes: &BTreeMap<StableId, Note>,
+    media: &BTreeMap<StableId, MediaReference>,
+) -> Result<Tombstones, CanonicalYamlError> {
+    let mut tombstones = Tombstones::default();
+    for (index, value) in values.into_iter().enumerate() {
+        let record = match value {
+            TombstoneYaml::Legacy(value) => {
+                let id = sid(&value)?;
+                let mut matches = Vec::new();
+                if note_types.contains_key(&id) {
+                    matches.push(TombstoneAddress::NoteType {
+                        note_type_id: id.clone(),
+                    });
+                }
+                if notes.contains_key(&id) {
+                    matches.push(TombstoneAddress::Note {
+                        note_id: id.clone(),
+                    });
+                }
+                if media.contains_key(&id) {
+                    matches.push(TombstoneAddress::MediaReference {
+                        media_id: id.clone(),
+                    });
+                }
+                if matches.len() != 1 {
+                    let detail = if matches.is_empty() {
+                        "matches no retained top-level note, note type, or media identity"
+                            .to_owned()
+                    } else {
+                        format!(
+                            "matches multiple top-level kinds: {}",
+                            matches
+                                .iter()
+                                .map(TombstoneAddress::kind)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    };
+                    return Err(CanonicalYamlError::InvalidSchemaValue {
+                        path: format!("tombstones.{index}"),
+                        message: format!(
+                            "legacy bare tombstone {value:?} {detail}; replace it with an explicit typed record containing `kind` and full `path` (nested field/template ownership is never inferred)"
+                        ),
+                    });
+                }
+                TombstoneRecord::legacy(matches.pop().expect("one legacy match"))
+            }
+            TombstoneYaml::Typed(value) => {
+                let path = value.path.parse::<DeckPath>().map_err(|error| {
+                    CanonicalYamlError::InvalidSchemaValue {
+                        path: format!("tombstones.{index}.path"),
+                        message: error.to_string(),
+                    }
+                })?;
+                let address = TombstoneAddress::try_from(path).map_err(|_| {
+                    CanonicalYamlError::InvalidSchemaValue {
+                        path: format!("tombstones.{index}.path"),
+                        message: "path is not an exact removable entity/value address".to_owned(),
+                    }
+                })?;
+                if value.kind != address.kind() {
+                    return Err(CanonicalYamlError::InvalidSchemaValue {
+                        path: format!("tombstones.{index}.kind"),
+                        message: format!(
+                            "kind {:?} does not match typed path kind {:?}",
+                            value.kind,
+                            address.kind()
+                        ),
+                    });
+                }
+                let provenance = match (value.removed_by, value.operation) {
+                    (None, None) => None,
+                    (Some(overlay_id), Some(operation)) => {
+                        let operation = parse_change_intent(&operation)?;
+                        if operation != ChangeIntent::Remove {
+                            return Err(CanonicalYamlError::InvalidSchemaValue {
+                                path: format!("tombstones.{index}.operation"),
+                                message: "tombstone provenance operation must be `remove`"
+                                    .to_owned(),
+                            });
+                        }
+                        Some(RemovalProvenance {
+                            overlay_id: sid(&overlay_id)?,
+                            operation,
+                        })
+                    }
+                    _ => {
+                        return Err(CanonicalYamlError::InvalidSchemaValue {
+                            path: format!("tombstones.{index}"),
+                            message: "`removed_by` and `operation` must be supplied together"
+                                .to_owned(),
+                        });
+                    }
+                };
+                TombstoneRecord {
+                    address,
+                    provenance,
+                }
+            }
+        };
+        if tombstones.insert(record).is_some() {
+            return Err(CanonicalYamlError::InvalidSchemaValue {
+                path: format!("tombstones.{index}"),
+                message: "duplicate typed tombstone address".to_owned(),
+            });
+        }
+    }
+    Ok(tombstones)
 }
 
 #[derive(Deserialize)]

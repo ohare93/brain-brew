@@ -4,7 +4,8 @@ use std::fmt;
 use crate::media;
 use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, FieldValue,
-    MediaReference, Note, NoteType, StableId, ValidationReport, VariableRenderReport,
+    MediaReference, Note, NoteType, StableId, TombstoneAddress, Tombstones, ValidationReport,
+    VariableRenderReport,
 };
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +13,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CrowdAnkiExport {
     pub deck_json: String,
-    pub omitted_tombstones: Vec<StableId>,
+    pub omitted_tombstones: Vec<TombstoneAddress>,
 }
 
 /// Export a CanonicalDeck to deterministic normalized CrowdAnki `deck.json` bytes.
@@ -30,20 +31,37 @@ pub fn export_deck(deck: &CanonicalDeck) -> Result<CrowdAnkiExport, CrowdAnkiErr
     let note_models = deck
         .note_types
         .values()
-        .map(export_note_model)
+        .filter(|note_type| {
+            deck.tombstones
+                .blocking(&TombstoneAddress::NoteType {
+                    note_type_id: note_type.id.clone(),
+                })
+                .is_none()
+        })
+        .map(|note_type| export_note_model(note_type, deck))
         .collect::<Result<Vec<_>, _>>()?;
 
     let note_type_uuids = deck
         .note_types
         .iter()
+        .filter(|(id, _)| {
+            deck.tombstones
+                .blocking(&TombstoneAddress::NoteType {
+                    note_type_id: (*id).clone(),
+                })
+                .is_none()
+        })
         .map(|(id, note_type)| Ok((id.clone(), crowdanki_note_model_uuid(note_type)?)))
         .collect::<Result<BTreeMap<_, _>, CrowdAnkiError>>()?;
 
     let mut omitted_tombstones = Vec::new();
     let mut notes = Vec::new();
     for (id, note) in &deck.notes {
-        if deck.tombstones.contains(id) {
-            omitted_tombstones.push(id.clone());
+        let address = TombstoneAddress::Note {
+            note_id: id.clone(),
+        };
+        if deck.tombstones.blocking(&address).is_some() {
+            omitted_tombstones.push(address);
             continue;
         }
         notes.push(export_note(note, deck, &note_type_uuids)?);
@@ -66,6 +84,13 @@ pub fn export_deck(deck: &CanonicalDeck) -> Result<CrowdAnkiExport, CrowdAnkiErr
         media_files: deck
             .media
             .values()
+            .filter(|media| {
+                deck.tombstones
+                    .blocking(&TombstoneAddress::MediaReference {
+                        media_id: media.id.clone(),
+                    })
+                    .is_none()
+            })
             .map(|media| media.path.clone())
             .collect::<Vec<_>>(),
         name: deck.name.clone(),
@@ -585,7 +610,10 @@ fn json_value_summary(value: Option<&serde_json::Value>) -> String {
     summary
 }
 
-fn export_note_model(note_type: &NoteType) -> Result<CrowdAnkiNoteModelJson, CrowdAnkiError> {
+fn export_note_model(
+    note_type: &NoteType,
+    deck: &CanonicalDeck,
+) -> Result<CrowdAnkiNoteModelJson, CrowdAnkiError> {
     Ok(CrowdAnkiNoteModelJson {
         kind: "NoteModel".to_owned(),
         crowdanki_uuid: crowdanki_note_model_uuid(note_type)?,
@@ -593,6 +621,14 @@ fn export_note_model(note_type: &NoteType) -> Result<CrowdAnkiNoteModelJson, Cro
         flds: note_type
             .fields
             .iter()
+            .filter(|field| {
+                deck.tombstones
+                    .blocking(&TombstoneAddress::FieldDefinition {
+                        note_type_id: note_type.id.clone(),
+                        field_id: field.id.clone(),
+                    })
+                    .is_none()
+            })
             .enumerate()
             .map(|(ord, field)| CrowdAnkiFieldJson {
                 font: "Arial".to_owned(),
@@ -614,6 +650,14 @@ fn export_note_model(note_type: &NoteType) -> Result<CrowdAnkiNoteModelJson, Cro
         tmpls: note_type
             .card_templates
             .iter()
+            .filter(|template| {
+                deck.tombstones
+                    .blocking(&TombstoneAddress::CardTemplate {
+                        note_type_id: note_type.id.clone(),
+                        template_id: template.id.clone(),
+                    })
+                    .is_none()
+            })
             .enumerate()
             .map(|(ord, template)| CrowdAnkiTemplateJson {
                 afmt: template.answer_format.clone(),
@@ -652,6 +696,14 @@ fn export_note(
     let fields = note_type
         .fields
         .iter()
+        .filter(|field| {
+            deck.tombstones
+                .blocking(&TombstoneAddress::FieldDefinition {
+                    note_type_id: note_type.id.clone(),
+                    field_id: field.id.clone(),
+                })
+                .is_none()
+        })
         .map(|field| {
             note.fields
                 .get(&field.id)
@@ -956,7 +1008,7 @@ impl CrowdAnkiDeckJson {
             note_types,
             notes,
             media,
-            tombstones: BTreeSet::new(),
+            tombstones: Tombstones::default(),
             variables: BTreeMap::new(),
             adapter_ids: deck_adapter_ids,
         };

@@ -226,7 +226,7 @@ pub enum DeckPath {
         media_id: StableId,
     },
     Tombstone {
-        id: StableId,
+        address: TombstoneAddress,
     },
 }
 
@@ -357,7 +357,7 @@ impl fmt::Display for DeckPath {
             Self::MediaId { media_id } => write!(f, "media.{media_id}.id"),
             Self::MediaPath { media_id } => write!(f, "media.{media_id}.path"),
             Self::MediaSha256 { media_id } => write!(f, "media.{media_id}.sha256"),
-            Self::Tombstone { id } => write!(f, "tombstones.{id}"),
+            Self::Tombstone { address } => write!(f, "tombstones.{address}"),
         }
     }
 }
@@ -417,7 +417,10 @@ fn parse_deck_path(value: &str) -> Option<DeckPath> {
         return parse_media_path(rest);
     }
     if let Some(rest) = value.strip_prefix("tombstones.") {
-        return stable_id(rest).map(|id| DeckPath::Tombstone { id });
+        let path = parse_deck_path(rest)?;
+        return TombstoneAddress::try_from(path)
+            .ok()
+            .map(|address| DeckPath::Tombstone { address });
     }
     None
 }
@@ -674,6 +677,478 @@ impl AdapterIds {
     }
 }
 
+/// An exact, typed address whose removal identity must not be reused.
+///
+/// Every variant contains its complete parent scope, so invalid partial nested
+/// addresses cannot be represented. New removable paths must add an explicit
+/// variant here before they can create a tombstone.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum TombstoneAddress {
+    DeckName,
+    DeckDescription,
+    DeckVariable {
+        key: String,
+    },
+    DeckAdapterId {
+        key: String,
+    },
+    NoteType {
+        note_type_id: StableId,
+    },
+    NoteTypeName {
+        note_type_id: StableId,
+    },
+    NoteTypeVariable {
+        note_type_id: StableId,
+        key: String,
+    },
+    NoteTypeStyling {
+        note_type_id: StableId,
+    },
+    NoteTypeAdapterId {
+        note_type_id: StableId,
+        key: String,
+    },
+    FieldDefinition {
+        note_type_id: StableId,
+        field_id: StableId,
+    },
+    CardTemplate {
+        note_type_id: StableId,
+        template_id: StableId,
+    },
+    CardTemplateName {
+        note_type_id: StableId,
+        template_id: StableId,
+    },
+    CardTemplateVariable {
+        note_type_id: StableId,
+        template_id: StableId,
+        key: String,
+    },
+    CardTemplateQuestionFormat {
+        note_type_id: StableId,
+        template_id: StableId,
+    },
+    CardTemplateAnswerFormat {
+        note_type_id: StableId,
+        template_id: StableId,
+    },
+    CardTemplateAdapterId {
+        note_type_id: StableId,
+        template_id: StableId,
+        key: String,
+    },
+    Note {
+        note_id: StableId,
+    },
+    NoteVariable {
+        note_id: StableId,
+        key: String,
+    },
+    NoteField {
+        note_id: StableId,
+        field_id: StableId,
+    },
+    NoteTag {
+        note_id: StableId,
+        tag: String,
+    },
+    NoteAdapterId {
+        note_id: StableId,
+        key: String,
+    },
+    MediaReference {
+        media_id: StableId,
+    },
+}
+
+impl TombstoneAddress {
+    /// The canonical entity/value kind used by YAML and diagnostics.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::DeckName => "deck_name",
+            Self::DeckDescription => "deck_description",
+            Self::DeckVariable { .. } => "deck_variable",
+            Self::DeckAdapterId { .. } => "deck_adapter_id",
+            Self::NoteType { .. } => "note_type",
+            Self::NoteTypeName { .. } => "note_type_name",
+            Self::NoteTypeVariable { .. } => "note_type_variable",
+            Self::NoteTypeStyling { .. } => "note_type_styling",
+            Self::NoteTypeAdapterId { .. } => "note_type_adapter_id",
+            Self::FieldDefinition { .. } => "field_definition",
+            Self::CardTemplate { .. } => "card_template",
+            Self::CardTemplateName { .. } => "card_template_name",
+            Self::CardTemplateVariable { .. } => "card_template_variable",
+            Self::CardTemplateQuestionFormat { .. } => "card_template_question_format",
+            Self::CardTemplateAnswerFormat { .. } => "card_template_answer_format",
+            Self::CardTemplateAdapterId { .. } => "card_template_adapter_id",
+            Self::Note { .. } => "note",
+            Self::NoteVariable { .. } => "note_variable",
+            Self::NoteField { .. } => "note_field",
+            Self::NoteTag { .. } => "note_tag",
+            Self::NoteAdapterId { .. } => "note_adapter_id",
+            Self::MediaReference { .. } => "media_reference",
+        }
+    }
+
+    /// Convert to the canonical deck path for this exact address.
+    pub fn deck_path(&self) -> DeckPath {
+        match self {
+            Self::DeckName => DeckPath::DeckName,
+            Self::DeckDescription => DeckPath::DeckDescription,
+            Self::DeckVariable { key } => DeckPath::DeckVariable { key: key.clone() },
+            Self::DeckAdapterId { key } => DeckPath::DeckAdapterId { key: key.clone() },
+            Self::NoteType { note_type_id } => DeckPath::NoteType {
+                note_type_id: note_type_id.clone(),
+            },
+            Self::NoteTypeName { note_type_id } => DeckPath::NoteTypeName {
+                note_type_id: note_type_id.clone(),
+            },
+            Self::NoteTypeVariable { note_type_id, key } => DeckPath::NoteTypeVariable {
+                note_type_id: note_type_id.clone(),
+                key: key.clone(),
+            },
+            Self::NoteTypeStyling { note_type_id } => DeckPath::NoteTypeStyling {
+                note_type_id: note_type_id.clone(),
+            },
+            Self::NoteTypeAdapterId { note_type_id, key } => DeckPath::NoteTypeAdapterId {
+                note_type_id: note_type_id.clone(),
+                key: key.clone(),
+            },
+            Self::FieldDefinition {
+                note_type_id,
+                field_id,
+            } => DeckPath::NoteTypeField {
+                note_type_id: note_type_id.clone(),
+                field_id: field_id.clone(),
+            },
+            Self::CardTemplate {
+                note_type_id,
+                template_id,
+            } => DeckPath::NoteTypeCardTemplate {
+                note_type_id: note_type_id.clone(),
+                template_id: template_id.clone(),
+            },
+            Self::CardTemplateName {
+                note_type_id,
+                template_id,
+            } => DeckPath::NoteTypeCardTemplateName {
+                note_type_id: note_type_id.clone(),
+                template_id: template_id.clone(),
+            },
+            Self::CardTemplateVariable {
+                note_type_id,
+                template_id,
+                key,
+            } => DeckPath::NoteTypeCardTemplateVariable {
+                note_type_id: note_type_id.clone(),
+                template_id: template_id.clone(),
+                key: key.clone(),
+            },
+            Self::CardTemplateQuestionFormat {
+                note_type_id,
+                template_id,
+            } => DeckPath::NoteTypeCardTemplateQuestionFormat {
+                note_type_id: note_type_id.clone(),
+                template_id: template_id.clone(),
+            },
+            Self::CardTemplateAnswerFormat {
+                note_type_id,
+                template_id,
+            } => DeckPath::NoteTypeCardTemplateAnswerFormat {
+                note_type_id: note_type_id.clone(),
+                template_id: template_id.clone(),
+            },
+            Self::CardTemplateAdapterId {
+                note_type_id,
+                template_id,
+                key,
+            } => DeckPath::NoteTypeCardTemplateAdapterId {
+                note_type_id: note_type_id.clone(),
+                template_id: template_id.clone(),
+                key: key.clone(),
+            },
+            Self::Note { note_id } => DeckPath::Note {
+                note_id: note_id.clone(),
+            },
+            Self::NoteVariable { note_id, key } => DeckPath::NoteVariable {
+                note_id: note_id.clone(),
+                key: key.clone(),
+            },
+            Self::NoteField { note_id, field_id } => DeckPath::NoteField {
+                note_id: note_id.clone(),
+                field_id: field_id.clone(),
+            },
+            Self::NoteTag { note_id, tag } => DeckPath::NoteTag {
+                note_id: note_id.clone(),
+                tag: tag.clone(),
+            },
+            Self::NoteAdapterId { note_id, key } => DeckPath::NoteAdapterId {
+                note_id: note_id.clone(),
+                key: key.clone(),
+            },
+            Self::MediaReference { media_id } => DeckPath::Media {
+                media_id: media_id.clone(),
+            },
+        }
+    }
+
+    /// True when `self` is the same address or is structurally contained by `ancestor`.
+    pub fn is_same_or_descendant_of(&self, ancestor: &Self) -> bool {
+        if self == ancestor {
+            return true;
+        }
+        match (self, ancestor) {
+            (
+                Self::NoteTypeName {
+                    note_type_id: child,
+                }
+                | Self::NoteTypeVariable {
+                    note_type_id: child,
+                    ..
+                }
+                | Self::NoteTypeStyling {
+                    note_type_id: child,
+                }
+                | Self::NoteTypeAdapterId {
+                    note_type_id: child,
+                    ..
+                }
+                | Self::FieldDefinition {
+                    note_type_id: child,
+                    ..
+                }
+                | Self::CardTemplate {
+                    note_type_id: child,
+                    ..
+                }
+                | Self::CardTemplateName {
+                    note_type_id: child,
+                    ..
+                }
+                | Self::CardTemplateVariable {
+                    note_type_id: child,
+                    ..
+                }
+                | Self::CardTemplateQuestionFormat {
+                    note_type_id: child,
+                    ..
+                }
+                | Self::CardTemplateAnswerFormat {
+                    note_type_id: child,
+                    ..
+                }
+                | Self::CardTemplateAdapterId {
+                    note_type_id: child,
+                    ..
+                },
+                Self::NoteType {
+                    note_type_id: parent,
+                },
+            ) => child == parent,
+            (
+                Self::CardTemplateName {
+                    note_type_id: child_type,
+                    template_id: child_template,
+                }
+                | Self::CardTemplateVariable {
+                    note_type_id: child_type,
+                    template_id: child_template,
+                    ..
+                }
+                | Self::CardTemplateQuestionFormat {
+                    note_type_id: child_type,
+                    template_id: child_template,
+                }
+                | Self::CardTemplateAnswerFormat {
+                    note_type_id: child_type,
+                    template_id: child_template,
+                }
+                | Self::CardTemplateAdapterId {
+                    note_type_id: child_type,
+                    template_id: child_template,
+                    ..
+                },
+                Self::CardTemplate {
+                    note_type_id: parent_type,
+                    template_id: parent_template,
+                },
+            ) => child_type == parent_type && child_template == parent_template,
+            (
+                Self::NoteVariable { note_id: child, .. }
+                | Self::NoteField { note_id: child, .. }
+                | Self::NoteTag { note_id: child, .. }
+                | Self::NoteAdapterId { note_id: child, .. },
+                Self::Note { note_id: parent },
+            ) => child == parent,
+            _ => false,
+        }
+    }
+}
+
+impl fmt::Display for TombstoneAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.deck_path().fmt(f)
+    }
+}
+
+impl TryFrom<DeckPath> for TombstoneAddress {
+    type Error = InvalidDeckPath;
+
+    fn try_from(path: DeckPath) -> Result<Self, Self::Error> {
+        let original = path.to_string();
+        let address = match path {
+            DeckPath::DeckName => Self::DeckName,
+            DeckPath::DeckDescription => Self::DeckDescription,
+            DeckPath::DeckVariable { key } => Self::DeckVariable { key },
+            DeckPath::DeckAdapterId { key } => Self::DeckAdapterId { key },
+            DeckPath::NoteType { note_type_id } => Self::NoteType { note_type_id },
+            DeckPath::NoteTypeName { note_type_id } => Self::NoteTypeName { note_type_id },
+            DeckPath::NoteTypeVariable { note_type_id, key } => {
+                Self::NoteTypeVariable { note_type_id, key }
+            }
+            DeckPath::NoteTypeStyling { note_type_id } => Self::NoteTypeStyling { note_type_id },
+            DeckPath::NoteTypeAdapterId { note_type_id, key } => {
+                Self::NoteTypeAdapterId { note_type_id, key }
+            }
+            DeckPath::NoteTypeField {
+                note_type_id,
+                field_id,
+            } => Self::FieldDefinition {
+                note_type_id,
+                field_id,
+            },
+            DeckPath::NoteTypeCardTemplate {
+                note_type_id,
+                template_id,
+            } => Self::CardTemplate {
+                note_type_id,
+                template_id,
+            },
+            DeckPath::NoteTypeCardTemplateName {
+                note_type_id,
+                template_id,
+            } => Self::CardTemplateName {
+                note_type_id,
+                template_id,
+            },
+            DeckPath::NoteTypeCardTemplateVariable {
+                note_type_id,
+                template_id,
+                key,
+            } => Self::CardTemplateVariable {
+                note_type_id,
+                template_id,
+                key,
+            },
+            DeckPath::NoteTypeCardTemplateQuestionFormat {
+                note_type_id,
+                template_id,
+            } => Self::CardTemplateQuestionFormat {
+                note_type_id,
+                template_id,
+            },
+            DeckPath::NoteTypeCardTemplateAnswerFormat {
+                note_type_id,
+                template_id,
+            } => Self::CardTemplateAnswerFormat {
+                note_type_id,
+                template_id,
+            },
+            DeckPath::NoteTypeCardTemplateAdapterId {
+                note_type_id,
+                template_id,
+                key,
+            } => Self::CardTemplateAdapterId {
+                note_type_id,
+                template_id,
+                key,
+            },
+            DeckPath::Note { note_id } => Self::Note { note_id },
+            DeckPath::NoteVariable { note_id, key } => Self::NoteVariable { note_id, key },
+            DeckPath::NoteField { note_id, field_id } => Self::NoteField { note_id, field_id },
+            DeckPath::NoteTag { note_id, tag } => Self::NoteTag { note_id, tag },
+            DeckPath::NoteAdapterId { note_id, key } => Self::NoteAdapterId { note_id, key },
+            DeckPath::Media { media_id } => Self::MediaReference { media_id },
+            _ => return Err(InvalidDeckPath { value: original }),
+        };
+        Ok(address)
+    }
+}
+
+/// Provenance for a removal produced during ordered overlay composition.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct RemovalProvenance {
+    pub overlay_id: StableId,
+    pub operation: ChangeIntent,
+}
+
+/// One typed removal record. Legacy canonical records have no provenance;
+/// composition-created records always identify the removing overlay and operation.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct TombstoneRecord {
+    pub address: TombstoneAddress,
+    pub provenance: Option<RemovalProvenance>,
+}
+
+impl TombstoneRecord {
+    pub fn removed_by(address: TombstoneAddress, overlay_id: StableId) -> Self {
+        Self {
+            address,
+            provenance: Some(RemovalProvenance {
+                overlay_id,
+                operation: ChangeIntent::Remove,
+            }),
+        }
+    }
+
+    pub fn legacy(address: TombstoneAddress) -> Self {
+        Self {
+            address,
+            provenance: None,
+        }
+    }
+}
+
+/// Address-keyed tombstones with deterministic ordering and unique exact addresses.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Tombstones(BTreeMap<TombstoneAddress, TombstoneRecord>);
+
+impl Tombstones {
+    pub fn insert(&mut self, record: TombstoneRecord) -> Option<TombstoneRecord> {
+        self.0.insert(record.address.clone(), record)
+    }
+
+    pub fn get(&self, address: &TombstoneAddress) -> Option<&TombstoneRecord> {
+        self.0.get(address)
+    }
+
+    pub fn blocking(&self, address: &TombstoneAddress) -> Option<&TombstoneRecord> {
+        self.0
+            .values()
+            .find(|record| address.is_same_or_descendant_of(&record.address))
+    }
+
+    pub fn contains_address(&self, address: &TombstoneAddress) -> bool {
+        self.0.contains_key(address)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &TombstoneRecord> {
+        self.0.values()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+}
+
 /// The format-independent representation of a deck's content and structure.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CanonicalDeck {
@@ -684,7 +1159,7 @@ pub struct CanonicalDeck {
     pub note_types: BTreeMap<StableId, NoteType>,
     pub notes: BTreeMap<StableId, Note>,
     pub media: BTreeMap<StableId, MediaReference>,
-    pub tombstones: BTreeSet<StableId>,
+    pub tombstones: Tombstones,
     pub adapter_ids: AdapterIds,
 }
 
@@ -973,7 +1448,7 @@ pub enum OverlayKind {
 }
 
 /// The declared meaning of an overlay change.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ChangeIntent {
     Add,
     Merge,
@@ -1531,6 +2006,8 @@ pub struct ComposeError {
     pub overlay_id: Option<StableId>,
     pub expected: Option<ComposePrecondition>,
     pub actual: Option<ComposePrecondition>,
+    /// Original removal record when a later overlay attempts to reuse its address.
+    pub original_removal: Option<TombstoneRecord>,
     pub message: String,
 }
 
@@ -1546,6 +2023,7 @@ impl ComposeError {
             overlay_id: None,
             expected: None,
             actual: None,
+            original_removal: None,
             message,
         }
     }
@@ -1586,6 +2064,7 @@ pub enum ComposeErrorKind {
     MissingTranslation,
     StaleTranslationEntry,
     ValidationFailed,
+    TombstonedAddressReuse,
 }
 
 impl ComposeErrorKind {
@@ -1601,6 +2080,7 @@ impl ComposeErrorKind {
             Self::MissingTranslation => "missing_translation",
             Self::StaleTranslationEntry => "stale_translation_entry",
             Self::ValidationFailed => "validation_failed",
+            Self::TombstonedAddressReuse => "tombstoned_address_reuse",
         }
     }
 
@@ -1615,6 +2095,7 @@ impl ComposeErrorKind {
             }
             Self::MissingTranslation | Self::StaleTranslationEntry => "translation",
             Self::ValidationFailed => "validation",
+            Self::TombstonedAddressReuse => "tombstone",
         }
     }
 }

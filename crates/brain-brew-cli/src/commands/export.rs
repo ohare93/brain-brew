@@ -171,7 +171,7 @@ fn write_crowdanki_export(
         return Err("--media-mode reference-only cannot be combined with --media-root because reference-only mode intentionally skips all media root and byte validation".to_owned());
     }
     warnings.extend(validate_media_semantics(deck, media_mode)?);
-    if let Some(warning) = media_mode.development_warning(deck.media.len()) {
+    if let Some(warning) = media_mode.development_warning(active_media_count(deck)) {
         warnings.push(warning);
     }
     let export = crowdanki::export_deck(deck).map_err(|error| error.to_string())?;
@@ -202,15 +202,29 @@ fn write_crowdanki_export(
     Ok(())
 }
 
+fn active_media_count(deck: &CanonicalDeck) -> usize {
+    deck.media
+        .keys()
+        .filter(|id| {
+            deck.tombstones
+                .blocking(&brain_brew_core::TombstoneAddress::MediaReference {
+                    media_id: (*id).clone(),
+                })
+                .is_none()
+        })
+        .count()
+}
+
 fn print_export_result(
     deck: &CanonicalDeck,
     out_dir: &Path,
     media_mode: MediaVerificationMode,
     warnings: Vec<String>,
     json_output: bool,
-    omitted_tombstones: &[brain_brew_core::StableId],
+    omitted_tombstones: &[brain_brew_core::TombstoneAddress],
 ) {
-    let release_ready = media_mode.release_ready(deck.media.len());
+    let media_count = active_media_count(deck);
+    let release_ready = media_mode.release_ready(media_count);
     if json_output {
         println!(
             "{}",
@@ -220,11 +234,15 @@ fn print_export_result(
                 "output": out_dir.join("deck.json").display().to_string(),
                 "media": {
                     "mode": media_mode.name(),
-                    "declarations": deck.media.len(),
+                    "declarations": media_count,
                     "release_ready": release_ready,
-                    "assets_copied": if media_mode == MediaVerificationMode::Strict { deck.media.len() } else { 0 },
+                    "assets_copied": if media_mode == MediaVerificationMode::Strict { media_count } else { 0 },
                 },
                 "warnings": warnings,
+                "omitted_tombstones": omitted_tombstones.iter().map(|address| serde_json::json!({
+                    "kind": address.kind(),
+                    "path": address.to_string(),
+                })).collect::<Vec<_>>(),
             }))
             .expect("export status JSON serializes")
         );

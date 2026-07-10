@@ -161,6 +161,12 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                             "overlay": error.overlay_id.as_ref().map(ToString::to_string),
                             "expected": error.expected.as_ref().map(precondition_json),
                             "actual": error.actual.as_ref().map(precondition_json),
+                            "original_removal": error.original_removal.as_ref().map(|record| json!({
+                                "kind": record.address.kind(),
+                                "path": record.address.to_string(),
+                                "overlay": record.provenance.as_ref().map(|value| value.overlay_id.to_string()),
+                                "operation": record.provenance.as_ref().map(|value| value.operation.as_str()),
+                            })),
                             "message": error.message,
                         })
                     })

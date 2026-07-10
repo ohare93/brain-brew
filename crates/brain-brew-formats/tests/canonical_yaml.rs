@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, MediaReference, Note, NoteType,
-    SemanticChangeKind, StableId,
+    SemanticChangeKind, StableId, TombstoneAddress, Tombstones,
 };
 use brain_brew_formats::{canonical_yaml, crowdanki, source_includes};
 
@@ -11,6 +11,94 @@ fn emits_canonical_deck_yaml_with_explicit_order_arrays() {
     let yaml = canonical_yaml::to_string(&ug_style_deck()).expect("deck emits");
 
     assert_eq!(yaml, EXPECTED_CANONICAL_YAML);
+}
+
+#[test]
+fn legacy_flat_tombstone_migrates_only_from_one_unambiguous_top_level_identity() {
+    let legacy = EXPECTED_CANONICAL_YAML.replace("tombstones: []", "tombstones:\n  - note.finland");
+    let deck = canonical_yaml::from_str(&legacy).expect("unambiguous legacy note migrates");
+    assert!(deck.tombstones.contains_address(&TombstoneAddress::Note {
+        note_id: sid("note.finland"),
+    }));
+
+    let canonical = canonical_yaml::to_string(&deck).expect("migrated deck writes canonically");
+    assert!(canonical.contains("tombstones:\n  - kind: note\n    path: notes.note.finland\n"));
+    assert!(!canonical.contains("  - note.finland\n"));
+    assert_eq!(canonical_yaml::format_str(&canonical).unwrap(), canonical);
+}
+
+#[test]
+fn legacy_flat_tombstone_rejects_unknown_nested_and_cross_kind_ambiguous_ids() {
+    for (legacy_id, expected) in [
+        ("entity.missing", "matches no retained top-level"),
+        (
+            "field.capital",
+            "nested field/template ownership is never inferred",
+        ),
+    ] {
+        let source = EXPECTED_CANONICAL_YAML
+            .replace("tombstones: []", &format!("tombstones:\n  - {legacy_id}"));
+        let error = canonical_yaml::from_str(&source).expect_err("legacy ID must fail closed");
+        assert!(error.to_string().contains(expected), "{error}");
+        assert!(error.to_string().contains("kind"), "{error}");
+        assert!(error.to_string().contains("path"), "{error}");
+    }
+
+    let ambiguous = EXPECTED_CANONICAL_YAML
+        .replace("note-type.country", "note.finland")
+        .replace("tombstones: []", "tombstones:\n  - note.finland");
+    let error =
+        canonical_yaml::from_str(&ambiguous).expect_err("cross-kind legacy ID is ambiguous");
+    assert!(
+        error.to_string().contains("multiple top-level kinds"),
+        "{error}"
+    );
+}
+
+#[test]
+fn typed_tombstone_provenance_round_trips_and_duplicate_addresses_fail() {
+    let source = EXPECTED_CANONICAL_YAML.replace(
+        "tombstones: []",
+        "tombstones:\n  - kind: note\n    path: notes.note.finland\n    removed_by: overlay.patch.remove-finland\n    operation: remove",
+    );
+    let deck = canonical_yaml::from_str(&source).expect("typed tombstone parses");
+    let record = deck
+        .tombstones
+        .get(&TombstoneAddress::Note {
+            note_id: sid("note.finland"),
+        })
+        .expect("typed note record");
+    assert_eq!(
+        record.provenance.as_ref().unwrap().overlay_id,
+        sid("overlay.patch.remove-finland")
+    );
+    let canonical = canonical_yaml::to_string(&deck).expect("typed provenance emits");
+    assert_eq!(canonical_yaml::from_str(&canonical).unwrap(), deck);
+
+    let duplicate = canonical.replace(
+        "tombstones:\n",
+        "tombstones:\n  - kind: note\n    path: notes.note.finland\n",
+    );
+    let error = canonical_yaml::from_str(&duplicate).expect_err("duplicate typed address rejects");
+    assert!(
+        error
+            .to_string()
+            .contains("duplicate typed tombstone address"),
+        "{error}"
+    );
+}
+
+#[test]
+fn typed_tombstone_kind_must_match_its_full_path() {
+    let source = EXPECTED_CANONICAL_YAML.replace(
+        "tombstones: []",
+        "tombstones:\n  - kind: media_reference\n    path: notes.note.finland",
+    );
+    let error = canonical_yaml::from_str(&source).expect_err("kind/path mismatch rejects");
+    assert!(
+        error.to_string().contains("does not match typed path kind"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -963,7 +1051,7 @@ fn ug_style_deck() -> CanonicalDeck {
                 sha256: "0123456789abcdef".to_owned(),
             },
         )]),
-        tombstones: BTreeSet::new(),
+        tombstones: Tombstones::default(),
         adapter_ids: deck_adapter_ids,
     }
 }

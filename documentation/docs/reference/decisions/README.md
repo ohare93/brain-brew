@@ -27,6 +27,7 @@ The ADRs are written in hindsight around the decisions that still shape the Rust
 | [0017](0017-enforce-semantic-version-package-compatibility.md) | Enforce Semantic Version Package Compatibility | Accepted | 2026-07-10 |
 | [0018](0018-model-note-fields-as-semantic-values.md) | Model Note Fields as Semantic Values | Accepted | 2026-07-10 |
 | [0019](0019-use-canonical-entity-fingerprints-for-complete-destructive-changes.md) | Use Canonical Entity Fingerprints for Complete Destructive Changes | Accepted | 2026-07-10 |
+| [0020](0020-address-removals-with-typed-path-tombstones.md) | Address Removals with Typed Path Tombstones | Accepted | 2026-07-10 |
 
 ## Process
 

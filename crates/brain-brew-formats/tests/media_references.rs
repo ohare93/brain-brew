@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, FieldValue,
-    MediaReference, Note, NoteType, StableId,
+    MediaReference, Note, NoteType, StableId, Tombstones,
 };
 use brain_brew_formats::{
     canonical_yaml,
@@ -481,7 +481,7 @@ fn media_deck() -> CanonicalDeck {
                 },
             ),
         ]),
-        tombstones: BTreeSet::new(),
+        tombstones: Tombstones::default(),
         adapter_ids: AdapterIds::new(),
     }
 }

@@ -186,11 +186,23 @@ impl CanonicalDeck {
                 ));
             }
 
-            if self.tombstones.contains(id) {
+            let note_address = TombstoneAddress::Note {
+                note_id: id.clone(),
+            };
+            if self.tombstones.blocking(&note_address).is_some() {
                 continue;
             }
 
-            let Some(note_type) = self.note_types.get(&note.note_type_id) else {
+            let note_type_address = TombstoneAddress::NoteType {
+                note_type_id: note.note_type_id.clone(),
+            };
+            let Some(note_type) = self
+                .tombstones
+                .blocking(&note_type_address)
+                .is_none()
+                .then(|| self.note_types.get(&note.note_type_id))
+                .flatten()
+            else {
                 errors.push(ValidationError::new(
                     ValidationErrorKind::MissingNoteType,
                     DeckPath::NoteNoteTypeId {
@@ -205,10 +217,28 @@ impl CanonicalDeck {
             let expected_field_ids = note_type
                 .fields
                 .iter()
+                .filter(|field| {
+                    self.tombstones
+                        .blocking(&TombstoneAddress::FieldDefinition {
+                            note_type_id: note.note_type_id.clone(),
+                            field_id: field.id.clone(),
+                        })
+                        .is_none()
+                })
                 .map(|field| field.id.clone())
                 .collect::<BTreeSet<_>>();
 
             for field_id in note.fields.keys() {
+                if self
+                    .tombstones
+                    .blocking(&TombstoneAddress::NoteField {
+                        note_id: id.clone(),
+                        field_id: field_id.clone(),
+                    })
+                    .is_some()
+                {
+                    continue;
+                }
                 if !expected_field_ids.contains(field_id) {
                     errors.push(ValidationError::new(
                         ValidationErrorKind::UnknownNoteField,
@@ -226,6 +256,16 @@ impl CanonicalDeck {
             }
 
             for (field_id, value) in &note.fields {
+                if self
+                    .tombstones
+                    .blocking(&TombstoneAddress::NoteField {
+                        note_id: id.clone(),
+                        field_id: field_id.clone(),
+                    })
+                    .is_some()
+                {
+                    continue;
+                }
                 let path = DeckPath::NoteField {
                     note_id: id.clone(),
                     field_id: field_id.clone(),
@@ -252,7 +292,14 @@ impl CanonicalDeck {
                             ));
                         }
                         for image in images {
-                            if !self.media.contains_key(&image.media_id) {
+                            if !self.media.contains_key(&image.media_id)
+                                || self
+                                    .tombstones
+                                    .blocking(&TombstoneAddress::MediaReference {
+                                        media_id: image.media_id.clone(),
+                                    })
+                                    .is_some()
+                            {
                                 errors.push(ValidationError::new(
                                     ValidationErrorKind::UnknownMediaReference,
                                     path.clone(),
@@ -268,7 +315,13 @@ impl CanonicalDeck {
             }
 
             for field_id in expected_field_ids {
-                if !note.fields.contains_key(&field_id) {
+                let value_address = TombstoneAddress::NoteField {
+                    note_id: id.clone(),
+                    field_id: field_id.clone(),
+                };
+                if !note.fields.contains_key(&field_id)
+                    || self.tombstones.blocking(&value_address).is_some()
+                {
                     errors.push(ValidationError::new(
                         ValidationErrorKind::MissingNoteField,
                         DeckPath::NoteField {
@@ -296,10 +349,9 @@ impl CanonicalDeck {
             );
         }
 
-        for id in &self.tombstones {
-            push_invalid_stable_id_error(
-                id,
-                DeckPath::Tombstone { id: id.clone() }.to_string(),
+        for record in self.tombstones.iter() {
+            validate_tombstone_address_ids(
+                &record.address,
                 &mut errors,
                 &mut invalid_stable_id_paths,
             );
@@ -310,6 +362,70 @@ impl CanonicalDeck {
         } else {
             Err(ValidationReport { errors })
         }
+    }
+}
+
+fn validate_tombstone_address_ids(
+    address: &TombstoneAddress,
+    errors: &mut Vec<ValidationError>,
+    seen: &mut BTreeSet<(String, String)>,
+) {
+    let path = DeckPath::Tombstone {
+        address: address.clone(),
+    }
+    .to_string();
+    let ids: Vec<&StableId> = match address {
+        TombstoneAddress::NoteType { note_type_id }
+        | TombstoneAddress::NoteTypeName { note_type_id }
+        | TombstoneAddress::NoteTypeVariable { note_type_id, .. }
+        | TombstoneAddress::NoteTypeStyling { note_type_id }
+        | TombstoneAddress::NoteTypeAdapterId { note_type_id, .. } => vec![note_type_id],
+        TombstoneAddress::FieldDefinition {
+            note_type_id,
+            field_id,
+        } => vec![note_type_id, field_id],
+        TombstoneAddress::CardTemplate {
+            note_type_id,
+            template_id,
+        }
+        | TombstoneAddress::CardTemplateName {
+            note_type_id,
+            template_id,
+        }
+        | TombstoneAddress::CardTemplateVariable {
+            note_type_id,
+            template_id,
+            ..
+        }
+        | TombstoneAddress::CardTemplateQuestionFormat {
+            note_type_id,
+            template_id,
+        }
+        | TombstoneAddress::CardTemplateAnswerFormat {
+            note_type_id,
+            template_id,
+        }
+        | TombstoneAddress::CardTemplateAdapterId {
+            note_type_id,
+            template_id,
+            ..
+        } => vec![note_type_id, template_id],
+        TombstoneAddress::Note { note_id }
+        | TombstoneAddress::NoteVariable { note_id, .. }
+        | TombstoneAddress::NoteField { note_id, .. }
+        | TombstoneAddress::NoteTag { note_id, .. }
+        | TombstoneAddress::NoteAdapterId { note_id, .. } => vec![note_id],
+        TombstoneAddress::MediaReference { media_id } => vec![media_id],
+        TombstoneAddress::DeckName
+        | TombstoneAddress::DeckDescription
+        | TombstoneAddress::DeckVariable { .. }
+        | TombstoneAddress::DeckAdapterId { .. } => Vec::new(),
+    };
+    for id in ids {
+        push_invalid_stable_id_error(id, path.clone(), errors, seen);
+    }
+    if let TombstoneAddress::NoteField { field_id, .. } = address {
+        push_invalid_stable_id_error(field_id, path, errors, seen);
     }
 }
 

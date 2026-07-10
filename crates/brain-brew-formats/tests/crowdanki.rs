@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, FieldValue,
-    MediaReference, Note, NoteType, StableId,
+    MediaReference, Note, NoteType, StableId, TombstoneAddress, TombstoneRecord, Tombstones,
 };
 use brain_brew_formats::{canonical_yaml, crowdanki};
 
@@ -866,11 +866,19 @@ fn crowdanki_parity_report_summarizes_repeated_defaults_and_serializes_to_json()
 #[test]
 fn export_omits_tombstoned_notes_and_reports_their_stable_ids() {
     let mut deck = ug_style_deck();
-    deck.tombstones.insert(sid("note.finland"));
+    deck.tombstones
+        .insert(TombstoneRecord::legacy(TombstoneAddress::Note {
+            note_id: sid("note.finland"),
+        }));
 
     let export = crowdanki::export_deck(&deck).expect("deck exports");
 
-    assert_eq!(export.omitted_tombstones, vec![sid("note.finland")]);
+    assert_eq!(
+        export.omitted_tombstones,
+        vec![TombstoneAddress::Note {
+            note_id: sid("note.finland"),
+        }]
+    );
     assert!(!export.deck_json.contains("ug-finland-guid"));
 }
 
@@ -1082,7 +1090,7 @@ fn ug_style_deck() -> CanonicalDeck {
                 sha256: String::new(),
             },
         )]),
-        tombstones: BTreeSet::new(),
+        tombstones: Tombstones::default(),
         adapter_ids: deck_adapter_ids,
     }
 }

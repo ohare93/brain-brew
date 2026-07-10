@@ -73,6 +73,44 @@ fn apply_overlay(
     changed_paths: &mut BTreeMap<String, StableId>,
     errors: &mut Vec<ComposeError>,
 ) {
+    let mutations = overlay_mutation_addresses(overlay);
+    let mut blocked = false;
+    for (address, intent) in &mutations {
+        if let Some(record) = resolved.tombstones.blocking(address) {
+            let path = address.to_string();
+            let removal = record
+                .provenance
+                .as_ref()
+                .map(|provenance| {
+                    format!(
+                        " by overlay {} with {}",
+                        provenance.overlay_id,
+                        provenance.operation.as_str()
+                    )
+                })
+                .unwrap_or_else(|| " in legacy canonical source".to_owned());
+            let mut error = ComposeError::new(
+                ComposeErrorKind::TombstonedAddressReuse,
+                path.clone(),
+                format!(
+                    "overlay {} cannot {} {path}; typed address {} was removed{removal} and removal provenance cannot be erased",
+                    overlay.id,
+                    intent.as_str(),
+                    record.address
+                ),
+            );
+            error.intent = Some(*intent);
+            error.overlay_id = Some(overlay.id.clone());
+            error.original_removal = Some(record.clone());
+            errors.push(error);
+            blocked = true;
+        }
+    }
+    if blocked {
+        return;
+    }
+
+    let errors_before = errors.len();
     if let Some(translations) = &overlay.translations {
         apply_translation_dictionary(resolved, overlay, translations, changed_paths, errors);
     }
@@ -134,6 +172,209 @@ fn apply_overlay(
     for (media_id, change) in &overlay.media_changes {
         apply_media_change(resolved, overlay, media_id, change, changed_paths, errors);
     }
+
+    if errors.len() == errors_before {
+        for (address, intent) in mutations {
+            if intent == ChangeIntent::Remove {
+                resolved
+                    .tombstones
+                    .insert(TombstoneRecord::removed_by(address, overlay.id.clone()));
+            }
+        }
+    }
+}
+
+fn overlay_mutation_addresses(overlay: &Overlay) -> Vec<(TombstoneAddress, ChangeIntent)> {
+    let mut addresses = Vec::new();
+    if let Some(change) = &overlay.deck_change {
+        if let Some(item) = &change.name {
+            addresses.push((TombstoneAddress::DeckName, item.intent));
+        }
+        if let Some(item) = &change.description {
+            addresses.push((TombstoneAddress::DeckDescription, item.intent));
+        }
+        addresses.extend(change.variables.iter().map(|(key, item)| {
+            (
+                TombstoneAddress::DeckVariable { key: key.clone() },
+                item.intent,
+            )
+        }));
+        addresses.extend(change.adapter_ids.iter().map(|(key, item)| {
+            (
+                TombstoneAddress::DeckAdapterId { key: key.clone() },
+                item.intent,
+            )
+        }));
+    }
+    for (note_type_id, change) in &overlay.note_type_changes {
+        let parent = TombstoneAddress::NoteType {
+            note_type_id: note_type_id.clone(),
+        };
+        if matches!(change.intent, ChangeIntent::Add | ChangeIntent::Remove)
+            || change.note_type.is_some()
+        {
+            addresses.push((parent, change.intent));
+            continue;
+        }
+        if let Some(item) = &change.name {
+            addresses.push((
+                TombstoneAddress::NoteTypeName {
+                    note_type_id: note_type_id.clone(),
+                },
+                item.intent,
+            ));
+        }
+        if let Some(item) = &change.styling {
+            addresses.push((
+                TombstoneAddress::NoteTypeStyling {
+                    note_type_id: note_type_id.clone(),
+                },
+                item.intent,
+            ));
+        }
+        addresses.extend(change.variables.iter().map(|(key, item)| {
+            (
+                TombstoneAddress::NoteTypeVariable {
+                    note_type_id: note_type_id.clone(),
+                    key: key.clone(),
+                },
+                item.intent,
+            )
+        }));
+        addresses.extend(change.adapter_ids.iter().map(|(key, item)| {
+            (
+                TombstoneAddress::NoteTypeAdapterId {
+                    note_type_id: note_type_id.clone(),
+                    key: key.clone(),
+                },
+                item.intent,
+            )
+        }));
+        for (field_id, item) in &change.fields {
+            addresses.push((
+                TombstoneAddress::FieldDefinition {
+                    note_type_id: note_type_id.clone(),
+                    field_id: field_id.clone(),
+                },
+                item.intent,
+            ));
+        }
+        for (template_id, item) in &change.card_templates {
+            let template = TombstoneAddress::CardTemplate {
+                note_type_id: note_type_id.clone(),
+                template_id: template_id.clone(),
+            };
+            if matches!(item.intent, ChangeIntent::Add | ChangeIntent::Remove)
+                || item.template.is_some()
+            {
+                addresses.push((template, item.intent));
+                continue;
+            }
+            if let Some(change) = &item.name {
+                addresses.push((
+                    TombstoneAddress::CardTemplateName {
+                        note_type_id: note_type_id.clone(),
+                        template_id: template_id.clone(),
+                    },
+                    change.intent,
+                ));
+            }
+            if let Some(change) = &item.question_format {
+                addresses.push((
+                    TombstoneAddress::CardTemplateQuestionFormat {
+                        note_type_id: note_type_id.clone(),
+                        template_id: template_id.clone(),
+                    },
+                    change.intent,
+                ));
+            }
+            if let Some(change) = &item.answer_format {
+                addresses.push((
+                    TombstoneAddress::CardTemplateAnswerFormat {
+                        note_type_id: note_type_id.clone(),
+                        template_id: template_id.clone(),
+                    },
+                    change.intent,
+                ));
+            }
+            addresses.extend(item.variables.iter().map(|(key, change)| {
+                (
+                    TombstoneAddress::CardTemplateVariable {
+                        note_type_id: note_type_id.clone(),
+                        template_id: template_id.clone(),
+                        key: key.clone(),
+                    },
+                    change.intent,
+                )
+            }));
+            addresses.extend(item.adapter_ids.iter().map(|(key, change)| {
+                (
+                    TombstoneAddress::CardTemplateAdapterId {
+                        note_type_id: note_type_id.clone(),
+                        template_id: template_id.clone(),
+                        key: key.clone(),
+                    },
+                    change.intent,
+                )
+            }));
+        }
+    }
+    for (note_id, change) in &overlay.note_changes {
+        let parent = TombstoneAddress::Note {
+            note_id: note_id.clone(),
+        };
+        if matches!(change.intent, ChangeIntent::Add | ChangeIntent::Remove)
+            || change.note.is_some()
+        {
+            addresses.push((parent, change.intent));
+            continue;
+        }
+        addresses.extend(change.variables.iter().map(|(key, item)| {
+            (
+                TombstoneAddress::NoteVariable {
+                    note_id: note_id.clone(),
+                    key: key.clone(),
+                },
+                item.intent,
+            )
+        }));
+        addresses.extend(change.fields.iter().map(|(field_id, item)| {
+            (
+                TombstoneAddress::NoteField {
+                    note_id: note_id.clone(),
+                    field_id: field_id.clone(),
+                },
+                item.intent,
+            )
+        }));
+        addresses.extend(change.tags.iter().map(|(tag, item)| {
+            (
+                TombstoneAddress::NoteTag {
+                    note_id: note_id.clone(),
+                    tag: tag.clone(),
+                },
+                item.intent,
+            )
+        }));
+        addresses.extend(change.adapter_ids.iter().map(|(key, item)| {
+            (
+                TombstoneAddress::NoteAdapterId {
+                    note_id: note_id.clone(),
+                    key: key.clone(),
+                },
+                item.intent,
+            )
+        }));
+    }
+    addresses.extend(overlay.media_changes.iter().map(|(media_id, item)| {
+        (
+            TombstoneAddress::MediaReference {
+                media_id: media_id.clone(),
+            },
+            item.intent,
+        )
+    }));
+    addresses
 }
 
 fn fill_added_field_blanks(
@@ -270,7 +511,7 @@ fn apply_note_type_remove(
         return;
     }
     if resolved.notes.iter().any(|(note_id, note)| {
-        &note.note_type_id == note_type_id && !resolved.tombstones.contains(note_id)
+        &note.note_type_id == note_type_id && is_active_note(resolved, note_id)
     }) {
         errors.push(ComposeError::new(
             ComposeErrorKind::ValidationFailed,
@@ -280,7 +521,6 @@ fn apply_note_type_remove(
         return;
     }
     resolved.note_types.remove(note_type_id);
-    resolved.tombstones.insert(note_type_id.clone());
 }
 
 fn apply_note_type_change(
@@ -1019,7 +1259,7 @@ fn apply_note_add(
         return;
     }
 
-    if resolved.notes.contains_key(note_id) && !resolved.tombstones.contains(note_id) {
+    if resolved.notes.contains_key(note_id) && is_active_note(resolved, note_id) {
         errors.push(ComposeError::new(
             ComposeErrorKind::AlreadyExists,
             path,
@@ -1049,7 +1289,6 @@ fn apply_note_add(
     }
 
     resolved.notes.insert(note_id.clone(), note.clone());
-    resolved.tombstones.remove(note_id);
 }
 
 fn apply_note_merge(
@@ -1098,7 +1337,6 @@ fn apply_note_merge(
             return;
         }
         resolved.notes.insert(note_id.clone(), replacement.clone());
-        resolved.tombstones.remove(note_id);
         return;
     }
     if requires_expected_base(change.intent) {
@@ -1116,7 +1354,7 @@ fn apply_note_merge(
         }
     }
 
-    if resolved.tombstones.contains(note_id) {
+    if !is_active_note(resolved, note_id) {
         errors.push(ComposeError::new(
             ComposeErrorKind::MissingOverlayTarget,
             note_path(note_id),
@@ -1691,8 +1929,11 @@ fn media_sha256_path(media_id: &StableId) -> String {
     .to_string()
 }
 
-fn tombstone_path(id: &StableId) -> String {
-    DeckPath::Tombstone { id: id.clone() }.to_string()
+fn tombstone_path(address: &TombstoneAddress) -> String {
+    DeckPath::Tombstone {
+        address: address.clone(),
+    }
+    .to_string()
 }
 
 fn apply_note_remove(
@@ -1716,11 +1957,7 @@ fn apply_note_remove(
     ) {
         return;
     }
-    if !record_change_path(&path, overlay, change.intent, changed_paths, errors) {
-        return;
-    }
-
-    resolved.tombstones.insert(note_id.clone());
+    record_change_path(&path, overlay, change.intent, changed_paths, errors);
 }
 
 pub(crate) fn record_change_path(
@@ -1748,8 +1985,21 @@ pub(crate) fn record_change_path(
     true
 }
 
+fn note_address(note_id: &StableId) -> TombstoneAddress {
+    TombstoneAddress::Note {
+        note_id: note_id.clone(),
+    }
+}
+
+fn is_active_note(resolved: &CanonicalDeck, note_id: &StableId) -> bool {
+    resolved
+        .tombstones
+        .blocking(&note_address(note_id))
+        .is_none()
+}
+
 fn live_note<'a>(resolved: &'a CanonicalDeck, note_id: &StableId) -> Option<&'a Note> {
-    (!resolved.tombstones.contains(note_id))
+    is_active_note(resolved, note_id)
         .then(|| resolved.notes.get(note_id))
         .flatten()
 }
@@ -1883,26 +2133,49 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
     let mut errors = Vec::new();
     let mut image_errors = Vec::new();
     let deck_variables = rendered.variables.clone();
+    let tombstones = rendered.tombstones.clone();
     let media_paths = rendered
         .media
         .iter()
+        .filter(|(id, _)| {
+            tombstones
+                .blocking(&TombstoneAddress::MediaReference {
+                    media_id: (*id).clone(),
+                })
+                .is_none()
+        })
         .map(|(id, media)| (id.clone(), media.path.clone()))
         .collect::<BTreeMap<_, _>>();
 
-    render_string_with_variables(
-        &mut rendered.name,
-        &deck_name_path(),
-        &[&deck_variables],
-        &mut errors,
-    );
-    render_string_with_variables(
-        &mut rendered.description,
-        &deck_description_path(),
-        &[&deck_variables],
-        &mut errors,
-    );
+    if tombstones.blocking(&TombstoneAddress::DeckName).is_none() {
+        render_string_with_variables(
+            &mut rendered.name,
+            &deck_name_path(),
+            &[&deck_variables],
+            &mut errors,
+        );
+    }
+    if tombstones
+        .blocking(&TombstoneAddress::DeckDescription)
+        .is_none()
+    {
+        render_string_with_variables(
+            &mut rendered.description,
+            &deck_description_path(),
+            &[&deck_variables],
+            &mut errors,
+        );
+    }
 
     for (note_type_id, note_type) in &mut rendered.note_types {
+        if tombstones
+            .blocking(&TombstoneAddress::NoteType {
+                note_type_id: note_type_id.clone(),
+            })
+            .is_some()
+        {
+            continue;
+        }
         let note_type_variables = note_type.variables.clone();
         render_string_with_variables(
             &mut note_type.name,
@@ -1917,6 +2190,15 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
             &mut errors,
         );
         for field in &mut note_type.fields {
+            if tombstones
+                .blocking(&TombstoneAddress::FieldDefinition {
+                    note_type_id: note_type_id.clone(),
+                    field_id: field.id.clone(),
+                })
+                .is_some()
+            {
+                continue;
+            }
             render_string_with_variables(
                 &mut field.name,
                 &DeckPath::NoteTypeFieldName {
@@ -1929,6 +2211,15 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
             );
         }
         for template in &mut note_type.card_templates {
+            if tombstones
+                .blocking(&TombstoneAddress::CardTemplate {
+                    note_type_id: note_type_id.clone(),
+                    template_id: template.id.clone(),
+                })
+                .is_some()
+            {
+                continue;
+            }
             let template_variables = template.variables.clone();
             let scopes = [&template_variables, &note_type_variables, &deck_variables];
             render_string_with_variables(
@@ -1953,12 +2244,29 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
     }
 
     for (note_id, note) in &mut rendered.notes {
+        if tombstones
+            .blocking(&TombstoneAddress::Note {
+                note_id: note_id.clone(),
+            })
+            .is_some()
+        {
+            continue;
+        }
         let note_variables = note.variables.clone();
         let note_type_variables = rendered
             .note_types
             .get(&note.note_type_id)
             .map(|note_type| &note_type.variables);
         for (field_id, value) in &mut note.fields {
+            if tombstones
+                .blocking(&TombstoneAddress::NoteField {
+                    note_id: note_id.clone(),
+                    field_id: field_id.clone(),
+                })
+                .is_some()
+            {
+                continue;
+            }
             let path = note_field_path(note_id, field_id);
             let scopes = if let Some(note_type_variables) = note_type_variables {
                 vec![&note_variables, note_type_variables, &deck_variables]
@@ -2351,26 +2659,41 @@ fn diff_media(
     }
 }
 
-fn diff_tombstones(
-    left: &BTreeSet<StableId>,
-    right: &BTreeSet<StableId>,
-    changes: &mut Vec<SemanticChange>,
-) {
-    for id in left {
-        if !right.contains(id) {
-            changes.push(SemanticChange::removed(tombstone_path(id)));
+fn diff_tombstones(left: &Tombstones, right: &Tombstones, changes: &mut Vec<SemanticChange>) {
+    for record in left.iter() {
+        if !right.contains_address(&record.address) {
+            changes.push(SemanticChange::removed(tombstone_path(&record.address)));
         }
     }
 
-    for id in right {
-        if !left.contains(id) {
+    for record in right.iter() {
+        if !left.contains_address(&record.address) {
             changes.push(SemanticChange::new(
                 SemanticChangeKind::Tombstoned,
-                tombstone_path(id),
+                tombstone_path(&record.address),
                 None,
-                Some(id.to_string()),
+                Some(tombstone_summary(record)),
+            ));
+        } else if left.get(&record.address) != Some(record) {
+            changes.push(SemanticChange::new(
+                SemanticChangeKind::Modified,
+                tombstone_path(&record.address),
+                left.get(&record.address).map(tombstone_summary),
+                Some(tombstone_summary(record)),
             ));
         }
+    }
+}
+
+fn tombstone_summary(record: &TombstoneRecord) -> String {
+    match &record.provenance {
+        Some(provenance) => format!(
+            "{} removed_by={} operation={}",
+            record.address,
+            provenance.overlay_id,
+            provenance.operation.as_str()
+        ),
+        None => format!("{} legacy", record.address),
     }
 }
 

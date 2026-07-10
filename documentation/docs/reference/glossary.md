@@ -82,4 +82,4 @@ A deck entity that identifies and verifies an external media asset.
 
 ## Tombstone
 
-A record that a deck entity was deliberately removed.
+A typed record that an exact deck entity/value address was deliberately removed. Its full path preserves parent scope, and composition-created records retain the removing overlay provenance.

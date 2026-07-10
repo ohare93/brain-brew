@@ -76,7 +76,7 @@ fn ug_style_fixture_composes_exports_imports_and_diffs_semantically() {
         "stderr: {}",
         stderr(&export_output)
     );
-    assert!(stdout(&export_output).contains("omitted tombstones: note.australia"));
+    assert!(stdout(&export_output).contains("omitted tombstones: notes.note.australia"));
 
     let deck_json = fs::read_to_string(export_dir.join("deck.json")).unwrap();
     let crowdanki: serde_json::Value = serde_json::from_str(&deck_json).unwrap();

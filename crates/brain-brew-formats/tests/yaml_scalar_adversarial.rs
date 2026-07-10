@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_formats::core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, MediaReference, Note, NoteType,
-    StableId,
+    StableId, Tombstones,
 };
 use brain_brew_formats::lockfile::{
     FederationLock, LockedPackage, LockedPackageMetadata, LockedSource, OriginalSource,
@@ -184,7 +184,7 @@ fn canonical_deck_with_value(value: &str) -> CanonicalDeck {
                 sha256: "0123456789abcdef".to_owned(),
             },
         )]),
-        tombstones: BTreeSet::new(),
+        tombstones: Tombstones::default(),
         adapter_ids: AdapterIds::new(),
     }
 }

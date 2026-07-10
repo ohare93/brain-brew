@@ -6,9 +6,9 @@ use brain_brew_core::{
     FieldDefinitionChange, FieldImageReference, FieldValue, MediaChange, MediaReference,
     MessageComponent, Note, NoteChange, NoteType, NoteTypeChange, Overlay, OverlayKind,
     PropertyChange, StableId, StaleTranslation, StructuredMessage, TagChange, TargetAdaptation,
-    TranslationCoverageCategory, TranslationDictionary, ValidationErrorKind,
-    fingerprint_card_template, fingerprint_field_definition, fingerprint_media_reference,
-    fingerprint_note, fingerprint_note_type,
+    TombstoneAddress, Tombstones, TranslationCoverageCategory, TranslationDictionary,
+    ValidationErrorKind, fingerprint_card_template, fingerprint_field_definition,
+    fingerprint_media_reference, fingerprint_note, fingerprint_note_type,
 };
 
 fn target_adaptation(
@@ -2163,7 +2163,13 @@ fn remove_overlay_can_tombstone_an_unused_note_type() {
     let resolved = base.compose(&[overlay]).expect("remove composes");
 
     assert!(!resolved.note_types.contains_key(&sid("note-type.region")));
-    assert!(resolved.tombstones.contains(&sid("note-type.region")));
+    assert!(
+        resolved
+            .tombstones
+            .contains_address(&TombstoneAddress::NoteType {
+                note_type_id: sid("note-type.region"),
+            })
+    );
 }
 
 #[test]
@@ -2195,7 +2201,209 @@ fn remove_overlay_records_a_tombstone_without_erasing_the_entity_from_resolved_d
     let resolved = base.compose(&[overlay]).expect("remove composes");
 
     assert!(resolved.notes.contains_key(&sid("note.finland")));
-    assert!(resolved.tombstones.contains(&sid("note.finland")));
+    assert!(
+        resolved
+            .tombstones
+            .contains_address(&TombstoneAddress::Note {
+                note_id: sid("note.finland"),
+            })
+    );
+}
+
+#[test]
+fn exact_tombstone_reintroduction_fails_with_original_removal_provenance() {
+    let base = ug_style_deck();
+    let remove = Overlay {
+        id: sid("overlay.patch.remove-finland"),
+        kind: OverlayKind::Patch,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::from([(
+            sid("note.finland"),
+            NoteChange {
+                intent: ChangeIntent::Remove,
+                note: None,
+                variables: BTreeMap::new(),
+                fields: BTreeMap::new(),
+                tags: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: Some(ExpectedBase::EntityFingerprint(fingerprint_note(
+                    &base.notes[&sid("note.finland")],
+                ))),
+            },
+        )]),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+    let reintroduce = Overlay {
+        id: sid("overlay.extension.reintroduce-finland"),
+        kind: OverlayKind::Extension,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::from([(
+            sid("note.finland"),
+            NoteChange {
+                intent: ChangeIntent::Add,
+                note: Some(base.notes[&sid("note.finland")].clone()),
+                variables: BTreeMap::new(),
+                fields: BTreeMap::new(),
+                tags: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: None,
+            },
+        )]),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let report = base
+        .compose(&[remove, reintroduce])
+        .expect_err("an exact removed address cannot be reused");
+    let error = report
+        .errors
+        .iter()
+        .find(|error| error.kind == ComposeErrorKind::TombstonedAddressReuse)
+        .expect("structured tombstone reuse error");
+    assert_eq!(error.path, "notes.note.finland");
+    assert_eq!(error.intent, Some(ChangeIntent::Add));
+    assert_eq!(
+        error.overlay_id.as_ref(),
+        Some(&sid("overlay.extension.reintroduce-finland"))
+    );
+    let removal = error.original_removal.as_ref().expect("removal provenance");
+    assert_eq!(removal.address.kind(), "note");
+    assert_eq!(
+        removal.provenance.as_ref().unwrap().overlay_id,
+        sid("overlay.patch.remove-finland")
+    );
+}
+
+#[test]
+fn identical_stable_ids_in_different_kinds_do_not_alias() {
+    let mut base = ug_style_deck();
+    let shared_id = sid("entity.shared");
+    base.note_types.insert(
+        shared_id.clone(),
+        NoteType {
+            id: shared_id.clone(),
+            name: "Unused shared ID type".to_owned(),
+            variables: BTreeMap::new(),
+            fields: Vec::new(),
+            card_templates: Vec::new(),
+            styling: String::new(),
+            adapter_ids: AdapterIds::new(),
+        },
+    );
+    base.media.insert(
+        shared_id.clone(),
+        MediaReference {
+            id: shared_id.clone(),
+            path: "shared.bin".to_owned(),
+            sha256: "shared".to_owned(),
+        },
+    );
+    let overlay = Overlay {
+        id: sid("overlay.patch.remove-shared-type"),
+        kind: OverlayKind::Patch,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::from([(
+            shared_id.clone(),
+            NoteTypeChange {
+                intent: ChangeIntent::Remove,
+                note_type: None,
+                name: None,
+                variables: BTreeMap::new(),
+                styling: None,
+                fields: BTreeMap::new(),
+                card_templates: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: Some(ExpectedBase::EntityFingerprint(fingerprint_note_type(
+                    &base.note_types[&shared_id],
+                ))),
+            },
+        )]),
+        media_changes: BTreeMap::new(),
+    };
+
+    let resolved = base.compose(&[overlay]).expect("typed removal composes");
+    assert!(resolved.media.contains_key(&shared_id));
+    assert!(
+        resolved
+            .tombstones
+            .contains_address(&TombstoneAddress::NoteType {
+                note_type_id: shared_id.clone(),
+            })
+    );
+    assert!(
+        !resolved
+            .tombstones
+            .contains_address(&TombstoneAddress::MediaReference {
+                media_id: shared_id,
+            })
+    );
+}
+
+#[test]
+fn identical_nested_ids_under_different_parents_do_not_alias() {
+    let mut base = ug_style_deck();
+    let mut second = base.note_types[&sid("note-type.country")].clone();
+    second.id = sid("note-type.region");
+    second.name = "Region".to_owned();
+    base.note_types.insert(second.id.clone(), second);
+    base.notes.clear();
+    base.tombstones
+        .insert(brain_brew_core::TombstoneRecord::legacy(
+            TombstoneAddress::FieldDefinition {
+                note_type_id: sid("note-type.country"),
+                field_id: sid("field.flag"),
+            },
+        ));
+    let overlay = Overlay {
+        id: sid("overlay.patch.rename-region-flag"),
+        kind: OverlayKind::Patch,
+        translations: None,
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::from([(
+            sid("note-type.region"),
+            NoteTypeChange {
+                intent: ChangeIntent::Merge,
+                note_type: None,
+                name: None,
+                variables: BTreeMap::new(),
+                styling: None,
+                fields: BTreeMap::from([(
+                    sid("field.flag"),
+                    FieldDefinitionChange {
+                        intent: ChangeIntent::Replace,
+                        field: Some(FieldDefinition {
+                            id: sid("field.flag"),
+                            name: "Region flag".to_owned(),
+                        }),
+                        expected_base: Some(ExpectedBase::EntityFingerprint(
+                            fingerprint_field_definition(
+                                &base.note_types[&sid("note-type.region")].fields[2],
+                            ),
+                        )),
+                    },
+                )]),
+                card_templates: BTreeMap::new(),
+                adapter_ids: BTreeMap::new(),
+                expected_base: None,
+            },
+        )]),
+        media_changes: BTreeMap::new(),
+    };
+
+    let resolved = base
+        .compose(&[overlay])
+        .expect("different parent remains independent");
+    assert_eq!(
+        resolved.note_types[&sid("note-type.region")].fields[2].name,
+        "Region flag"
+    );
 }
 
 #[test]
@@ -2254,7 +2462,13 @@ fn tombstoned_notes_do_not_block_note_type_removal_and_validate_accepts_result()
 
     assert!(!resolved.note_types.contains_key(&sid("note-type.country")));
     assert!(resolved.notes.contains_key(&sid("note.finland")));
-    assert!(resolved.tombstones.contains(&sid("note.finland")));
+    assert!(
+        resolved
+            .tombstones
+            .contains_address(&TombstoneAddress::Note {
+                note_id: sid("note.finland"),
+            })
+    );
     resolved
         .validate()
         .expect("tombstoned notes may retain a now-missing note type");
@@ -2659,6 +2873,22 @@ fn destructive_operation_matrix_covers_core_change_families() {
             .iter()
             .any(|field| field.id == sid("field.flag"))
     );
+    assert!(
+        field_removed
+            .tombstones
+            .contains_address(&TombstoneAddress::FieldDefinition {
+                note_type_id: sid("note-type.country"),
+                field_id: sid("field.flag"),
+            })
+    );
+    assert!(
+        field_removed
+            .tombstones
+            .contains_address(&TombstoneAddress::NoteField {
+                note_id: sid("note.finland"),
+                field_id: sid("field.flag"),
+            })
+    );
 
     let field_replaced = base
         .compose(&[field_definition_overlay(
@@ -2690,6 +2920,14 @@ fn destructive_operation_matrix_covers_core_change_families() {
         template_removed.note_types[&sid("note-type.country")]
             .card_templates
             .is_empty()
+    );
+    assert!(
+        template_removed
+            .tombstones
+            .contains_address(&TombstoneAddress::CardTemplate {
+                note_type_id: sid("note-type.country"),
+                template_id: sid("template.country-to-capital"),
+            })
     );
 
     let template_replaced = base
@@ -2723,6 +2961,13 @@ fn destructive_operation_matrix_covers_core_change_families() {
         )])
         .expect("media remove composes");
     assert!(!media_removed.media.contains_key(&sid("media.flag.finland")));
+    assert!(
+        media_removed
+            .tombstones
+            .contains_address(&TombstoneAddress::MediaReference {
+                media_id: sid("media.flag.finland"),
+            })
+    );
 
     let media_replaced = base
         .compose(&[media_overlay(
@@ -2750,6 +2995,11 @@ fn destructive_operation_matrix_covers_core_change_families() {
         )])
         .expect("string property remove composes");
     assert!(name_removed.name.is_empty());
+    assert!(
+        name_removed
+            .tombstones
+            .contains_address(&TombstoneAddress::DeckName)
+    );
 
     let name_replaced = base
         .compose(&[deck_name_overlay(
@@ -2768,6 +3018,13 @@ fn destructive_operation_matrix_covers_core_change_families() {
         )])
         .expect("variable remove composes");
     assert!(!variable_removed.variables.contains_key("deck.locale"));
+    assert!(
+        variable_removed
+            .tombstones
+            .contains_address(&TombstoneAddress::DeckVariable {
+                key: "deck.locale".to_owned(),
+            })
+    );
 
     let variable_replaced = base
         .compose(&[deck_variable_overlay(
@@ -3154,7 +3411,7 @@ fn ug_style_deck() -> CanonicalDeck {
                 sha256: "0123456789abcdef".to_owned(),
             },
         )]),
-        tombstones: BTreeSet::new(),
+        tombstones: Tombstones::default(),
         adapter_ids: deck_adapter_ids,
     }
 }

@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, FieldValue,
     MediaReference, MessageComponent, Note, NoteType, SemanticChangeKind, StableId,
-    StructuredMessage,
+    StructuredMessage, TombstoneAddress, TombstoneRecord, Tombstones,
 };
 
 #[test]
@@ -94,11 +94,18 @@ fn added_and_removed_notes_are_reported_by_stable_id_not_position() {
 fn tombstones_are_distinct_semantic_changes() {
     let left = ug_style_deck();
     let mut right = ug_style_deck();
-    right.tombstones.insert(sid("note.finland"));
+    right
+        .tombstones
+        .insert(TombstoneRecord::legacy(TombstoneAddress::Note {
+            note_id: sid("note.finland"),
+        }));
 
     let diff = left.semantic_diff(&right);
 
-    assert!(diff.has_change(SemanticChangeKind::Tombstoned, "tombstones.note.finland"));
+    assert!(diff.has_change(
+        SemanticChangeKind::Tombstoned,
+        "tombstones.notes.note.finland"
+    ));
 }
 
 fn ug_style_deck() -> CanonicalDeck {
@@ -164,7 +171,7 @@ fn ug_style_deck() -> CanonicalDeck {
                 sha256: "0123456789abcdef".to_owned(),
             },
         )]),
-        tombstones: BTreeSet::new(),
+        tombstones: Tombstones::default(),
         adapter_ids: AdapterIds::new(),
     }
 }

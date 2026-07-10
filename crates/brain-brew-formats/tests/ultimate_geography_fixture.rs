@@ -1221,7 +1221,13 @@ fn ug_regression_note_changes_flow_to_crowdanki_for_every_target() {
             .notes
             .iter()
             .rev()
-            .find(|(note_id, _)| !deck.tombstones.contains(note_id))
+            .find(|(note_id, _)| {
+                deck.tombstones
+                    .blocking(&brain_brew_core::TombstoneAddress::Note {
+                        note_id: (*note_id).clone(),
+                    })
+                    .is_none()
+            })
             .expect("UG fixture has at least one exported note");
         let note_index = baseline_json["notes"].as_array().unwrap().len() - 1;
         assert_eq!(

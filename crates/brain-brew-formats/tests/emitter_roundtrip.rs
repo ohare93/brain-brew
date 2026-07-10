@@ -4,7 +4,7 @@ use brain_brew_formats::canonical_yaml;
 use brain_brew_formats::core::{
     AdapterIds, CanonicalDeck, ChangeIntent, DeckChange, ExpectedBase, FieldChange,
     FieldDefinition, FieldValue, MediaReference, Note, NoteChange, NoteType, Overlay, OverlayKind,
-    PropertyChange, StableId, StructuredMessage,
+    PropertyChange, StableId, StructuredMessage, Tombstones,
 };
 use brain_brew_formats::lockfile::{
     FederationLock, LockedPackage, LockedPackageMetadata, LockedSource, OriginalSource,
@@ -275,7 +275,7 @@ fn canonical_deck_with_value(value: &str) -> CanonicalDeck {
         note_types: BTreeMap::from([(note_type.id.clone(), note_type)]),
         notes: BTreeMap::from([(note.id.clone(), note)]),
         media: media_map_with_value("media.png"),
-        tombstones: BTreeSet::new(),
+        tombstones: Tombstones::default(),
         adapter_ids: AdapterIds::new(),
     }
 }

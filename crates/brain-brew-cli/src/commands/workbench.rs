@@ -2291,6 +2291,7 @@ fn note_list_json_from_context(
         },
         "progress": progress,
         "metadata_progress": metadata_progress,
+        "tombstones": workbench_tombstones_json(context),
         "total": total,
         "limit": pagination.limit,
         "offset": pagination.offset,
@@ -2566,8 +2567,29 @@ fn note_pivot_json_from_context(
         },
         "progress": progress,
         "metadata_progress": metadata_progress,
+        "tombstones": workbench_tombstones_json(context),
         "notes": notes,
         "stale_entries": stale_entries_json(&context.report.entries),
+    })
+}
+
+fn workbench_tombstones_json(context: &SelectedTranslationContext) -> Value {
+    let records = |deck: &CanonicalDeck| {
+        deck.tombstones
+            .iter()
+            .map(|record| {
+                json!({
+                    "kind": record.address.kind(),
+                    "path": record.address.to_string(),
+                    "removed_by": record.provenance.as_ref().map(|value| value.overlay_id.to_string()),
+                    "operation": record.provenance.as_ref().map(|value| value.operation.as_str()),
+                })
+            })
+            .collect::<Vec<_>>()
+    };
+    json!({
+        "source": records(&context.source_deck),
+        "target": records(&context.target_deck),
     })
 }
 

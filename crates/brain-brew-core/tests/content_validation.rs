@@ -1,8 +1,8 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, ContentKind, FieldDefinition, MediaReference,
-    NoteType, StableId, validate_content_str, validate_deck_content,
+    NoteType, StableId, Tombstones, validate_content_str, validate_deck_content,
 };
 
 #[derive(Clone, Copy)]
@@ -195,7 +195,7 @@ fn deck_with_content(
         note_types,
         notes: BTreeMap::new(),
         media: BTreeMap::<StableId, MediaReference>::new(),
-        tombstones: BTreeSet::new(),
+        tombstones: Tombstones::default(),
         adapter_ids: AdapterIds::new(),
     }
 }

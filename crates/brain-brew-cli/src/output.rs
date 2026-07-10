@@ -1,7 +1,7 @@
 use std::env;
 use std::io::{self, IsTerminal};
 
-use brain_brew_core::{CanonicalDeck, SemanticChangeKind, SemanticDiff};
+use brain_brew_core::{CanonicalDeck, SemanticChangeKind, SemanticDiff, TombstoneAddress};
 use brain_brew_formats::manifest;
 use serde_json::{Value, json};
 
@@ -212,10 +212,49 @@ fn print_json_cli_error(error: &CliError) {
 pub(crate) fn deck_stats(deck: &CanonicalDeck) -> Vec<(&'static str, String)> {
     vec![
         ("deck", deck.name.clone()),
-        ("notes", deck.notes.len().to_string()),
-        ("note types", deck.note_types.len().to_string()),
+        (
+            "notes",
+            deck.notes
+                .keys()
+                .filter(|id| {
+                    deck.tombstones
+                        .blocking(&TombstoneAddress::Note {
+                            note_id: (*id).clone(),
+                        })
+                        .is_none()
+                })
+                .count()
+                .to_string(),
+        ),
+        (
+            "note types",
+            deck.note_types
+                .keys()
+                .filter(|id| {
+                    deck.tombstones
+                        .blocking(&TombstoneAddress::NoteType {
+                            note_type_id: (*id).clone(),
+                        })
+                        .is_none()
+                })
+                .count()
+                .to_string(),
+        ),
         ("card templates", card_template_count(deck).to_string()),
-        ("media references", deck.media.len().to_string()),
+        (
+            "media references",
+            deck.media
+                .keys()
+                .filter(|id| {
+                    deck.tombstones
+                        .blocking(&TombstoneAddress::MediaReference {
+                            media_id: (*id).clone(),
+                        })
+                        .is_none()
+                })
+                .count()
+                .to_string(),
+        ),
     ]
 }
 
@@ -275,7 +314,27 @@ fn print_value_lines(prefix: char, value: &str) {
 fn card_template_count(deck: &CanonicalDeck) -> usize {
     deck.note_types
         .values()
-        .map(|note_type| note_type.card_templates.len())
+        .filter(|note_type| {
+            deck.tombstones
+                .blocking(&TombstoneAddress::NoteType {
+                    note_type_id: note_type.id.clone(),
+                })
+                .is_none()
+        })
+        .map(|note_type| {
+            note_type
+                .card_templates
+                .iter()
+                .filter(|template| {
+                    deck.tombstones
+                        .blocking(&TombstoneAddress::CardTemplate {
+                            note_type_id: note_type.id.clone(),
+                            template_id: template.id.clone(),
+                        })
+                        .is_none()
+                })
+                .count()
+        })
         .sum()
 }
 

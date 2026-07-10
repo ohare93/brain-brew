@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use brain_brew_core::{CanonicalDeck, DeckPath, FieldValue};
+use brain_brew_core::{CanonicalDeck, DeckPath, FieldValue, StableId, TombstoneAddress};
 use sha2::{Digest, Sha256};
 
 use crate::safe_relative_path::SafeRelativePath;
@@ -71,6 +71,7 @@ pub fn validate_paths(deck: &CanonicalDeck) -> Result<(), MediaValidationReport>
     let errors = deck
         .media
         .values()
+        .filter(|media| active_media(deck, &media.id))
         .filter_map(|media| {
             SafeRelativePath::new(&media.path)
                 .err()
@@ -119,7 +120,11 @@ pub fn validate_hashes(
 ) -> Result<(), MediaValidationReport> {
     let mut errors = Vec::new();
 
-    for media in deck.media.values() {
+    for media in deck
+        .media
+        .values()
+        .filter(|media| active_media(deck, &media.id))
+    {
         if media.sha256.is_empty() {
             errors.push(MediaValidationError {
                 kind: MediaValidationErrorKind::EmptyHash,
@@ -177,6 +182,7 @@ pub fn reference_report(deck: &CanonicalDeck) -> MediaReferenceReport {
     let declared = deck
         .media
         .values()
+        .filter(|media| active_media(deck, &media.id))
         .map(|media| media.path.clone())
         .collect::<BTreeSet<_>>();
     let mut errors = declaration_errors(deck, MediaHashPolicy::Optional);
@@ -209,7 +215,11 @@ fn declaration_errors(
 ) -> Vec<MediaValidationError> {
     let mut errors = Vec::new();
     let mut paths = BTreeMap::<&str, (&str, &str)>::new();
-    for media in deck.media.values() {
+    for media in deck
+        .media
+        .values()
+        .filter(|media| active_media(deck, &media.id))
+    {
         if let Err(error) = SafeRelativePath::new(&media.path) {
             errors.push(MediaValidationError {
                 kind: MediaValidationErrorKind::UnsafePath,
@@ -263,9 +273,34 @@ struct CollectedReferences {
 
 fn collect_references(deck: &CanonicalDeck) -> CollectedReferences {
     let mut collected = CollectedReferences::default();
-    extract_from_text(&deck.description, "deck.description", &mut collected);
+    if deck
+        .tombstones
+        .blocking(&TombstoneAddress::DeckDescription)
+        .is_none()
+    {
+        extract_from_text(&deck.description, "deck.description", &mut collected);
+    }
     for (note_id, note) in &deck.notes {
+        if deck
+            .tombstones
+            .blocking(&TombstoneAddress::Note {
+                note_id: note_id.clone(),
+            })
+            .is_some()
+        {
+            continue;
+        }
         for (field_id, value) in &note.fields {
+            if deck
+                .tombstones
+                .blocking(&TombstoneAddress::NoteField {
+                    note_id: note_id.clone(),
+                    field_id: field_id.clone(),
+                })
+                .is_some()
+            {
+                continue;
+            }
             match value {
                 FieldValue::Scalar(value) => extract_from_text(
                     value,
@@ -278,7 +313,9 @@ fn collect_references(deck: &CanonicalDeck) -> CollectedReferences {
                 ),
                 FieldValue::Images(images) => {
                     for image in images {
-                        if let Some(media) = deck.media.get(&image.media_id) {
+                        if let Some(media) = deck.media.get(&image.media_id)
+                            && active_media(deck, &image.media_id)
+                        {
                             collected.paths.insert(media.path.clone());
                         }
                     }
@@ -288,12 +325,31 @@ fn collect_references(deck: &CanonicalDeck) -> CollectedReferences {
         }
     }
     for (note_type_id, note_type) in &deck.note_types {
+        if deck
+            .tombstones
+            .blocking(&TombstoneAddress::NoteType {
+                note_type_id: note_type_id.clone(),
+            })
+            .is_some()
+        {
+            continue;
+        }
         extract_from_text(
             &note_type.styling,
             &format!("note_types.{note_type_id}.styling"),
             &mut collected,
         );
         for template in &note_type.card_templates {
+            if deck
+                .tombstones
+                .blocking(&TombstoneAddress::CardTemplate {
+                    note_type_id: note_type_id.clone(),
+                    template_id: template.id.clone(),
+                })
+                .is_some()
+            {
+                continue;
+            }
             extract_from_text(
                 &template.question_format,
                 &format!(
@@ -318,7 +374,26 @@ fn collect_references(deck: &CanonicalDeck) -> CollectedReferences {
 fn structured_image_reference_errors(deck: &CanonicalDeck) -> Vec<MediaValidationError> {
     let mut errors = Vec::new();
     for (note_id, note) in &deck.notes {
+        if deck
+            .tombstones
+            .blocking(&TombstoneAddress::Note {
+                note_id: note_id.clone(),
+            })
+            .is_some()
+        {
+            continue;
+        }
         for (field_id, value) in &note.fields {
+            if deck
+                .tombstones
+                .blocking(&TombstoneAddress::NoteField {
+                    note_id: note_id.clone(),
+                    field_id: field_id.clone(),
+                })
+                .is_some()
+            {
+                continue;
+            }
             let FieldValue::Images(images) = value else {
                 continue;
             };
@@ -328,7 +403,8 @@ fn structured_image_reference_errors(deck: &CanonicalDeck) -> Vec<MediaValidatio
             }
             .to_string();
             for image in images {
-                if !deck.media.contains_key(&image.media_id) {
+                if !deck.media.contains_key(&image.media_id) || !active_media(deck, &image.media_id)
+                {
                     errors.push(MediaValidationError {
                         kind: MediaValidationErrorKind::UnknownMediaId,
                         path: field_path.clone(),
@@ -342,6 +418,14 @@ fn structured_image_reference_errors(deck: &CanonicalDeck) -> Vec<MediaValidatio
         }
     }
     errors
+}
+
+fn active_media(deck: &CanonicalDeck, media_id: &StableId) -> bool {
+    deck.tombstones
+        .blocking(&TombstoneAddress::MediaReference {
+            media_id: media_id.clone(),
+        })
+        .is_none()
 }
 
 /// Validate that every used media path is declared.

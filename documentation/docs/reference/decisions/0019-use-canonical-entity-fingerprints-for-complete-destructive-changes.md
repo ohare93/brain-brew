@@ -41,4 +41,4 @@ Canonical YAML rejects legacy `expected_base: entity_present` with migration gui
 - Changing canonical bytes requires a new schema version; existing v1 vectors remain fixed.
 - Maintainers regenerate affected overlays from the intended exact base.
 - Complete note and note-type bodies are valid for `replace`/`override` only with the matching fingerprint; `merge` remains sparse authoring except complete field/template/media compatibility paths, which are fingerprint-protected.
-- Typed/path-addressed tombstones remain a separate correctness task; this decision protects removal preconditions but does not redesign tombstone storage.
+- ADR-020 now defines typed/path-addressed tombstone storage; this decision remains responsible for checking the exact entity state before the removal record is created.

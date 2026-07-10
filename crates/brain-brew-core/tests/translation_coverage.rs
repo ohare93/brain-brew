@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldValue, MessageComponent, Note,
-    NoteType, Overlay, OverlayKind, StableId, StaleTranslation, StructuredMessage,
+    NoteType, Overlay, OverlayKind, StableId, StaleTranslation, StructuredMessage, Tombstones,
     TranslationCoverageCategory, TranslationDictionary,
 };
 
@@ -164,7 +164,7 @@ fn structured_message_deck() -> CanonicalDeck {
         note_types: BTreeMap::from([(note_type.id.clone(), note_type)]),
         notes: BTreeMap::from([(note.id.clone(), note)]),
         media: BTreeMap::new(),
-        tombstones: BTreeSet::new(),
+        tombstones: Tombstones::default(),
         adapter_ids: AdapterIds::new(),
     }
 }

@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, FieldValue,
-    MediaReference, Note, NoteType, StableId, ValidationErrorKind,
+    MediaReference, Note, NoteType, StableId, Tombstones, ValidationErrorKind,
 };
 
 #[test]
@@ -330,7 +330,7 @@ fn ug_style_deck() -> CanonicalDeck {
                 sha256: "0123456789abcdef".to_owned(),
             },
         )]),
-        tombstones: BTreeSet::new(),
+        tombstones: Tombstones::default(),
         adapter_ids: AdapterIds::new(),
     }
 }

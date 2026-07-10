@@ -45,16 +45,37 @@ fn translation_coverage_report(
         source_paths: BTreeMap::new(),
     };
 
-    builder.record_string(&deck.name, DeckPath::DeckName.to_string(), None);
-    builder.record_string(
-        &deck.description,
-        DeckPath::DeckDescription.to_string(),
-        None,
-    );
+    if deck
+        .tombstones
+        .blocking(&TombstoneAddress::DeckName)
+        .is_none()
+    {
+        builder.record_string(&deck.name, DeckPath::DeckName.to_string(), None);
+    }
+    if deck
+        .tombstones
+        .blocking(&TombstoneAddress::DeckDescription)
+        .is_none()
+    {
+        builder.record_string(
+            &deck.description,
+            DeckPath::DeckDescription.to_string(),
+            None,
+        );
+    }
     builder.record_variables(&deck.variables, &DeckPath::DeckVariables.to_string());
     builder.record_adapter_ids(&deck.adapter_ids, &DeckPath::DeckAdapterIds.to_string());
 
     for (note_type_id, note_type) in &deck.note_types {
+        if deck
+            .tombstones
+            .blocking(&TombstoneAddress::NoteType {
+                note_type_id: note_type_id.clone(),
+            })
+            .is_some()
+        {
+            continue;
+        }
         builder.record_string(
             &note_type.name,
             DeckPath::NoteTypeName {
@@ -71,6 +92,16 @@ fn translation_coverage_report(
             .to_string(),
         );
         for field in &note_type.fields {
+            if deck
+                .tombstones
+                .blocking(&TombstoneAddress::FieldDefinition {
+                    note_type_id: note_type_id.clone(),
+                    field_id: field.id.clone(),
+                })
+                .is_some()
+            {
+                continue;
+            }
             builder.record_string(
                 &field.name,
                 DeckPath::NoteTypeFieldName {
@@ -82,6 +113,16 @@ fn translation_coverage_report(
             );
         }
         for template in &note_type.card_templates {
+            if deck
+                .tombstones
+                .blocking(&TombstoneAddress::CardTemplate {
+                    note_type_id: note_type_id.clone(),
+                    template_id: template.id.clone(),
+                })
+                .is_some()
+            {
+                continue;
+            }
             builder.record_string(
                 &template.name,
                 DeckPath::NoteTypeCardTemplateName {
@@ -118,6 +159,15 @@ fn translation_coverage_report(
     }
 
     for (note_id, note) in &deck.notes {
+        if deck
+            .tombstones
+            .blocking(&TombstoneAddress::Note {
+                note_id: note_id.clone(),
+            })
+            .is_some()
+        {
+            continue;
+        }
         builder.record_variables(
             &note.variables,
             &DeckPath::NoteVariables {
@@ -126,6 +176,16 @@ fn translation_coverage_report(
             .to_string(),
         );
         for (field_id, value) in &note.fields {
+            if deck
+                .tombstones
+                .blocking(&TombstoneAddress::NoteField {
+                    note_id: note_id.clone(),
+                    field_id: field_id.clone(),
+                })
+                .is_some()
+            {
+                continue;
+            }
             let path = DeckPath::NoteField {
                 note_id: note_id.clone(),
                 field_id: field_id.clone(),
@@ -1132,9 +1192,11 @@ pub(crate) fn apply_translation_dictionary(
     let mut source_paths = BTreeMap::<String, BTreeSet<String>>::new();
 
     {
+        let tombstones = resolved.tombstones.clone();
         let mut context = TranslationApplyContext {
             overlay,
             translations,
+            tombstones: &tombstones,
             seen_direct: &mut seen_direct,
             seen_contextual: &mut seen_contextual,
             seen_target_adaptations: &mut seen_target_adaptations,
@@ -1144,12 +1206,19 @@ pub(crate) fn apply_translation_dictionary(
             changed_paths,
             errors,
         };
-        context.translate_string(&mut resolved.name, DeckPath::DeckName.to_string(), None);
-        context.translate_string(
-            &mut resolved.description,
-            DeckPath::DeckDescription.to_string(),
-            None,
-        );
+        if tombstones.blocking(&TombstoneAddress::DeckName).is_none() {
+            context.translate_string(&mut resolved.name, DeckPath::DeckName.to_string(), None);
+        }
+        if tombstones
+            .blocking(&TombstoneAddress::DeckDescription)
+            .is_none()
+        {
+            context.translate_string(
+                &mut resolved.description,
+                DeckPath::DeckDescription.to_string(),
+                None,
+            );
+        }
         context.translate_variables(
             &mut resolved.variables,
             &DeckPath::DeckVariables.to_string(),
@@ -1160,6 +1229,14 @@ pub(crate) fn apply_translation_dictionary(
         );
 
         for (note_type_id, note_type) in &mut resolved.note_types {
+            if tombstones
+                .blocking(&TombstoneAddress::NoteType {
+                    note_type_id: note_type_id.clone(),
+                })
+                .is_some()
+            {
+                continue;
+            }
             context.translate_string(
                 &mut note_type.name,
                 DeckPath::NoteTypeName {
@@ -1176,6 +1253,15 @@ pub(crate) fn apply_translation_dictionary(
                 .to_string(),
             );
             for field in &mut note_type.fields {
+                if tombstones
+                    .blocking(&TombstoneAddress::FieldDefinition {
+                        note_type_id: note_type_id.clone(),
+                        field_id: field.id.clone(),
+                    })
+                    .is_some()
+                {
+                    continue;
+                }
                 context.translate_string(
                     &mut field.name,
                     DeckPath::NoteTypeFieldName {
@@ -1187,6 +1273,15 @@ pub(crate) fn apply_translation_dictionary(
                 );
             }
             for template in &mut note_type.card_templates {
+                if tombstones
+                    .blocking(&TombstoneAddress::CardTemplate {
+                        note_type_id: note_type_id.clone(),
+                        template_id: template.id.clone(),
+                    })
+                    .is_some()
+                {
+                    continue;
+                }
                 context.translate_string(
                     &mut template.name,
                     DeckPath::NoteTypeCardTemplateName {
@@ -1223,6 +1318,14 @@ pub(crate) fn apply_translation_dictionary(
         }
 
         for (note_id, note) in &mut resolved.notes {
+            if tombstones
+                .blocking(&TombstoneAddress::Note {
+                    note_id: note_id.clone(),
+                })
+                .is_some()
+            {
+                continue;
+            }
             context.translate_variables(
                 &mut note.variables,
                 &DeckPath::NoteVariables {
@@ -1232,6 +1335,15 @@ pub(crate) fn apply_translation_dictionary(
             );
             let field_ids = note.fields.keys().cloned().collect::<Vec<_>>();
             for field_id in field_ids {
+                if tombstones
+                    .blocking(&TombstoneAddress::NoteField {
+                        note_id: note_id.clone(),
+                        field_id: field_id.clone(),
+                    })
+                    .is_some()
+                {
+                    continue;
+                }
                 let path = DeckPath::NoteField {
                     note_id: note_id.clone(),
                     field_id: field_id.clone(),
@@ -1367,6 +1479,7 @@ pub(crate) fn apply_translation_dictionary(
 struct TranslationApplyContext<'a, 'b> {
     overlay: &'a Overlay,
     translations: &'a TranslationDictionary,
+    tombstones: &'a Tombstones,
     seen_direct: &'b mut BTreeSet<String>,
     seen_contextual: &'b mut BTreeSet<(String, String)>,
     seen_target_adaptations: &'b mut BTreeSet<String>,
@@ -1467,6 +1580,11 @@ impl TranslationApplyContext<'_, '_> {
         include_variable: bool,
         record_missing: bool,
     ) {
+        let tombstone = path
+            .parse::<DeckPath>()
+            .ok()
+            .and_then(|deck_path| TombstoneAddress::try_from(deck_path).ok())
+            .and_then(|address| self.tombstones.blocking(&address));
         let outcome = resolve_translation(
             self.translations,
             value,
@@ -1478,6 +1596,40 @@ impl TranslationApplyContext<'_, '_> {
                 include_ignored: true,
             },
         );
+
+        let translated_value = match &outcome {
+            TranslationOutcome::TargetAdaptation { adaptation } => Some(adaptation.target.as_str()),
+            TranslationOutcome::Variable { translated }
+            | TranslationOutcome::Contextual { translated, .. }
+            | TranslationOutcome::Direct { translated } => Some(*translated),
+            TranslationOutcome::Stale { record, .. } => Some(record.target.as_str()),
+            TranslationOutcome::Empty
+            | TranslationOutcome::Ignored
+            | TranslationOutcome::NoChange
+            | TranslationOutcome::Missing => None,
+        };
+        if let Some(record) = tombstone
+            && translated_value.is_some_and(|translated| translated != value)
+        {
+            let removal = record
+                .provenance
+                .as_ref()
+                .map(|provenance| format!(" by overlay {}", provenance.overlay_id))
+                .unwrap_or_else(|| " in legacy canonical source".to_owned());
+            let mut error = ComposeError::new(
+                ComposeErrorKind::TombstonedAddressReuse,
+                path.clone(),
+                format!(
+                    "translation overlay {} cannot replace {path}; typed address {} was removed{removal}",
+                    self.overlay.id, record.address
+                ),
+            );
+            error.intent = Some(ChangeIntent::Replace);
+            error.overlay_id = Some(self.overlay.id.clone());
+            error.original_removal = Some(record.clone());
+            self.errors.push(error);
+            return;
+        }
 
         match &outcome {
             TranslationOutcome::TargetAdaptation { adaptation } => {
