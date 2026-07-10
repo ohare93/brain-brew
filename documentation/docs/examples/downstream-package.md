@@ -14,6 +14,9 @@ This example creates a package that extends Ultimate Geography with an America o
 package:
   id: anki-geo.america
   version: 0.1.0
+  base_package: anki-geo.ultimate-geography
+  compatible_base_versions:
+    - '>=0.1.0, <0.2.0'
   depends_on:
     - anki-geo.ultimate-geography@0.1.0
 base: deck.yaml
@@ -27,6 +30,8 @@ targets:
     overlays:
       - overlay.extension.america
 ```
+
+The exact dependency pin selects a reproducible package identity. The compatibility range separately declares which base releases this extension supports; commas are AND and separate list items are OR. See [Packages and lock files](../authoring/packages-locking.md#version-and-compatibility-semantics).
 
 ## Local development with includes
 

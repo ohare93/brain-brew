@@ -218,6 +218,7 @@ version = "1.0.0-alpha.1"
 dependencies = [
  "base64",
  "brain-brew-core",
+ "semver",
  "serde",
  "serde_json",
  "serde_yaml",

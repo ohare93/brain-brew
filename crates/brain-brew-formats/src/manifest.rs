@@ -3,6 +3,7 @@ use std::fmt;
 
 use serde::Deserialize;
 
+use crate::package_semver;
 use crate::yaml_scalar::{
     is_emittable_key as is_emittable_yaml_key, key as yaml_key, scalar as yaml_scalar,
 };
@@ -45,6 +46,22 @@ impl FederatedDeckManifest {
     fn validate_language_catalog(&self) -> Result<(), ManifestError> {
         self.validate_emittable_yaml_keys()?;
         self.validate_translation_profile()?;
+        if let Some(package) = &self.package {
+            validate_package_metadata(package)?;
+        }
+        for (id, overlay) in &self.overlays {
+            if let Some(kind) = &overlay.kind
+                && !matches!(
+                    kind.as_str(),
+                    "translation" | "extension" | "patch" | "personal"
+                )
+            {
+                return Err(ManifestError::InvalidOverlayCatalogKind {
+                    id: id.clone(),
+                    kind: kind.clone(),
+                });
+            }
+        }
 
         for (code, language) in &self.languages {
             if language.source && !language.translation_overlays.is_empty() {
@@ -161,6 +178,7 @@ impl FederatedDeckManifest {
 pub struct PackageMetadata {
     pub id: String,
     pub version: String,
+    pub base_package: Option<String>,
     pub compatible_base_versions: Vec<String>,
     pub depends_on: Vec<String>,
 }
@@ -292,6 +310,9 @@ pub fn to_string(manifest: &FederatedDeckManifest) -> Result<String, ManifestErr
         out.push_str("package:\n");
         out.push_str(&format!("  id: {}\n", yaml_scalar(&package.id)));
         out.push_str(&format!("  version: {}\n", yaml_scalar(&package.version)));
+        if let Some(base_package) = &package.base_package {
+            out.push_str(&format!("  base_package: {}\n", yaml_scalar(base_package)));
+        }
         if !package.compatible_base_versions.is_empty() {
             out.push_str("  compatible_base_versions:\n");
             for version in &package.compatible_base_versions {
@@ -506,6 +527,120 @@ where
     Ok(())
 }
 
+fn validate_package_metadata(package: &PackageMetadata) -> Result<(), ManifestError> {
+    package_semver::validate_package_id(&package.id)
+        .map_err(|error| invalid_package_field("id", &package.id, error.to_string()))?;
+    let canonical_version = package_semver::canonical_version(&package.version)
+        .map_err(|error| invalid_package_field("version", &package.version, error.to_string()))?;
+    if canonical_version != package.version {
+        return Err(invalid_package_field(
+            "version",
+            &package.version,
+            format!("canonical form is {canonical_version:?}"),
+        ));
+    }
+
+    let mut dependencies = BTreeMap::new();
+    for (index, dependency) in package.depends_on.iter().enumerate() {
+        let parsed = package_semver::parse_exact_dependency(dependency).map_err(|error| {
+            invalid_package_field(
+                format!("depends_on[{index}]"),
+                dependency,
+                error.to_string(),
+            )
+        })?;
+        let canonical = format!("{}@{}", parsed.id, parsed.version);
+        if canonical != *dependency {
+            return Err(invalid_package_field(
+                format!("depends_on[{index}]"),
+                dependency,
+                format!("canonical form is {canonical:?}"),
+            ));
+        }
+        if dependencies
+            .insert(parsed.id.clone(), parsed.version)
+            .is_some()
+        {
+            return Err(invalid_package_field(
+                format!("depends_on[{index}]"),
+                dependency,
+                format!(
+                    "dependency package {:?} is declared more than once",
+                    parsed.id
+                ),
+            ));
+        }
+    }
+
+    match (
+        &package.base_package,
+        package.compatible_base_versions.is_empty(),
+    ) {
+        (None, true) => {}
+        (None, false) => {
+            return Err(invalid_package_field(
+                "base_package",
+                "",
+                "base_package is required when compatible_base_versions is declared",
+            ));
+        }
+        (Some(base), true) => {
+            return Err(invalid_package_field(
+                "base_package",
+                base,
+                "compatible_base_versions must contain at least one requirement",
+            ));
+        }
+        (Some(base), false) => {
+            package_semver::validate_package_id(base)
+                .map_err(|error| invalid_package_field("base_package", base, error.to_string()))?;
+            if base == &package.id {
+                return Err(invalid_package_field(
+                    "base_package",
+                    base,
+                    "a package cannot use itself as its base package",
+                ));
+            }
+            if !dependencies.contains_key(base) {
+                return Err(invalid_package_field(
+                    "base_package",
+                    base,
+                    "base package must also have an exact depends_on pin",
+                ));
+            }
+        }
+    }
+    for (index, requirement) in package.compatible_base_versions.iter().enumerate() {
+        let canonical = package_semver::canonical_requirement(requirement).map_err(|error| {
+            invalid_package_field(
+                format!("compatible_base_versions[{index}]"),
+                requirement,
+                error.to_string(),
+            )
+        })?;
+        if canonical != *requirement {
+            return Err(invalid_package_field(
+                format!("compatible_base_versions[{index}]"),
+                requirement,
+                format!("canonical form is {canonical:?}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn invalid_package_field(
+    field: impl Into<String>,
+    value: impl AsRef<str>,
+    reason: impl Into<String>,
+) -> ManifestError {
+    ManifestError::InvalidPackageMetadata {
+        field: field.into(),
+        value: value.as_ref().to_owned(),
+        reason: reason.into(),
+    }
+}
+
 fn parse_translation_coverage_policy(
     value: &str,
 ) -> Result<TranslationCoveragePolicy, ManifestError> {
@@ -551,6 +686,15 @@ pub enum ManifestError {
     UnemittableYamlKey {
         section: &'static str,
         key: String,
+    },
+    InvalidPackageMetadata {
+        field: String,
+        value: String,
+        reason: String,
+    },
+    InvalidOverlayCatalogKind {
+        id: String,
+        kind: String,
     },
 }
 
@@ -622,6 +766,18 @@ impl fmt::Display for ManifestError {
             Self::UnemittableYamlKey { section, key } => {
                 write!(f, "manifest {section} key {key:?} cannot be emitted safely")
             }
+            Self::InvalidPackageMetadata {
+                field,
+                value,
+                reason,
+            } => write!(
+                f,
+                "invalid manifest package {field} value {value:?}: {reason}"
+            ),
+            Self::InvalidOverlayCatalogKind { id, kind } => write!(
+                f,
+                "invalid manifest overlays.{id}.kind value {kind:?}; expected translation, extension, patch, or personal"
+            ),
         }
     }
 }
@@ -649,7 +805,10 @@ struct ManifestYaml {
 impl ManifestYaml {
     fn into_manifest(self) -> Result<FederatedDeckManifest, ManifestError> {
         let manifest = FederatedDeckManifest {
-            package: self.package.map(PackageMetadataYaml::into_metadata),
+            package: self
+                .package
+                .map(PackageMetadataYaml::into_metadata)
+                .transpose()?,
             base: self.base,
             include_roots: self.include_roots,
             overlays: self
@@ -680,19 +839,58 @@ struct PackageMetadataYaml {
     id: String,
     version: String,
     #[serde(default)]
+    base_package: Option<String>,
+    #[serde(default)]
     compatible_base_versions: Vec<String>,
     #[serde(default)]
     depends_on: Vec<String>,
 }
 
 impl PackageMetadataYaml {
-    fn into_metadata(self) -> PackageMetadata {
-        PackageMetadata {
+    fn into_metadata(self) -> Result<PackageMetadata, ManifestError> {
+        package_semver::validate_package_id(&self.id)
+            .map_err(|error| invalid_package_field("id", &self.id, error.to_string()))?;
+        let version = package_semver::canonical_version(&self.version)
+            .map_err(|error| invalid_package_field("version", &self.version, error.to_string()))?;
+        let depends_on = self
+            .depends_on
+            .into_iter()
+            .enumerate()
+            .map(|(index, dependency)| {
+                let parsed =
+                    package_semver::parse_exact_dependency(&dependency).map_err(|error| {
+                        invalid_package_field(
+                            format!("depends_on[{index}]"),
+                            &dependency,
+                            error.to_string(),
+                        )
+                    })?;
+                Ok(format!("{}@{}", parsed.id, parsed.version))
+            })
+            .collect::<Result<Vec<_>, ManifestError>>()?;
+        let compatible_base_versions = self
+            .compatible_base_versions
+            .into_iter()
+            .enumerate()
+            .map(|(index, requirement)| {
+                package_semver::canonical_requirement(&requirement).map_err(|error| {
+                    invalid_package_field(
+                        format!("compatible_base_versions[{index}]"),
+                        &requirement,
+                        error.to_string(),
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>, ManifestError>>()?;
+        let metadata = PackageMetadata {
             id: self.id,
-            version: self.version,
-            compatible_base_versions: self.compatible_base_versions,
-            depends_on: self.depends_on,
-        }
+            version,
+            base_package: self.base_package,
+            compatible_base_versions,
+            depends_on,
+        };
+        validate_package_metadata(&metadata)?;
+        Ok(metadata)
     }
 }
 

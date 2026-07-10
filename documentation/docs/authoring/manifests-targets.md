@@ -53,7 +53,7 @@ overlays:
     kind: extension
 ```
 
-The manifest `kind` should match the overlay file's `kind`.
+The catalog key must equal the decoded overlay file's `id`, and a declared manifest `kind` must equal the file's `kind`. Registry loading decodes every authorized catalog source before planning any target. Unknown kinds, aliases that give one source conflicting identities, and package-qualified references whose owning catalog/source disagrees fail closed.
 
 ## Overlay dependencies
 
@@ -189,9 +189,17 @@ targets:
 
 > **Experimental:** Lock/package federation works today, but the `brainbrew.lock` format and `brainbrew lock` CLI surface may change incompatibly in any release until a real downstream consumer stabilizes them.
 
-A downstream package can extend an upstream target:
+A downstream package declares an exact dependency pin plus an explicit compatible base range, then extends an upstream target. See [Packages and lock files](packages-locking.md#version-and-compatibility-semantics) for canonical SemVer, OR/AND, and prerelease behavior.
 
 ```yaml
+package:
+  id: anki-geo.america
+  version: 0.1.0
+  base_package: anki-geo.ultimate-geography
+  compatible_base_versions:
+    - '>=0.1.0, <0.2.0'
+  depends_on:
+    - anki-geo.ultimate-geography@0.1.0
 targets:
   en-america:
     extends: anki-geo.ultimate-geography:en-standard

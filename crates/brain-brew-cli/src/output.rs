@@ -87,6 +87,7 @@ pub(crate) fn package_json(package: &manifest::PackageMetadata) -> serde_json::V
     json!({
         "id": package.id,
         "version": package.version,
+        "base_package": package.base_package,
         "compatible_base_versions": package.compatible_base_versions,
         "depends_on": package.depends_on,
     })

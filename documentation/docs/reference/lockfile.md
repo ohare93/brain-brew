@@ -28,7 +28,7 @@ packages:
       nar_hash: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 ```
 
-Every `original` and `locked` source is a tagged source-specific type. Unknown fields and fields belonging to another source type are rejected.
+Every `original` and `locked` source is a tagged source-specific type. Unknown fields and fields belonging to another source type are rejected. The package map key is a valid package ID and `package.version` is the canonical full Semantic Version read from the locked manifest; malformed or shortened versions are rejected during lock decode/verification.
 
 ## Locked source variants
 

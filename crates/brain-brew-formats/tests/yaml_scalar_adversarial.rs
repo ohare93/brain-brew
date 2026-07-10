@@ -194,10 +194,11 @@ fn canonical_deck_with_value(value: &str) -> CanonicalDeck {
 fn manifest_with_value(value: &str) -> FederatedDeckManifest {
     FederatedDeckManifest {
         package: Some(PackageMetadata {
-            id: value.to_owned(),
-            version: value.to_owned(),
-            compatible_base_versions: vec![value.to_owned()],
-            depends_on: vec![value.to_owned()],
+            id: "package.hostile-scalars".to_owned(),
+            version: "1.0.0".to_owned(),
+            base_package: None,
+            compatible_base_versions: Vec::new(),
+            depends_on: Vec::new(),
         }),
         base: value.to_owned(),
         include_roots: vec![value.to_owned()],
@@ -205,7 +206,7 @@ fn manifest_with_value(value: &str) -> FederatedDeckManifest {
             "overlay.hostile".to_owned(),
             OverlayManifestEntry {
                 file: value.to_owned(),
-                kind: Some(value.to_owned()),
+                kind: Some("translation".to_owned()),
                 depends_on: vec![value.to_owned()],
             },
         )]),
@@ -247,7 +248,7 @@ fn lockfile_with_value(value: &str) -> FederationLock {
             LockedPackage {
                 manifest: value.to_owned(),
                 package: LockedPackageMetadata {
-                    version: value.to_owned(),
+                    version: "1.0.0".to_owned(),
                 },
                 original: OriginalSource::Path {
                     path: value.to_owned(),

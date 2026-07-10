@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use brain_brew_formats::manifest;
+use brain_brew_formats::package_semver;
 
 use crate::package_tree;
 
@@ -24,8 +25,8 @@ pub(crate) fn validate_package_dependencies(
         let Some(package) = &manifest.package else {
             continue;
         };
-        if let Some(previous) = by_id.insert(package.id.clone(), (*path, package.version.clone())) {
-            let conflict = if previous.1 == package.version {
+        if let Some(previous) = by_id.insert(package.id.clone(), (*path, package)) {
+            let conflict = if previous.1.version == package.version {
                 "duplicate package identity"
             } else {
                 "conflicting package versions"
@@ -33,7 +34,7 @@ pub(crate) fn validate_package_dependencies(
             return Err(format!(
                 "{conflict} {}: {} in {} and {} in {}",
                 package.id,
-                previous.1,
+                previous.1.version,
                 previous.0.display(),
                 package.version,
                 path.display()
@@ -41,40 +42,84 @@ pub(crate) fn validate_package_dependencies(
         }
     }
 
-    let mut graph = BTreeMap::<String, Vec<String>>::new();
+    let mut graph = BTreeMap::<String, Vec<DependencyEdge>>::new();
     for (path, manifest) in packages {
         let Some(package) = &manifest.package else {
             continue;
         };
         let mut dependencies = Vec::new();
-        for dependency in &package.depends_on {
-            let (dependency_id, expected_version) =
-                parse_dependency(dependency).map_err(|reason| {
-                    format!(
-                        "invalid package dependency {dependency:?} declared by {} in {}: {reason}",
-                        package.id,
-                        path.display()
-                    )
-                })?;
-            let Some((dependency_path, actual_version)) = by_id.get(dependency_id) else {
-                return Err(format!(
-                    "package dependency {dependency_id} required by {} in {} was not found",
+        for declaration in &package.depends_on {
+            let dependency = package_semver::parse_exact_dependency(declaration).map_err(|reason| {
+                format!(
+                    "invalid package dependency {declaration:?} declared by {}@{} in {}: {reason}",
                     package.id,
+                    package.version,
+                    path.display()
+                )
+            })?;
+            let Some((dependency_path, dependency_package)) = by_id.get(&dependency.id) else {
+                return Err(format!(
+                    "package dependency {}@{} required by {}@{} in {} was not found",
+                    dependency.id,
+                    dependency.version,
+                    package.id,
+                    package.version,
                     path.display()
                 ));
             };
-            if let Some(expected_version) = expected_version
-                && actual_version != expected_version
-            {
+            if dependency_package.version != dependency.version {
                 return Err(format!(
-                    "package dependency {dependency_id}@{expected_version} required by {} in {} resolved to version {} in {}",
+                    "package dependency {}@{} required by {}@{} in {} resolved to version {} in {}",
+                    dependency.id,
+                    dependency.version,
                     package.id,
+                    package.version,
                     path.display(),
-                    actual_version,
+                    dependency_package.version,
                     dependency_path.display()
                 ));
             }
-            dependencies.push(dependency_id.to_owned());
+            dependencies.push(DependencyEdge {
+                target: dependency.id,
+                declaration: declaration.clone(),
+            });
+        }
+
+        if let Some(base_package) = &package.base_package {
+            let Some((base_path, base)) = by_id.get(base_package) else {
+                // This should also be diagnosed by the exact dependency pass,
+                // but retain a specific fail-closed guard for constructed data.
+                return Err(format!(
+                    "base package {base_package} required by {}@{} in {} was not found",
+                    package.id,
+                    package.version,
+                    path.display()
+                ));
+            };
+            let compatible = package_semver::requirements_match(
+                &package.compatible_base_versions,
+                &base.version,
+            )
+            .map_err(|error| {
+                format!(
+                    "invalid compatible_base_versions declared by {}@{} in {}: {error}",
+                    package.id,
+                    package.version,
+                    path.display()
+                )
+            })?;
+            if !compatible {
+                return Err(format!(
+                    "base package {}@{} in {} is incompatible with {}@{} in {}; compatible_base_versions requires one of [{}]",
+                    base.id,
+                    base.version,
+                    base_path.display(),
+                    package.id,
+                    package.version,
+                    path.display(),
+                    package.compatible_base_versions.join(" OR ")
+                ));
+            }
         }
         graph.insert(package.id.clone(), dependencies);
     }
@@ -82,28 +127,61 @@ pub(crate) fn validate_package_dependencies(
     let mut complete = BTreeSet::new();
     let mut active = Vec::new();
     for package in graph.keys() {
-        visit_package(package, &graph, &mut complete, &mut active)?;
+        visit_package(package, &graph, &by_id, &mut complete, &mut active)?;
     }
     Ok(())
 }
 
+#[derive(Clone)]
+struct DependencyEdge {
+    target: String,
+    declaration: String,
+}
+
 fn visit_package(
     package: &str,
-    graph: &BTreeMap<String, Vec<String>>,
+    graph: &BTreeMap<String, Vec<DependencyEdge>>,
+    packages: &BTreeMap<String, (&PathBuf, &manifest::PackageMetadata)>,
     complete: &mut BTreeSet<String>,
-    active: &mut Vec<String>,
+    active: &mut Vec<(String, Option<String>)>,
 ) -> Result<(), String> {
     if complete.contains(package) {
         return Ok(());
     }
-    if let Some(index) = active.iter().position(|candidate| candidate == package) {
-        let mut cycle = active[index..].to_vec();
-        cycle.push(package.to_owned());
-        return Err(format!("package dependency cycle: {}", cycle.join(" -> ")));
+    if let Some(index) = active
+        .iter()
+        .position(|(candidate, _)| candidate == package)
+    {
+        let cycle = &active[index..];
+        let mut trace = String::from("package dependency cycle:");
+        for (id, incoming) in cycle {
+            let (path, metadata) = packages[id];
+            trace.push_str(&format!(
+                "\n  {}@{} ({})",
+                metadata.id,
+                metadata.version,
+                path.display()
+            ));
+            let edge = incoming
+                .as_ref()
+                .expect("a dependency cycle has an outgoing edge");
+            trace.push_str(&format!(" --depends_on {edge}-->"));
+        }
+        let (path, metadata) = packages[package];
+        trace.push_str(&format!(
+            "\n  {}@{} ({})",
+            metadata.id,
+            metadata.version,
+            path.display()
+        ));
+        return Err(trace);
     }
-    active.push(package.to_owned());
+    active.push((package.to_owned(), None));
     for dependency in graph.get(package).into_iter().flatten() {
-        visit_package(dependency, graph, complete, active)?;
+        if let Some(last) = active.last_mut() {
+            last.1 = Some(dependency.declaration.clone());
+        }
+        visit_package(&dependency.target, graph, packages, complete, active)?;
     }
     active.pop();
     complete.insert(package.to_owned());
@@ -169,40 +247,4 @@ fn collect_manifests(
         }
     }
     Ok(())
-}
-
-fn parse_dependency(dependency: &str) -> Result<(&str, Option<&str>), &'static str> {
-    if dependency.is_empty() {
-        return Err("dependency ID is empty");
-    }
-    let (id, version) = dependency
-        .split_once('@')
-        .map_or((dependency, None), |(id, version)| (id, Some(version)));
-    if id.is_empty() {
-        return Err("dependency ID is empty");
-    }
-    if id.chars().any(char::is_whitespace) {
-        return Err("dependency ID contains whitespace");
-    }
-    if dependency.matches('@').count() > 1 {
-        return Err("dependency contains more than one @ separator");
-    }
-    if version.is_some_and(str::is_empty) {
-        return Err("dependency version is empty");
-    }
-    Ok((id, version))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_dependency;
-
-    #[test]
-    fn dependency_parser_rejects_ambiguous_specs() {
-        for invalid in ["", "@1", "pkg@", "pkg@1@2", "bad id@1"] {
-            assert!(parse_dependency(invalid).is_err(), "{invalid}");
-        }
-        assert_eq!(parse_dependency("pkg").unwrap(), ("pkg", None));
-        assert_eq!(parse_dependency("pkg@1").unwrap(), ("pkg", Some("1")));
-    }
 }

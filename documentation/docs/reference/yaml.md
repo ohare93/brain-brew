@@ -227,8 +227,11 @@ Formatting preserves scalar `!include` directives; composition materializes thei
 
 ```yaml
 package:
-  id: example.capitals
+  id: example.capitals-extension
   version: 0.1.0
+  base_package: upstream.package
+  compatible_base_versions:
+    - '>=0.1.0, <0.2.0'
   depends_on:
     - upstream.package@0.1.0
 base: deck.yaml
@@ -244,6 +247,10 @@ targets:
       - overlay.translation.de
     translation_coverage: strict # optional; lenient by default
 ```
+
+`package.version` and every exact dependency version are full Semantic Versions. `depends_on` requires `<package-id>@<SemVer>`; ranges are not accepted there. `base_package` and a non-empty `compatible_base_versions` list are declared together for extension/base compatibility, while base packages omit both. Each compatibility list item is an OR branch and comma-separated comparators inside an item are AND. Requirements are canonicalized and use the `semver` crate's prerelease matching behavior. See [Packages and lock files](../authoring/packages-locking.md#version-and-compatibility-semantics).
+
+Overlay catalog keys must equal decoded `overlay.id`; declared catalog kinds must equal decoded `overlay.kind` and be one of `translation`, `extension`, `patch`, or `personal`.
 
 ## Lock file
 

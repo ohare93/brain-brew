@@ -250,6 +250,7 @@ impl ManifestRegistry {
                 .map(|loaded| (&loaded.path, &loaded.manifest))
                 .collect::<Vec<_>>(),
         )?;
+        validate_overlay_catalogs(&manifests)?;
 
         let mut packages = BTreeMap::new();
         for (index, loaded) in manifests.iter().enumerate() {
@@ -399,8 +400,6 @@ impl ManifestRegistry {
             let document =
                 overlay_document_from_package(&file, &loaded.root, &loaded.include_roots)?;
             let overlay = document.resolved_overlay().clone();
-            // Retain the actual source kind. Catalog identity checking is
-            // deliberately deferred to the later federation policy task.
             let kind = overlay.kind;
             let qualified_id = self.qualified_overlay(
                 overlay_blueprint.manifest_index,
@@ -730,6 +729,76 @@ fn source_precedence(kind: RegistrySourceKind) -> u8 {
         RegistrySourceKind::ExplicitInclude => 1,
         RegistrySourceKind::PackageRoot => 2,
         RegistrySourceKind::SiblingLock => 3,
+    }
+}
+
+fn validate_overlay_catalogs(manifests: &[RegistryManifest]) -> Result<(), String> {
+    let mut source_identities = BTreeMap::<PathBuf, String>::new();
+    for loaded in manifests {
+        for (catalog_id, entry) in &loaded.manifest.overlays {
+            let field = format!("overlays.{catalog_id}.file");
+            let file = authorize_manifest_path(loaded, &field, &entry.file)?;
+            let qualified = loaded
+                .identity
+                .as_ref()
+                .map(|package| format!("{}:{catalog_id}", package.id))
+                .unwrap_or_else(|| catalog_id.clone());
+            let declared_identity = format!(
+                "{qualified} ({}) declared by {}",
+                entry.kind.as_deref().unwrap_or("unspecified kind"),
+                loaded.path.display()
+            );
+            if let Some(previous) =
+                source_identities.insert(file.clone(), declared_identity.clone())
+                && previous != declared_identity
+            {
+                return Err(format!(
+                    "overlay source {} is cataloged under conflicting identities: {previous}; {declared_identity}",
+                    file.display()
+                ));
+            }
+            let document = overlay_document_from_package(
+                &file,
+                &loaded.root,
+                &loaded.include_roots,
+            )
+            .map_err(|error| {
+                format!(
+                    "overlay catalog {catalog_id:?} declared in {} could not decode {}: {error}",
+                    loaded.path.display(),
+                    file.display()
+                )
+            })?;
+            let overlay = document.resolved_overlay();
+            if overlay.id.as_str() != catalog_id {
+                return Err(format!(
+                    "overlay catalog identity mismatch in {} at overlays.{catalog_id}: catalog ID {catalog_id:?} points to {} whose overlay.id is {:?}",
+                    loaded.path.display(),
+                    file.display(),
+                    overlay.id.as_str()
+                ));
+            }
+            if let Some(declared_kind) = &entry.kind {
+                let actual_kind = overlay_kind_name(overlay.kind);
+                if declared_kind != actual_kind {
+                    return Err(format!(
+                        "overlay catalog kind mismatch in {} at overlays.{catalog_id}.kind: declared {declared_kind:?}, but {} has overlay.kind {actual_kind:?}",
+                        loaded.path.display(),
+                        file.display()
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn overlay_kind_name(kind: OverlayKind) -> &'static str {
+    match kind {
+        OverlayKind::Translation => "translation",
+        OverlayKind::Extension => "extension",
+        OverlayKind::Patch => "patch",
+        OverlayKind::Personal => "personal",
     }
 }
 

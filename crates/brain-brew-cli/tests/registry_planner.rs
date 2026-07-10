@@ -13,6 +13,14 @@ fn stderr(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
+fn run_with_cache(args: &[&str], cache: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_brainbrew"))
+        .args(args)
+        .env("BRAINBREW_CACHE_DIR", cache)
+        .output()
+        .expect("brainbrew runs")
+}
+
 fn write_package(root: &Path, id: &str, dependencies: &[&str], manifest_body: &str) -> PathBuf {
     fs::create_dir_all(root).unwrap();
     fs::write(root.join("deck.yaml"), DECK).unwrap();
@@ -201,6 +209,30 @@ fn registry_rejects_duplicate_identities_and_cross_package_target_cycles() {
     assert!(stderr(&duplicate).contains("duplicate package identity"));
 
     fs::write(
+        &second_manifest,
+        fs::read_to_string(&second_manifest)
+            .unwrap()
+            .replace("version: 1.0.0", "version: 2.0.0"),
+    )
+    .unwrap();
+    let conflicting = run(&[
+        "targets",
+        "--manifest",
+        first_manifest.to_str().unwrap(),
+        "--include",
+        second_manifest.to_str().unwrap(),
+    ]);
+    assert!(!conflicting.status.success());
+    assert!(stderr(&conflicting).contains("conflicting package versions"));
+    fs::write(
+        &second_manifest,
+        fs::read_to_string(&second_manifest)
+            .unwrap()
+            .replace("version: 2.0.0", "version: 1.0.0"),
+    )
+    .unwrap();
+
+    fs::write(
         &first_manifest,
         fs::read_to_string(&first_manifest)
             .unwrap()
@@ -283,8 +315,191 @@ fn explicit_includes_cannot_bypass_missing_dependency_or_package_cycle_validatio
     assert!(!cycle.status.success());
     let error = stderr(&cycle);
     assert!(error.contains("package dependency cycle"), "{error}");
+    assert!(error.contains("example.root@1.0.0"), "{error}");
+    assert!(error.contains("example.up@1.0.0"), "{error}");
     assert!(
-        error.contains("example.root -> example.up -> example.root"),
+        error.contains("--depends_on example.up@1.0.0-->"),
+        "{error}"
+    );
+    assert!(
+        error.contains("--depends_on example.root@1.0.0-->"),
+        "{error}"
+    );
+    assert!(error.contains(root_manifest.to_str().unwrap()), "{error}");
+    assert!(
+        error.contains(upstream_manifest.to_str().unwrap()),
+        "{error}"
+    );
+}
+
+#[test]
+fn dependency_validation_covers_root_package_root_and_sibling_lock_discovery() {
+    let temp = tempfile::tempdir().unwrap();
+    let missing_root = temp.path().join("missing-root");
+    let missing_manifest = write_package(
+        &missing_root,
+        "example.missing-root",
+        &["example.absent@1.0.0"],
+        "  base:\n    overlays: []\n",
+    );
+    let root_route = run(&["targets", "--manifest", missing_manifest.to_str().unwrap()]);
+    assert!(!root_route.status.success());
+    assert!(stderr(&root_route).contains("example.absent@1.0.0"));
+
+    let package_root_route = run(&["targets", "--package-root", temp.path().to_str().unwrap()]);
+    assert!(!package_root_route.status.success());
+    assert!(stderr(&package_root_route).contains("example.absent@1.0.0"));
+
+    let locked = temp.path().join("locked");
+    write_package(
+        &locked,
+        "example.locked",
+        &["example.transitive-missing@1.0.0"],
+        "  locked:\n    overlays: []\n",
+    );
+    let consumer = temp.path().join("consumer");
+    let consumer_manifest = write_package(
+        &consumer,
+        "example.consumer",
+        &["example.locked@1.0.0"],
+        "  consumer:\n    overlays: []\n",
+    );
+    let lock = consumer.join("brainbrew.lock");
+    let cache = temp.path().join("cache");
+    let update = run_with_cache(
+        &[
+            "lock",
+            "update",
+            "--lock",
+            lock.to_str().unwrap(),
+            "--package",
+            "example.locked",
+            "--path",
+            locked.to_str().unwrap(),
+        ],
+        &cache,
+    );
+    assert!(update.status.success(), "{}", stderr(&update));
+    let lock_route = run_with_cache(
+        &["targets", "--manifest", consumer_manifest.to_str().unwrap()],
+        &cache,
+    );
+    assert!(!lock_route.status.success());
+    assert!(
+        stderr(&lock_route).contains("example.transitive-missing@1.0.0"),
+        "{}",
+        stderr(&lock_route)
+    );
+}
+
+#[test]
+fn package_cycles_include_deterministic_self_edge_traces() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    let manifest = write_package(
+        &root,
+        "example.self",
+        &["example.self@1.0.0"],
+        "  base:\n    overlays: []\n",
+    );
+    let output = run(&["targets", "--manifest", manifest.to_str().unwrap()]);
+    assert!(!output.status.success());
+    let error = stderr(&output);
+    let expected = format!(
+        "package dependency cycle:\n  example.self@1.0.0 ({path}) --depends_on example.self@1.0.0-->\n  example.self@1.0.0 ({path})",
+        path = fs::canonicalize(manifest).unwrap().display()
+    );
+    assert!(error.contains(&expected), "{error}");
+}
+
+#[test]
+fn base_compatibility_ranges_use_or_and_semver_prerelease_rules() {
+    let temp = tempfile::tempdir().unwrap();
+    let base = temp.path().join("base");
+    let extension = temp.path().join("extension");
+    let base_manifest = write_package(&base, "example.base", &[], "  base:\n    overlays: []\n");
+    let extension_manifest = write_package(
+        &extension,
+        "example.extension",
+        &["example.base@1.0.0"],
+        "  extended:\n    extends: example.base:base\n    overlays: []\n",
+    );
+    let source = fs::read_to_string(&extension_manifest).unwrap().replace(
+        "  version: 1.0.0\n  depends_on:",
+        "  version: 1.0.0\n  base_package: example.base\n  compatible_base_versions:\n    - '>=2, <3'\n    - '>=1, <2'\n  depends_on:",
+    );
+    fs::write(&extension_manifest, source).unwrap();
+
+    let valid = run(&[
+        "targets",
+        "--manifest",
+        extension_manifest.to_str().unwrap(),
+        "--include",
+        base_manifest.to_str().unwrap(),
+    ]);
+    assert!(valid.status.success(), "{}", stderr(&valid));
+
+    fs::write(
+        &extension_manifest,
+        fs::read_to_string(&extension_manifest)
+            .unwrap()
+            .replace("    - '>=1, <2'\n", "    - '>=1.0.0-alpha.1, <1.0.0'\n"),
+    )
+    .unwrap();
+    let incompatible = run(&[
+        "targets",
+        "--manifest",
+        extension_manifest.to_str().unwrap(),
+        "--include",
+        base_manifest.to_str().unwrap(),
+    ]);
+    assert!(!incompatible.status.success());
+    let error = stderr(&incompatible);
+    assert!(error.contains("incompatible"), "{error}");
+    assert!(error.contains("compatible_base_versions"), "{error}");
+}
+
+#[test]
+fn registry_rejects_overlay_catalog_id_kind_and_alias_mismatches_before_planning() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    let manifest = write_package(&root, "example.catalog", &[], "  base:\n    overlays: []\n");
+    fs::write(
+        root.join("overlay.yaml"),
+        "id: overlay.actual\nkind: extension\n",
+    )
+    .unwrap();
+    fs::write(
+        &manifest,
+        "package:\n  id: example.catalog\n  version: 1.0.0\nbase: deck.yaml\noverlays:\n  overlay.declared:\n    file: overlay.yaml\n    kind: extension\ntargets:\n  base:\n    overlays: []\n",
+    )
+    .unwrap();
+    let wrong_id = run(&["targets", "--manifest", manifest.to_str().unwrap()]);
+    assert!(!wrong_id.status.success());
+    assert!(stderr(&wrong_id).contains("catalog identity mismatch"));
+
+    fs::write(
+        &manifest,
+        fs::read_to_string(&manifest)
+            .unwrap()
+            .replace("overlay.declared", "overlay.actual")
+            .replace("kind: extension", "kind: patch"),
+    )
+    .unwrap();
+    let wrong_kind = run(&["targets", "--manifest", manifest.to_str().unwrap()]);
+    assert!(!wrong_kind.status.success());
+    assert!(stderr(&wrong_kind).contains("catalog kind mismatch"));
+
+    fs::write(
+        &manifest,
+        "package:\n  id: example.catalog\n  version: 1.0.0\nbase: deck.yaml\noverlays:\n  overlay.actual:\n    file: overlay.yaml\n    kind: extension\n  overlay.alias:\n    file: overlay.yaml\n    kind: extension\ntargets:\n  base:\n    overlays: []\n",
+    )
+    .unwrap();
+    let alias = run(&["targets", "--manifest", manifest.to_str().unwrap()]);
+    assert!(!alias.status.success());
+    let error = stderr(&alias);
+    assert!(
+        error.contains("conflicting identities") || error.contains("catalog identity mismatch"),
         "{error}"
     );
 }

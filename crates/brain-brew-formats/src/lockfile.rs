@@ -260,13 +260,25 @@ fn invalid_package(package: &str, message: impl Into<String>) -> LockfileError {
 }
 
 fn validate_package(package_id: &str, package: &LockedPackage) -> Result<(), LockfileError> {
+    crate::package_semver::validate_package_id(package_id)
+        .map_err(|error| invalid_package(package_id, format!("invalid package ID: {error}")))?;
     if package.manifest.is_empty() {
         return Err(invalid_package(package_id, "manifest must not be empty"));
     }
-    if package.package.version.is_empty() {
+    let canonical_version = crate::package_semver::canonical_version(&package.package.version)
+        .map_err(|error| {
+            invalid_package(
+                package_id,
+                format!("package.version must be a Semantic Version: {error}"),
+            )
+        })?;
+    if canonical_version != package.package.version {
         return Err(invalid_package(
             package_id,
-            "package.version must not be empty",
+            format!(
+                "package.version {:?} is not canonical; expected {canonical_version:?}",
+                package.package.version
+            ),
         ));
     }
     if package.original.source_type() != package.locked.source_type() {

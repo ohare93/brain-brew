@@ -139,11 +139,6 @@ fn hostile_string_map_keys_are_quoted_and_round_trip_where_the_schema_allows_the
         let manifest_once = manifest::to_string(&manifest).expect("manifest emits");
         assert_eq!(manifest::from_str(&manifest_once).unwrap(), manifest);
         assert_eq!(manifest::format_str(&manifest_once).unwrap(), manifest_once);
-
-        let lock = lockfile_with_package_key(key);
-        let lock_once = lockfile::to_string(&lock).expect("lockfile emits");
-        assert_eq!(lockfile::from_str(&lock_once).unwrap(), lock);
-        assert_eq!(lockfile::format_str(&lock_once).unwrap(), lock_once);
     }
 }
 
@@ -166,7 +161,7 @@ fn newline_containing_map_keys_are_rejected_cleanly() {
     assert!(error.to_string().contains("cannot be emitted safely"));
 
     let error = lockfile::from_str(
-        "version: 2\npackages:\n  ? \"bad\\nkey\"\n  : manifest: brainbrew.yaml\n    package:\n      version: '1'\n    original:\n      type: path\n      path: .\n    locked:\n      type: path\n      path: .\n      nar_hash: 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='\n",
+        "version: 2\npackages:\n  ? \"bad\\nkey\"\n  : manifest: brainbrew.yaml\n    package:\n      version: 1.0.0\n    original:\n      type: path\n      path: .\n    locked:\n      type: path\n      path: .\n      nar_hash: 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='\n",
     )
     .expect_err("lockfile rejects newline package keys");
     assert!(error.to_string().contains("cannot be emitted safely"));
@@ -413,7 +408,7 @@ fn locked_package(value: &str) -> LockedPackage {
     LockedPackage {
         manifest: value.to_owned(),
         package: LockedPackageMetadata {
-            version: value.to_owned(),
+            version: "1.0.0".to_owned(),
         },
         original: OriginalSource::Path {
             path: value.to_owned(),

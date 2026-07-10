@@ -61,6 +61,7 @@ fn parses_package_metadata_and_target_export_checks() {
 package:
   id: anki-geo.ultimate-geography
   version: 0.1.0
+  base_package: anki-geo.shared-geography
   compatible_base_versions:
     - '>=0.1,<0.2'
   depends_on:
@@ -82,7 +83,11 @@ targets:
     let package = manifest.package.expect("package metadata parsed");
     assert_eq!(package.id, "anki-geo.ultimate-geography");
     assert_eq!(package.version, "0.1.0");
-    assert_eq!(package.compatible_base_versions, vec![">=0.1,<0.2"]);
+    assert_eq!(
+        package.base_package.as_deref(),
+        Some("anki-geo.shared-geography")
+    );
+    assert_eq!(package.compatible_base_versions, vec![">=0.1, <0.2"]);
     assert_eq!(package.depends_on, vec!["anki-geo.shared-geography@0.1.0"]);
 
     let export = manifest.targets["en-standard"]
@@ -574,6 +579,7 @@ targets:
 package:
   depends_on: [anki-geo.shared-geography@0.1.0]
   compatible_base_versions: ['>=0.1,<0.2']
+  base_package: anki-geo.shared-geography
   version: 0.1.0
   id: anki-geo.ultimate-geography
 base: deck.yaml
@@ -586,8 +592,9 @@ base: deck.yaml
         r#"package:
   id: anki-geo.ultimate-geography
   version: 0.1.0
+  base_package: anki-geo.shared-geography
   compatible_base_versions:
-    - '>=0.1,<0.2'
+    - '>=0.1, <0.2'
   depends_on:
     - 'anki-geo.shared-geography@0.1.0'
 base: deck.yaml
@@ -603,6 +610,85 @@ targets:
           - '$.deck_config_uuid'
 "#
     );
+}
+
+#[test]
+fn package_semver_is_validated_and_requirements_are_canonicalized() {
+    let manifest = manifest::from_str(
+        r#"package:
+  id: example.extension
+  version: 2.0.0-beta.1+build.7
+  base_package: example.base
+  compatible_base_versions:
+    - '>=1.2.3-alpha.1,<2'
+    - '=2.0.0-beta.1'
+  depends_on:
+    - example.base@1.5.0
+base: deck.yaml
+"#,
+    )
+    .expect("valid semantic versions parse");
+    let package = manifest.package.unwrap();
+    assert_eq!(package.version, "2.0.0-beta.1+build.7");
+    assert_eq!(
+        package.compatible_base_versions,
+        vec![">=1.2.3-alpha.1, <2", "=2.0.0-beta.1"]
+    );
+
+    for (field, old, replacement) in [
+        ("version", "version: 1.0.0", "version: latest"),
+        (
+            "depends_on",
+            "depends_on: [example.base@1.2.3]",
+            "depends_on: [example.base@1.2]",
+        ),
+        (
+            "compatible_base_versions",
+            "compatible_base_versions: ['>=1']",
+            "compatible_base_versions: ['']",
+        ),
+    ] {
+        let source = "package:\n  id: example.extension\n  version: 1.0.0\n  base_package: example.base\n  compatible_base_versions: ['>=1']\n  depends_on: [example.base@1.2.3]\nbase: deck.yaml\n"
+            .replace(old, replacement);
+        let error = manifest::from_str(&source).expect_err("invalid SemVer must fail");
+        assert!(error.to_string().contains(field), "{field}: {error}");
+    }
+
+    for dependency in ["example.base", "example.base@>=1.0.0"] {
+        let source = format!(
+            "package:\n  id: example.extension\n  version: 1.0.0\n  depends_on: [{dependency}]\nbase: deck.yaml\n"
+        );
+        let error = manifest::from_str(&source).expect_err("dependencies require exact pins");
+        assert!(error.to_string().contains("depends_on[0]"), "{error}");
+        assert!(
+            error.to_string().contains("exact dependency pin"),
+            "{error}"
+        );
+    }
+}
+
+#[test]
+fn package_base_compatibility_fields_must_be_declared_together() {
+    for package_fields in [
+        "  compatible_base_versions: ['>=1']\n",
+        "  base_package: example.base\n",
+        "  base_package: example.base\n  compatible_base_versions: ['>=1']\n  depends_on: [other@1.0.0]\n",
+    ] {
+        let source = format!(
+            "package:\n  id: example.extension\n  version: 1.0.0\n{package_fields}base: deck.yaml\n"
+        );
+        let error = manifest::from_str(&source).expect_err("invalid base relation must fail");
+        assert!(error.to_string().contains("base_package"), "{error}");
+    }
+}
+
+#[test]
+fn rejects_unknown_overlay_catalog_kinds_at_manifest_decode() {
+    let error = manifest::from_str(
+        "base: deck.yaml\noverlays:\n  overlay.bad:\n    file: bad.yaml\n    kind: typo\n",
+    )
+    .expect_err("unknown catalog kind must fail");
+    assert!(error.to_string().contains("overlays.overlay.bad.kind"));
 }
 
 #[test]

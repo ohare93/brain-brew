@@ -2382,13 +2382,14 @@ fn targets_can_discover_multiple_package_manifests() {
     write_manifest_workspace(&second);
     fs::write(
         first.join("brainbrew.yaml"),
-        MANIFEST_WITH_PACKAGE_YAML.replace("  depends_on:\n    - anki-geo.shared-geography\n", ""),
+        MANIFEST_WITH_PACKAGE_YAML
+            .replace("  depends_on:\n    - anki-geo.shared-geography@0.1.0\n", ""),
     )
     .unwrap();
     fs::write(
         second.join("brainbrew.yaml"),
         MANIFEST_WITH_PACKAGE_YAML
-            .replace("  depends_on:\n    - anki-geo.shared-geography\n", "")
+            .replace("  depends_on:\n    - anki-geo.shared-geography@0.1.0\n", "")
             .replace("anki-geo.ultimate-geography", "anki-geo.rivers")
             .replace("patched-via-dependency", "rivers"),
     )
@@ -2419,7 +2420,8 @@ fn targets_discovers_package_root_and_validates_dependencies() {
     write_manifest_workspace(&rivers);
     fs::write(
         ug.join("brainbrew.yaml"),
-        MANIFEST_WITH_PACKAGE_YAML.replace("  depends_on:\n    - anki-geo.shared-geography\n", ""),
+        MANIFEST_WITH_PACKAGE_YAML
+            .replace("  depends_on:\n    - anki-geo.shared-geography@0.1.0\n", ""),
     )
     .unwrap();
     fs::write(
@@ -2427,7 +2429,7 @@ fn targets_discovers_package_root_and_validates_dependencies() {
         MANIFEST_WITH_PACKAGE_YAML
             .replace("anki-geo.ultimate-geography", "anki-geo.rivers")
             .replace(
-                "depends_on:\n    - anki-geo.shared-geography",
+                "depends_on:\n    - anki-geo.shared-geography@0.1.0",
                 "depends_on:\n    - anki-geo.ultimate-geography@0.1.0",
             )
             .replace("patched-via-dependency", "rivers"),
@@ -2452,7 +2454,8 @@ fn compose_can_resolve_extended_targets_from_brainbrew_lock() {
     write_manifest_workspace(&ug);
     fs::write(
         ug.join("brainbrew.yaml"),
-        MANIFEST_WITH_PACKAGE_YAML.replace("  depends_on:\n    - anki-geo.shared-geography\n", ""),
+        MANIFEST_WITH_PACKAGE_YAML
+            .replace("  depends_on:\n    - anki-geo.shared-geography@0.1.0\n", ""),
     )
     .unwrap();
     fs::write(america.join("deck.yaml"), SAMPLE_CANONICAL_YAML).unwrap();
@@ -2536,7 +2539,8 @@ fn lock_update_and_verify_path_package_without_nix() {
     write_manifest_workspace(&ug);
     fs::write(
         ug.join("brainbrew.yaml"),
-        MANIFEST_WITH_PACKAGE_YAML.replace("  depends_on:\n    - anki-geo.shared-geography\n", ""),
+        MANIFEST_WITH_PACKAGE_YAML
+            .replace("  depends_on:\n    - anki-geo.shared-geography@0.1.0\n", ""),
     )
     .unwrap();
     let lock_path = america.join("brainbrew.lock");
@@ -2599,7 +2603,8 @@ fn lock_update_and_verify_tarball_package_without_nix() {
     write_manifest_workspace(&ug);
     fs::write(
         ug.join("brainbrew.yaml"),
-        MANIFEST_WITH_PACKAGE_YAML.replace("  depends_on:\n    - anki-geo.shared-geography\n", ""),
+        MANIFEST_WITH_PACKAGE_YAML
+            .replace("  depends_on:\n    - anki-geo.shared-geography@0.1.0\n", ""),
     )
     .unwrap();
     let archive_path = root.join("ultimate-geography.tar.gz");
@@ -2665,7 +2670,8 @@ fn compose_can_extend_targets_and_mix_overlays_from_included_package_manifests()
     write_manifest_workspace(&ug);
     fs::write(
         ug.join("brainbrew.yaml"),
-        MANIFEST_WITH_PACKAGE_YAML.replace("  depends_on:\n    - anki-geo.shared-geography\n", ""),
+        MANIFEST_WITH_PACKAGE_YAML
+            .replace("  depends_on:\n    - anki-geo.shared-geography@0.1.0\n", ""),
     )
     .unwrap();
     fs::write(america.join("deck.yaml"), SAMPLE_CANONICAL_YAML).unwrap();
@@ -2778,7 +2784,7 @@ fn targets_reports_missing_package_dependencies() {
         MANIFEST_WITH_PACKAGE_YAML
             .replace("anki-geo.ultimate-geography", "anki-geo.rivers")
             .replace(
-                "depends_on:\n    - anki-geo.shared-geography",
+                "depends_on:\n    - anki-geo.shared-geography@0.1.0",
                 "depends_on:\n    - anki-geo.ultimate-geography@0.1.0",
             )
             .replace("patched-via-dependency", "rivers"),
@@ -2802,7 +2808,8 @@ fn targets_reports_package_dependency_version_mismatches() {
     write_manifest_workspace(&rivers);
     fs::write(
         ug.join("brainbrew.yaml"),
-        MANIFEST_WITH_PACKAGE_YAML.replace("  depends_on:\n    - anki-geo.shared-geography\n", ""),
+        MANIFEST_WITH_PACKAGE_YAML
+            .replace("  depends_on:\n    - anki-geo.shared-geography@0.1.0\n", ""),
     )
     .unwrap();
     fs::write(
@@ -2810,7 +2817,7 @@ fn targets_reports_package_dependency_version_mismatches() {
         MANIFEST_WITH_PACKAGE_YAML
             .replace("anki-geo.ultimate-geography", "anki-geo.rivers")
             .replace(
-                "depends_on:\n    - anki-geo.shared-geography",
+                "depends_on:\n    - anki-geo.shared-geography@0.1.0",
                 "depends_on:\n    - anki-geo.ultimate-geography@9.9.9",
             )
             .replace("patched-via-dependency", "rivers"),
@@ -2829,7 +2836,8 @@ fn targets_json_includes_package_metadata() {
     write_manifest_workspace(&dir);
     fs::write(
         dir.join("brainbrew.yaml"),
-        MANIFEST_WITH_PACKAGE_YAML.replace("  depends_on:\n    - anki-geo.shared-geography\n", ""),
+        MANIFEST_WITH_PACKAGE_YAML
+            .replace("  depends_on:\n    - anki-geo.shared-geography@0.1.0\n", ""),
     )
     .unwrap();
 
@@ -5215,7 +5223,8 @@ fn explain_reports_json_for_ui_consumers() {
     write_manifest_workspace(&dir);
     fs::write(
         dir.join("brainbrew.yaml"),
-        MANIFEST_WITH_PACKAGE_YAML.replace("  depends_on:\n    - anki-geo.shared-geography\n", ""),
+        MANIFEST_WITH_PACKAGE_YAML
+            .replace("  depends_on:\n    - anki-geo.shared-geography@0.1.0\n", ""),
     )
     .unwrap();
 
@@ -7082,7 +7091,7 @@ fn temp_dir(name: &str) -> PathBuf {
     path
 }
 
-const CAPITAL_OVERLAY_YAML: &str = r#"id: overlay.patch.capital
+const CAPITAL_OVERLAY_YAML: &str = r#"id: patch.capital
 kind: patch
 notes:
   note.finland:
@@ -7096,7 +7105,7 @@ notes:
 "#;
 
 const MESSY_OVERLAY_YAML: &str = r#"kind: patch
-id: overlay.patch.capital
+id: patch.capital
 notes:
   note.finland:
     fields:
@@ -7108,11 +7117,11 @@ notes:
     intent: merge
 "#;
 
-const NOOP_OVERLAY_YAML: &str = r#"id: overlay.noop
+const NOOP_OVERLAY_YAML: &str = r#"id: noop.after-capital
 kind: patch
 "#;
 
-const SECOND_CAPITAL_OVERLAY_YAML: &str = r#"id: overlay.patch.capital.second
+const SECOND_CAPITAL_OVERLAY_YAML: &str = r#"id: patch.capital.second
 kind: patch
 notes:
   note.finland:
@@ -7164,10 +7173,8 @@ targets:
 const MANIFEST_WITH_PACKAGE_YAML: &str = r#"package:
   id: anki-geo.ultimate-geography
   version: 0.1.0
-  compatible_base_versions:
-    - '>=0.1,<0.2'
   depends_on:
-    - anki-geo.shared-geography
+    - anki-geo.shared-geography@0.1.0
 base: deck.yaml
 overlays:
   noop.after-capital:

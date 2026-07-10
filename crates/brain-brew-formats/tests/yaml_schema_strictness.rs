@@ -41,7 +41,7 @@ fn rejects_non_string_scalars_at_canonical_string_positions() {
         );
 
         let lock_yaml = format!(
-            "version: 2\npackages:\n  package.strict:\n    manifest: {scalar}\n    package:\n      version: '1'\n    original:\n      type: path\n      path: .\n    locked:\n      type: path\n      path: .\n      nar_hash: 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='\n"
+            "version: 2\npackages:\n  package.strict:\n    manifest: {scalar}\n    package:\n      version: 1.0.0\n    original:\n      type: path\n      path: .\n    locked:\n      type: path\n      path: .\n      nar_hash: 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='\n"
         );
         assert_rejected_by_both(
             case,

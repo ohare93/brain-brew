@@ -211,6 +211,17 @@ fn rejects_missing_empty_malformed_and_noncanonical_sha256_sri() {
 }
 
 #[test]
+fn rejects_non_semver_or_noncanonical_locked_package_versions() {
+    for version in ["latest", "1.2"] {
+        let source = format!(
+            "version: 2\npackages:\n  example.package:\n    manifest: brainbrew.yaml\n    package:\n      version: {version}\n    original:\n      type: path\n      path: .\n    locked:\n      type: path\n      path: .\n      nar_hash: '{ZERO_SRI}'\n"
+        );
+        let error = lockfile::from_str(&source).expect_err("package version must be SemVer");
+        assert!(error.to_string().contains("package.version"), "{error}");
+    }
+}
+
+#[test]
 fn rejects_nonimmutable_git_revision() {
     let yaml = format!(
         "version: 2\npackages:\n  package.strict:\n    manifest: brainbrew.yaml\n    package:\n      version: 1.0.0\n    original:\n      type: git\n      url: https://github.com/example/pkg.git\n      ref: main\n    locked:\n      type: git\n      url: https://github.com/example/pkg.git\n      rev: main\n      nar_hash: '{ZERO_SRI}'\n"

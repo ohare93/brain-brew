@@ -14,6 +14,9 @@ Federated packages let one repository compose with another without copying upstr
 package:
   id: anki-geo.america
   version: 0.1.0
+  base_package: anki-geo.ultimate-geography
+  compatible_base_versions:
+    - '>=0.1.0, <0.2.0'
   depends_on:
     - anki-geo.ultimate-geography@0.1.0
 base: deck.yaml
@@ -27,6 +30,21 @@ targets:
     overlays:
       - overlay.extension.america
 ```
+
+## Version and compatibility semantics
+
+Package metadata uses the [`semver`](https://docs.rs/semver/) requirement grammar and is enforced before any target or package source is planned.
+
+- `version` is a full Semantic Version such as `1.2.3` or `2.0.0-beta.1`; opaque labels and shortened versions are invalid.
+- Every `depends_on` entry is an exact `<package-id>@<SemVer>` pin. Omitting `@version` or putting a range there is invalid. Exact pins keep the selected registry/lock identity reproducible, including any build metadata.
+- An extension identifies its upstream with `base_package`. That ID must also have an exact `depends_on` pin.
+- `compatible_base_versions` must be non-empty when `base_package` is present and must be absent otherwise. Base packages therefore omit both fields.
+- Commas inside one requirement are **AND**: `>=1.2.0, <2.0.0`. Separate list entries are **OR** alternatives.
+- Prereleases follow the `semver` crate rule. A prerelease is matched only by a comparator containing a prerelease with the same major/minor/patch tuple; for example `>=2.0.0-alpha.1, <2.0.0` can match `2.0.0-alpha.2`, while `>=1.0.0` does not match `2.0.0-alpha.1`. Build metadata does not affect range matching.
+
+Formatting canonicalizes requirement spacing. Empty or malformed versions/requirements fail at manifest decode with the manifest path and declaring field. Brain Brew validates the complete package registry from the root manifest, explicit `--include` files, `--package-root` discovery, and sibling locks before target planning. Missing packages, duplicate/conflicting package IDs, exact-version mismatches, incompatible base versions, self-cycles, and multi-package cycles all fail closed.
+
+This is validation, not dependency solving: maintainers choose and lock one exact dependency version, then declare whether that selected base version is in the extension's supported range.
 
 ## Local includes
 
