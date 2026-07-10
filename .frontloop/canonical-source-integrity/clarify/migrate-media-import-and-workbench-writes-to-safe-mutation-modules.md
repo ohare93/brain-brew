@@ -18,3 +18,8 @@ Move media hash/images-to-refs, CrowdAnki import output, and Workbench Apply ont
 ## Implementation Notes
 
 Depends on source-document/transaction modules plus package ownership work for locked dependencies.
+
+
+## Blocked
+
+Blocked on package-federation-security/0010–0070: safe path authorization, immutable lock containment, registry-aware provenance planning, and federated media ownership must land before mutators can prove locked dependency sources are unselectable. Resume this task immediately after those prerequisites integrate.
