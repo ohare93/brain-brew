@@ -17,11 +17,9 @@ use serde_json::json;
 
 use crate::commands::translation_overlay::compose_lenient_translation_overlay;
 use crate::help;
-use crate::io::{
-    PlannedOverlay, manifest_root, overlay_from_source_text, overlay_source_document,
-    plan_manifest_target_with_packages, read_manifest,
-};
+use crate::io::{manifest_root, overlay_from_source_text, overlay_source_document, read_manifest};
 use crate::output;
+use crate::planner::{PlannedOverlay, plan_manifest_target};
 use crate::workspace_mutation::{PlannedWorkspaceFile, commit_workspace_files, recover_workspace};
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
@@ -993,7 +991,7 @@ fn collect_translation_reports(
 
     let mut reports = Vec::new();
     for target in &target_names {
-        let plan = plan_manifest_target_with_packages(
+        let plan = plan_manifest_target(
             &args.manifest_path,
             target,
             &args.include_paths,
@@ -1685,7 +1683,7 @@ fn non_dictionary_translation_overlays(
     let target_names = selected_target_names(&manifest, args);
     let mut choices = BTreeSet::<OverlayChoice>::new();
     for target in target_names {
-        let plan = plan_manifest_target_with_packages(
+        let plan = plan_manifest_target(
             &args.manifest_path,
             &target,
             &args.include_paths,
@@ -2715,7 +2713,7 @@ fn validate_final_translation_composition(
     }
     let manifest = read_manifest(&args.manifest_path)?;
     for target in selected_target_names(&manifest, args) {
-        let plan = plan_manifest_target_with_packages(
+        let plan = plan_manifest_target(
             &args.manifest_path,
             &target,
             &args.include_paths,
@@ -2756,7 +2754,7 @@ fn translation_overlay_choices(args: &TranslationArgs) -> Result<Vec<OverlayChoi
     let target_names = selected_target_names(&manifest, args);
     let mut choices = BTreeSet::<OverlayChoice>::new();
     for target in target_names {
-        let plan = plan_manifest_target_with_packages(
+        let plan = plan_manifest_target(
             &args.manifest_path,
             &target,
             &args.include_paths,

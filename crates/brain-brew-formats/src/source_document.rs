@@ -100,6 +100,30 @@ impl IncludeRequest {
     }
 }
 
+/// Kind and schema location of a source loaded through `!include`.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum IncludedSourceKind {
+    Scalar { schema_path: String },
+    MediaDeclarations,
+}
+
+/// Provenance retained for one source loaded while parsing a document.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct IncludedSource {
+    kind: IncludedSourceKind,
+    provenance: SourceProvenance,
+}
+
+impl IncludedSource {
+    pub fn kind(&self) -> &IncludedSourceKind {
+        &self.kind
+    }
+
+    pub fn provenance(&self) -> &SourceProvenance {
+        &self.provenance
+    }
+}
+
 /// Whether a typed edit changes the root YAML or the content of an include.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum EditLocation {
@@ -214,6 +238,7 @@ pub(crate) struct PreparedSource {
 pub(crate) struct IncludeState {
     scalar: BTreeMap<String, ScalarInclude>,
     media: Option<MediaInclude>,
+    loaded_sources: BTreeSet<IncludedSource>,
 }
 
 #[derive(Clone)]
@@ -233,6 +258,10 @@ struct MediaInclude {
 }
 
 impl IncludeState {
+    pub(crate) fn source_provenance(&self) -> Vec<IncludedSource> {
+        self.loaded_sources.iter().cloned().collect()
+    }
+
     pub(crate) fn media(&self) -> Option<&BTreeMap<StableId, MediaReference>> {
         self.media.as_ref().map(|include| &include.media)
     }
@@ -461,6 +490,10 @@ fn prepare_value(
                         format!("invalid included media map: {error}"),
                     )
                 })?;
+                includes.loaded_sources.insert(IncludedSource {
+                    kind: IncludedSourceKind::MediaDeclarations,
+                    provenance: loaded.provenance.clone(),
+                });
                 includes.media = Some(MediaInclude {
                     directive: format!("media: !include {}", yaml_scalar::scalar(&target)),
                     source: loaded,
@@ -477,7 +510,7 @@ fn prepare_value(
                     format!("!include {target:?} is only valid for scalar content fields"),
                 ));
             }
-            let loaded = load_scalar_include(request, loader, stack)?;
+            let loaded = load_scalar_include(request, loader, stack, &mut includes.loaded_sources)?;
             let sentinel = next_sentinel(original, includes.scalar.len());
             includes.scalar.insert(
                 schema_path,
@@ -541,6 +574,7 @@ fn load_scalar_include(
     request: IncludeRequest,
     loader: &mut impl FnMut(&IncludeRequest) -> Result<SourceFile, String>,
     stack: &mut Vec<String>,
+    loaded_sources: &mut BTreeSet<IncludedSource>,
 ) -> Result<SourceFile, SourceDocumentError> {
     let cycle_key = format!("{} -> {}", request.referring_source, request.target);
     if stack.contains(&cycle_key) {
@@ -561,6 +595,12 @@ fn load_scalar_include(
             format!("could not load !include {:?}: {message}", request.target),
         )
     })?;
+    loaded_sources.insert(IncludedSource {
+        kind: IncludedSourceKind::Scalar {
+            schema_path: request.schema_path.clone(),
+        },
+        provenance: loaded.provenance.clone(),
+    });
     let nested = nested_include_target(&loaded.text).map_err(|message| {
         SourceDocumentError::at(&loaded.provenance, &request.schema_path, message)
     })?;
@@ -573,6 +613,7 @@ fn load_scalar_include(
             },
             loader,
             stack,
+            loaded_sources,
         )
     } else {
         Ok(loaded)

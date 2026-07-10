@@ -5,11 +5,9 @@ use serde_json::json;
 
 use crate::args::{parse_manifest_target_args, split_json_flag};
 use crate::help;
-use crate::io::{
-    plan_manifest_target_with_packages, read_and_compose_deck,
-    read_and_compose_manifest_target_with_packages, read_deck_and_overlays,
-};
+use crate::io::{read_and_compose_deck, read_deck_and_overlays};
 use crate::output;
+use crate::planner::plan_manifest_target;
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if args
@@ -19,7 +17,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         let (json_output, rest) = split_json_flag(args);
         let manifest_args = parse_manifest_target_args(&rest)?;
         let deck = if json_output {
-            let plan = plan_manifest_target_with_packages(
+            let plan = plan_manifest_target(
                 &manifest_args.manifest_path,
                 &manifest_args.target,
                 &manifest_args.include_paths,
@@ -35,12 +33,13 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                 Err(report) => return report_json_compose_failure(report, "invalid deck"),
             }
         } else {
-            read_and_compose_manifest_target_with_packages(
+            plan_manifest_target(
                 &manifest_args.manifest_path,
                 &manifest_args.target,
                 &manifest_args.include_paths,
                 &manifest_args.package_roots,
             )?
+            .compose()?
         };
         let mut details = vec![
             (

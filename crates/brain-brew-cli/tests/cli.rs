@@ -2380,10 +2380,15 @@ fn targets_can_discover_multiple_package_manifests() {
     let second = temp_dir("targets-package-second");
     write_manifest_workspace(&first);
     write_manifest_workspace(&second);
-    fs::write(first.join("brainbrew.yaml"), MANIFEST_WITH_PACKAGE_YAML).unwrap();
+    fs::write(
+        first.join("brainbrew.yaml"),
+        MANIFEST_WITH_PACKAGE_YAML.replace("  depends_on:\n    - anki-geo.shared-geography\n", ""),
+    )
+    .unwrap();
     fs::write(
         second.join("brainbrew.yaml"),
         MANIFEST_WITH_PACKAGE_YAML
+            .replace("  depends_on:\n    - anki-geo.shared-geography\n", "")
             .replace("anki-geo.ultimate-geography", "anki-geo.rivers")
             .replace("patched-via-dependency", "rivers"),
     )
@@ -2822,7 +2827,11 @@ fn targets_reports_package_dependency_version_mismatches() {
 fn targets_json_includes_package_metadata() {
     let dir = temp_dir("targets-package-json");
     write_manifest_workspace(&dir);
-    fs::write(dir.join("brainbrew.yaml"), MANIFEST_WITH_PACKAGE_YAML).unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        MANIFEST_WITH_PACKAGE_YAML.replace("  depends_on:\n    - anki-geo.shared-geography\n", ""),
+    )
+    .unwrap();
 
     let output = run([
         "targets",
@@ -5204,7 +5213,11 @@ fn explain_reports_expanded_stack_and_diff() {
 fn explain_reports_json_for_ui_consumers() {
     let dir = temp_dir("explain-json");
     write_manifest_workspace(&dir);
-    fs::write(dir.join("brainbrew.yaml"), MANIFEST_WITH_PACKAGE_YAML).unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        MANIFEST_WITH_PACKAGE_YAML.replace("  depends_on:\n    - anki-geo.shared-geography\n", ""),
+    )
+    .unwrap();
 
     let output = run([
         "explain",

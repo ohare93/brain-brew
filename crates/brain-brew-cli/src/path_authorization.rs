@@ -175,6 +175,7 @@ pub(crate) struct AuthorizedPath {
 }
 
 impl AuthorizedPath {
+    #[cfg(test)]
     pub(crate) fn as_path(&self) -> &Path {
         &self.resolved
     }

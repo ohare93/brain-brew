@@ -1,13 +1,13 @@
 use serde_json::json;
 
 use crate::args::{parse_manifest_target_args, split_json_flag};
-use crate::io::plan_manifest_target_with_packages;
 use crate::output::{self, one_line, package_json, semantic_kind_name};
+use crate::planner::{OverlayExpansionOrigin, TargetExpansionOrigin, plan_manifest_target};
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     let (json_output, rest) = split_json_flag(args);
     let manifest_args = parse_manifest_target_args(&rest)?;
-    let plan = plan_manifest_target_with_packages(
+    let plan = plan_manifest_target(
         &manifest_args.manifest_path,
         &manifest_args.target,
         &manifest_args.include_paths,
@@ -18,7 +18,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         if let Some(package) = &plan.package {
             println!("package: {}@{}", package.id, package.version);
         }
-        println!("target: {}", plan.target);
+        println!("target: {}", plan.qualified_name);
         println!("base: {}", plan.base_label);
         println!("overlay stack:");
         if plan.overlays.is_empty() {
@@ -33,7 +33,57 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     let overlay_stack = plan
         .overlays
         .iter()
-        .map(|(overlay, _)| json!({"id": overlay.id, "file": overlay.display_file}))
+        .map(|(overlay, _)| {
+            let origin = match &overlay.origin {
+                OverlayExpansionOrigin::Target {
+                    qualified_target,
+                    reference,
+                } => json!({
+                    "kind": "target",
+                    "target": qualified_target,
+                    "reference": reference,
+                }),
+                OverlayExpansionOrigin::Dependency {
+                    declaring_overlay,
+                    reference,
+                } => json!({
+                    "kind": "overlay_dependency",
+                    "overlay": declaring_overlay,
+                    "reference": reference,
+                }),
+            };
+            json!({
+                "id": overlay.id,
+                "qualified_id": overlay.qualified_id,
+                "file": overlay.display_file,
+                "origin": origin,
+            })
+        })
+        .collect::<Vec<_>>();
+    let target_expansion = plan
+        .target_expansion
+        .iter()
+        .map(|target| {
+            let origin = match &target.origin {
+                TargetExpansionOrigin::Selection => json!({"kind": "selection"}),
+                TargetExpansionOrigin::Extends {
+                    declaring_target,
+                    reference,
+                } => json!({
+                    "kind": "extends",
+                    "target": declaring_target,
+                    "reference": reference,
+                }),
+            };
+            json!({
+                "qualified_name": target.qualified_name,
+                "package": target.owner.as_ref().map(|package| json!({
+                    "id": package.id,
+                    "version": package.version,
+                })),
+                "origin": origin,
+            })
+        })
         .collect::<Vec<_>>();
     let overlays = plan
         .overlays
@@ -61,6 +111,12 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                     serde_json::to_string_pretty(&json!({
                         "package": plan.package.as_ref().map(package_json),
                         "target": plan.target,
+                        "qualified_name": plan.qualified_name,
+                        "owner": plan.owner.as_ref().map(|package| json!({
+                            "id": package.id,
+                            "version": package.version,
+                        })),
+                        "target_expansion": target_expansion,
                         "base": plan.base_label,
                         "overlay_stack": overlay_stack,
                         "changes": changes,
@@ -104,6 +160,12 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                     "errors": errors,
                     "package": plan.package.as_ref().map(package_json),
                     "target": plan.target,
+                    "qualified_name": plan.qualified_name,
+                    "owner": plan.owner.as_ref().map(|package| json!({
+                        "id": package.id,
+                        "version": package.version,
+                    })),
+                    "target_expansion": target_expansion,
                     "base": plan.base_label,
                     "overlay_stack": overlay_stack,
                 }));

@@ -6,8 +6,9 @@ use brain_brew_formats::canonical_yaml;
 use crate::args::{parse_manifest_target_args, parse_overlay_and_optional_out};
 use crate::commands::verify;
 use crate::help;
-use crate::io::{plan_manifest_target_with_packages, read_deck_and_overlays};
+use crate::io::read_deck_and_overlays;
 use crate::output;
+use crate::planner::plan_manifest_target;
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -20,7 +21,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         .any(|arg| arg == "--manifest" || arg == "--target")
     {
         let manifest_args = parse_manifest_target_args(args)?;
-        let plan = plan_manifest_target_with_packages(
+        let plan = plan_manifest_target(
             &manifest_args.manifest_path,
             &manifest_args.target,
             &manifest_args.include_paths,

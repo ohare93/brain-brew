@@ -12,8 +12,9 @@ use brain_brew_core::{CanonicalDeck, StableId};
 
 use crate::canonical_yaml;
 use crate::source_document::{
-    EditLocation, ImageConversionReport, IncludeRequest, IncludeState, SourceDocumentEmission,
-    SourceDocumentError, SourceFile, SourceProvenance, convert_text_to_images, prepare_source,
+    EditLocation, ImageConversionReport, IncludeRequest, IncludeState, IncludedSource,
+    SourceDocumentEmission, SourceDocumentError, SourceFile, SourceProvenance,
+    convert_text_to_images, prepare_source,
 };
 
 /// Closed set of scalar Canonical Deck source locations supported by mutators.
@@ -186,6 +187,11 @@ impl CanonicalSourceDocument {
 
     pub fn provenance(&self) -> &SourceProvenance {
         &self.provenance
+    }
+
+    /// Every scalar or structural media source loaded by this document.
+    pub fn included_sources(&self) -> Vec<IncludedSource> {
+        self.includes.source_provenance()
     }
 
     /// Read-only validated domain view. Mutation remains behind typed methods.

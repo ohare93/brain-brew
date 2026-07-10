@@ -34,8 +34,9 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use crate::commands::translation_overlay::compose_lenient_translation_overlay;
 use crate::help;
-use crate::io::{manifest_root, plan_manifest_target_with_packages, read_manifest};
+use crate::io::{manifest_root, read_manifest};
 use crate::path_authorization::PathAuthorizer;
+use crate::planner::{ManifestRegistry, PlannedOverlay, plan_manifest_target};
 
 static EMBEDDED_WORKBENCH_ASSETS: Dir<'static> =
     include_dir!("$CARGO_MANIFEST_DIR/assets/workbench");
@@ -1204,20 +1205,17 @@ impl WorkspaceMetadata {
     ) -> Result<BTreeSet<String>, String> {
         let mut paths = BTreeSet::new();
         for target_id in manifest.targets.keys() {
-            let plan =
-                plan_manifest_target_with_packages(&self.manifest_path, target_id, &[], &[])?;
-            let mut current = plan.base;
-            paths.extend(current.media.values().map(|media| media.path.clone()));
-            for (planned, overlay) in plan.overlays {
-                current = if overlay.translations.is_some() {
-                    compose_lenient_translation_overlay(&current, &overlay)?
-                } else {
-                    current.compose(&[overlay]).map_err(|error| {
-                        format!("failed to compose overlay {}: {error}", planned.id)
-                    })?
-                };
-                paths.extend(current.media.values().map(|media| media.path.clone()));
-            }
+            let reference = manifest
+                .package
+                .as_ref()
+                .map(|package| format!("{}:{target_id}", package.id))
+                .unwrap_or_else(|| target_id.clone());
+            let plan = plan_manifest_target(&self.manifest_path, &reference, &[], &[])?;
+            paths.extend(
+                plan.media_declarations
+                    .values()
+                    .map(|media| media.path.clone()),
+            );
         }
         Ok(paths)
     }
@@ -1269,12 +1267,7 @@ impl WorkspaceMetadata {
         &self,
         selection: WorkbenchSelection,
     ) -> Result<SelectedTranslationContext, String> {
-        let plan = plan_manifest_target_with_packages(
-            &self.manifest_path,
-            &selection.target_id,
-            &[],
-            &[],
-        )?;
+        let plan = plan_manifest_target(&self.manifest_path, &selection.target_id, &[], &[])?;
         let mut current = plan.base.clone();
         let mut selected_source_deck = None;
         let mut selected_report = None;
@@ -1390,18 +1383,29 @@ impl WorkspaceMetadata {
                 format!("language {language_code:?} has no overlay label {overlay_label:?}")
             })?
             .clone();
-        let overlay = manifest
+        let target_reference = if target_id.contains(':') {
+            target_id.clone()
+        } else {
+            manifest
+                .package
+                .as_ref()
+                .map(|package| format!("{}:{target_id}", package.id))
+                .unwrap_or_else(|| target_id.clone())
+        };
+        let plan = plan_manifest_target(&self.manifest_path, &target_reference, &[], &[])?;
+        let planned_overlay = plan
             .overlays
-            .get(&overlay_id)
-            .ok_or_else(|| format!("overlay {overlay_id:?} is not in the manifest catalog"))?;
-        let overlay_file = PathAuthorizer::new("workspace", &self.manifest_root)?
-            .authorize_read(
-                &self.manifest_path,
-                format!("overlays.{overlay_id}.file"),
-                &overlay.file,
-            )
-            .map_err(|error| error.to_string())?
-            .into_path_buf();
+            .iter()
+            .find(|(planned, _)| planned.id == overlay_id || planned.qualified_id == overlay_id)
+            .map(|(planned, _)| planned)
+            .ok_or_else(|| {
+                format!(
+                    "target {:?} does not include translation overlay {:?}",
+                    plan.qualified_name, overlay_id
+                )
+            })?;
+        let overlay_file = planned_overlay.file.clone();
+        let overlay_display_file = planned_overlay.display_file.clone();
 
         let overlay_badges = language_entry
             .translation_overlays
@@ -1417,11 +1421,11 @@ impl WorkspaceMetadata {
             language_code,
             language_display_name: language_entry.display_name.clone(),
             target_label,
-            target_id,
+            target_id: plan.qualified_name,
             overlay_label,
             overlay_id,
             overlay_file,
-            overlay_display_file: String::new(),
+            overlay_display_file,
             overlay_badges,
             structural_fields: manifest
                 .translation_profile
@@ -1793,7 +1797,7 @@ struct OverlayBadge {
 struct SelectedTranslationContext {
     selection: WorkbenchSelection,
     base_deck: CanonicalDeck,
-    plan_overlays: Vec<(crate::io::PlannedOverlay, Overlay)>,
+    plan_overlays: Vec<(PlannedOverlay, Overlay)>,
     source_deck: CanonicalDeck,
     target_deck: CanonicalDeck,
     report: brain_brew_core::TranslationCoverageReport,
@@ -2057,11 +2061,6 @@ fn apply_new_language_request(
     let manifest_yaml = manifest::to_string(&updated).map_err(|error| error.to_string())?;
     manifest::from_str(&manifest_yaml)
         .map_err(|error| format!("invalid generated manifest: {error}"))?;
-    for target in &request.targets {
-        updated
-            .expand_target(&target.target_id)
-            .map_err(|error| format!("invalid generated target {:?}: {error}", target.target_id))?;
-    }
 
     Ok((updated, overlay_writes))
 }
@@ -4979,25 +4978,21 @@ fn file_fingerprints(
 
 fn authorized_manifest_source_files(
     manifest_path: &Path,
-    root: &Path,
-    manifest: &FederatedDeckManifest,
+    _root: &Path,
+    _manifest: &FederatedDeckManifest,
 ) -> Result<Vec<PathBuf>, String> {
-    let authorizer = PathAuthorizer::new("workspace", root)?;
-    let mut files = vec![manifest_path.to_path_buf()];
-    files.push(
-        authorizer
-            .authorize_read(manifest_path, "base", &manifest.base)
-            .map_err(|error| error.to_string())?
-            .into_path_buf(),
+    let registry = ManifestRegistry::load(manifest_path, &[], &[])?;
+    let mut files = registry
+        .manifests()
+        .iter()
+        .map(|loaded| loaded.path.clone())
+        .collect::<Vec<_>>();
+    files.extend(
+        registry
+            .registered_sources()?
+            .into_iter()
+            .map(|source| source.path),
     );
-    for (id, overlay) in &manifest.overlays {
-        files.push(
-            authorizer
-                .authorize_read(manifest_path, format!("overlays.{id}.file"), &overlay.file)
-                .map_err(|error| error.to_string())?
-                .into_path_buf(),
-        );
-    }
     files.sort();
     files.dedup();
     Ok(files)

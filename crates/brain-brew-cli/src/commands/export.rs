@@ -8,12 +8,12 @@ use crate::args::{parse_manifest_target_args, parse_overlay_out_media};
 use crate::commands::verify;
 use crate::help;
 use crate::io::{
-    configured_crowdanki_out, manifest_root, plan_manifest_target_with_packages,
-    read_deck_and_overlays, read_manifest, root_relative_path,
+    configured_crowdanki_out, manifest_root, read_deck_and_overlays, root_relative_path,
 };
 use crate::media_assets::{copy_media_assets, validate_media_assets};
 use crate::output;
 use crate::path_authorization::PathAuthorizer;
+use crate::planner::plan_manifest_target;
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if matches!(args, [flag] if flag == "--help" || flag == "-h")
@@ -33,15 +33,22 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         .any(|arg| arg == "--manifest" || arg == "--target")
     {
         let manifest_args = parse_manifest_target_args(&args[1..])?;
-        let manifest = read_manifest(&manifest_args.manifest_path)?;
+        let plan = plan_manifest_target(
+            &manifest_args.manifest_path,
+            &manifest_args.target,
+            &manifest_args.include_paths,
+            &manifest_args.package_roots,
+        )?;
+        // Export destinations belong to the caller-selected workspace, never a
+        // dependency package/cache root selected while resolving the target.
         let root = manifest_root(&manifest_args.manifest_path);
         let out_dir = if let Some(out_path) = manifest_args.out_path.clone() {
             out_path
-        } else if let Some(path) = configured_crowdanki_out(&manifest, &manifest_args.target) {
+        } else if let Some(path) = configured_crowdanki_out(&plan.target_manifest, &plan.target) {
             PathAuthorizer::new("workspace", &root)?
                 .authorize_create(
                     &manifest_args.manifest_path,
-                    format!("targets.{}.exports.crowdanki.out", manifest_args.target),
+                    format!("targets.{}.exports.crowdanki.out", plan.target),
                     &path,
                 )
                 .map_err(|error| error.to_string())?
@@ -51,17 +58,11 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                 .authorize_create(
                     &manifest_args.manifest_path,
                     "generated CrowdAnki output",
-                    &format!("build/crowdanki/{}", manifest_args.target),
+                    &format!("build/crowdanki/{}", plan.target),
                 )
                 .map_err(|error| error.to_string())?
                 .into_path_buf()
         };
-        let plan = plan_manifest_target_with_packages(
-            &manifest_args.manifest_path,
-            &manifest_args.target,
-            &manifest_args.include_paths,
-            &manifest_args.package_roots,
-        )?;
         verify::emit_stale_translation_warnings(&plan)?;
         let deck = plan.compose()?;
         let media_root = manifest_args

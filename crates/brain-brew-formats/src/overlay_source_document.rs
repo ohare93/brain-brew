@@ -9,9 +9,9 @@ use brain_brew_core::{Overlay, StableId, TranslationDictionary};
 
 use crate::canonical_yaml;
 use crate::source_document::{
-    EditLocation, ImageConversionReport, IncludeRequest, IncludeState, SourceDocumentEmission,
-    SourceDocumentError, SourceFile, SourceProvenance, convert_text_to_images, ensure_non_empty,
-    matching_contexts, prepare_source,
+    EditLocation, ImageConversionReport, IncludeRequest, IncludeState, IncludedSource,
+    SourceDocumentEmission, SourceDocumentError, SourceFile, SourceProvenance,
+    convert_text_to_images, ensure_non_empty, matching_contexts, prepare_source,
 };
 
 /// One validated translator decision. The selected source and occurrence path
@@ -113,6 +113,11 @@ impl OverlaySourceDocument {
 
     pub fn provenance(&self) -> &SourceProvenance {
         &self.provenance
+    }
+
+    /// Every scalar source loaded by this document.
+    pub fn included_sources(&self) -> Vec<IncludedSource> {
+        self.includes.source_provenance()
     }
 
     /// Read-only validated domain view. Mutation remains behind typed methods.

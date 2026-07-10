@@ -14,6 +14,7 @@ mod overlay_draft;
 mod package_resolver;
 mod package_tree;
 mod path_authorization;
+mod planner;
 mod workspace_mutation;
 mod workspace_transaction;
 

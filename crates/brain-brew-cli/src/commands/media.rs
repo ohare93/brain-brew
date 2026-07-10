@@ -7,12 +7,12 @@ use serde_yaml::{Mapping, Value};
 
 use crate::help;
 use crate::io::{
-    format_source_at, manifest_root, plan_manifest_target_with_packages, read_manifest,
-    resolve_include_target_for_context, root_relative_path, source_context_for_path,
-    top_level_media_include_path,
+    format_source_at, manifest_root, resolve_include_target_for_context, root_relative_path,
+    source_context_for_path, top_level_media_include_path,
 };
 use crate::output;
 use crate::path_authorization::PathAuthorizer;
+use crate::planner::{ManifestRegistry, PlanSourceKind};
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if matches!(args, [flag] if flag == "--help" || flag == "-h")
@@ -272,30 +272,41 @@ fn collect_manifest_source_files(
     include_paths: &[PathBuf],
     package_roots: &[PathBuf],
 ) -> Result<(Vec<String>, BTreeSet<PathBuf>), String> {
-    let manifest = read_manifest(manifest_path)?;
-    let root = manifest_root(manifest_path);
+    let registry = ManifestRegistry::load(manifest_path, include_paths, package_roots)?;
     let target_names = if all_targets {
-        manifest.targets.keys().cloned().collect::<Vec<_>>()
+        registry
+            .root()
+            .manifest
+            .targets
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
     } else if let Some(target) = target {
         vec![target.to_owned()]
     } else {
         return Err("media command requires --all-targets or --target <target>".to_owned());
     };
 
-    let base_file = PathAuthorizer::new("package", &root)?
-        .authorize_read(manifest_path, "base", &manifest.base)
-        .map_err(|error| error.to_string())?
-        .into_path_buf();
-    let mut source_files = BTreeSet::from([base_file]);
+    let mut source_files = BTreeSet::new();
     for target in &target_names {
-        let plan = plan_manifest_target_with_packages(
-            manifest_path,
-            target,
-            include_paths,
-            package_roots,
-        )?;
-        for (overlay, _) in plan.overlays {
-            source_files.insert(overlay.file);
+        let reference = if all_targets {
+            registry
+                .root()
+                .identity
+                .as_ref()
+                .map(|identity| format!("{}:{target}", identity.id))
+                .unwrap_or_else(|| target.clone())
+        } else {
+            target.clone()
+        };
+        let plan = registry.plan(&reference)?;
+        for source in plan.sources() {
+            if matches!(
+                source.kind,
+                PlanSourceKind::Base | PlanSourceKind::Overlay { .. }
+            ) {
+                source_files.insert(source.path.clone());
+            }
         }
     }
 

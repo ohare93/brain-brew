@@ -7,14 +7,14 @@ use brain_brew_formats::{crowdanki, manifest, media_map, strict_yaml};
 use crate::args::parse_verify_args;
 use crate::help;
 use crate::io::{
-    ManifestTargetPlan, SourceContext, include_roots_from_manifest, manifest_root,
-    plan_manifest_target_with_packages, read_manifest, resolve_include_target_for_context,
-    root_relative_path, top_level_media_include_path, verify_canonical_deck_format,
-    verify_manifest_format, verify_overlay_format,
+    SourceContext, include_roots_from_manifest, manifest_root, read_manifest,
+    resolve_include_target_for_context, root_relative_path, top_level_media_include_path,
+    verify_canonical_deck_format, verify_manifest_format, verify_overlay_format,
 };
 use crate::media_assets::{validate_media_assets, validate_media_references};
 use crate::output;
 use crate::path_authorization::PathAuthorizer;
+use crate::planner::{ManifestRegistry, PlanSourceKind, TargetPlan};
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -25,8 +25,22 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     verify_manifest_format(&verify_args.manifest_path)?;
     let manifest = read_manifest(&verify_args.manifest_path)?;
     let root = manifest_root(&verify_args.manifest_path);
+    let registry = ManifestRegistry::load(
+        &verify_args.manifest_path,
+        &verify_args.include_paths,
+        &verify_args.package_roots,
+    )?;
+    for loaded in registry.manifests() {
+        verify_manifest_format(&loaded.path)?;
+    }
     let target_names = if verify_args.all_targets {
-        manifest.targets.keys().cloned().collect::<Vec<_>>()
+        registry
+            .root()
+            .manifest
+            .targets
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
     } else if let Some(target) = verify_args.target {
         vec![target]
     } else {
@@ -57,19 +71,22 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         .as_ref()
         .map(|path| root_relative_path(&root, path));
     for target in &target_names {
-        let plan = plan_manifest_target_with_packages(
-            &verify_args.manifest_path,
-            target,
-            &verify_args.include_paths,
-            &verify_args.package_roots,
-        )?;
-        for (overlay, _) in &plan.overlays {
-            verify_overlay_format(&overlay.file)?;
-        }
+        let target_reference = if verify_args.all_targets {
+            registry
+                .root()
+                .identity
+                .as_ref()
+                .map(|identity| format!("{}:{target}", identity.id))
+                .unwrap_or_else(|| target.clone())
+        } else {
+            target.clone()
+        };
+        let plan = registry.plan(&target_reference)?;
+        verify_plan_source_formats(&plan)?;
         let policy = verify_args.translation_coverage.unwrap_or_else(|| {
-            manifest
+            plan.target_manifest
                 .targets
-                .get(target)
+                .get(&plan.target)
                 .map(|target| target.translation_coverage)
                 .unwrap_or_default()
         });
@@ -84,7 +101,12 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         if !verify_args.skip_content_validation {
             verify_deck_content(target, &deck)?;
         }
-        verify_configured_exports(&root, &manifest, target, &deck)?;
+        verify_configured_exports(
+            &plan.target_manifest_root,
+            &plan.target_manifest,
+            &plan.target,
+            &deck,
+        )?;
     }
 
     let suffix = if target_names.len() == 1 { "" } else { "s" };
@@ -143,8 +165,31 @@ fn verify_deck_content(target: &str, deck: &CanonicalDeck) -> Result<(), String>
     }
 }
 
+fn verify_plan_source_formats(plan: &TargetPlan) -> Result<(), String> {
+    verify_canonical_deck_format(&plan.base_source.path)?;
+    for source in plan.sources() {
+        match &source.kind {
+            PlanSourceKind::Overlay { .. } => verify_overlay_format(&source.path)?,
+            PlanSourceKind::MediaInclude => {
+                let input = fs::read_to_string(&source.path)
+                    .map_err(|error| format!("{}: {error}", source.path.display()))?;
+                let formatted = media_map::format_str(&input)
+                    .map_err(|error| format!("{}: {error}", source.path.display()))?;
+                if formatted != input {
+                    return Err(format!(
+                        "{} is not in canonical format",
+                        source.path.display()
+                    ));
+                }
+            }
+            PlanSourceKind::Base | PlanSourceKind::ScalarInclude { .. } => {}
+        }
+    }
+    Ok(())
+}
+
 fn verify_translation_coverage_policy(
-    plan: &ManifestTargetPlan,
+    plan: &TargetPlan,
     policy: manifest::TranslationCoveragePolicy,
 ) -> Result<(), String> {
     let mut current = plan.base.clone();
@@ -199,7 +244,7 @@ fn verify_translation_coverage_policy(
     Ok(())
 }
 
-pub(crate) fn emit_stale_translation_warnings(plan: &ManifestTargetPlan) -> Result<(), String> {
+pub(crate) fn emit_stale_translation_warnings(plan: &TargetPlan) -> Result<(), String> {
     for message in stale_translation_warning_messages(plan)? {
         eprintln!("warning: {message}");
     }
@@ -217,7 +262,7 @@ pub(crate) fn emit_stale_translation_warnings_for_overlays(
     Ok(())
 }
 
-fn stale_translation_warning_messages(plan: &ManifestTargetPlan) -> Result<Vec<String>, String> {
+fn stale_translation_warning_messages(plan: &TargetPlan) -> Result<Vec<String>, String> {
     let mut messages = Vec::new();
     let mut current = plan.base.clone();
     for (planned, overlay) in &plan.overlays {

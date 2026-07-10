@@ -1,77 +1,85 @@
 use serde_json::json;
 
 use crate::args::{parse_targets_args, split_json_flag};
-use crate::commands::lock::locked_package_manifest_paths;
-use crate::io::{manifest_root, read_manifest, target_package_json};
 use crate::output::package_json;
-use crate::package_resolver::{discover_package_manifests, validate_package_dependencies};
+use crate::package_resolver::discover_package_manifests;
+use crate::planner::ManifestRegistry;
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     let (json_output, rest) = split_json_flag(args);
-    let target_args = parse_targets_args(&rest)?;
-    let mut manifest_paths = target_args.manifest_paths;
-    manifest_paths.extend(discover_package_manifests(&target_args.package_roots)?);
-    manifest_paths.sort();
-    manifest_paths.dedup();
-    let lock_manifest_paths = manifest_paths
-        .iter()
-        .map(|path| locked_package_manifest_paths(&manifest_root(path).join("brainbrew.lock")))
-        .collect::<Result<Vec<_>, String>>()?
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
-    let has_lock_manifest_paths = !lock_manifest_paths.is_empty();
-    manifest_paths.extend(lock_manifest_paths);
-    manifest_paths.sort();
-    manifest_paths.dedup();
-    let manifests = manifest_paths
-        .iter()
-        .map(|path| Ok((path, read_manifest(path)?)))
-        .collect::<Result<Vec<_>, String>>()?;
-    if !target_args.package_roots.is_empty() || has_lock_manifest_paths {
-        validate_package_dependencies(
-            &manifests
-                .iter()
-                .map(|(path, manifest)| (*path, manifest))
-                .collect::<Vec<_>>(),
-        )?;
+    let mut target_args = parse_targets_args(&rest)?;
+    if target_args.manifest_paths.is_empty() {
+        target_args.manifest_paths = discover_package_manifests(&target_args.package_roots)?;
     }
+    let Some(root_manifest) = target_args.manifest_paths.first().cloned() else {
+        return Err("no Brain Brew package manifests were discovered".to_owned());
+    };
+    let explicit = target_args
+        .manifest_paths
+        .iter()
+        .skip(1)
+        .cloned()
+        .collect::<Vec<_>>();
+    let registry = ManifestRegistry::load(&root_manifest, &explicit, &target_args.package_roots)?;
 
     if json_output {
-        let packages = manifests
-            .iter()
-            .map(|(path, manifest)| target_package_json(path, manifest))
-            .collect::<Result<Vec<_>, String>>()?;
-        let package = manifests
-            .first()
-            .and_then(|(_, manifest)| manifest.package.as_ref())
-            .map(package_json);
-        let targets = packages
-            .iter()
-            .flat_map(|package| package["targets"].as_array().cloned().unwrap_or_default())
-            .collect::<Vec<_>>();
+        let mut packages = Vec::new();
+        let mut all_targets = Vec::new();
+        for loaded in registry.manifests() {
+            let mut targets = Vec::new();
+            for target in loaded.manifest.targets.keys() {
+                let reference = loaded
+                    .identity
+                    .as_ref()
+                    .map(|identity| format!("{}:{target}", identity.id))
+                    .unwrap_or_else(|| target.clone());
+                let plan = registry.plan(&reference)?;
+                let overlays = plan
+                    .overlays
+                    .iter()
+                    .map(|(overlay, _)| {
+                        json!({
+                            "id": overlay.id,
+                            "qualified_id": overlay.qualified_id,
+                            "file": overlay.display_file,
+                            "kind": format!("{:?}", overlay.kind).to_ascii_lowercase(),
+                            "declared_kind": overlay.declared_kind,
+                            "package": overlay.package.as_ref().map(|package| json!({
+                                "id": package.id,
+                                "version": package.version,
+                            })),
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                let value = json!({
+                    "name": target,
+                    "qualified_name": plan.qualified_name,
+                    "extends": loaded.manifest.targets[target].extends.as_ref(),
+                    "overlays": overlays,
+                });
+                targets.push(value.clone());
+                all_targets.push(value);
+            }
+            packages.push(json!({
+                "manifest": loaded.path.display().to_string(),
+                "package": loaded.manifest.package.as_ref().map(package_json),
+                "targets": targets,
+            }));
+        }
+        let package = registry.root().manifest.package.as_ref().map(package_json);
         println!(
             "{}",
             serde_json::to_string_pretty(
-                &json!({"package": package, "targets": targets, "packages": packages})
+                &json!({"package": package, "targets": all_targets, "packages": packages})
             )
             .unwrap()
         );
     } else {
-        let qualify = manifests.len() > 1;
-        for (_, manifest) in manifests {
-            let prefix = manifest.package.as_ref().map(|package| package.id.as_str());
-            for target in manifest.targets.keys() {
-                if qualify {
-                    if let Some(prefix) = prefix {
-                        println!("{prefix}:{target}");
-                    } else {
-                        println!("{target}");
-                    }
-                } else {
-                    println!("{target}");
-                }
-            }
+        for target in registry.target_references() {
+            // Planning is intentional: text and JSON listings reject the same
+            // missing refs, cycles, identity mismatches, and ambiguous graph.
+            registry.plan(&target)?;
+            println!("{target}");
         }
     }
     Ok(())
