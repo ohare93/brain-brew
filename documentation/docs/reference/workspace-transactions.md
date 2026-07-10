@@ -76,7 +76,7 @@ Recovery takes the same cooperative lock and processes journals in deterministic
 - `Committed`: retain the new tree and finish cleanup;
 - `RolledBack`: retain the old tree and finish cleanup.
 
-A directory created before the initial journal is safe to remove because target replacement is forbidden before journal publication. A malformed journal, missing/corrupt backup, path escape, cross-filesystem parent, or target containing bytes that match neither the old nor new fingerprint stops recovery with an explicit error. Recovery never treats an unrecognized mixed tree as successful.
+A directory created before the initial journal is safe to remove because target replacement is forbidden before journal publication. A rollback restore-stage file left by a crash is discarded and regenerated from the fingerprint-verified backup; its existing bytes are never trusted. A malformed journal, missing/corrupt backup, path escape, cross-filesystem parent, or target containing bytes that match neither the old nor new fingerprint stops recovery with an explicit error. Recovery never treats an unrecognized mixed tree as successful.
 
 ## Concurrency
 

@@ -328,6 +328,7 @@ pub(crate) enum FailurePoint {
     MarkCommitted,
     FinalizeCleanup,
     Rollback(usize),
+    PublishRollbackRestore(usize),
     RecordRollback(usize),
     MarkRolledBack,
 }
@@ -748,6 +749,15 @@ impl<'a> WorkspaceTransactionManager<'a> {
                         reason: "backup fingerprint does not match journal".to_owned(),
                     });
                 }
+                // A crash may leave this derived restore stage behind. Never trust its bytes:
+                // discard it and regenerate exclusively from the fingerprint-verified backup.
+                if path_exists(self.filesystem, &rollback_stage)? {
+                    self.filesystem
+                        .remove_file_durable(&rollback_stage)
+                        .map_err(|source| {
+                            io_error("remove stale rollback stage", &rollback_stage, source)
+                        })?;
+                }
                 self.filesystem
                     .write_new_durable(
                         &rollback_stage,
@@ -755,6 +765,13 @@ impl<'a> WorkspaceTransactionManager<'a> {
                         entry.original_mode.unwrap_or(0o600),
                     )
                     .map_err(|source| io_error("stage rollback", &rollback_stage, source))?;
+                if let Err(failure) = self.inject(&FailurePoint::PublishRollbackRestore(index)) {
+                    return Err(self.interrupted(
+                        journal.transaction_id.clone(),
+                        journal.state.clone(),
+                        failure,
+                    ));
+                }
                 self.filesystem
                     .replace_durable(&rollback_stage, &target)
                     .map_err(|source| io_error("restore target", &target, source))?;
@@ -2022,8 +2039,10 @@ mod tests {
             FailurePoint::Rollback(2),
             FailurePoint::RecordRollback(2),
             FailurePoint::Rollback(1),
+            FailurePoint::PublishRollbackRestore(1),
             FailurePoint::RecordRollback(1),
             FailurePoint::Rollback(0),
+            FailurePoint::PublishRollbackRestore(0),
             FailurePoint::RecordRollback(0),
             FailurePoint::MarkRolledBack,
         ];
@@ -2043,6 +2062,52 @@ mod tests {
                 .unwrap();
             assert_original(directory.path());
         }
+    }
+
+    #[test]
+    fn recovery_discards_a_stale_restore_stage_and_regenerates_it_from_the_backup() {
+        let (directory, plan) = fixture();
+        let filesystem = RealWorkspaceFilesystem;
+        let transaction = plan.validate(&filesystem).unwrap();
+        let failures = TwoFailures::new(
+            (FailurePoint::Replace(2), InjectedFailure::Error),
+            (
+                FailurePoint::PublishRollbackRestore(1),
+                InjectedFailure::Crash,
+            ),
+        );
+        WorkspaceTransactionManager::new(&filesystem, &failures)
+            .commit(transaction)
+            .unwrap_err();
+
+        let control = directory.path().join(CONTROL_DIRECTORY);
+        let transaction_directory = fs::read_dir(&control)
+            .unwrap()
+            .filter_map(Result::ok)
+            .find(|entry| entry.file_type().unwrap().is_dir())
+            .unwrap()
+            .path();
+        let stale_stage = transaction_directory.join("backups/1.restore");
+        assert!(stale_stage.exists());
+        fs::write(&stale_stage, b"attacker-controlled stale stage\n").unwrap();
+
+        let actions = WorkspaceTransactionManager::new(&filesystem, &NoFailures)
+            .recover(directory.path())
+            .unwrap();
+        assert!(matches!(
+            actions.as_slice(),
+            [RecoveryAction::RolledBack { .. }]
+        ));
+        assert_original(directory.path());
+        assert!(!transaction_directory.exists());
+
+        assert!(
+            WorkspaceTransactionManager::new(&filesystem, &NoFailures)
+                .recover(directory.path())
+                .unwrap()
+                .is_empty()
+        );
+        assert_original(directory.path());
     }
 
     struct TwoFailures {
