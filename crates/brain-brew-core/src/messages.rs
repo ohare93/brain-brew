@@ -14,6 +14,16 @@ impl CanonicalDeck {
             Err(ValidationReport { errors })
         }
     }
+
+    /// Resolve one scalar/message field as semantic text without lowering images.
+    pub fn field_text(&self, note_id: &StableId, field_id: &StableId) -> Option<String> {
+        let path = DeckPath::NoteField {
+            note_id: note_id.clone(),
+            field_id: field_id.clone(),
+        }
+        .to_string();
+        rendered_field_text_at_path(self, &path)
+    }
 }
 
 pub(crate) fn validate_message_references(
@@ -121,52 +131,86 @@ pub(crate) fn resolve_structured_messages_with_validation_errors(
     });
 }
 
-pub(crate) fn resolve_structured_messages_with_compose_errors(
-    deck: &mut CanonicalDeck,
-    errors: &mut Vec<ComposeError>,
-) {
-    resolve_structured_messages(deck, errors, |path, message| {
-        ComposeError::new(ComposeErrorKind::ValidationFailed, path, message)
-    });
-}
-
 fn resolve_structured_messages<E>(
     deck: &mut CanonicalDeck,
     errors: &mut Vec<E>,
     make_error: impl Fn(String, String) -> E,
 ) {
     let snapshot = deck.clone();
+    let message_fields = snapshot
+        .notes
+        .iter()
+        .flat_map(|(note_id, note)| {
+            note.fields.iter().filter_map(move |(field_id, value)| {
+                matches!(value, FieldValue::Message(_))
+                    .then_some((note_id.clone(), field_id.clone()))
+            })
+        })
+        .collect::<Vec<_>>();
+    let mut memo = BTreeMap::<String, String>::new();
     let mut resolved_fields = Vec::<(StableId, StableId, String)>::new();
-    for (note_id, note) in &snapshot.notes {
-        for (field_id, message) in &note.field_messages {
-            match render_structured_message(&snapshot, message) {
-                Ok(value) => resolved_fields.push((note_id.clone(), field_id.clone(), value)),
-                Err(error) => errors.push(make_error(
-                    DeckPath::NoteFieldMessage {
-                        note_id: note_id.clone(),
-                        field_id: field_id.clone(),
-                    }
-                    .to_string(),
-                    error.message(),
-                )),
-            }
+    for (note_id, field_id) in message_fields {
+        let path = DeckPath::NoteField {
+            note_id: note_id.clone(),
+            field_id: field_id.clone(),
+        }
+        .to_string();
+        match render_field_at_path(&snapshot, &path, &mut BTreeSet::new(), &mut memo) {
+            Ok(value) => resolved_fields.push((note_id, field_id, value)),
+            Err(error) => errors.push(make_error(path, error.message())),
         }
     }
     for (note_id, field_id, value) in resolved_fields {
         if let Some(note) = deck.notes.get_mut(&note_id) {
-            note.fields.insert(field_id, value);
+            note.fields.insert(field_id, FieldValue::Scalar(value));
         }
     }
+}
+
+fn render_field_at_path(
+    deck: &CanonicalDeck,
+    path: &str,
+    visiting: &mut BTreeSet<String>,
+    memo: &mut BTreeMap<String, String>,
+) -> Result<String, StructuredMessageRenderError> {
+    if let Some(value) = memo.get(path) {
+        return Ok(value.clone());
+    }
+    if !visiting.insert(path.to_owned()) {
+        return Err(StructuredMessageRenderError::Cycle(path.to_owned()));
+    }
+    let value = match field_value_at_path(deck, path) {
+        Some(FieldValue::Scalar(value)) => Ok(value.clone()),
+        Some(FieldValue::Message(message)) => {
+            render_structured_message(deck, message, visiting, memo)
+        }
+        Some(FieldValue::Images(_)) => Err(StructuredMessageRenderError::NonTextReference(
+            path.to_owned(),
+        )),
+        None => Err(StructuredMessageRenderError::InvalidReference(
+            path.to_owned(),
+        )),
+    };
+    visiting.remove(path);
+    if let Ok(value) = &value {
+        memo.insert(path.to_owned(), value.clone());
+    }
+    value
 }
 
 fn render_structured_message(
     deck: &CanonicalDeck,
     message: &StructuredMessage,
+    visiting: &mut BTreeSet<String>,
+    memo: &mut BTreeMap<String, String>,
 ) -> Result<String, StructuredMessageRenderError> {
     if let Some(format) = &message.format {
         let mut variables = BTreeMap::new();
         for (name, component) in &message.variables {
-            variables.insert(name.clone(), render_message_component(deck, component)?);
+            variables.insert(
+                name.clone(),
+                render_message_component(deck, component, visiting, memo)?,
+            );
         }
         return render_message_format(format, &variables)
             .map_err(StructuredMessageRenderError::Format);
@@ -174,7 +218,7 @@ fn render_structured_message(
 
     let mut rendered = String::new();
     for component in &message.components {
-        rendered.push_str(&render_message_component(deck, component)?);
+        rendered.push_str(&render_message_component(deck, component, visiting, memo)?);
     }
     Ok(rendered)
 }
@@ -182,16 +226,13 @@ fn render_structured_message(
 fn render_message_component(
     deck: &CanonicalDeck,
     component: &MessageComponent,
+    visiting: &mut BTreeSet<String>,
+    memo: &mut BTreeMap<String, String>,
 ) -> Result<String, StructuredMessageRenderError> {
     match component {
         MessageComponent::Literal(value) | MessageComponent::Text(value) => Ok(value.clone()),
         MessageComponent::FieldRef(reference) => {
-            let Some(value) = field_value_at_path(deck, reference) else {
-                return Err(StructuredMessageRenderError::InvalidReference(
-                    reference.clone(),
-                ));
-            };
-            Ok(value.to_owned())
+            render_field_at_path(deck, reference, visiting, memo)
         }
     }
 }
@@ -199,6 +240,8 @@ fn render_message_component(
 #[derive(Debug)]
 enum StructuredMessageRenderError {
     InvalidReference(String),
+    NonTextReference(String),
+    Cycle(String),
     Format(String),
 }
 
@@ -208,6 +251,12 @@ impl StructuredMessageRenderError {
             Self::InvalidReference(reference) => format!(
                 "structured message field reference {reference:?} does not resolve to a note field"
             ),
+            Self::NonTextReference(reference) => format!(
+                "structured message field reference {reference:?} resolves to structured images, not text"
+            ),
+            Self::Cycle(reference) => {
+                format!("structured message field reference cycle includes {reference:?}")
+            }
             Self::Format(message) => message.clone(),
         }
     }
@@ -297,14 +346,20 @@ fn parse_message_format(format: &str) -> Result<Vec<MessageFormatPart>, String> 
     Ok(parts)
 }
 
-pub(crate) fn field_value_at_path<'a>(deck: &'a CanonicalDeck, path: &str) -> Option<&'a str> {
+pub(crate) fn field_value_at_path<'a>(
+    deck: &'a CanonicalDeck,
+    path: &str,
+) -> Option<&'a FieldValue> {
     let DeckPath::NoteField { note_id, field_id } = path.parse().ok()? else {
         return None;
     };
     deck.notes
         .get(&note_id)
         .and_then(|note| note.fields.get(&field_id))
-        .map(String::as_str)
+}
+
+pub(crate) fn rendered_field_text_at_path(deck: &CanonicalDeck, path: &str) -> Option<String> {
+    render_field_at_path(deck, path, &mut BTreeSet::new(), &mut BTreeMap::new()).ok()
 }
 
 pub(crate) fn message_component_path(

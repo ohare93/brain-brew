@@ -180,11 +180,14 @@ tombstones: []
     let deck = canonical_yaml::from_str(yaml).expect("structured message yaml parses");
 
     assert_eq!(
-        deck.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
-        "Iceland (blue background with a white cross)"
+        deck.field_text(&sid("note.finland"), &sid("field.flag-similarity"))
+            .as_deref(),
+        Some("Iceland (blue background with a white cross)")
     );
     assert_eq!(
-        deck.notes[&sid("note.finland")].field_messages[&sid("field.flag-similarity")]
+        deck.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")]
+            .as_message()
+            .unwrap()
             .components
             .len(),
         4
@@ -246,10 +249,13 @@ tombstones: []
     let deck = canonical_yaml::from_str(yaml).expect("formatted structured message yaml parses");
 
     assert_eq!(
-        deck.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
-        "Iceland (blue background with a white cross)"
+        deck.field_text(&sid("note.finland"), &sid("field.flag-similarity"))
+            .as_deref(),
+        Some("Iceland (blue background with a white cross)")
     );
-    let message = &deck.notes[&sid("note.finland")].field_messages[&sid("field.flag-similarity")];
+    let message = deck.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")]
+        .as_message()
+        .unwrap();
     assert_eq!(message.format.as_deref(), Some("{country} ({description})"));
     assert!(message.variables.contains_key("description"));
 
@@ -545,9 +551,8 @@ fn parses_emits_and_formats_structured_image_fields() {
 
     let deck = canonical_yaml::from_str(&yaml).expect("image field yaml parses");
     let note = &deck.notes[&sid("note.finland")];
-    assert_eq!(note.fields[&sid("field.flag")], "");
     assert_eq!(
-        note.field_images[&sid("field.flag")][0].media_id,
+        note.fields[&sid("field.flag")].as_images().unwrap()[0].media_id,
         sid("media.flag.finland")
     );
 
@@ -578,7 +583,10 @@ fn image_field_sequence_canonicalizes_singletons_and_emits_block_sequences() {
     ));
     let parsed = canonical_yaml::from_str(&sequence).expect("image sequence parses");
     assert_eq!(
-        parsed.notes[&sid("note.finland")].field_images[&sid("field.flag")].len(),
+        parsed.notes[&sid("note.finland")].fields[&sid("field.flag")]
+            .as_images()
+            .unwrap()
+            .len(),
         2
     );
     assert_eq!(canonical_yaml::format_str(&sequence).unwrap(), sequence);
@@ -602,9 +610,9 @@ fn include_resolver_passes_image_tags_through_when_includes_are_present() {
     assert!(formatted.contains("field.flag: !image media.flag.finland\n"));
     let deck = canonical_yaml::from_str(&resolved).expect("resolved deck parses");
     assert!(
-        deck.notes[&sid("note.finland")]
-            .field_images
-            .contains_key(&sid("field.flag"))
+        deck.notes[&sid("note.finland")].fields[&sid("field.flag")]
+            .as_images()
+            .is_some()
     );
 }
 
@@ -934,9 +942,8 @@ fn ug_style_deck() -> CanonicalDeck {
             (sid("field.country"), "Finland".to_owned()),
             (sid("field.capital"), "Helsinki".to_owned()),
             (sid("field.flag"), "<img src=\"fi.png\">".to_owned()),
-        ]),
-        field_messages: BTreeMap::new(),
-        field_images: BTreeMap::new(),
+        ])
+        .into(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: note_adapter_ids,
     };

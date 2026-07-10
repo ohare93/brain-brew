@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use brain_brew_core::{CanonicalDeck, StableId};
+use brain_brew_core::{CanonicalDeck, FieldValue, StableId};
 
 use crate::canonical_yaml;
 use crate::source_document::{
@@ -146,17 +146,23 @@ impl CanonicalSourceDocument {
         mut loader: impl FnMut(&IncludeRequest) -> Result<SourceFile, String>,
     ) -> Result<Self, SourceDocumentError> {
         let prepared = prepare_source(source, true, &mut loader)?;
-        let mut deck =
-            canonical_yaml::from_str(&prepared.yaml_without_directives).map_err(|error| {
-                SourceDocumentError::source(prepared.root.provenance(), error.to_string())
-            })?;
+        let root_yaml = yaml_with_included_media_for_validation(
+            &prepared.yaml_without_directives,
+            prepared.includes.media(),
+        )?;
+        let mut deck = canonical_yaml::from_str(&root_yaml).map_err(|error| {
+            SourceDocumentError::source(prepared.root.provenance(), error.to_string())
+        })?;
         if let Some(media) = prepared.includes.media() {
             deck.media = media.clone();
         }
-        let mut resolved_deck =
-            canonical_yaml::from_str(&prepared.materialized_yaml).map_err(|error| {
-                SourceDocumentError::source(prepared.root.provenance(), error.to_string())
-            })?;
+        let materialized_yaml = yaml_with_included_media_for_validation(
+            &prepared.materialized_yaml,
+            prepared.includes.media(),
+        )?;
+        let mut resolved_deck = canonical_yaml::from_str(&materialized_yaml).map_err(|error| {
+            SourceDocumentError::source(prepared.root.provenance(), error.to_string())
+        })?;
         if let Some(media) = prepared.includes.media() {
             resolved_deck.media = media.clone();
         }
@@ -310,15 +316,11 @@ impl CanonicalSourceDocument {
         for note in next.deck.notes.values_mut() {
             let field_ids = note.fields.keys().cloned().collect::<Vec<_>>();
             for field_id in field_ids {
-                if note.field_messages.contains_key(&field_id)
-                    || note.field_images.contains_key(&field_id)
-                {
+                let Some(text) = note.fields[&field_id].as_scalar() else {
                     continue;
-                }
-                let text = &note.fields[&field_id];
+                };
                 if let Some(images) = convert_text_to_images(text, lookup, &mut report) {
-                    note.fields.insert(field_id.clone(), String::new());
-                    note.field_images.insert(field_id, images);
+                    note.fields.insert(field_id, FieldValue::Images(images));
                 }
             }
         }
@@ -330,11 +332,7 @@ impl CanonicalSourceDocument {
     /// Emit deterministic canonical root YAML and changed include outputs.
     pub fn emit(&self) -> Result<SourceDocumentEmission, SourceDocumentError> {
         self.validate()?;
-        let mut deck = self.deck.clone();
-        if self.includes.media().is_some() {
-            deck.media.clear();
-        }
-        let canonical = canonical_yaml::to_string(&deck)
+        let canonical = canonical_yaml::to_string(&self.deck)
             .map_err(|error| SourceDocumentError::source(&self.provenance, error.to_string()))?;
         let canonical = self.includes.restore_directives(canonical)?;
         // The codec generated every schema value; this final strict pass protects
@@ -354,6 +352,30 @@ impl CanonicalSourceDocument {
             .map(|_| ())
             .map_err(|error| SourceDocumentError::source(&self.provenance, error.to_string()))
     }
+}
+
+fn yaml_with_included_media_for_validation(
+    yaml: &str,
+    media: Option<&BTreeMap<StableId, brain_brew_core::MediaReference>>,
+) -> Result<String, SourceDocumentError> {
+    let Some(media) = media else {
+        return Ok(yaml.to_owned());
+    };
+    if media.is_empty() {
+        return Ok(yaml.to_owned());
+    }
+    let placeholder = "media: {}\n";
+    if yaml.matches(placeholder).count() != 1 {
+        return Err(SourceDocumentError::source(
+            &SourceProvenance::new("canonical deck"),
+            "expected one empty media placeholder while loading media include",
+        ));
+    }
+    let body = crate::media_map::to_string(media)
+        .lines()
+        .map(|line| format!("  {line}\n"))
+        .collect::<String>();
+    Ok(yaml.replacen(placeholder, &format!("media:\n{body}"), 1))
 }
 
 fn scalar_mut<'a>(
@@ -409,15 +431,12 @@ fn scalar_mut<'a>(
         CanonicalScalarTarget::NoteVariable { note_id, key } => {
             deck.notes.get_mut(note_id)?.variables.get_mut(key)
         }
-        CanonicalScalarTarget::NoteField { note_id, field_id } => {
-            let note = deck.notes.get_mut(note_id)?;
-            if note.field_messages.contains_key(field_id)
-                || note.field_images.contains_key(field_id)
-            {
-                return None;
-            }
-            note.fields.get_mut(field_id)
-        }
+        CanonicalScalarTarget::NoteField { note_id, field_id } => deck
+            .notes
+            .get_mut(note_id)?
+            .fields
+            .get_mut(field_id)?
+            .as_scalar_mut(),
     }
 }
 

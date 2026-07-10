@@ -1,9 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::messages::{
-    resolve_structured_messages_with_compose_errors,
-    resolve_structured_messages_with_validation_errors,
-};
+use crate::messages::resolve_structured_messages_with_validation_errors;
 use crate::translation::apply_translation_dictionary;
 use crate::*;
 
@@ -14,11 +11,8 @@ impl CanonicalDeck {
         let mut errors = Vec::new();
         let mut changed_paths = BTreeMap::<String, StableId>::new();
 
-        resolve_structured_messages_with_compose_errors(&mut resolved, &mut errors);
-
         for overlay in overlays {
             apply_overlay(&mut resolved, overlay, &mut changed_paths, &mut errors);
-            resolve_structured_messages_with_compose_errors(&mut resolved, &mut errors);
         }
 
         if !errors.is_empty() {
@@ -624,6 +618,14 @@ fn apply_string_property_change(
                     return;
                 }
             }
+            ExpectedBase::FieldValue(expected) => {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::ExpectedBaseMismatch,
+                    path,
+                    format!("semantic field expected base {expected:?} cannot apply to a scalar property"),
+                ));
+                return;
+            }
         }
     }
 
@@ -719,6 +721,14 @@ fn apply_map_string_property_change(
                     return;
                 }
             }
+            ExpectedBase::FieldValue(expected) => {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::ExpectedBaseMismatch,
+                    path,
+                    format!("semantic field expected base {expected:?} cannot apply to a scalar property"),
+                ));
+                return;
+            }
         }
     }
 
@@ -794,6 +804,16 @@ fn apply_adapter_id_change(
                     ));
                     return;
                 }
+            }
+            ExpectedBase::FieldValue(expected) => {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::ExpectedBaseMismatch,
+                    path,
+                    format!(
+                        "semantic field expected base {expected:?} cannot apply to an adapter ID"
+                    ),
+                ));
+                return;
             }
         }
     }
@@ -1078,6 +1098,14 @@ fn apply_tag_change(
                     return;
                 }
             }
+            ExpectedBase::FieldValue(expected) => {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::ExpectedBaseMismatch,
+                    path,
+                    format!("semantic field expected base {expected:?} cannot apply to a tag"),
+                ));
+                return;
+            }
         }
     }
 
@@ -1121,89 +1149,75 @@ fn apply_field_change(
         return;
     }
 
+    let current_value = note.fields.get(field_id);
     if let Some(expected_base) = &change.expected_base {
-        match expected_base {
-            ExpectedBase::Value(expected_value) => {
-                let current_value = note.fields.get(field_id).map(String::as_str);
-                if current_value != Some(expected_value.as_str()) {
-                    errors.push(ComposeError::new(
-                        ComposeErrorKind::ExpectedBaseMismatch,
-                        path,
-                        format!(
-                            "expected base value {:?}, found {:?}",
-                            expected_value, current_value
-                        ),
-                    ));
-                    return;
-                }
+        let matches = match expected_base {
+            ExpectedBase::Value(expected) => {
+                current_value == Some(&FieldValue::Scalar(expected.clone()))
             }
-            ExpectedBase::EntityPresent => {
-                if !note.fields.contains_key(field_id) {
-                    errors.push(ComposeError::new(
-                        ComposeErrorKind::ExpectedBaseMismatch,
-                        path,
-                        format!("expected field {field_id} to be present"),
-                    ));
-                    return;
-                }
-            }
+            ExpectedBase::FieldValue(expected) => current_value == Some(expected),
+            ExpectedBase::EntityPresent => current_value.is_some(),
+        };
+        if !matches {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::ExpectedBaseMismatch,
+                path,
+                format!(
+                    "expected base value {:?}, found {:?}",
+                    expected_base, current_value
+                ),
+            ));
+            return;
         }
     }
 
-    let current_value = note.fields.get(field_id).map(String::as_str).unwrap_or("");
+    if change.intent == ChangeIntent::Remove {
+        if change.value.is_some() {
+            errors.push(ComposeError::new(
+                ComposeErrorKind::MissingOverlayPayload,
+                path,
+                format!("remove field change for {field_id} must not include a value"),
+            ));
+            return;
+        }
+        note.fields.remove(field_id);
+        return;
+    }
+
+    let Some(replacement) = &change.value else {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::MissingOverlayPayload,
+            path,
+            format!("field change for {field_id} must include one semantic value"),
+        ));
+        return;
+    };
 
     match change.intent {
-        ChangeIntent::Add if !current_value.is_empty() => {
+        ChangeIntent::Add if current_value.is_some_and(|value| !value.is_blank()) => {
             errors.push(ComposeError::new(
                 ComposeErrorKind::AlreadyExists,
                 path,
                 format!("field {field_id} already has a non-blank value on note {note_id}"),
             ));
         }
-        ChangeIntent::Merge if !current_value.is_empty() => {
+        ChangeIntent::Merge if current_value.is_some_and(|value| !value.is_blank()) => {
             errors.push(ComposeError::new(
                 ComposeErrorKind::ExpectedBaseMismatch,
                 path,
                 format!(
-                    "field-level merge may only fill a blank value; found {:?}",
+                    "field-level merge may only fill a blank scalar value; found {:?}",
                     current_value
                 ),
             ));
-        }
-        ChangeIntent::Remove => {
-            note.fields.remove(field_id);
-            note.field_messages.remove(field_id);
-            note.field_images.remove(field_id);
         }
         ChangeIntent::Add
         | ChangeIntent::Merge
         | ChangeIntent::Replace
         | ChangeIntent::Override => {
-            if let Some(message) = &change.message {
-                note.fields.insert(field_id.clone(), String::new());
-                note.field_messages
-                    .insert(field_id.clone(), message.clone());
-                note.field_images.remove(field_id);
-                return;
-            }
-            if let Some(images) = &change.images {
-                note.fields.insert(field_id.clone(), String::new());
-                note.field_images.insert(field_id.clone(), images.clone());
-                note.field_messages.remove(field_id);
-                return;
-            }
-            let Some(value) = &change.value else {
-                errors.push(ComposeError::new(
-                    ComposeErrorKind::MissingOverlayPayload,
-                    path,
-                    format!("field change for {field_id} must include a value, message, or images"),
-                ));
-                return;
-            };
-            note.fields.insert(field_id.clone(), value.clone());
-            note.field_messages.remove(field_id);
-            note.field_images.remove(field_id);
+            note.fields.insert(field_id.clone(), replacement.clone());
         }
+        ChangeIntent::Remove => unreachable!("remove handled above"),
     }
 }
 
@@ -1251,6 +1265,14 @@ fn apply_media_change(
                     ));
                     return;
                 }
+            }
+            ExpectedBase::FieldValue(expected) => {
+                errors.push(ComposeError::new(
+                    ComposeErrorKind::ExpectedBaseMismatch,
+                    path,
+                    format!("semantic field expected base {expected:?} cannot apply to media"),
+                ));
+                return;
             }
         }
     }
@@ -1722,34 +1744,25 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
             .map(|note_type| &note_type.variables);
         for (field_id, value) in &mut note.fields {
             let path = note_field_path(note_id, field_id);
-            if let Some(note_type_variables) = note_type_variables {
-                render_string_with_variables(
-                    value,
-                    &path,
-                    &[&note_variables, note_type_variables, &deck_variables],
-                    &mut errors,
-                );
-            } else {
-                render_string_with_variables(
-                    value,
-                    &path,
-                    &[&note_variables, &deck_variables],
-                    &mut errors,
-                );
-            }
-        }
-        for (field_id, message) in &mut note.field_messages {
             let scopes = if let Some(note_type_variables) = note_type_variables {
                 vec![&note_variables, note_type_variables, &deck_variables]
             } else {
                 vec![&note_variables, &deck_variables]
             };
-            render_message_variables(
-                message,
-                &note_field_message_path(note_id, field_id),
-                &scopes,
-                &mut errors,
-            );
+            match value {
+                FieldValue::Scalar(value) => {
+                    render_string_with_variables(value, &path, &scopes, &mut errors);
+                }
+                FieldValue::Message(message) => {
+                    render_message_variables(
+                        message,
+                        &note_field_message_path(note_id, field_id),
+                        &scopes,
+                        &mut errors,
+                    );
+                }
+                FieldValue::Images(_) => {}
+            }
         }
         render_image_fields(note_id, note, &media_paths, &mut image_errors);
     }
@@ -1779,7 +1792,15 @@ fn render_image_fields(
     media_paths: &BTreeMap<StableId, String>,
     errors: &mut Vec<ValidationError>,
 ) {
-    let image_fields = note.field_images.clone();
+    let image_fields = note
+        .fields
+        .iter()
+        .filter_map(|(field_id, value)| {
+            value
+                .as_images()
+                .map(|images| (field_id.clone(), images.to_vec()))
+        })
+        .collect::<Vec<_>>();
     for (field_id, images) in image_fields {
         let path = note_field_path(note_id, &field_id);
         let mut rendered = String::new();
@@ -1803,8 +1824,8 @@ fn render_image_fields(
             rendered.push_str("\" />");
         }
         if !field_has_error {
-            note.fields.insert(field_id.clone(), rendered);
-            note.field_images.remove(&field_id);
+            note.fields
+                .insert(field_id.clone(), FieldValue::Scalar(rendered));
         }
     }
 }
@@ -2047,8 +2068,8 @@ fn diff_notes(
 
 fn diff_note_fields(
     note_id: &StableId,
-    left: &BTreeMap<StableId, String>,
-    right: &BTreeMap<StableId, String>,
+    left: &BTreeMap<StableId, FieldValue>,
+    right: &BTreeMap<StableId, FieldValue>,
     changes: &mut Vec<SemanticChange>,
 ) {
     for field_id in left.keys() {
@@ -2056,7 +2077,7 @@ fn diff_note_fields(
             changes.push(SemanticChange::new(
                 SemanticChangeKind::Removed,
                 note_field_path(note_id, field_id),
-                left.get(field_id).cloned(),
+                left.get(field_id).map(field_value_summary),
                 None,
             ));
         }
@@ -2068,7 +2089,7 @@ fn diff_note_fields(
                 SemanticChangeKind::Added,
                 note_field_path(note_id, field_id),
                 None,
-                Some(right_value.clone()),
+                Some(field_value_summary(right_value)),
             ));
             continue;
         };
@@ -2076,8 +2097,8 @@ fn diff_note_fields(
         push_modified_if_changed(
             changes,
             note_field_path(note_id, field_id),
-            left_value,
-            right_value,
+            &field_value_summary(left_value),
+            &field_value_summary(right_value),
         );
     }
 }
@@ -2150,6 +2171,14 @@ fn push_modified_if_changed(
             Some(left.to_owned()),
             Some(right.to_owned()),
         ));
+    }
+}
+
+fn field_value_summary(value: &FieldValue) -> String {
+    match value {
+        FieldValue::Scalar(value) => value.clone(),
+        FieldValue::Images(images) => format!("images:{images:?}"),
+        FieldValue::Message(message) => format!("message:{message:?}"),
     }
 }
 

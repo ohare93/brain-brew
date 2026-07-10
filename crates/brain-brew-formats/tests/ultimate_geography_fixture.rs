@@ -108,10 +108,9 @@ fn ultimate_geography_fixture_uses_structured_messages_for_flag_similarity() {
         .flat_map(|target| {
             let deck = compose_target(&root, &manifest, target);
             deck.notes
-                .values()
-                .filter_map(|note| note.fields.get(&sid("field.flag-similarity")))
+                .keys()
+                .filter_map(|note_id| deck.field_text(note_id, &sid("field.flag-similarity")))
                 .filter(|value| !value.is_empty())
-                .cloned()
                 .collect::<Vec<_>>()
         })
         .collect();
@@ -374,7 +373,9 @@ fn ultimate_geography_hardcore_extension_builds_on_main_deck_without_erasing_bas
         english.notes[&sid("note.hardcore-anguilla")].fields[&sid("field.capital")],
         "The Valley"
     );
-    let anguilla_map_images = &english.notes[&sid("note.anguilla")].field_images[&sid("field.map")];
+    let anguilla_map_images = english.notes[&sid("note.anguilla")].fields[&sid("field.map")]
+        .as_images()
+        .unwrap();
     assert_eq!(
         anguilla_map_images
             .iter()
@@ -857,9 +858,7 @@ fn ug_regression_field_definition_changes_flow_to_crowdanki_for_every_target() {
             field_id,
             FieldChange {
                 intent: ChangeIntent::Add,
-                value: Some(finland_value.clone()),
-                message: None,
-                images: None,
+                value: Some((finland_value.clone()).into()),
                 expected_base: None,
             },
         );
@@ -1111,10 +1110,8 @@ fn ug_regression_note_changes_flow_to_crowdanki_for_every_target() {
             field_id,
             FieldChange {
                 intent: ChangeIntent::Override,
-                value: Some(new_value.clone()),
-                message: None,
-                images: None,
-                expected_base: Some(ExpectedBase::Value(current_value)),
+                value: Some((new_value.clone()).into()),
+                expected_base: Some(ExpectedBase::FieldValue(current_value)),
             },
         );
         let mut overlay = empty_overlay(&format!("overlay.regression.note-field.{target}"));
@@ -1146,10 +1143,8 @@ fn ug_regression_note_changes_flow_to_crowdanki_for_every_target() {
             field_id,
             FieldChange {
                 intent: ChangeIntent::Override,
-                value: Some("${regression.country}".to_owned()),
-                message: None,
-                images: None,
-                expected_base: Some(ExpectedBase::Value(current_value)),
+                value: Some(("${regression.country}".to_owned()).into()),
+                expected_base: Some(ExpectedBase::FieldValue(current_value)),
             },
         );
         let mut overlay = empty_overlay(&format!("overlay.regression.note-variable.{target}"));
@@ -1261,9 +1256,7 @@ fn ug_regression_note_changes_flow_to_crowdanki_for_every_target() {
             id: note_id.clone(),
             note_type_id: note_type.id.clone(),
             variables: BTreeMap::new(),
-            fields,
-            field_messages: BTreeMap::new(),
-            field_images: BTreeMap::new(),
+            fields: fields.into(),
             tags: BTreeSet::from(["ZZZ::Regression".to_owned()]),
             adapter_ids,
         };
@@ -1300,7 +1293,10 @@ fn ug_regression_translation_overlay_changes_flow_to_resolved_and_crowdanki_outp
     let baseline_json = exported_json(&baseline_deck);
     let note_id = sid("note.finland");
     let field_id = sid("field.capital");
-    let current_value = baseline_deck.notes[&note_id].fields[&field_id].clone();
+    let current_value = baseline_deck.notes[&note_id].fields[&field_id]
+        .as_scalar()
+        .unwrap()
+        .to_owned();
     let translated_value = "Regression translated capital".to_owned();
     let expected_export_path =
         note_field_json_path(&baseline_deck, "note.finland", "field.capital");

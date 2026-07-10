@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
-    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, MediaReference,
-    Note, NoteType, StableId,
+    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, FieldValue,
+    MediaReference, Note, NoteType, StableId,
 };
 use brain_brew_formats::{canonical_yaml, crowdanki};
 
@@ -43,12 +43,11 @@ fn export_is_byte_identical_for_structured_image_and_equivalent_raw_img_field() 
         .insert(sid("field.flag"), "<img src=\"flags/fi.png\" />".to_owned());
     let mut structured = ug_style_deck();
     let note = structured.notes.get_mut(&sid("note.finland")).unwrap();
-    note.fields.insert(sid("field.flag"), String::new());
-    note.field_images.insert(
+    note.fields.insert(
         sid("field.flag"),
-        vec![FieldImageReference {
+        FieldValue::Images(vec![FieldImageReference {
             media_id: sid("media.flags-fi-png"),
-        }],
+        }]),
     );
 
     let raw_json = crowdanki::export_deck(&raw)
@@ -75,17 +74,15 @@ fn import_emits_strict_image_fields_as_structured_references() {
         .expect("strict image fields import");
     let note = imported.notes.get(&sid("note.finland")).unwrap();
 
-    assert_eq!(note.fields.get(&sid("field.capital")).unwrap(), "");
-    assert_eq!(note.fields.get(&sid("field.flag")).unwrap(), "");
     assert_eq!(
-        note.field_images.get(&sid("field.capital")).unwrap(),
-        &vec![FieldImageReference {
+        note.fields[&sid("field.capital")].as_images().unwrap(),
+        &[FieldImageReference {
             media_id: sid("media.flags-fi-png"),
         }]
     );
     assert_eq!(
-        note.field_images.get(&sid("field.flag")).unwrap(),
-        &vec![
+        note.fields[&sid("field.flag")].as_images().unwrap(),
+        &[
             FieldImageReference {
                 media_id: sid("media.flags-fi-png"),
             },
@@ -122,7 +119,7 @@ fn import_decodes_safe_rendered_image_url_back_to_original_media_filename() {
     let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
         .expect("encoded strict image path imports");
     let note = imported.notes.get(&sid("note.finland")).unwrap();
-    assert!(note.field_images.contains_key(&sid("field.flag")));
+    assert!(note.fields[&sid("field.flag")].as_images().is_some());
     assert_eq!(imported.media.values().next().unwrap().path, original);
 }
 
@@ -179,7 +176,7 @@ fn import_keeps_non_strict_or_ambiguous_image_html_as_raw_fields() {
         let note_id = sid(&format!("note.{}", slug_for_test(label)));
         let note = imported.notes.get(&note_id).unwrap();
         assert_eq!(note.fields.get(&sid("field.flag")).unwrap(), expected_value);
-        assert!(!note.field_images.contains_key(&sid("field.flag")));
+        assert!(note.fields[&sid("field.flag")].as_scalar().is_some());
     }
     assert!(
         yaml.contains("field.flag: '<img src=\"x.png\" alt=\"y\" />'"),
@@ -210,24 +207,22 @@ fn structured_image_fields_survive_crowdanki_export_import_round_trip() {
         },
     );
     let note = original.notes.get_mut(&sid("note.finland")).unwrap();
-    note.fields.insert(sid("field.capital"), String::new());
-    note.field_images.insert(
+    note.fields.insert(
         sid("field.capital"),
-        vec![FieldImageReference {
+        FieldValue::Images(vec![FieldImageReference {
             media_id: sid("media.flags-fi-png"),
-        }],
+        }]),
     );
-    note.fields.insert(sid("field.flag"), String::new());
-    note.field_images.insert(
+    note.fields.insert(
         sid("field.flag"),
-        vec![
+        FieldValue::Images(vec![
             FieldImageReference {
                 media_id: sid("media.flags-fi-png"),
             },
             FieldImageReference {
                 media_id: sid("media.maps-fi-png"),
             },
-        ],
+        ]),
     );
 
     let export = crowdanki::export_deck(&original).expect("structured deck exports");
@@ -1066,9 +1061,8 @@ fn ug_style_deck() -> CanonicalDeck {
             (sid("field.country"), "Finland".to_owned()),
             (sid("field.capital"), "Helsinki".to_owned()),
             (sid("field.flag"), "<img src=\"fi.png\">".to_owned()),
-        ]),
-        field_messages: BTreeMap::new(),
-        field_images: BTreeMap::new(),
+        ])
+        .into(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: note_adapter_ids,
     };

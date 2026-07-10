@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
-    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, MessageComponent, Note, NoteType,
-    Overlay, OverlayKind, StableId, StaleTranslation, StructuredMessage,
+    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldValue, MessageComponent, Note,
+    NoteType, Overlay, OverlayKind, StableId, StaleTranslation, StructuredMessage,
     TranslationCoverageCategory, TranslationDictionary,
 };
 
@@ -50,8 +50,10 @@ fn untranslated_structured_message_format_is_fallback_coverage_but_compose_succe
 
     let resolved = deck.compose(&[overlay]).expect("compose does not fail");
     assert_eq!(
-        resolved.notes[&sid("note.finland")].fields[&sid("field.summary")],
-        "Capital: Helsingfors"
+        resolved
+            .field_text(&sid("note.finland"), &sid("field.summary"))
+            .as_deref(),
+        Some("Capital: Helsingfors")
     );
 }
 
@@ -136,21 +138,20 @@ fn structured_message_deck() -> CanonicalDeck {
         note_type_id: sid("note-type.country"),
         variables: BTreeMap::new(),
         fields: BTreeMap::from([
-            (sid("field.country"), "Finland".to_owned()),
-            (sid("field.summary"), "Capital: Helsinki".to_owned()),
-        ]),
-        field_messages: BTreeMap::from([(
-            sid("field.summary"),
-            StructuredMessage {
-                components: Vec::new(),
-                format: Some("Capital: {capital}".to_owned()),
-                variables: BTreeMap::from([(
-                    "capital".to_owned(),
-                    MessageComponent::Text("Helsinki".to_owned()),
-                )]),
-            },
-        )]),
-        field_images: BTreeMap::new(),
+            (sid("field.country"), FieldValue::scalar("Finland")),
+            (
+                sid("field.summary"),
+                FieldValue::Message(StructuredMessage {
+                    components: Vec::new(),
+                    format: Some("Capital: {capital}".to_owned()),
+                    variables: BTreeMap::from([(
+                        "capital".to_owned(),
+                        MessageComponent::Text("Helsinki".to_owned()),
+                    )]),
+                }),
+            ),
+        ])
+        .into(),
         tags: BTreeSet::new(),
         adapter_ids: AdapterIds::new(),
     };

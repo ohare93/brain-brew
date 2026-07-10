@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
-    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, MediaReference,
-    Note, NoteType, StableId, ValidationErrorKind,
+    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, FieldValue,
+    MediaReference, Note, NoteType, StableId, ValidationErrorKind,
 };
 
 #[test]
@@ -35,8 +35,10 @@ fn complete_deck_preserves_anki_compatible_structure_and_adapter_identities() {
     let note = deck.notes.get(&sid("note.finland")).expect("note exists");
     assert_eq!(note.note_type_id, sid("note-type.country"));
     assert_eq!(
-        note.fields.get(&sid("field.country")),
-        Some(&"Finland".to_owned())
+        note.fields
+            .get(&sid("field.country"))
+            .and_then(FieldValue::as_scalar),
+        Some("Finland")
     );
     assert!(note.tags.contains("Europe"));
     assert_eq!(
@@ -80,7 +82,7 @@ fn validation_rejects_note_fields_not_defined_by_its_note_type() {
         .get_mut(&sid("note.finland"))
         .unwrap()
         .fields
-        .insert(sid("field.population"), "5.6 million".to_owned());
+        .insert(sid("field.population"), FieldValue::scalar("5.6 million"));
 
     let report = deck
         .validate()
@@ -96,28 +98,40 @@ fn validation_rejects_note_fields_not_defined_by_its_note_type() {
 }
 
 #[test]
-fn validation_rejects_conflicting_field_representations() {
+fn validation_rejects_malformed_and_unknown_structured_images_at_the_field_path() {
     let mut deck = ug_style_deck();
-    let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
-    note.fields
-        .insert(sid("field.flag"), "raw flag html".to_owned());
-    note.field_images.insert(
-        sid("field.flag"),
-        vec![FieldImageReference {
-            media_id: sid("media.flag.finland"),
-        }],
-    );
-
+    deck.notes
+        .get_mut(&sid("note.finland"))
+        .unwrap()
+        .fields
+        .insert(sid("field.flag"), FieldValue::Images(Vec::new()));
     let report = deck
         .validate()
-        .expect_err("raw field plus structured image must fail validation");
-
+        .expect_err("empty structured images must fail validation");
     assert!(report.has_kind(ValidationErrorKind::ConflictingFieldRepresentation));
     assert!(report.errors.iter().any(|error| {
         error.path == "notes.note.finland.fields.field.flag"
-            && error.message.contains("conflicting field representations")
-            && error.message.contains("raw value")
-            && error.message.contains("structured images")
+            && error.message.contains("must not be empty")
+    }));
+
+    assert!(FieldValue::images(Vec::new()).is_err());
+    deck.notes
+        .get_mut(&sid("note.finland"))
+        .unwrap()
+        .fields
+        .insert(
+            sid("field.flag"),
+            FieldValue::Images(vec![FieldImageReference {
+                media_id: sid("media.missing"),
+            }]),
+        );
+    let report = deck
+        .validate()
+        .expect_err("unknown structured media must fail canonical validation");
+    assert!(report.has_kind(ValidationErrorKind::UnknownMediaReference));
+    assert!(report.errors.iter().any(|error| {
+        error.path == "notes.note.finland.fields.field.flag"
+            && error.message.contains("media.missing")
     }));
 }
 
@@ -289,12 +303,14 @@ fn ug_style_deck() -> CanonicalDeck {
         note_type_id: sid("note-type.country"),
         variables: BTreeMap::new(),
         fields: BTreeMap::from([
-            (sid("field.country"), "Finland".to_owned()),
-            (sid("field.capital"), "Helsinki".to_owned()),
-            (sid("field.flag"), "<img src=\"fi.png\">".to_owned()),
-        ]),
-        field_messages: BTreeMap::new(),
-        field_images: BTreeMap::new(),
+            (sid("field.country"), FieldValue::scalar("Finland")),
+            (sid("field.capital"), FieldValue::scalar("Helsinki")),
+            (
+                sid("field.flag"),
+                FieldValue::scalar("<img src=\"fi.png\">"),
+            ),
+        ])
+        .into(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: note_adapter_ids,
     };

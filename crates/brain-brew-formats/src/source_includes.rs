@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -102,6 +103,7 @@ struct MediaIncludeReplacement {
 fn strip_top_level_media_include(
     value: &mut Value,
 ) -> Result<Option<MediaIncludeReplacement>, String> {
+    let image_ids = collect_structured_image_ids(value);
     let Value::Mapping(mapping) = value else {
         return Ok(None);
     };
@@ -119,7 +121,22 @@ fn strip_top_level_media_include(
         return Err("!include path must be a scalar string".to_owned());
     };
     let directive = format!("media: !include {}", yaml_scalar::scalar(path));
-    mapping.remove(&media_key);
+    let synthetic_media = image_ids
+        .into_iter()
+        .map(|id| {
+            let mut reference = serde_yaml::Mapping::new();
+            reference.insert(
+                Value::String("path".to_owned()),
+                Value::String(format!("__brain_brew_media_{id}__")),
+            );
+            reference.insert(
+                Value::String("sha256".to_owned()),
+                Value::String(String::new()),
+            );
+            (Value::String(id), Value::Mapping(reference))
+        })
+        .collect();
+    mapping.insert(media_key, Value::Mapping(synthetic_media));
     Ok(Some(MediaIncludeReplacement { directive }))
 }
 
@@ -130,27 +147,52 @@ fn restore_top_level_media_include(
     let Some(media_include) = media_include else {
         return Ok(formatted);
     };
-    let placeholder = "media: {}\n";
-    let count = formatted
-        .split_inclusive('\n')
-        .filter(|line| *line == placeholder)
-        .count();
-    if count != 1 {
-        return Err(format!(
-            "expected exactly one top-level `media: {{}}` line to restore `{}`, found {count}",
+    let start = formatted.find("media:").ok_or_else(|| {
+        format!(
+            "missing top-level media section for `{}`",
             media_include.directive
-        ));
+        )
+    })?;
+    if start > 0 && !formatted[..start].ends_with('\n') {
+        return Err("top-level media section was not line aligned".to_owned());
     }
+    let end = formatted[start..]
+        .find("tombstones:")
+        .map(|offset| start + offset)
+        .ok_or_else(|| "missing tombstones section after top-level media".to_owned())?;
     let mut restored = String::with_capacity(formatted.len() + media_include.directive.len());
-    for line in formatted.split_inclusive('\n') {
-        if line == placeholder {
-            restored.push_str(&media_include.directive);
-            restored.push('\n');
-        } else {
-            restored.push_str(line);
+    restored.push_str(&formatted[..start]);
+    restored.push_str(&media_include.directive);
+    restored.push('\n');
+    restored.push_str(&formatted[end..]);
+    Ok(restored)
+}
+
+fn collect_structured_image_ids(value: &Value) -> BTreeSet<String> {
+    fn collect(value: &Value, ids: &mut BTreeSet<String>) {
+        match value {
+            Value::Tagged(tagged) if tagged.tag == "image" => {
+                if let Value::String(id) = &tagged.value {
+                    ids.insert(id.clone());
+                }
+            }
+            Value::Tagged(tagged) => collect(&tagged.value, ids),
+            Value::Sequence(sequence) => {
+                for item in sequence {
+                    collect(item, ids);
+                }
+            }
+            Value::Mapping(mapping) => {
+                for item in mapping.values() {
+                    collect(item, ids);
+                }
+            }
+            Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
         }
     }
-    Ok(restored)
+    let mut ids = BTreeSet::new();
+    collect(value, &mut ids);
+    ids
 }
 
 fn replace_includes_with_sentinels(

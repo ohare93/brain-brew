@@ -3,10 +3,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, CardTemplateSide,
     ChangeIntent, ComposeErrorKind, DeckChange, ExpectedBase, FieldChange, FieldDefinition,
-    FieldDefinitionChange, FieldImageReference, MediaChange, MediaReference, MessageComponent,
-    Note, NoteChange, NoteType, NoteTypeChange, Overlay, OverlayKind, PropertyChange, StableId,
-    StaleTranslation, StructuredMessage, TagChange, TargetAdaptation, TranslationCoverageCategory,
-    TranslationDictionary, ValidationErrorKind,
+    FieldDefinitionChange, FieldImageReference, FieldValue, MediaChange, MediaReference,
+    MessageComponent, Note, NoteChange, NoteType, NoteTypeChange, Overlay, OverlayKind,
+    PropertyChange, StableId, StaleTranslation, StructuredMessage, TagChange, TargetAdaptation,
+    TranslationCoverageCategory, TranslationDictionary, ValidationErrorKind,
 };
 
 fn target_adaptation(
@@ -53,8 +53,9 @@ fn add_overlay_adds_a_new_note_to_the_resolved_deck() {
             .get(&sid("note.sweden"))
             .unwrap()
             .fields
-            .get(&sid("field.capital")),
-        Some(&"Stockholm".to_owned())
+            .get(&sid("field.capital"))
+            .and_then(FieldValue::as_scalar),
+        Some("Stockholm")
     );
 }
 
@@ -116,9 +117,8 @@ fn extension_overlay_can_add_a_note_type_and_notes_using_it() {
                     fields: BTreeMap::from([
                         (sid("field.region"), "Europe".to_owned()),
                         (sid("field.map"), "<img src=\"europe.png\" />".to_owned()),
-                    ]),
-                    field_messages: BTreeMap::new(),
-                    field_images: BTreeMap::new(),
+                    ])
+                    .into(),
                     tags: BTreeSet::from(["UG::Europe".to_owned()]),
                     adapter_ids: AdapterIds::new(),
                 }),
@@ -176,8 +176,9 @@ fn replace_field_succeeds_when_expected_base_matches_current_value() {
             .get(&sid("note.finland"))
             .unwrap()
             .fields
-            .get(&sid("field.capital")),
-        Some(&"Helsingfors".to_owned())
+            .get(&sid("field.capital"))
+            .and_then(FieldValue::as_scalar),
+        Some("Helsingfors")
     );
 }
 
@@ -232,8 +233,9 @@ fn later_override_can_intentionally_replace_an_earlier_overlay_change() {
             .get(&sid("note.finland"))
             .unwrap()
             .fields
-            .get(&sid("field.capital")),
-        Some(&"Helsinki / Helsingfors".to_owned())
+            .get(&sid("field.capital"))
+            .and_then(FieldValue::as_scalar),
+        Some("Helsinki / Helsingfors")
     );
 }
 
@@ -784,7 +786,7 @@ fn translation_dictionary_allows_field_level_contextual_translation() {
             .unwrap()
             .fields
             .get(&sid("field.capital"))
-            .map(String::as_str),
+            .and_then(FieldValue::as_scalar),
         Some("Helsingfors")
     );
 }
@@ -1063,9 +1065,46 @@ fn render_variables_reports_structured_message_resolution_errors_after_substitut
         .expect_err("unresolvable structured message refs must fail variable rendering");
 
     let output = report.to_string();
-    assert!(output.contains("notes.note.finland.fields.field.summary.message"));
+    assert!(output.contains("notes.note.finland.fields.field.summary"));
     assert!(output.contains("notes.note.missing.fields.field.country"));
     assert!(output.contains("does not resolve to a note field"));
+}
+
+#[test]
+fn canonical_validation_rejects_structured_message_reference_cycles() {
+    let mut deck = ug_style_deck();
+    let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
+    note.fields.insert(
+        sid("field.country"),
+        FieldValue::Message(StructuredMessage {
+            components: vec![MessageComponent::FieldRef(
+                "notes.note.finland.fields.field.capital".to_owned(),
+            )],
+            format: None,
+            variables: BTreeMap::new(),
+        }),
+    );
+    note.fields.insert(
+        sid("field.capital"),
+        FieldValue::Message(StructuredMessage {
+            components: vec![MessageComponent::FieldRef(
+                "notes.note.finland.fields.field.country".to_owned(),
+            )],
+            format: None,
+            variables: BTreeMap::new(),
+        }),
+    );
+
+    let report = deck
+        .validate()
+        .expect_err("message cycle must fail validation");
+    assert!(report.has_kind(ValidationErrorKind::InvalidMessageReference));
+    assert!(
+        report
+            .errors
+            .iter()
+            .any(|error| error.message.contains("cycle"))
+    );
 }
 
 #[test]
@@ -1086,12 +1125,11 @@ fn render_variables_resolves_structured_message_field_refs_after_correct_substit
 fn render_variables_lowers_structured_images_to_exact_img_html() {
     let mut deck = ug_style_deck();
     let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
-    note.fields.insert(sid("field.flag"), String::new());
-    note.field_images.insert(
+    note.fields.insert(
         sid("field.flag"),
-        vec![FieldImageReference {
+        FieldValue::Images(vec![FieldImageReference {
             media_id: sid("media.flag.finland"),
-        }],
+        }]),
     );
 
     let rendered = deck
@@ -1103,7 +1141,10 @@ fn render_variables_lowers_structured_images_to_exact_img_html() {
         rendered_note.fields[&sid("field.flag")],
         "<img src=\"flags/fi.png\" />"
     );
-    assert!(!rendered_note.field_images.contains_key(&sid("field.flag")));
+    assert!(matches!(
+        rendered_note.fields[&sid("field.flag")],
+        FieldValue::Scalar(_)
+    ));
 }
 
 #[test]
@@ -1112,12 +1153,11 @@ fn render_variables_url_encodes_and_html_escapes_structured_image_paths() {
     deck.media.get_mut(&sid("media.flag.finland")).unwrap().path =
         "flags/旗 & quote\" #1?.svg".to_owned();
     let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
-    note.fields.insert(sid("field.flag"), String::new());
-    note.field_images.insert(
+    note.fields.insert(
         sid("field.flag"),
-        vec![FieldImageReference {
+        FieldValue::Images(vec![FieldImageReference {
             media_id: sid("media.flag.finland"),
-        }],
+        }]),
     );
 
     let rendered = deck
@@ -1146,17 +1186,16 @@ fn render_variables_lowers_multi_image_fields_without_separators() {
         },
     );
     let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
-    note.fields.insert(sid("field.flag"), String::new());
-    note.field_images.insert(
+    note.fields.insert(
         sid("field.flag"),
-        vec![
+        FieldValue::Images(vec![
             FieldImageReference {
                 media_id: sid("media.flag.finland.blur"),
             },
             FieldImageReference {
                 media_id: sid("media.flag.finland"),
             },
-        ],
+        ]),
     );
 
     let rendered = deck
@@ -1173,12 +1212,11 @@ fn render_variables_lowers_multi_image_fields_without_separators() {
 fn render_variables_reports_unknown_structured_image_media_id_with_field_path() {
     let mut deck = ug_style_deck();
     let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
-    note.fields.insert(sid("field.flag"), String::new());
-    note.field_images.insert(
+    note.fields.insert(
         sid("field.flag"),
-        vec![FieldImageReference {
+        FieldValue::Images(vec![FieldImageReference {
             media_id: sid("media.flag.missing"),
-        }],
+        }]),
     );
 
     let report = deck
@@ -1254,8 +1292,10 @@ fn translation_dictionary_resolves_structured_message_components() {
     let resolved = base.compose(&[overlay]).expect("translations compose");
 
     assert_eq!(
-        resolved.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
-        "Island (blå bakgrunn med hvitt kors), Norge (rød bakgrunn med blått kors)"
+        resolved
+            .field_text(&sid("note.finland"), &sid("field.flag-similarity"))
+            .as_deref(),
+        Some("Island (blå bakgrunn med hvitt kors), Norge (rød bakgrunn med blått kors)")
     );
 }
 
@@ -1304,8 +1344,12 @@ fn translation_dictionary_no_change_wins_over_stale_record_for_structured_messag
     let resolved = base.compose(&[overlay]).expect("translations compose");
 
     assert_eq!(
-        resolved.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
-        "Iceland (blue background with a white cross), Norway (red background with a blue cross)"
+        resolved
+            .field_text(&sid("note.finland"), &sid("field.flag-similarity"))
+            .as_deref(),
+        Some(
+            "Iceland (blue background with a white cross), Norway (red background with a blue cross)"
+        )
     );
 }
 
@@ -1367,8 +1411,10 @@ fn translation_dictionary_can_translate_structured_message_format() {
     let resolved = base.compose(&[overlay]).expect("translations compose");
 
     assert_eq!(
-        resolved.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
-        "冰岛(蓝底白十字)、挪威(红底蓝十字)"
+        resolved
+            .field_text(&sid("note.finland"), &sid("field.flag-similarity"))
+            .as_deref(),
+        Some("冰岛(蓝底白十字)、挪威(红底蓝十字)")
     );
 }
 
@@ -1416,12 +1462,10 @@ fn translation_dictionary_can_override_full_structured_message_when_needed() {
         resolved.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
         "Særskilt full oversettelse"
     );
-    assert!(
-        !resolved.notes[&sid("note.finland")]
-            .field_messages
-            .contains_key(&sid("field.flag-similarity")),
-        "full resolved-text overrides replace the structured source message"
-    );
+    assert!(matches!(
+        resolved.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")],
+        FieldValue::Scalar(_)
+    ));
 }
 
 #[test]
@@ -1516,11 +1560,9 @@ fn field_image_changes_replace_raw_fields_and_raw_changes_clear_images() {
                     sid("field.flag"),
                     FieldChange {
                         intent: ChangeIntent::Replace,
-                        value: None,
-                        message: None,
-                        images: Some(vec![FieldImageReference {
+                        value: Some(FieldValue::Images(vec![FieldImageReference {
                             media_id: sid("media.flag.finland"),
-                        }]),
+                        }])),
                         expected_base: Some(ExpectedBase::Value("raw flag html".to_owned())),
                     },
                 )]),
@@ -1535,12 +1577,10 @@ fn field_image_changes_replace_raw_fields_and_raw_changes_clear_images() {
 
     let imaged = base.compose(&[to_image]).expect("image field composes");
     let note = &imaged.notes[&sid("note.finland")];
-    assert_eq!(note.fields[&sid("field.flag")], "");
     assert_eq!(
-        note.field_images[&sid("field.flag")][0].media_id,
+        note.fields[&sid("field.flag")].as_images().unwrap()[0].media_id,
         sid("media.flag.finland")
     );
-    assert!(!note.field_messages.contains_key(&sid("field.flag")));
 
     let to_raw = Overlay {
         id: sid("overlay.patch.flag-raw"),
@@ -1557,10 +1597,12 @@ fn field_image_changes_replace_raw_fields_and_raw_changes_clear_images() {
                     sid("field.flag"),
                     FieldChange {
                         intent: ChangeIntent::Replace,
-                        value: Some("replacement raw html".to_owned()),
-                        message: None,
-                        images: None,
-                        expected_base: Some(ExpectedBase::Value(String::new())),
+                        value: Some(("replacement raw html".to_owned()).into()),
+                        expected_base: Some(ExpectedBase::FieldValue(FieldValue::Images(vec![
+                            FieldImageReference {
+                                media_id: sid("media.flag.finland"),
+                            },
+                        ]))),
                     },
                 )]),
                 tags: BTreeMap::new(),
@@ -1575,8 +1617,121 @@ fn field_image_changes_replace_raw_fields_and_raw_changes_clear_images() {
     let raw = imaged.compose(&[to_raw]).expect("raw replacement composes");
     let note = &raw.notes[&sid("note.finland")];
     assert_eq!(note.fields[&sid("field.flag")], "replacement raw html");
-    assert!(!note.field_images.contains_key(&sid("field.flag")));
-    assert!(!note.field_messages.contains_key(&sid("field.flag")));
+}
+
+#[test]
+fn semantic_field_intent_matrix_is_representation_aware() {
+    let values = [
+        ("blank", FieldValue::scalar("")),
+        ("scalar", FieldValue::scalar("existing")),
+        (
+            "image",
+            FieldValue::Images(vec![FieldImageReference {
+                media_id: sid("media.flag.finland"),
+            }]),
+        ),
+        (
+            "message",
+            FieldValue::Message(StructuredMessage {
+                components: vec![MessageComponent::Text("existing message".to_owned())],
+                format: None,
+                variables: BTreeMap::new(),
+            }),
+        ),
+    ];
+    let intents = [
+        ChangeIntent::Add,
+        ChangeIntent::Merge,
+        ChangeIntent::Replace,
+        ChangeIntent::Override,
+        ChangeIntent::Remove,
+    ];
+
+    for (name, existing) in &values {
+        for intent in intents {
+            let mut base = ug_style_deck();
+            base.notes
+                .get_mut(&sid("note.finland"))
+                .unwrap()
+                .fields
+                .insert(sid("field.flag"), existing.clone());
+            let expected_base = match intent {
+                ChangeIntent::Replace | ChangeIntent::Override | ChangeIntent::Remove => {
+                    Some(ExpectedBase::FieldValue(existing.clone()))
+                }
+                ChangeIntent::Add | ChangeIntent::Merge => None,
+            };
+            let change = FieldChange {
+                intent,
+                value: (intent != ChangeIntent::Remove).then(|| FieldValue::scalar("replacement")),
+                expected_base,
+            };
+            let result = base.compose(&[overlay_with_field_change(
+                "overlay.matrix",
+                sid("field.flag"),
+                change,
+            )]);
+            let should_succeed = match intent {
+                ChangeIntent::Add | ChangeIntent::Merge => existing.is_blank(),
+                ChangeIntent::Replace | ChangeIntent::Override => true,
+                ChangeIntent::Remove => false,
+            };
+            assert_eq!(
+                result.is_ok(),
+                should_succeed,
+                "intent {intent:?} against {name}"
+            );
+        }
+    }
+
+    for intent in intents {
+        let mut base = ug_style_deck();
+        base.notes
+            .get_mut(&sid("note.finland"))
+            .unwrap()
+            .fields
+            .remove(&sid("field.flag"));
+        let change = FieldChange {
+            intent,
+            value: (intent != ChangeIntent::Remove).then(|| FieldValue::scalar("replacement")),
+            expected_base: matches!(
+                intent,
+                ChangeIntent::Replace | ChangeIntent::Override | ChangeIntent::Remove
+            )
+            .then_some(ExpectedBase::EntityPresent),
+        };
+        let result = base.compose(&[overlay_with_field_change(
+            "overlay.matrix.missing",
+            sid("field.flag"),
+            change,
+        )]);
+        assert_eq!(
+            result.is_ok(),
+            matches!(intent, ChangeIntent::Add | ChangeIntent::Merge),
+            "intent {intent:?} against missing field"
+        );
+    }
+
+    for existing in values.into_iter().skip(2).map(|(_, value)| value) {
+        let mut base = ug_style_deck();
+        base.notes
+            .get_mut(&sid("note.finland"))
+            .unwrap()
+            .fields
+            .insert(sid("field.flag"), existing);
+        let report = base
+            .compose(&[overlay_with_field_change(
+                "overlay.matrix.wrong-scalar-base",
+                sid("field.flag"),
+                FieldChange {
+                    intent: ChangeIntent::Replace,
+                    value: Some(FieldValue::scalar("replacement")),
+                    expected_base: Some(ExpectedBase::Value(String::new())),
+                },
+            )])
+            .expect_err("empty scalar expected base must not match structured values");
+        assert!(report.has_kind(ComposeErrorKind::ExpectedBaseMismatch));
+    }
 }
 
 #[test]
@@ -1621,9 +1776,7 @@ fn extension_overlay_can_add_a_note_type_field_and_backfill_note_values() {
                     sid("field.population"),
                     FieldChange {
                         intent: ChangeIntent::Add,
-                        value: Some("5.6 million".to_owned()),
-                        message: None,
-                        images: None,
+                        value: Some(("5.6 million".to_owned()).into()),
                         expected_base: None,
                     },
                 )]),
@@ -1645,8 +1798,9 @@ fn extension_overlay_can_add_a_note_type_field_and_backfill_note_values() {
             .get(&sid("note.finland"))
             .unwrap()
             .fields
-            .get(&sid("field.population")),
-        Some(&"5.6 million".to_owned())
+            .get(&sid("field.population"))
+            .and_then(FieldValue::as_scalar),
+        Some("5.6 million")
     );
 }
 
@@ -1691,8 +1845,9 @@ fn extension_overlay_adds_blank_values_for_new_fields_without_explicit_values() 
     assert_eq!(
         resolved.notes[&sid("note.finland")]
             .fields
-            .get(&sid("field.region-code")),
-        Some(&String::new())
+            .get(&sid("field.region-code"))
+            .and_then(FieldValue::as_scalar),
+        Some("")
     );
     resolved
         .validate()
@@ -2237,9 +2392,7 @@ fn field_level_merge_only_fills_blank_values() {
             sid("field.flag"),
             FieldChange {
                 intent: ChangeIntent::Merge,
-                value: Some("<img src=\"fi-new.png\">".to_owned()),
-                message: None,
-                images: None,
+                value: Some(("<img src=\"fi-new.png\">".to_owned()).into()),
                 expected_base: None,
             },
         )])
@@ -2259,9 +2412,7 @@ fn field_level_merge_rejects_non_blank_values_and_replace_with_expected_base_ove
             sid("field.capital"),
             FieldChange {
                 intent: ChangeIntent::Merge,
-                value: Some("Helsingfors".to_owned()),
-                message: None,
-                images: None,
+                value: Some(("Helsingfors".to_owned()).into()),
                 expected_base: None,
             },
         )])
@@ -2270,7 +2421,7 @@ fn field_level_merge_rejects_non_blank_values_and_replace_with_expected_base_ove
     assert!(report.has_kind(ComposeErrorKind::ExpectedBaseMismatch));
     assert!(report.errors.iter().any(|error| {
         error.path == "notes.note.finland.fields.field.capital"
-            && error.message.contains("may only fill a blank value")
+            && error.message.contains("may only fill a blank scalar value")
     }));
 
     let resolved = ug_style_deck()
@@ -2279,9 +2430,7 @@ fn field_level_merge_rejects_non_blank_values_and_replace_with_expected_base_ove
             sid("field.capital"),
             FieldChange {
                 intent: ChangeIntent::Replace,
-                value: Some("Helsingfors".to_owned()),
-                message: None,
-                images: None,
+                value: Some(("Helsingfors".to_owned()).into()),
                 expected_base: Some(ExpectedBase::Value("Helsinki".to_owned())),
             },
         )])
@@ -2298,22 +2447,18 @@ fn field_level_merge_rejects_non_blank_for_structured_messages_and_images() {
     for change in [
         FieldChange {
             intent: ChangeIntent::Merge,
-            value: None,
-            message: Some(StructuredMessage {
+            value: Some(FieldValue::Message(StructuredMessage {
                 components: vec![MessageComponent::Text("structured".to_owned())],
                 format: None,
                 variables: BTreeMap::new(),
-            }),
-            images: None,
+            })),
             expected_base: None,
         },
         FieldChange {
             intent: ChangeIntent::Merge,
-            value: None,
-            message: None,
-            images: Some(vec![FieldImageReference {
+            value: Some(FieldValue::Images(vec![FieldImageReference {
                 media_id: sid("media.flag.finland"),
-            }]),
+            }])),
             expected_base: None,
         },
     ] {
@@ -2397,9 +2542,7 @@ fn field_add_fills_blank_but_rejects_non_blank_existing_values() {
             sid("field.flag"),
             FieldChange {
                 intent: ChangeIntent::Add,
-                value: Some("filled flag".to_owned()),
-                message: None,
-                images: None,
+                value: Some(("filled flag".to_owned()).into()),
                 expected_base: None,
             },
         )])
@@ -2415,9 +2558,7 @@ fn field_add_fills_blank_but_rejects_non_blank_existing_values() {
             sid("field.capital"),
             FieldChange {
                 intent: ChangeIntent::Add,
-                value: Some("Helsingfors".to_owned()),
-                message: None,
-                images: None,
+                value: Some(("Helsingfors".to_owned()).into()),
                 expected_base: None,
             },
         )])
@@ -2481,8 +2622,6 @@ fn destructive_operation_matrix_covers_core_change_families() {
                 FieldChange {
                     intent: ChangeIntent::Remove,
                     value: None,
-                    message: None,
-                    images: None,
                     expected_base: Some(ExpectedBase::EntityPresent),
                 },
             )]),
@@ -2753,9 +2892,7 @@ fn overlay_replacing_capital(
                     sid("field.capital"),
                     FieldChange {
                         intent,
-                        value: Some(value.to_owned()),
-                        message: None,
-                        images: None,
+                        value: Some((value.to_owned()).into()),
                         expected_base,
                     },
                 )]),
@@ -2813,9 +2950,8 @@ fn ug_style_deck() -> CanonicalDeck {
             (sid("field.country"), "Finland".to_owned()),
             (sid("field.capital"), "Helsinki".to_owned()),
             (sid("field.flag"), "<img src=\"fi.png\">".to_owned()),
-        ]),
-        field_messages: BTreeMap::new(),
-        field_images: BTreeMap::new(),
+        ])
+        .into(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: note_adapter_ids,
     };
@@ -2864,9 +3000,8 @@ fn ug_style_deck_with_variable_field_ref_message(target_note: &str) -> Canonical
                 (sid("field.capital"), "Reykjavik".to_owned()),
                 (sid("field.flag"), "<img src=\"is.png\">".to_owned()),
                 (sid("field.summary"), String::new()),
-            ]),
-            field_messages: BTreeMap::new(),
-            field_images: BTreeMap::new(),
+            ])
+            .into(),
             tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
             adapter_ids: AdapterIds::new(),
         },
@@ -2875,16 +3010,15 @@ fn ug_style_deck_with_variable_field_ref_message(target_note: &str) -> Canonical
     finland
         .variables
         .insert("target.note".to_owned(), target_note.to_owned());
-    finland.fields.insert(sid("field.summary"), String::new());
-    finland.field_messages.insert(
+    finland.fields.insert(
         sid("field.summary"),
-        StructuredMessage {
+        FieldValue::Message(StructuredMessage {
             components: vec![MessageComponent::FieldRef(
                 "notes.note.${target.note}.fields.field.country".to_owned(),
             )],
             format: None,
             variables: BTreeMap::new(),
-        },
+        }),
     );
     deck
 }
@@ -2910,9 +3044,8 @@ fn ug_style_deck_with_flag_similarity_message() -> CanonicalDeck {
                 (sid("field.capital"), "Reykjavik".to_owned()),
                 (sid("field.flag"), "<img src=\"is.png\">".to_owned()),
                 (sid("field.flag-similarity"), String::new()),
-            ]),
-            field_messages: BTreeMap::new(),
-            field_images: BTreeMap::new(),
+            ])
+            .into(),
             tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
             adapter_ids: AdapterIds::new(),
         },
@@ -2928,20 +3061,16 @@ fn ug_style_deck_with_flag_similarity_message() -> CanonicalDeck {
                 (sid("field.capital"), "Oslo".to_owned()),
                 (sid("field.flag"), "<img src=\"no.png\">".to_owned()),
                 (sid("field.flag-similarity"), String::new()),
-            ]),
-            field_messages: BTreeMap::new(),
-            field_images: BTreeMap::new(),
+            ])
+            .into(),
             tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
             adapter_ids: AdapterIds::new(),
         },
     );
     let finland = deck.notes.get_mut(&sid("note.finland")).unwrap();
-    finland
-        .fields
-        .insert(sid("field.flag-similarity"), String::new());
-    finland.field_messages.insert(
+    finland.fields.insert(
         sid("field.flag-similarity"),
-        StructuredMessage {
+        FieldValue::Message(StructuredMessage {
             components: Vec::new(),
             format: Some("{country_1} ({description_1}), {country_2} ({description_2})".to_owned()),
             variables: BTreeMap::from([
@@ -2964,10 +3093,9 @@ fn ug_style_deck_with_flag_similarity_message() -> CanonicalDeck {
                     MessageComponent::Text("red background with a blue cross".to_owned()),
                 ),
             ]),
-        },
+        }),
     );
-    deck.resolve_structured_messages()
-        .expect("structured message resolves")
+    deck
 }
 
 fn sweden_note() -> Note {
@@ -2979,9 +3107,8 @@ fn sweden_note() -> Note {
             (sid("field.country"), "Sweden".to_owned()),
             (sid("field.capital"), "Stockholm".to_owned()),
             (sid("field.flag"), "<img src=\"se.png\">".to_owned()),
-        ]),
-        field_messages: BTreeMap::new(),
-        field_images: BTreeMap::new(),
+        ])
+        .into(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: AdapterIds::new(),
     }

@@ -1,4 +1,4 @@
-use brain_brew_core::{ChangeIntent, ExpectedBase, OverlayKind, StableId};
+use brain_brew_core::{ChangeIntent, ExpectedBase, FieldValue, OverlayKind, StableId};
 use brain_brew_formats::canonical_yaml;
 
 #[test]
@@ -77,7 +77,10 @@ notes:
     assert_eq!(note_change.intent, ChangeIntent::Merge);
     let field_change = note_change.fields.get(&sid("field.capital")).unwrap();
     assert_eq!(field_change.intent, ChangeIntent::Replace);
-    assert_eq!(field_change.value.as_deref(), Some("Helsingfors"));
+    assert_eq!(
+        field_change.value.as_ref().and_then(FieldValue::as_scalar),
+        Some("Helsingfors")
+    );
     assert_eq!(
         field_change.expected_base,
         Some(ExpectedBase::Value("Helsinki".to_owned()))
@@ -214,7 +217,8 @@ field_additions:
             .get(&sid("field.population"))
             .unwrap()
             .value
-            .as_deref(),
+            .as_ref()
+            .and_then(FieldValue::as_scalar),
         Some("25.0 million")
     );
     assert_eq!(
@@ -223,7 +227,8 @@ field_additions:
             .get(&sid("field.area"))
             .unwrap()
             .value
-            .as_deref(),
+            .as_ref()
+            .and_then(FieldValue::as_scalar),
         Some("7.69 million km²")
     );
 }
@@ -373,7 +378,10 @@ field_fills:
     assert_eq!(note_change.intent, ChangeIntent::Merge);
     let capital = note_change.fields.get(&sid("field.capital")).unwrap();
     assert_eq!(capital.intent, ChangeIntent::Replace);
-    assert_eq!(capital.value.as_deref(), Some("The Valley"));
+    assert_eq!(
+        capital.value.as_ref().and_then(FieldValue::as_scalar),
+        Some("The Valley")
+    );
     assert_eq!(
         capital.expected_base,
         Some(ExpectedBase::Value(String::new()))
@@ -472,24 +480,30 @@ notes:
 
     assert_eq!(
         overlay.note_changes[&sid("note.finland")].fields[&sid("field.map")]
-            .images
+            .value
             .as_ref()
+            .unwrap()
+            .as_images()
             .unwrap()[0]
             .media_id,
         sid("media.map.finland")
     );
     assert_eq!(
         overlay.note_changes[&sid("note.iceland")].fields[&sid("field.flag")]
-            .images
+            .value
             .as_ref()
+            .unwrap()
+            .as_images()
             .unwrap()
             .len(),
         2
     );
     assert_eq!(
         overlay.note_changes[&sid("note.norway")].fields[&sid("field.flag")]
-            .images
+            .value
             .as_ref()
+            .unwrap()
+            .as_images()
             .unwrap()[0]
             .media_id,
         sid("media.flag.norway")
@@ -861,6 +875,39 @@ note_types:
             .as_deref(),
         Some("{{Land}}")
     );
+}
+
+#[test]
+fn structured_field_expected_bases_round_trip_atomically() {
+    let source = r#"id: overlay.patch.image
+kind: patch
+notes:
+  note.finland:
+    intent: merge
+    fields:
+      field.flag:
+        intent: replace
+        value: !image media.flag.new
+        expected_base:
+          value:
+            - !image media.flag.blur
+            - !image media.flag.old
+"#;
+    let overlay =
+        canonical_yaml::overlay_from_str(source).expect("structured expected base parses");
+    let change = &overlay.note_changes[&sid("note.finland")].fields[&sid("field.flag")];
+    let ExpectedBase::FieldValue(expected) = change.expected_base.as_ref().unwrap() else {
+        panic!("expected semantic field base");
+    };
+    assert_eq!(expected.as_images().unwrap().len(), 2);
+
+    let once = canonical_yaml::overlay_to_string(&overlay).expect("structured expected base emits");
+    assert!(
+        once.contains("expected_base:\n          value:\n            - !image media.flag.blur")
+    );
+    let twice =
+        canonical_yaml::overlay_format_str(&once).expect("structured expected base reformats");
+    assert_eq!(twice, once);
 }
 
 #[test]

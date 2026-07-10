@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use brain_brew_core::{Overlay, StableId, TranslationDictionary};
+use brain_brew_core::{FieldValue, Overlay, StableId, TranslationDictionary};
 
 use crate::canonical_yaml;
 use crate::source_document::{
@@ -405,13 +405,17 @@ impl OverlaySourceDocument {
                     "sparse note field change is not present",
                 )
             })?;
-        let current = change.value.as_mut().ok_or_else(|| {
-            SourceDocumentError::at(
-                &next.provenance,
-                &path,
-                "field change is not represented as scalar text",
-            )
-        })?;
+        let current = change
+            .value
+            .as_mut()
+            .and_then(FieldValue::as_scalar_mut)
+            .ok_or_else(|| {
+                SourceDocumentError::at(
+                    &next.provenance,
+                    &path,
+                    "field change is not represented as scalar text",
+                )
+            })?;
         if current != expected {
             return Err(SourceDocumentError::at(
                 &next.provenance,
@@ -473,26 +477,20 @@ impl OverlaySourceDocument {
             if let Some(note) = &mut note_change.note {
                 let field_ids = note.fields.keys().cloned().collect::<Vec<_>>();
                 for field_id in field_ids {
-                    if note.field_messages.contains_key(&field_id)
-                        || note.field_images.contains_key(&field_id)
-                    {
+                    let Some(text) = note.fields[&field_id].as_scalar() else {
                         continue;
-                    }
-                    if let Some(images) =
-                        convert_text_to_images(&note.fields[&field_id], lookup, &mut report)
-                    {
-                        note.fields.insert(field_id.clone(), String::new());
-                        note.field_images.insert(field_id, images);
+                    };
+                    if let Some(images) = convert_text_to_images(text, lookup, &mut report) {
+                        note.fields.insert(field_id, FieldValue::Images(images));
                     }
                 }
             }
             for field_change in note_change.fields.values_mut() {
-                let Some(text) = field_change.value.as_deref() else {
+                let Some(text) = field_change.value.as_ref().and_then(FieldValue::as_scalar) else {
                     continue;
                 };
                 if let Some(images) = convert_text_to_images(text, lookup, &mut report) {
-                    field_change.value = None;
-                    field_change.images = Some(images);
+                    field_change.value = Some(FieldValue::Images(images));
                 }
             }
         }

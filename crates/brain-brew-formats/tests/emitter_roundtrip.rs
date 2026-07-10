@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use brain_brew_formats::canonical_yaml;
 use brain_brew_formats::core::{
     AdapterIds, CanonicalDeck, ChangeIntent, DeckChange, ExpectedBase, FieldChange,
-    FieldDefinition, MediaReference, Note, NoteChange, NoteType, Overlay, OverlayKind,
+    FieldDefinition, FieldValue, MediaReference, Note, NoteChange, NoteType, Overlay, OverlayKind,
     PropertyChange, StableId, StructuredMessage,
 };
 use brain_brew_formats::lockfile::{
@@ -192,13 +192,11 @@ fn fallible_public_emitters_reject_constructible_invalid_map_keys() {
                 sid("field.value"),
                 FieldChange {
                     intent: ChangeIntent::Replace,
-                    value: Some("value".to_owned()),
-                    message: Some(StructuredMessage {
+                    value: Some(FieldValue::Message(StructuredMessage {
                         components: Vec::new(),
                         format: None,
                         variables: BTreeMap::new(),
-                    }),
-                    images: None,
+                    })),
                     expected_base: None,
                 },
             )]),
@@ -265,9 +263,7 @@ fn canonical_deck_with_value(value: &str) -> CanonicalDeck {
         id: sid("note.hostile"),
         note_type_id: sid("note-type.hostile"),
         variables: BTreeMap::new(),
-        fields: BTreeMap::from([(sid("field.value"), value.to_owned())]),
-        field_messages: BTreeMap::new(),
-        field_images: BTreeMap::new(),
+        fields: BTreeMap::from([(sid("field.value"), value.to_owned())]).into(),
         tags: BTreeSet::new(),
         adapter_ids: AdapterIds::new(),
     };

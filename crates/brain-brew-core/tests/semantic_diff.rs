@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
-    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, MediaReference, Note, NoteType,
-    SemanticChangeKind, StableId,
+    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, FieldValue,
+    MediaReference, MessageComponent, Note, NoteType, SemanticChangeKind, StableId,
+    StructuredMessage,
 };
 
 #[test]
@@ -34,6 +35,46 @@ fn note_field_changes_are_reported_by_stable_id_path() {
     assert_eq!(change.path, "notes.note.finland.fields.field.capital");
     assert_eq!(change.before.as_deref(), Some("Helsinki"));
     assert_eq!(change.after.as_deref(), Some("Helsingfors"));
+}
+
+#[test]
+fn structured_field_values_and_representation_changes_are_semantic_differences() {
+    let left = ug_style_deck();
+    let mut image = left.clone();
+    image
+        .notes
+        .get_mut(&sid("note.finland"))
+        .unwrap()
+        .fields
+        .insert(
+            sid("field.flag"),
+            FieldValue::Images(vec![FieldImageReference {
+                media_id: sid("media.flag.finland"),
+            }]),
+        );
+    assert!(image.semantic_diff(&left).has_change(
+        SemanticChangeKind::Modified,
+        "notes.note.finland.fields.field.flag"
+    ));
+
+    let mut message = left.clone();
+    message
+        .notes
+        .get_mut(&sid("note.finland"))
+        .unwrap()
+        .fields
+        .insert(
+            sid("field.capital"),
+            FieldValue::Message(StructuredMessage {
+                components: vec![MessageComponent::Text("Helsinki".to_owned())],
+                format: None,
+                variables: BTreeMap::new(),
+            }),
+        );
+    assert!(message.semantic_diff(&left).has_change(
+        SemanticChangeKind::Modified,
+        "notes.note.finland.fields.field.capital"
+    ));
 }
 
 #[test]
@@ -102,9 +143,8 @@ fn ug_style_deck() -> CanonicalDeck {
             (sid("field.country"), "Finland".to_owned()),
             (sid("field.capital"), "Helsinki".to_owned()),
             (sid("field.flag"), "<img src=\"fi.png\">".to_owned()),
-        ]),
-        field_messages: BTreeMap::new(),
-        field_images: BTreeMap::new(),
+        ])
+        .into(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: AdapterIds::new(),
     };
@@ -138,9 +178,8 @@ fn sweden_note() -> Note {
             (sid("field.country"), "Sweden".to_owned()),
             (sid("field.capital"), "Stockholm".to_owned()),
             (sid("field.flag"), "<img src=\"se.png\">".to_owned()),
-        ]),
-        field_messages: BTreeMap::new(),
-        field_images: BTreeMap::new(),
+        ])
+        .into(),
         tags: BTreeSet::from(["Europe".to_owned(), "Nordic".to_owned()]),
         adapter_ids: AdapterIds::new(),
     }

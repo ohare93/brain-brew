@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use brain_brew_core::{CanonicalDeck, ChangeIntent, Overlay, OverlayKind};
+use brain_brew_core::{CanonicalDeck, ChangeIntent, FieldValue, Overlay, OverlayKind};
 use brain_brew_formats::manifest::{self, FederatedDeckManifest};
 use brain_brew_formats::media;
 use brain_brew_formats::source_document::{
@@ -1046,7 +1046,10 @@ fn bind_media_references(
 
     let mut bindings = BTreeMap::<String, MediaReferenceBinding>::new();
     for note in deck.notes.values() {
-        for images in note.field_images.values() {
+        for value in note.fields.values() {
+            let FieldValue::Images(images) = value else {
+                continue;
+            };
             for image in images {
                 let declaration = declarations.get(image.media_id.as_str()).ok_or_else(|| {
                     format!(

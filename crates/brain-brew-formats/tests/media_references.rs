@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use brain_brew_core::{
-    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, MediaReference,
-    Note, NoteType, StableId,
+    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, FieldValue,
+    MediaReference, Note, NoteType, StableId,
 };
 use brain_brew_formats::{
     canonical_yaml,
@@ -62,12 +62,11 @@ fn extracts_multiple_img_sources_from_one_field() {
 fn referenced_paths_resolves_structured_image_ids_to_declared_paths() {
     let mut deck = media_deck();
     let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
-    note.fields.insert(sid("field.flag"), String::new());
-    note.field_images.insert(
+    note.fields.insert(
         sid("field.flag"),
-        vec![FieldImageReference {
+        FieldValue::Images(vec![FieldImageReference {
             media_id: sid("media.flags-fi-png"),
-        }],
+        }]),
     );
 
     let paths = media::referenced_paths(&deck);
@@ -79,12 +78,11 @@ fn referenced_paths_resolves_structured_image_ids_to_declared_paths() {
 fn validation_reports_unknown_structured_image_media_id_with_field_path() {
     let mut deck = media_deck();
     let note = deck.notes.get_mut(&sid("note.finland")).unwrap();
-    note.fields.insert(sid("field.flag"), String::new());
-    note.field_images.insert(
+    note.fields.insert(
         sid("field.flag"),
-        vec![FieldImageReference {
+        FieldValue::Images(vec![FieldImageReference {
             media_id: sid("media.unknown"),
-        }],
+        }]),
     );
 
     let report = media::validate_references(&deck).expect_err("unknown media id must fail");
@@ -444,9 +442,8 @@ fn media_deck() -> CanonicalDeck {
         fields: BTreeMap::from([
             (sid("field.country"), "Finland".to_owned()),
             (sid("field.flag"), "<img src=\"flags/fi.png\">".to_owned()),
-        ]),
-        field_messages: BTreeMap::new(),
-        field_images: BTreeMap::new(),
+        ])
+        .into(),
         tags: BTreeSet::new(),
         adapter_ids: AdapterIds::new(),
     };

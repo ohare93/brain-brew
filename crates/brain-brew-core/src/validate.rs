@@ -151,52 +151,27 @@ impl CanonicalDeck {
                 &mut errors,
                 &mut invalid_stable_id_paths,
             );
-            for field_id in note.fields.keys() {
+            for (field_id, value) in &note.fields {
+                let path = DeckPath::NoteField {
+                    note_id: id.clone(),
+                    field_id: field_id.clone(),
+                }
+                .to_string();
                 push_invalid_stable_id_error(
                     field_id,
-                    DeckPath::NoteField {
-                        note_id: id.clone(),
-                        field_id: field_id.clone(),
-                    }
-                    .to_string(),
+                    path.clone(),
                     &mut errors,
                     &mut invalid_stable_id_paths,
                 );
-            }
-            for field_id in note.field_messages.keys() {
-                push_invalid_stable_id_error(
-                    field_id,
-                    DeckPath::NoteFieldMessage {
-                        note_id: id.clone(),
-                        field_id: field_id.clone(),
+                if let FieldValue::Images(images) = value {
+                    for image in images {
+                        push_invalid_stable_id_error(
+                            &image.media_id,
+                            path.clone(),
+                            &mut errors,
+                            &mut invalid_stable_id_paths,
+                        );
                     }
-                    .to_string(),
-                    &mut errors,
-                    &mut invalid_stable_id_paths,
-                );
-            }
-            for (field_id, images) in &note.field_images {
-                push_invalid_stable_id_error(
-                    field_id,
-                    DeckPath::NoteField {
-                        note_id: id.clone(),
-                        field_id: field_id.clone(),
-                    }
-                    .to_string(),
-                    &mut errors,
-                    &mut invalid_stable_id_paths,
-                );
-                for image in images {
-                    push_invalid_stable_id_error(
-                        &image.media_id,
-                        DeckPath::NoteField {
-                            note_id: id.clone(),
-                            field_id: field_id.clone(),
-                        }
-                        .to_string(),
-                        &mut errors,
-                        &mut invalid_stable_id_paths,
-                    );
                 }
             }
 
@@ -250,89 +225,45 @@ impl CanonicalDeck {
                 }
             }
 
-            for (field_id, message) in &note.field_messages {
-                if !expected_field_ids.contains(field_id) {
-                    errors.push(ValidationError::new(
-                        ValidationErrorKind::UnknownNoteField,
-                        DeckPath::NoteFieldMessage {
-                            note_id: id.clone(),
-                            field_id: field_id.clone(),
-                        }
-                        .to_string(),
-                        format!(
-                            "structured message field {field_id} is not defined by note type {}",
-                            note.note_type_id
-                        ),
-                    ));
+            for (field_id, value) in &note.fields {
+                let path = DeckPath::NoteField {
+                    note_id: id.clone(),
+                    field_id: field_id.clone(),
                 }
-                validate_message_references(self, id, field_id, message, &mut errors);
-            }
-
-            for (field_id, images) in &note.field_images {
-                if images.is_empty() {
-                    errors.push(ValidationError::new(
-                        ValidationErrorKind::ConflictingFieldRepresentation,
-                        DeckPath::NoteField {
-                            note_id: id.clone(),
-                            field_id: field_id.clone(),
+                .to_string();
+                match value {
+                    FieldValue::Scalar(_) => {}
+                    FieldValue::Message(message) => {
+                        if let Err(error) = message.validate_shape() {
+                            errors.push(ValidationError::new(
+                                ValidationErrorKind::InvalidMessageReference,
+                                path.clone(),
+                                error.to_string(),
+                            ));
                         }
-                        .to_string(),
-                        format!("structured image field {field_id} must not be empty"),
-                    ));
-                }
-                if !expected_field_ids.contains(field_id) {
-                    errors.push(ValidationError::new(
-                        ValidationErrorKind::UnknownNoteField,
-                        DeckPath::NoteField {
-                            note_id: id.clone(),
-                            field_id: field_id.clone(),
+                        validate_message_references(self, id, field_id, message, &mut errors);
+                    }
+                    FieldValue::Images(images) => {
+                        if images.is_empty() {
+                            errors.push(ValidationError::new(
+                                ValidationErrorKind::ConflictingFieldRepresentation,
+                                path.clone(),
+                                format!("structured image field {field_id} must not be empty"),
+                            ));
                         }
-                        .to_string(),
-                        format!(
-                            "structured image field {field_id} is not defined by note type {}",
-                            note.note_type_id
-                        ),
-                    ));
-                }
-            }
-
-            for field_id in note
-                .fields
-                .keys()
-                .chain(note.field_messages.keys())
-                .chain(note.field_images.keys())
-                .cloned()
-                .collect::<BTreeSet<_>>()
-            {
-                let has_raw_value = note
-                    .fields
-                    .get(&field_id)
-                    .is_some_and(|value| !value.is_empty());
-                let has_message = note.field_messages.contains_key(&field_id);
-                let has_images = note.field_images.contains_key(&field_id);
-                if has_images && (has_raw_value || has_message) {
-                    let mut representations = Vec::new();
-                    if has_raw_value {
-                        representations.push("raw value");
-                    }
-                    if has_message {
-                        representations.push("structured message");
-                    }
-                    if has_images {
-                        representations.push("structured images");
-                    }
-                    errors.push(ValidationError::new(
-                        ValidationErrorKind::ConflictingFieldRepresentation,
-                        DeckPath::NoteField {
-                            note_id: id.clone(),
-                            field_id: field_id.clone(),
+                        for image in images {
+                            if !self.media.contains_key(&image.media_id) {
+                                errors.push(ValidationError::new(
+                                    ValidationErrorKind::UnknownMediaReference,
+                                    path.clone(),
+                                    format!(
+                                        "unknown media id \"{}\" referenced in field {path}",
+                                        image.media_id
+                                    ),
+                                ));
+                            }
                         }
-                        .to_string(),
-                        format!(
-                            "conflicting field representations for {field_id}: {}",
-                            representations.join(", ")
-                        ),
-                    ));
+                    }
                 }
             }
 
@@ -352,6 +283,17 @@ impl CanonicalDeck {
                     ));
                 }
             }
+        }
+
+        if !errors
+            .iter()
+            .any(|error| error.kind == ValidationErrorKind::InvalidMessageReference)
+        {
+            let mut message_graph = self.clone();
+            crate::messages::resolve_structured_messages_with_validation_errors(
+                &mut message_graph,
+                &mut errors,
+            );
         }
 
         for id in &self.tombstones {

@@ -4,6 +4,8 @@
 **Status**: Accepted  
 **Deciders**: Project Lead
 
+> **Amendment:** ADR-018 supersedes this ADR's parallel-map core representation. The `!image` syntax, stable media-ID references, lowering, verification, import, and include decisions remain active.
+
 ## Context
 
 Brain Brew currently represents media assets as declared media references keyed by stable ID, with each declaration carrying a `path` and `sha256` (`MediaReference` in `crates/brain-brew-core/src/model.rs`; `MediaYaml` in `crates/brain-brew-formats/src/canonical_yaml.rs`). Verification, however, compares used paths to declared paths: `referenced_paths` scans note field strings, styling, and card templates, and `reference_report` compares the used path set with `deck.media.values().map(|media| media.path)` (`crates/brain-brew-formats/src/media.rs`). `brainbrew media hash` also walks declaration paths and updates `sha256` entries by path (`crates/brain-brew-cli/src/commands/media.rs`).

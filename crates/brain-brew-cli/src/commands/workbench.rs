@@ -14,7 +14,7 @@ use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use brain_brew_core::{
-    CanonicalDeck, CardTemplate, Note, NoteType, Overlay, OverlayKind, StableId,
+    CanonicalDeck, CardTemplate, FieldValue, Note, NoteType, Overlay, OverlayKind, StableId,
     TranslationCoverageCategory, TranslationCoverageEntry, TranslationDictionary,
     validate_deck_content,
 };
@@ -2893,14 +2893,12 @@ fn card_detail_json(context: &SelectedTranslationContext, card: &ProducedCardRow
     let target_note_type = target_note
         .and_then(|note| context.target_deck.note_types.get(&note.note_type_id))
         .or(source_note_type);
-    let target_fields = target_note.map(|note| &note.fields);
     let fields = card
         .field_rows
         .iter()
         .map(|row| {
-            let target = target_fields
-                .and_then(|fields| fields.get(&row.field_id))
-                .cloned()
+            let target = target_note
+                .and_then(|note| context.target_deck.field_text(&note.id, &row.field_id))
                 .unwrap_or_else(|| row.translated.clone());
             json!({
                 "path": row.path,
@@ -3070,8 +3068,7 @@ fn source_string_occurrence_json(
             row.translated.clone()
         } else {
             target_note
-                .and_then(|note| note.fields.get(&row.field_id))
-                .cloned()
+                .and_then(|note| context.target_deck.field_text(&note.id, &row.field_id))
                 .unwrap_or_else(|| row.translated.clone())
         },
         "status": row.category.as_str(),
@@ -3098,7 +3095,8 @@ fn note_title(note: Option<&Note>, note_type: Option<&NoteType>) -> String {
             if let Some(value) = note
                 .fields
                 .get(&field.id)
-                .and_then(|value| title_candidate(value))
+                .and_then(FieldValue::as_scalar)
+                .and_then(title_candidate)
             {
                 return value;
             }
@@ -3106,7 +3104,8 @@ fn note_title(note: Option<&Note>, note_type: Option<&NoteType>) -> String {
     }
     note.fields
         .values()
-        .find_map(|value| title_candidate(value))
+        .filter_map(FieldValue::as_scalar)
+        .find_map(title_candidate)
         .unwrap_or_else(|| note.id.to_string())
 }
 
@@ -3259,7 +3258,9 @@ fn main_field_rows(
             continue;
         };
         for field in &note_type.fields {
-            let source = note.fields.get(&field.id).cloned().unwrap_or_default();
+            let Some(source) = source_deck.field_text(note_id, &field.id) else {
+                continue;
+            };
             if source.is_empty() {
                 continue;
             }
@@ -3680,10 +3681,8 @@ fn note_pivot_notes_json(
         let fields = field_rows
             .iter()
             .map(|row| {
-                let target = target_note
-                    .fields
-                    .get(&row.field_id)
-                    .cloned()
+                let target = target_deck
+                    .field_text(note_id, &row.field_id)
                     .unwrap_or_else(|| row.translated.clone());
                 json!({
                     "path": row.path,
@@ -3853,11 +3852,19 @@ fn render_template_side(
 ) -> String {
     let mut rendered = template.replace("{{FrontSide}}", front_side);
     for field in &note_type.fields {
-        let value = note.fields.get(&field.id).map(String::as_str).unwrap_or("");
+        let value = note
+            .fields
+            .get(&field.id)
+            .and_then(FieldValue::as_scalar)
+            .unwrap_or("");
         rendered = render_conditional_sections(&rendered, &field.name, value);
     }
     for field in &note_type.fields {
-        let value = note.fields.get(&field.id).map(String::as_str).unwrap_or("");
+        let value = note
+            .fields
+            .get(&field.id)
+            .and_then(FieldValue::as_scalar)
+            .unwrap_or("");
         let preview_value = format!(
             "<span data-preview-field-id=\"{}\">{}</span>",
             html_attribute_escape(field.id.as_str()),
@@ -4282,14 +4289,19 @@ fn set_deck_note_field(
         .notes
         .get_mut(&note_id)
         .ok_or_else(|| format!("source edit path {path:?} is not in the canonical deck file"))?;
-    let current = note.fields.get(&field_id).cloned().unwrap_or_default();
+    let current = note
+        .fields
+        .get(&field_id)
+        .and_then(FieldValue::as_scalar)
+        .unwrap_or_default();
     if current != expected_source {
         return Err(format!(
             "invalid source {:?} for {}; expected canonical deck value {:?}",
             expected_source, path, current
         ));
     }
-    note.fields.insert(field_id, value.to_owned());
+    note.fields
+        .insert(field_id, FieldValue::Scalar(value.to_owned()));
     Ok(())
 }
 

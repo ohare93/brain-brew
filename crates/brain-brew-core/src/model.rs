@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
@@ -982,7 +983,10 @@ pub enum ChangeIntent {
 /// Base value or condition an overlay expects before applying a destructive change.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ExpectedBase {
+    /// A scalar property value. For note fields this matches only a scalar field value.
     Value(String),
+    /// A structured note-field value expected atomically.
+    FieldValue(FieldValue),
     EntityPresent,
 }
 
@@ -1078,9 +1082,8 @@ pub struct MediaChange {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FieldChange {
     pub intent: ChangeIntent,
-    pub value: Option<String>,
-    pub message: Option<StructuredMessage>,
-    pub images: Option<Vec<FieldImageReference>>,
+    /// The complete semantic value. `None` is valid only for removal.
+    pub value: Option<FieldValue>,
     pub expected_base: Option<ExpectedBase>,
 }
 
@@ -1120,21 +1123,214 @@ pub struct Note {
     pub id: StableId,
     pub note_type_id: StableId,
     pub variables: BTreeMap<String, String>,
-    pub fields: BTreeMap<StableId, String>,
-    pub field_messages: BTreeMap<StableId, StructuredMessage>,
-    pub field_images: BTreeMap<StableId, Vec<FieldImageReference>>,
+    /// Exactly one semantic representation for each declared note field.
+    pub fields: FieldMap,
     pub tags: BTreeSet<String>,
     pub adapter_ids: AdapterIds,
 }
 
-/// A structured reference from a note field to a declared media asset by stable ID.
+/// A note's single map of semantic field values.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct FieldMap(BTreeMap<StableId, FieldValue>);
+
+impl FieldMap {
+    pub fn insert(
+        &mut self,
+        field_id: StableId,
+        value: impl Into<FieldValue>,
+    ) -> Option<FieldValue> {
+        self.0.insert(field_id, value.into())
+    }
+}
+
+impl Deref for FieldMap {
+    type Target = BTreeMap<StableId, FieldValue>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for FieldMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl From<BTreeMap<StableId, FieldValue>> for FieldMap {
+    fn from(fields: BTreeMap<StableId, FieldValue>) -> Self {
+        Self(fields)
+    }
+}
+
+impl From<BTreeMap<StableId, String>> for FieldMap {
+    fn from(fields: BTreeMap<StableId, String>) -> Self {
+        Self(
+            fields
+                .into_iter()
+                .map(|(field_id, value)| (field_id, FieldValue::Scalar(value)))
+                .collect(),
+        )
+    }
+}
+
+impl FromIterator<(StableId, FieldValue)> for FieldMap {
+    fn from_iter<T: IntoIterator<Item = (StableId, FieldValue)>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+impl<'a> IntoIterator for &'a FieldMap {
+    type Item = (&'a StableId, &'a FieldValue);
+    type IntoIter = std::collections::btree_map::Iter<'a, StableId, FieldValue>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut FieldMap {
+    type Item = (&'a StableId, &'a mut FieldValue);
+    type IntoIter = std::collections::btree_map::IterMut<'a, StableId, FieldValue>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter_mut()
+    }
+}
+
+/// One semantic note-field value.
+///
+/// Equality, ordering, hashing, and debug output include the representation, so a
+/// scalar containing rendered image HTML is intentionally distinct from structured
+/// image references that lower to the same adapter bytes.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum FieldValue {
+    Scalar(String),
+    Images(Vec<FieldImageReference>),
+    Message(StructuredMessage),
+}
+
+impl FieldValue {
+    pub fn scalar(value: impl Into<String>) -> Self {
+        Self::Scalar(value.into())
+    }
+
+    pub fn images(images: Vec<FieldImageReference>) -> Result<Self, InvalidFieldValue> {
+        if images.is_empty() {
+            Err(InvalidFieldValue::EmptyImageSequence)
+        } else {
+            Ok(Self::Images(images))
+        }
+    }
+
+    pub fn message(message: StructuredMessage) -> Result<Self, InvalidFieldValue> {
+        message.validate_shape()?;
+        Ok(Self::Message(message))
+    }
+
+    pub fn as_scalar(&self) -> Option<&str> {
+        match self {
+            Self::Scalar(value) => Some(value),
+            Self::Images(_) | Self::Message(_) => None,
+        }
+    }
+
+    pub fn as_scalar_mut(&mut self) -> Option<&mut String> {
+        match self {
+            Self::Scalar(value) => Some(value),
+            Self::Images(_) | Self::Message(_) => None,
+        }
+    }
+
+    pub fn as_images(&self) -> Option<&[FieldImageReference]> {
+        match self {
+            Self::Images(images) => Some(images),
+            Self::Scalar(_) | Self::Message(_) => None,
+        }
+    }
+
+    pub fn as_message(&self) -> Option<&StructuredMessage> {
+        match self {
+            Self::Message(message) => Some(message),
+            Self::Scalar(_) | Self::Images(_) => None,
+        }
+    }
+
+    pub fn as_message_mut(&mut self) -> Option<&mut StructuredMessage> {
+        match self {
+            Self::Message(message) => Some(message),
+            Self::Scalar(_) | Self::Images(_) => None,
+        }
+    }
+
+    /// Only the intentional empty scalar is blank/fillable.
+    pub fn is_blank(&self) -> bool {
+        matches!(self, Self::Scalar(value) if value.is_empty())
+    }
+}
+
+impl Default for FieldValue {
+    fn default() -> Self {
+        Self::Scalar(String::new())
+    }
+}
+
+impl From<String> for FieldValue {
+    fn from(value: String) -> Self {
+        Self::Scalar(value)
+    }
+}
+
+impl From<&str> for FieldValue {
+    fn from(value: &str) -> Self {
+        Self::Scalar(value.to_owned())
+    }
+}
+
+impl PartialEq<str> for FieldValue {
+    fn eq(&self, other: &str) -> bool {
+        self.as_scalar() == Some(other)
+    }
+}
+
+impl PartialEq<&str> for FieldValue {
+    fn eq(&self, other: &&str) -> bool {
+        self == *other
+    }
+}
+
+impl PartialEq<String> for FieldValue {
+    fn eq(&self, other: &String) -> bool {
+        self == other.as_str()
+    }
+}
+
+/// A malformed semantic field value.
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum InvalidFieldValue {
+    EmptyImageSequence,
+    InvalidMessage(String),
+}
+
+impl fmt::Display for InvalidFieldValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyImageSequence => f.write_str("structured image field must not be empty"),
+            Self::InvalidMessage(message) => f.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for InvalidFieldValue {}
+
+/// A structured reference from a note field to a declared media asset by stable ID.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FieldImageReference {
     pub media_id: StableId,
 }
 
 /// A field value assembled from reusable references, translatable fragments, and literal glue.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct StructuredMessage {
     /// Positional components for simple messages.
     pub components: Vec<MessageComponent>,
@@ -1144,8 +1340,35 @@ pub struct StructuredMessage {
     pub variables: BTreeMap<String, MessageComponent>,
 }
 
+impl StructuredMessage {
+    pub fn validate_shape(&self) -> Result<(), InvalidFieldValue> {
+        match (
+            &self.format,
+            self.components.is_empty(),
+            self.variables.is_empty(),
+        ) {
+            (Some(_), false, _) => Err(InvalidFieldValue::InvalidMessage(
+                "structured message cannot mix an inline format with positional message components"
+                    .to_owned(),
+            )),
+            (None, _, false) => Err(InvalidFieldValue::InvalidMessage(
+                "structured message variables require an inline format".to_owned(),
+            )),
+            (None, true, true) => Err(InvalidFieldValue::InvalidMessage(
+                "structured message must contain at least one component".to_owned(),
+            )),
+            (Some(format), true, true) if format.is_empty() => {
+                Err(InvalidFieldValue::InvalidMessage(
+                    "structured message format must not be empty".to_owned(),
+                ))
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
 /// One component of a structured message field value.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum MessageComponent {
     /// Non-translatable glue such as punctuation, spaces, or markup.
     Literal(String),

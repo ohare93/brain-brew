@@ -379,21 +379,22 @@ impl IncludeState {
             canonical = canonical.replace(&include.sentinel, &include.directive);
         }
         if let Some(include) = &self.media {
-            let placeholder = "media: {}\n";
-            let count = canonical
-                .split_inclusive('\n')
-                .filter(|line| *line == placeholder)
-                .count();
-            if count != 1 {
+            let Some(start) = canonical.find("media:") else {
                 return Err(SourceDocumentError::at(
                     &include.source.provenance,
                     "media",
-                    format!(
-                        "expected one empty media section during canonical emission, found {count}"
-                    ),
+                    "canonical emission omitted the media section",
                 ));
-            }
-            canonical = canonical.replace(placeholder, &format!("{}\n", include.directive));
+            };
+            let Some(relative_end) = canonical[start..].find("tombstones:") else {
+                return Err(SourceDocumentError::at(
+                    &include.source.provenance,
+                    "media",
+                    "canonical emission omitted tombstones after media",
+                ));
+            };
+            let end = start + relative_end;
+            canonical.replace_range(start..end, &format!("{}\n", include.directive));
         }
         Ok(canonical)
     }

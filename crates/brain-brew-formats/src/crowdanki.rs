@@ -3,8 +3,8 @@ use std::fmt;
 
 use crate::media;
 use brain_brew_core::{
-    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, MediaReference,
-    Note, NoteType, StableId, ValidationReport, VariableRenderReport,
+    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, FieldValue,
+    MediaReference, Note, NoteType, StableId, ValidationReport, VariableRenderReport,
 };
 use serde::{Deserialize, Serialize};
 
@@ -652,8 +652,19 @@ fn export_note(
     let fields = note_type
         .fields
         .iter()
-        .map(|field| note.fields.get(&field.id).cloned().unwrap_or_default())
-        .collect();
+        .map(|field| {
+            note.fields
+                .get(&field.id)
+                .and_then(FieldValue::as_scalar)
+                .map(str::to_owned)
+                .ok_or_else(|| {
+                    CrowdAnkiError::Unsupported(format!(
+                        "note {} field {} was not lowered to scalar adapter text",
+                        note.id, field.id
+                    ))
+                })
+        })
+        .collect::<Result<_, _>>()?;
 
     Ok(CrowdAnkiNoteJson {
         type_: "Note".to_owned(),
@@ -1212,7 +1223,7 @@ impl CrowdAnkiNoteJson {
             .fields
             .iter()
             .zip(self.fields)
-            .map(|(field, value)| (field.id.clone(), value))
+            .map(|(field, value)| (field.id.clone(), FieldValue::Scalar(value)))
             .collect();
         let mut adapter_ids = AdapterIds::new();
         adapter_ids.insert("crowdanki:guid", self.guid);
@@ -1224,8 +1235,6 @@ impl CrowdAnkiNoteJson {
                 note_type_id,
                 variables: BTreeMap::new(),
                 fields,
-                field_messages: BTreeMap::new(),
-                field_images: BTreeMap::new(),
                 tags: self.tags.into_iter().collect(),
                 adapter_ids,
             },
@@ -1243,10 +1252,9 @@ fn reverse_map_strict_image_fields(
 ) {
     let field_ids = note.fields.keys().cloned().collect::<Vec<_>>();
     for field_id in field_ids {
-        let value = note
-            .fields
-            .get(&field_id)
-            .expect("field id came from note field map");
+        let Some(value) = note.fields.get(&field_id).and_then(FieldValue::as_scalar) else {
+            continue;
+        };
         let Some(paths) = media::strict_image_tag_paths(value) else {
             continue;
         };
@@ -1265,8 +1273,7 @@ fn reverse_map_strict_image_fields(
             continue;
         }
 
-        note.fields.insert(field_id.clone(), String::new());
-        note.field_images.insert(field_id, images);
+        note.fields.insert(field_id, FieldValue::Images(images));
     }
 }
 

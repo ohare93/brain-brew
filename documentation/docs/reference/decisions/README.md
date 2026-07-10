@@ -25,6 +25,7 @@ The ADRs are written in hindsight around the decisions that still shape the Rust
 | [0015](0015-use-lazy-single-work-item-workbench-editing.md) | Use Lazy Single-Work-Item Workbench Editing | Accepted | 2026-06-24 |
 | [0016](0016-use-structured-image-field-references-and-severable-media-includes.md) | Use Structured Image Field References and Severable Media Includes | Accepted | 2026-07-04 |
 | [0017](0017-enforce-semantic-version-package-compatibility.md) | Enforce Semantic Version Package Compatibility | Accepted | 2026-07-10 |
+| [0018](0018-model-note-fields-as-semantic-values.md) | Model Note Fields as Semantic Values | Accepted | 2026-07-10 |
 
 ## Process
 

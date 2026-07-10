@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::compose::record_change_path;
 use crate::messages::{
-    field_value_at_path, message_component_path, message_format_path, message_variable_path,
-    render_message_format,
+    message_component_path, message_format_path, message_variable_path, render_message_format,
+    rendered_field_text_at_path,
 };
 use crate::*;
 
@@ -131,10 +131,13 @@ fn translation_coverage_report(
                 field_id: field_id.clone(),
             }
             .to_string();
-            if let Some(message) = note.field_messages.get(field_id) {
-                builder.record_message(value, path, note_id, field_id, message);
-            } else {
-                builder.record_string(value, path, None);
+            match value {
+                FieldValue::Scalar(value) => builder.record_string(value, path, None),
+                FieldValue::Message(message) => {
+                    let rendered = rendered_field_text_at_path(deck, &path).unwrap_or_default();
+                    builder.record_message(&rendered, path, note_id, field_id, message);
+                }
+                FieldValue::Images(_) => {}
             }
         }
         builder.record_tags(
@@ -394,8 +397,8 @@ impl TranslationCoverageBuilder<'_> {
                 self.record_string(value, path, None);
             }
             MessageComponent::FieldRef(reference) => {
-                if let Some(value) = field_value_at_path(self.deck, reference) {
-                    self.record_string(value, path, None);
+                if let Some(value) = rendered_field_text_at_path(self.deck, reference) {
+                    self.record_string(&value, path, None);
                 }
             }
         }
@@ -919,7 +922,12 @@ fn note_field_contexts(
         .fields
         .iter()
         .map(|field| {
-            let source = note.fields.get(&field.id).cloned().unwrap_or_default();
+            let source = note
+                .fields
+                .get(&field.id)
+                .and_then(FieldValue::as_scalar)
+                .unwrap_or_default()
+                .to_owned();
             let path = DeckPath::NoteField {
                 note_id: note_id.clone(),
                 field_id: field.id.clone(),
@@ -946,8 +954,13 @@ fn message_context(
     field_id: &StableId,
     entries_by_path: &BTreeMap<&str, &TranslationCoverageEntry>,
 ) -> Option<TranslationMessageContext> {
-    let message = note.field_messages.get(field_id)?;
-    let resolved_source = note.fields.get(field_id).cloned().unwrap_or_default();
+    let message = note.fields.get(field_id)?.as_message()?;
+    let field_path = DeckPath::NoteField {
+        note_id: note_id.clone(),
+        field_id: field_id.clone(),
+    }
+    .to_string();
+    let resolved_source = rendered_field_text_at_path(deck, &field_path).unwrap_or_default();
     let full_field_translation = entries_by_path
         .get(
             DeckPath::NoteField {
@@ -1045,9 +1058,7 @@ fn message_component_context(
         MessageComponent::Text(value) => (MessageComponentKind::Text, value.clone(), None),
         MessageComponent::FieldRef(reference) => (
             MessageComponentKind::FieldRef,
-            field_value_at_path(deck, reference)
-                .unwrap_or_default()
-                .to_owned(),
+            rendered_field_text_at_path(deck, reference).unwrap_or_default(),
             Some(reference.clone()),
         ),
     };
@@ -1226,28 +1237,26 @@ pub(crate) fn apply_translation_dictionary(
                     field_id: field_id.clone(),
                 }
                 .to_string();
-                if note.field_messages.contains_key(&field_id) {
-                    let source = note.fields.get(&field_id).cloned().unwrap_or_default();
-                    let full_override = {
-                        let message = note
-                            .field_messages
-                            .get_mut(&field_id)
-                            .expect("field message existence checked");
-                        context.translate_message_field(
+                let source = rendered_field_text_at_path(&source_deck, &path).unwrap_or_default();
+                let Some(value) = note.fields.get_mut(&field_id) else {
+                    continue;
+                };
+                match value {
+                    FieldValue::Scalar(value) => context.translate_string(value, path, None),
+                    FieldValue::Message(message) => {
+                        let full_override = context.translate_message_field(
                             &source_deck,
                             &source,
-                            path.clone(),
+                            path,
                             note_id,
                             &field_id,
                             message,
-                        )
-                    };
-                    if let Some(translated) = full_override {
-                        note.field_messages.remove(&field_id);
-                        note.fields.insert(field_id, translated);
+                        );
+                        if let Some(translated) = full_override {
+                            *value = FieldValue::Scalar(translated);
+                        }
                     }
-                } else if let Some(value) = note.fields.get_mut(&field_id) {
-                    context.translate_string(value, path, None);
+                    FieldValue::Images(_) => {}
                 }
             }
             context.translate_tags(
@@ -1429,12 +1438,14 @@ impl TranslationApplyContext<'_, '_> {
                 self.translate_string(value, path, None);
             }
             MessageComponent::FieldRef(reference) => {
-                let Some(source) = field_value_at_path(source_deck, reference) else {
+                let Some(source) = rendered_field_text_at_path(source_deck, reference) else {
                     return;
                 };
-                let mut translated = source.to_owned();
+                let mut translated = source.clone();
                 self.translate_string(&mut translated, path, None);
-                *component = MessageComponent::Literal(translated);
+                if translated != source {
+                    *component = MessageComponent::Literal(translated);
+                }
             }
         }
     }

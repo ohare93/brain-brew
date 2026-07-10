@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use brain_brew_core::{CanonicalDeck, DeckPath};
+use brain_brew_core::{CanonicalDeck, DeckPath, FieldValue};
 use sha2::{Digest, Sha256};
 
 use crate::safe_relative_path::SafeRelativePath;
@@ -266,21 +266,24 @@ fn collect_references(deck: &CanonicalDeck) -> CollectedReferences {
     extract_from_text(&deck.description, "deck.description", &mut collected);
     for (note_id, note) in &deck.notes {
         for (field_id, value) in &note.fields {
-            extract_from_text(
-                value,
-                &DeckPath::NoteField {
-                    note_id: note_id.clone(),
-                    field_id: field_id.clone(),
+            match value {
+                FieldValue::Scalar(value) => extract_from_text(
+                    value,
+                    &DeckPath::NoteField {
+                        note_id: note_id.clone(),
+                        field_id: field_id.clone(),
+                    }
+                    .to_string(),
+                    &mut collected,
+                ),
+                FieldValue::Images(images) => {
+                    for image in images {
+                        if let Some(media) = deck.media.get(&image.media_id) {
+                            collected.paths.insert(media.path.clone());
+                        }
+                    }
                 }
-                .to_string(),
-                &mut collected,
-            );
-        }
-        for images in note.field_images.values() {
-            for image in images {
-                if let Some(media) = deck.media.get(&image.media_id) {
-                    collected.paths.insert(media.path.clone());
-                }
+                FieldValue::Message(_) => {}
             }
         }
     }
@@ -315,7 +318,10 @@ fn collect_references(deck: &CanonicalDeck) -> CollectedReferences {
 fn structured_image_reference_errors(deck: &CanonicalDeck) -> Vec<MediaValidationError> {
     let mut errors = Vec::new();
     for (note_id, note) in &deck.notes {
-        for (field_id, images) in &note.field_images {
+        for (field_id, value) in &note.fields {
+            let FieldValue::Images(images) = value else {
+                continue;
+            };
             let field_path = DeckPath::NoteField {
                 note_id: note_id.clone(),
                 field_id: field_id.clone(),

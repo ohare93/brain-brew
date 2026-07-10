@@ -4771,11 +4771,11 @@ fn verify_reports_unknown_structured_image_media_id() {
     let err = stderr(&output);
     assert!(!output.status.success());
     assert!(
-        err.contains("unknown media id `media.flags-missing`"),
+        err.contains("unknown media id \"media.flags-missing\""),
         "{err}"
     );
     assert!(
-        err.contains("field `notes.note.finland.fields.field.flag`"),
+        err.contains("field notes.note.finland.fields.field.flag"),
         "{err}"
     );
 }
