@@ -11,7 +11,7 @@ title: Workspace transaction contract
 A caller:
 
 1. validates each replacement's bytes with its format/domain validator, producing `ValidatedReplacement`;
-2. supplies a workspace-relative `WorkspaceWrite` with `ExpectedTarget::Absent` or a SHA-256/length `FileFingerprint`;
+2. supplies a workspace-relative `WorkspaceWrite` with `ExpectedTarget::Absent` or the SHA-256/length `FileFingerprint` of the exact bytes used to compute that replacement—not bytes re-read during transaction planning;
 3. validates the complete `WorkspaceTransactionPlan` without filesystem mutation;
 4. commits the resulting `ValidatedWorkspaceTransaction`; and
 5. invokes workspace recovery before retrying after an interrupted transaction.
@@ -63,7 +63,7 @@ Before the first target replacement:
 - every existing target has a synced backup with a verified fingerprint; and
 - `Prepared`, then `Committing{completed: 0}`, is durably published.
 
-Each target replacement is an individual same-filesystem rename followed by a parent-directory sync. After each replacement, commit progress is durably advanced. This is **recoverable multi-file commit**, not atomic multi-file rename.
+Each existing-target replacement is an individual same-filesystem rename followed by a parent-directory sync. A planned-new target is published with an atomic no-replace hard link from its staged file, so a non-cooperating creator cannot be overwritten between the final absence check and publication. After each replacement, commit progress is durably advanced. This is **recoverable multi-file commit**, not atomic multi-file rename.
 
 An ordinary commit error attempts rollback before returning. If rollback succeeds, the error explicitly reports that the original workspace was restored. If rollback or cleanup fails, the transaction directory and journal remain for recovery.
 
@@ -88,8 +88,8 @@ The production implementation assumes:
 
 - Unix device IDs and permission modes are available;
 - staged files, backups, journals, and targets are on one filesystem;
-- file `sync_all`, directory `sync_all`, and same-filesystem rename provide their documented local-filesystem persistence semantics;
-- rename replaces a regular file atomically for one path; and
+- file `sync_all`, directory `sync_all`, same-filesystem rename, and same-filesystem hard links provide their documented local-filesystem persistence semantics;
+- rename replaces an existing regular file atomically for one path, while hard-link creation fails atomically if a planned-new target exists; and
 - the underlying filesystem and storage stack honor flushes after power loss.
 
 The production adapter fails as unsupported on non-Unix platforms rather than weakening filesystem or permission validation. Network filesystems, unusual FUSE implementations, hardware that ignores flushes, and non-cooperating writers remain platform risks. Windows support requires a separately tested adapter because replacement rename, locking, device identity, and permission behavior differ.

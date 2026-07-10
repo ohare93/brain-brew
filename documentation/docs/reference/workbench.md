@@ -18,9 +18,11 @@ The server binds `127.0.0.1` on an available port by default and serves JSON API
 
 Staged edits remain in that browser profile's `localStorage` across navigation and refresh. They are not copied to canonical YAML while the Workbench is read-only. Keep the browser profile or copy important draft text before clearing site data. The UI displays the server-provided `write_capability` from `/api/workspace`; it never guesses capability from build type or an environment variable.
 
-Source-document mutation now preserves canonical source/includes, and development writes now use one fingerprint-checked recoverable transaction with startup and pre-Apply recovery. Normal builds remain contained until all remaining conditions land and are tested together:
+Source-document mutation now preserves canonical source/includes, and development writes now use one fingerprint-checked recoverable transaction with startup and pre-Apply recovery. Within one request, every write expectation is anchored to the exact root/include/manifest bytes (or absence) used to compute that replacement; transaction planning never re-reads a newer target and rebases stale replacement bytes onto it. This closes the intra-request edit-computation race.
 
-1. every Apply input has complete compare-and-swap fingerprints (Workbench hardening 0040);
+Normal builds remain contained until all remaining conditions land and are tested together:
+
+1. browser Apply/Confirm requests carry complete UI-context compare-and-swap fingerprints for every input selected before the server begins that request (Workbench hardening 0040);
 2. Confirm is bound to an immutable, validated preview token (Workbench hardening 0050); and
 3. the applicable Workbench security gate is complete for the accepted threat model.
 

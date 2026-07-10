@@ -113,6 +113,7 @@ pub struct CanonicalSourceDocument {
     deck: CanonicalDeck,
     resolved_deck: CanonicalDeck,
     includes: IncludeState,
+    original_sources: BTreeMap<SourceProvenance, SourceFile>,
 }
 
 impl std::fmt::Debug for CanonicalSourceDocument {
@@ -162,11 +163,13 @@ impl CanonicalSourceDocument {
         canonical_yaml::to_string(&deck).map_err(|error| {
             SourceDocumentError::source(prepared.root.provenance(), error.to_string())
         })?;
+        let original_sources = prepared.original_sources()?;
         Ok(Self {
             provenance: prepared.root.provenance().clone(),
             deck,
             resolved_deck,
             includes: prepared.includes,
+            original_sources,
         })
     }
 
@@ -182,6 +185,7 @@ impl CanonicalSourceDocument {
             resolved_deck: deck.clone(),
             deck,
             includes: IncludeState::default(),
+            original_sources: BTreeMap::new(),
         })
     }
 
@@ -341,6 +345,7 @@ impl CanonicalSourceDocument {
         Ok(SourceDocumentEmission::new(
             root,
             self.includes.changed_sources()?,
+            self.original_sources.clone(),
         ))
     }
 

@@ -166,6 +166,26 @@ fn canonical_document_routes_targeted_scalar_and_media_edits_to_included_sources
             .text()
             .contains("sha256: new-hash\n")
     );
+    assert_eq!(
+        emission
+            .original_source(
+                &SourceProvenance::new("deck.yaml").with_source_root("fixture.workspace")
+            )
+            .unwrap()
+            .text(),
+        deck_source()
+    );
+    assert_eq!(
+        emission
+            .original_source(
+                &SourceProvenance::new("content/description.md")
+                    .with_source_root("fixture.workspace")
+            )
+            .unwrap()
+            .text(),
+        "Included description\n",
+        "included outputs retain the exact loader bytes used at edit computation time"
+    );
 }
 
 #[test]

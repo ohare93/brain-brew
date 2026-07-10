@@ -172,6 +172,8 @@ pub(crate) trait WorkspaceFilesystem: Send + Sync {
     fn create_dir_all(&self, path: &Path) -> io::Result<()>;
     fn write_new_durable(&self, path: &Path, bytes: &[u8], mode: u32) -> io::Result<()>;
     fn replace_durable(&self, source: &Path, target: &Path) -> io::Result<()>;
+    /// Publish a staged file only if the target is still absent.
+    fn publish_new_durable(&self, source: &Path, target: &Path) -> io::Result<()>;
     fn remove_file_durable(&self, path: &Path) -> io::Result<()>;
     fn remove_dir_all_durable(&self, path: &Path) -> io::Result<()>;
     fn sync_directory(&self, path: &Path) -> io::Result<()>;
@@ -239,6 +241,13 @@ impl WorkspaceFilesystem for RealWorkspaceFilesystem {
     fn replace_durable(&self, source: &Path, target: &Path) -> io::Result<()> {
         fs::rename(source, target)?;
         self.sync_directory(parent(target)?)
+    }
+
+    fn publish_new_durable(&self, source: &Path, target: &Path) -> io::Result<()> {
+        fs::hard_link(source, target)?;
+        self.sync_directory(parent(target)?)?;
+        fs::remove_file(source)?;
+        self.sync_directory(parent(source)?)
     }
 
     fn remove_file_durable(&self, path: &Path) -> io::Result<()> {
@@ -454,12 +463,16 @@ impl<'a> WorkspaceTransactionManager<'a> {
                     error,
                 );
             }
-            if let Err(source) = self.filesystem.replace_durable(&staged, target) {
+            let publish = match &write.expected {
+                ExpectedTarget::Absent => self.filesystem.publish_new_durable(&staged, target),
+                ExpectedTarget::Present(_) => self.filesystem.replace_durable(&staged, target),
+            };
+            if let Err(source) = publish {
                 return self.handle_commit_error(
                     &journal_path,
                     &transaction_directory,
                     &mut journal,
-                    io_error("replace target", target, source),
+                    io_error("publish replacement", target, source),
                 );
             }
             if let Err(failure) = self.inject(&FailurePoint::RecordCommit(index)) {
@@ -1872,6 +1885,7 @@ mod tests {
     struct DeviceOverrideFilesystem {
         real: RealWorkspaceFilesystem,
         overrides: BTreeMap<PathBuf, u64>,
+        create_at_publish: Option<(PathBuf, Vec<u8>)>,
     }
 
     impl WorkspaceFilesystem for DeviceOverrideFilesystem {
@@ -1903,6 +1917,14 @@ mod tests {
         fn replace_durable(&self, source: &Path, target: &Path) -> io::Result<()> {
             self.real.replace_durable(source, target)
         }
+        fn publish_new_durable(&self, source: &Path, target: &Path) -> io::Result<()> {
+            if let Some((race_target, bytes)) = &self.create_at_publish
+                && race_target == target
+            {
+                fs::write(target, bytes)?;
+            }
+            self.real.publish_new_durable(source, target)
+        }
         fn remove_file_durable(&self, path: &Path) -> io::Result<()> {
             self.real.remove_file_durable(path)
         }
@@ -1918,6 +1940,61 @@ mod tests {
     }
 
     #[test]
+    fn absent_target_created_after_validation_returns_typed_expected_state_conflict() {
+        let directory = tempfile::tempdir().unwrap();
+        let filesystem = RealWorkspaceFilesystem;
+        let target = directory.path().join("new.yaml");
+        let plan = WorkspaceTransactionPlan::new(
+            directory.path(),
+            vec![WorkspaceWrite::new(
+                "new.yaml",
+                ExpectedTarget::Absent,
+                replacement("transaction replacement\n"),
+            )],
+        );
+        let transaction = plan.validate(&filesystem).unwrap();
+        fs::write(&target, b"external creation\n").unwrap();
+        let error = WorkspaceTransactionManager::new(&filesystem, &NoFailures)
+            .commit(transaction)
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            TransactionError::ExpectedStateMismatch {
+                expected: ExpectedTarget::Absent,
+                actual: ExpectedTarget::Present(_),
+                ..
+            }
+        ));
+        assert_eq!(fs::read(target).unwrap(), b"external creation\n");
+    }
+
+    #[test]
+    fn absent_target_created_at_publish_is_never_overwritten() {
+        let directory = tempfile::tempdir().unwrap();
+        let canonical_root = fs::canonicalize(directory.path()).unwrap();
+        let target = canonical_root.join("new.yaml");
+        let filesystem = DeviceOverrideFilesystem {
+            real: RealWorkspaceFilesystem,
+            overrides: BTreeMap::new(),
+            create_at_publish: Some((target.clone(), b"external creation\n".to_vec())),
+        };
+        let plan = WorkspaceTransactionPlan::new(
+            &canonical_root,
+            vec![WorkspaceWrite::new(
+                "new.yaml",
+                ExpectedTarget::Absent,
+                replacement("transaction replacement\n"),
+            )],
+        );
+        let transaction = plan.validate(&filesystem).unwrap();
+        let error = WorkspaceTransactionManager::new(&filesystem, &NoFailures)
+            .commit(transaction)
+            .unwrap_err();
+        assert!(matches!(error, TransactionError::RecoveryConflict { .. }));
+        assert_eq!(fs::read(target).unwrap(), b"external creation\n");
+    }
+
+    #[test]
     fn injected_filesystem_identity_rejects_cross_filesystem_plan() {
         let (directory, plan) = fixture();
         let canonical_root = fs::canonicalize(directory.path()).unwrap();
@@ -1928,6 +2005,7 @@ mod tests {
         let filesystem = DeviceOverrideFilesystem {
             real: RealWorkspaceFilesystem,
             overrides: BTreeMap::from([(canonical_root.clone(), root_device + 1)]),
+            create_at_publish: None,
         };
         assert!(matches!(
             plan.validate(&filesystem).unwrap_err(),

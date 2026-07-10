@@ -136,11 +136,20 @@ pub enum EditLocation {
 pub struct SourceDocumentEmission {
     root: SourceFile,
     included: Vec<SourceFile>,
+    original_sources: BTreeMap<SourceProvenance, SourceFile>,
 }
 
 impl SourceDocumentEmission {
-    pub(crate) fn new(root: SourceFile, included: Vec<SourceFile>) -> Self {
-        Self { root, included }
+    pub(crate) fn new(
+        root: SourceFile,
+        included: Vec<SourceFile>,
+        original_sources: BTreeMap<SourceProvenance, SourceFile>,
+    ) -> Self {
+        Self {
+            root,
+            included,
+            original_sources,
+        }
     }
 
     pub fn root(&self) -> &SourceFile {
@@ -155,6 +164,14 @@ impl SourceDocumentEmission {
         self.included
             .iter()
             .find(|source| source.provenance.source_name == source_name)
+    }
+
+    /// Exact source bytes used to parse and compute an emitted replacement.
+    ///
+    /// Generated documents have no original snapshot and therefore represent
+    /// an expected-absent output.
+    pub fn original_source(&self, provenance: &SourceProvenance) -> Option<&SourceFile> {
+        self.original_sources.get(provenance)
     }
 }
 
@@ -255,6 +272,25 @@ struct MediaInclude {
     source: SourceFile,
     media: BTreeMap<StableId, MediaReference>,
     dirty: bool,
+}
+
+impl PreparedSource {
+    pub(crate) fn original_sources(
+        &self,
+    ) -> Result<BTreeMap<SourceProvenance, SourceFile>, SourceDocumentError> {
+        let mut originals = BTreeMap::<SourceProvenance, String>::new();
+        insert_changed_source(&mut originals, &self.root)?;
+        for include in self.includes.scalar.values() {
+            insert_changed_source(&mut originals, &include.source)?;
+        }
+        if let Some(include) = &self.includes.media {
+            insert_changed_source(&mut originals, &include.source)?;
+        }
+        Ok(originals
+            .into_iter()
+            .map(|(provenance, text)| (provenance.clone(), SourceFile::new(provenance, text)))
+            .collect())
+    }
 }
 
 impl IncludeState {

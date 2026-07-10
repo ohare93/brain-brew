@@ -52,6 +52,7 @@ pub struct OverlaySourceDocument {
     overlay: Overlay,
     resolved_overlay: Overlay,
     includes: IncludeState,
+    original_sources: BTreeMap<SourceProvenance, SourceFile>,
 }
 
 impl std::fmt::Debug for OverlaySourceDocument {
@@ -89,11 +90,13 @@ impl OverlaySourceDocument {
         canonical_yaml::overlay_to_string(&overlay).map_err(|error| {
             SourceDocumentError::source(prepared.root.provenance(), error.to_string())
         })?;
+        let original_sources = prepared.original_sources()?;
         Ok(Self {
             provenance: prepared.root.provenance().clone(),
             overlay,
             resolved_overlay,
             includes: prepared.includes,
+            original_sources,
         })
     }
 
@@ -108,6 +111,7 @@ impl OverlaySourceDocument {
             resolved_overlay: overlay.clone(),
             overlay,
             includes: IncludeState::default(),
+            original_sources: BTreeMap::new(),
         })
     }
 
@@ -507,6 +511,7 @@ impl OverlaySourceDocument {
         Ok(SourceDocumentEmission::new(
             SourceFile::new(self.provenance.clone(), canonical),
             self.includes.changed_sources()?,
+            self.original_sources.clone(),
         ))
     }
 

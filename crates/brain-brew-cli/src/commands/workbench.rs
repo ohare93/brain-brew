@@ -560,6 +560,16 @@ impl WorkspaceMetadata {
         Ok(self.cache.blocking_read().manifest.clone())
     }
 
+    fn current_manifest_snapshot(&self) -> Result<(FederatedDeckManifest, Vec<u8>), String> {
+        let bytes = fs::read(&self.manifest_path)
+            .map_err(|error| format!("{}: {error}", self.manifest_path.display()))?;
+        let text = std::str::from_utf8(&bytes)
+            .map_err(|error| format!("{}: {error}", self.manifest_path.display()))?;
+        let manifest = manifest::from_str(text)
+            .map_err(|error| format!("{}: {error}", self.manifest_path.display()))?;
+        Ok((manifest, bytes))
+    }
+
     fn ensure_fresh_cache(&self) -> Result<(), String> {
         let (generation, manifest, previous_signatures) = {
             let cache = self.cache.blocking_read();
@@ -873,14 +883,14 @@ impl WorkspaceMetadata {
     fn create_new_language_json(&self, request: NewLanguageRequest) -> Result<Value, String> {
         let _apply_guard = self.lock_apply()?;
         recover_workspace(&self.manifest_root)?;
-        let manifest = self.current_manifest()?;
+        let (manifest, manifest_original) = self.current_manifest_snapshot()?;
         let (updated, overlay_writes) =
             apply_new_language_request(&self.manifest_root, &manifest, &request)?;
         let manifest_yaml = manifest::to_string(&updated).map_err(|error| error.to_string())?;
         manifest::from_str(&manifest_yaml)
             .map_err(|error| format!("invalid generated manifest: {error}"))?;
 
-        let mut writes = Vec::new();
+        let mut outputs = BTreeMap::new();
         for (relative_path, overlay) in overlay_writes {
             let path = PathAuthorizer::new("workspace", &self.manifest_root)?
                 .authorize_create(
@@ -890,12 +900,6 @@ impl WorkspaceMetadata {
                 )
                 .map_err(|error| error.to_string())?
                 .into_path_buf();
-            if path.exists() {
-                return Err(format!(
-                    "invalid new language overlay file already exists: {}",
-                    path.display()
-                ));
-            }
             let provenance = brain_brew_formats::source_document::SourceProvenance::new(
                 path.display().to_string(),
             )
@@ -903,31 +907,24 @@ impl WorkspaceMetadata {
             let emission = OverlaySourceDocument::from_overlay(provenance, overlay)
                 .and_then(|document| document.emit())
                 .map_err(|error| format!("invalid generated overlay {relative_path}: {error}"))?;
-            let replacement = emission.root().text().as_bytes().to_vec();
-            writes.push(PlannedWorkspaceFile::validated_new(
-                path,
-                replacement,
-                |bytes| {
-                    let text = std::str::from_utf8(bytes).map_err(|error| error.to_string())?;
-                    canonical_yaml::overlay_from_str(text)
-                        .map(|_| ())
-                        .map_err(|error| error.to_string())
-                },
-            )?);
+            collect_document_emission(emission, &mut outputs)?;
         }
-        let manifest_original = fs::read(&self.manifest_path)
-            .map_err(|error| format!("{}: {error}", self.manifest_path.display()))?;
-        writes.push(PlannedWorkspaceFile::validated(
-            self.manifest_path.clone(),
-            manifest_original,
-            manifest_yaml.into_bytes(),
-            |bytes| {
-                let text = std::str::from_utf8(bytes).map_err(|error| error.to_string())?;
-                manifest::from_str(text)
-                    .map(|_| ())
-                    .map_err(|error| error.to_string())
-            },
-        )?);
+        if outputs
+            .insert(
+                self.manifest_path.clone(),
+                PlannedSourceOutput {
+                    original: OriginalSourceSnapshot::Present(manifest_original),
+                    replacement: manifest_yaml.into_bytes(),
+                },
+            )
+            .is_some()
+        {
+            return Err(format!(
+                "new-language overlay output conflicts with manifest {}",
+                self.manifest_path.display()
+            ));
+        }
+        let writes = planned_workbench_outputs(&self.manifest_root, outputs)?;
         commit_workspace_files(&self.manifest_root, writes)?;
         self.invalidate_workspace_cache_after_write()?;
 
@@ -4007,11 +4004,23 @@ fn planned_overlay_for_path<'a>(
         .ok_or_else(|| format!("no planned overlay owns {}", path.display()))
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum OriginalSourceSnapshot {
+    Present(Vec<u8>),
+    Absent,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PlannedSourceOutput {
+    original: OriginalSourceSnapshot,
+    replacement: Vec<u8>,
+}
+
 #[derive(Default)]
 struct SourceApplyPlan {
     changed_entries: Vec<Value>,
     overlay_changed: bool,
-    outputs: BTreeMap<PathBuf, Vec<u8>>,
+    outputs: BTreeMap<PathBuf, PlannedSourceOutput>,
     affected_files: BTreeMap<PathBuf, String>,
 }
 
@@ -4287,26 +4296,40 @@ fn note_field_path(path: &str) -> Result<(&str, &str), String> {
 
 fn collect_document_emission(
     emission: SourceDocumentEmission,
-    outputs: &mut BTreeMap<PathBuf, Vec<u8>>,
+    outputs: &mut BTreeMap<PathBuf, PlannedSourceOutput>,
 ) -> Result<(), String> {
-    collect_document_source(emission.root(), outputs)?;
+    collect_document_source(
+        emission.root(),
+        emission.original_source(emission.root().provenance()),
+        outputs,
+    )?;
     for source in emission.included() {
-        collect_document_source(source, outputs)?;
+        collect_document_source(
+            source,
+            emission.original_source(source.provenance()),
+            outputs,
+        )?;
     }
     Ok(())
 }
 
 fn collect_document_source(
     source: &brain_brew_formats::source_document::SourceFile,
-    outputs: &mut BTreeMap<PathBuf, Vec<u8>>,
+    original: Option<&brain_brew_formats::source_document::SourceFile>,
+    outputs: &mut BTreeMap<PathBuf, PlannedSourceOutput>,
 ) -> Result<(), String> {
     let path = PathBuf::from(source.provenance().source_name());
-    let bytes = source.text().as_bytes().to_vec();
-    if let Some(previous) = outputs.insert(path.clone(), bytes.clone())
-        && previous != bytes
+    let output = PlannedSourceOutput {
+        original: original.map_or(OriginalSourceSnapshot::Absent, |original| {
+            OriginalSourceSnapshot::Present(original.text().as_bytes().to_vec())
+        }),
+        replacement: source.text().as_bytes().to_vec(),
+    };
+    if let Some(previous) = outputs.insert(path.clone(), output.clone())
+        && previous != output
     {
         return Err(format!(
-            "conflicting Workbench outputs for {}",
+            "conflicting Workbench outputs or original snapshots for {}",
             path.display()
         ));
     }
@@ -4315,15 +4338,54 @@ fn collect_document_source(
 
 fn planned_workbench_outputs(
     workspace_root: &Path,
-    outputs: BTreeMap<PathBuf, Vec<u8>>,
+    outputs: BTreeMap<PathBuf, PlannedSourceOutput>,
 ) -> Result<Vec<PlannedWorkspaceFile>, String> {
     let canonical_root = fs::canonicalize(workspace_root)
         .map_err(|error| format!("{}: {error}", workspace_root.display()))?;
     outputs
         .into_iter()
-        .map(|(path, replacement)| {
-            let canonical =
-                fs::canonicalize(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+        .map(|(path, output)| {
+            let absolute = if path.is_absolute() {
+                path
+            } else {
+                canonical_root.join(path)
+            };
+            let canonical = match &output.original {
+                OriginalSourceSnapshot::Present(_) => {
+                    let parent = absolute
+                        .parent()
+                        .ok_or_else(|| format!("{} has no parent", absolute.display()))?;
+                    let canonical_parent = fs::canonicalize(parent)
+                        .map_err(|error| format!("{}: {error}", parent.display()))?;
+                    let name = absolute
+                        .file_name()
+                        .ok_or_else(|| format!("{} has no file name", absolute.display()))?;
+                    canonical_parent.join(name)
+                }
+                OriginalSourceSnapshot::Absent => {
+                    let mut ancestor = absolute.as_path();
+                    let mut suffix = Vec::new();
+                    while !ancestor.exists() {
+                        suffix.push(
+                            ancestor
+                                .file_name()
+                                .ok_or_else(|| {
+                                    format!("{} has no existing ancestor", absolute.display())
+                                })?
+                                .to_os_string(),
+                        );
+                        ancestor = ancestor.parent().ok_or_else(|| {
+                            format!("{} has no existing ancestor", absolute.display())
+                        })?;
+                    }
+                    let mut resolved = fs::canonicalize(ancestor)
+                        .map_err(|error| format!("{}: {error}", ancestor.display()))?;
+                    for component in suffix.iter().rev() {
+                        resolved.push(component);
+                    }
+                    resolved
+                }
+            };
             if !canonical.starts_with(&canonical_root) {
                 return Err(format!(
                     "Workbench mutation target {} is outside root workspace {}",
@@ -4331,15 +4393,27 @@ fn planned_workbench_outputs(
                     canonical_root.display()
                 ));
             }
-            let original = fs::read(&canonical)
-                .map_err(|error| format!("{}: {error}", canonical.display()))?;
-            PlannedWorkspaceFile::validated(canonical, original, replacement, |bytes| {
-                std::str::from_utf8(bytes)
-                    .map(|_| ())
-                    .map_err(|error| error.to_string())
-            })
+            match output.original {
+                OriginalSourceSnapshot::Present(original) => PlannedWorkspaceFile::validated(
+                    canonical,
+                    original,
+                    output.replacement,
+                    validate_utf8_workbench_output,
+                ),
+                OriginalSourceSnapshot::Absent => PlannedWorkspaceFile::validated_new(
+                    canonical,
+                    output.replacement,
+                    validate_utf8_workbench_output,
+                ),
+            }
         })
         .collect()
+}
+
+fn validate_utf8_workbench_output(bytes: &[u8]) -> Result<(), String> {
+    std::str::from_utf8(bytes)
+        .map(|_| ())
+        .map_err(|error| error.to_string())
 }
 
 fn validate_complete_workbench_result(
@@ -4859,4 +4933,144 @@ fn open_browser(url: &str) {
     };
 
     let _ = command.spawn();
+}
+
+#[cfg(test)]
+mod transaction_snapshot_tests {
+    use super::*;
+
+    fn assert_t0_conflict(
+        root: &Path,
+        target: &Path,
+        outputs: BTreeMap<PathBuf, PlannedSourceOutput>,
+        external: &[u8],
+    ) {
+        fs::write(target, external).unwrap();
+        let writes = planned_workbench_outputs(root, outputs).unwrap();
+        let error = commit_workspace_files(root, writes).unwrap_err();
+        assert!(
+            error.contains("does not match expected state"),
+            "unexpected conflict: {error}"
+        );
+        assert_eq!(fs::read(target).unwrap(), external);
+    }
+
+    #[test]
+    fn canonical_source_snapshot_is_not_rebased_during_transaction_planning() {
+        let workspace = tempfile::tempdir().unwrap();
+        let path = workspace.path().join("deck.yaml");
+        let original = include_str!("../../../../fixtures/ug-style/deck.yaml");
+        fs::write(&path, original).unwrap();
+        let mut document = canonical_source_document(&path, original).unwrap();
+        document
+            .set_scalar(
+                CanonicalScalarTarget::NoteField {
+                    note_id: StableId::new("note.finland").unwrap(),
+                    field_id: StableId::new("field.country").unwrap(),
+                },
+                "Finland",
+                "Computed replacement",
+            )
+            .unwrap();
+        let mut outputs = BTreeMap::new();
+        collect_document_emission(document.emit().unwrap(), &mut outputs).unwrap();
+
+        assert_t0_conflict(
+            workspace.path(),
+            &path,
+            outputs,
+            b"external canonical edit\n",
+        );
+    }
+
+    #[test]
+    fn included_source_snapshot_uses_exact_loader_bytes() {
+        let workspace = tempfile::tempdir().unwrap();
+        let path = workspace.path().join("deck.yaml");
+        let include = workspace.path().join("description.md");
+        let original = "deck:\n  id: deck.snapshot\n  name: Snapshot\n  description: !include description.md\n  adapter_ids: {}\nnote_types: {}\nnotes: {}\nmedia: {}\ntombstones: []\n";
+        fs::write(&path, original).unwrap();
+        fs::write(&include, "loader bytes\n").unwrap();
+        let mut document = canonical_source_document(&path, original).unwrap();
+        document
+            .set_scalar(
+                CanonicalScalarTarget::DeckDescription,
+                "loader bytes\n",
+                "computed include replacement\n",
+            )
+            .unwrap();
+        let mut outputs = BTreeMap::new();
+        collect_document_emission(document.emit().unwrap(), &mut outputs).unwrap();
+        outputs.retain(|output_path, _| output_path == &include);
+
+        assert_t0_conflict(
+            workspace.path(),
+            &include,
+            outputs,
+            b"external include edit\n",
+        );
+    }
+
+    #[test]
+    fn translation_overlay_snapshot_is_not_rebased_during_transaction_planning() {
+        let workspace = tempfile::tempdir().unwrap();
+        let path = workspace.path().join("da.yaml");
+        let original = "id: overlay.translation.da\nkind: translation\ntranslations:\n  direct:\n    Finland: Finlande\n";
+        fs::write(&path, original).unwrap();
+        let mut document = overlay_source_document(&path, original).unwrap();
+        document
+            .set_translation_decision(
+                "notes.note.finland.fields.field.country",
+                "Finland",
+                TranslationDecision::Direct("Suomi".to_owned()),
+            )
+            .unwrap();
+        let mut outputs = BTreeMap::new();
+        collect_document_emission(document.emit().unwrap(), &mut outputs).unwrap();
+
+        assert_t0_conflict(
+            workspace.path(),
+            &path,
+            outputs,
+            b"external translation edit\n",
+        );
+    }
+
+    #[test]
+    fn new_language_manifest_and_source_expectations_are_not_rebased() {
+        let manifest_workspace = tempfile::tempdir().unwrap();
+        let manifest_path = manifest_workspace.path().join("brainbrew.yaml");
+        let original_manifest = b"package: old\n".to_vec();
+        fs::write(&manifest_path, &original_manifest).unwrap();
+        let manifest_outputs = BTreeMap::from([(
+            manifest_path.clone(),
+            PlannedSourceOutput {
+                original: OriginalSourceSnapshot::Present(original_manifest),
+                replacement: b"package: computed\n".to_vec(),
+            },
+        )]);
+        assert_t0_conflict(
+            manifest_workspace.path(),
+            &manifest_path,
+            manifest_outputs,
+            b"package: external\n",
+        );
+
+        let source_workspace = tempfile::tempdir().unwrap();
+        let source_path = source_workspace.path().join("overlays/new.yaml");
+        fs::create_dir_all(source_path.parent().unwrap()).unwrap();
+        let source_outputs = BTreeMap::from([(
+            source_path.clone(),
+            PlannedSourceOutput {
+                original: OriginalSourceSnapshot::Absent,
+                replacement: b"id: overlay.translation.new\nkind: translation\n".to_vec(),
+            },
+        )]);
+        assert_t0_conflict(
+            source_workspace.path(),
+            &source_path,
+            source_outputs,
+            b"external new-language source\n",
+        );
+    }
 }
