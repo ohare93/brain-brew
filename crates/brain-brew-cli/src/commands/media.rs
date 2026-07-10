@@ -1,18 +1,24 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use brain_brew_formats::{media, media_map, strict_yaml};
-use serde_yaml::{Mapping, Value};
+use brain_brew_core::StableId;
+use brain_brew_formats::media;
+use brain_brew_formats::source_document::{ImageConversionReport, SourceDocumentEmission};
 
+use crate::commands::lock::validated_nar_hash;
 use crate::help;
 use crate::io::{
-    format_source_at, manifest_root, resolve_include_target_for_context, root_relative_path,
-    source_context_for_path, top_level_media_include_path,
+    canonical_document_from_package, format_source_at, manifest_root, overlay_document_from_package,
 };
+use crate::media_ownership::MediaRootSelections;
 use crate::output;
 use crate::path_authorization::PathAuthorizer;
-use crate::planner::{ManifestRegistry, PlanSourceKind};
+use crate::planner::{
+    ManifestRegistry, MediaDeclarationProvenance, PlanSourceKind, RegistryManifest,
+    RegistrySourceKind, SourceProvenance, TargetPlan,
+};
+use crate::workspace_mutation::{PlannedWorkspaceFile, commit_workspace_files, recover_workspace};
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if matches!(args, [flag] if flag == "--help" || flag == "-h")
@@ -21,7 +27,6 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         print!("{}", help::command("media").expect("media help exists"));
         return Ok(());
     }
-
     match args.first().map(String::as_str) {
         Some("hash") => run_hash(&args[1..]),
         Some("images-to-refs") => run_images_to_refs(&args[1..]),
@@ -33,52 +38,130 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
 }
 
 fn run_hash(args: &[String]) -> Result<(), String> {
-    let hash_args = parse_media_hash_args(args)?;
-    let root = manifest_root(&hash_args.manifest_path);
-    let media_root = root_relative_path(&root, &hash_args.media_root);
-    let (target_names, source_files) = collect_manifest_source_files(
-        &hash_args.manifest_path,
-        hash_args.target.as_deref(),
-        hash_args.all_targets,
-        &hash_args.include_paths,
-        &hash_args.package_roots,
+    let args = parse_media_args(args, true)?;
+    let workspace_root = manifest_root(&args.manifest_path);
+    recover_workspace(&workspace_root)?;
+    let registry = ManifestRegistry::load(
+        &args.manifest_path,
+        &args.include_paths,
+        &args.package_roots,
     )?;
+    let roots = MediaRootSelections::parse(&registry, &args.media_roots, &workspace_root)?;
+    let plans = selected_plans(&registry, args.target.as_deref(), args.all_targets)?;
+    let locked_before = snapshot_locked_packages(&registry)?;
 
-    let mut changed_entries = 0usize;
-    let mut changed_files = 0usize;
-    for path in source_files {
-        let input =
-            fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
-        let mut value = parse_yaml_value(&input, &path)?;
-        let (updated_path, updates) =
-            update_media_hashes_for_source(&path, &mut value, &media_root)?;
-        if updates == 0 {
-            continue;
-        }
-        match updated_path {
-            MediaHashUpdateTarget::Source => {
-                let updated_yaml = serde_yaml::to_string(&value)
-                    .map_err(|error| format!("{}: {error}", path.display()))?;
-                let formatted = format_source_at(&path, &updated_yaml)
-                    .map_err(|error| format!("{}: {error}", path.display()))?;
-                fs::write(&path, formatted)
-                    .map_err(|error| format!("{}: {error}", path.display()))?;
+    let mut declarations = BTreeMap::<(PathBuf, String), MediaDeclarationProvenance>::new();
+    for plan in &plans {
+        roots.require_for_plan(plan)?;
+        for declaration in plan.media_declarations.values() {
+            if !declaration.source_kind.is_root_workspace() {
+                return Err(read_only_declaration_error("media hash", plan, declaration));
             }
-            MediaHashUpdateTarget::IncludedMedia(media_path, formatted) => {
-                fs::write(&media_path, formatted)
-                    .map_err(|error| format!("{}: {error}", media_path.display()))?;
+            let key = (declaration.source.clone(), declaration.id.clone());
+            if let Some(previous) = declarations.insert(key, declaration.clone())
+                && (previous.path != declaration.path || previous.sha256 != declaration.sha256)
+            {
+                return Err(format!(
+                    "media hash found inconsistent final declarations for {} in {}",
+                    declaration.id,
+                    declaration.source.display()
+                ));
             }
         }
-        changed_entries += updates;
-        changed_files += 1;
     }
 
+    let mut updates = BTreeMap::<PathBuf, Vec<(MediaDeclarationProvenance, String)>>::new();
+    for declaration in declarations.into_values() {
+        let root = roots.require_for_declaration("media-hash mutation", &declaration)?;
+        let authorizer = PathAuthorizer::new(
+            format!("media for package {}", declaration.package_label()),
+            root,
+        )?;
+        let asset = authorizer
+            .authorize_read(
+                &declaration.source,
+                format!("media.{}.path", declaration.id),
+                &declaration.path,
+            )
+            .map_err(|error| mutation_asset_error(&declaration, root, &error.to_string()))?
+            .into_path_buf();
+        let bytes = fs::read(&asset)
+            .map_err(|error| mutation_asset_error(&declaration, root, &error.to_string()))?;
+        let actual = media::sha256_hex(&bytes);
+        if actual != declaration.sha256 {
+            updates
+                .entry(declaration.document_source.clone())
+                .or_default()
+                .push((declaration, actual));
+        }
+    }
+
+    let changed_entries = updates.values().map(Vec::len).sum::<usize>();
+    let mut replacements = BTreeMap::<PathBuf, Vec<u8>>::new();
+    for (document_path, changes) in updates {
+        let source = plan_source(&plans, &document_path)?;
+        let loaded = registry_manifest_for_source(&registry, source)?;
+        match source.kind {
+            PlanSourceKind::Base => {
+                let mut document = canonical_document_from_package(
+                    &document_path,
+                    &loaded.root,
+                    &loaded.include_roots,
+                )?;
+                for (declaration, hash) in changes {
+                    document
+                        .set_media_hash(
+                            &StableId::new(&declaration.id).map_err(|error| error.to_string())?,
+                            &declaration.path,
+                            &hash,
+                        )
+                        .map_err(|error| error.to_string())?;
+                }
+                collect_emission(
+                    document.emit().map_err(|error| error.to_string())?,
+                    &mut replacements,
+                )?;
+            }
+            PlanSourceKind::Overlay { .. } => {
+                let mut document = overlay_document_from_package(
+                    &document_path,
+                    &loaded.root,
+                    &loaded.include_roots,
+                )?;
+                for (declaration, hash) in changes {
+                    document
+                        .set_media_hash(
+                            &StableId::new(&declaration.id).map_err(|error| error.to_string())?,
+                            &declaration.path,
+                            &hash,
+                        )
+                        .map_err(|error| error.to_string())?;
+                }
+                collect_emission(
+                    document.emit().map_err(|error| error.to_string())?,
+                    &mut replacements,
+                )?;
+            }
+            _ => {
+                return Err(format!(
+                    "{} is not a mutable root source document",
+                    document_path.display()
+                ));
+            }
+        }
+    }
+
+    ensure_locked_packages_unchanged(&registry, &locked_before)?;
+    let files = planned_replacements(replacements)?;
+    let changed_files = files.len();
+    commit_workspace_files(&workspace_root, files)?;
+    ensure_locked_packages_unchanged(&registry, &locked_before)?;
     output::print_success(
         "updated media hashes",
         &[
-            ("manifest", hash_args.manifest_path.display().to_string()),
-            ("media root", media_root.display().to_string()),
-            ("targets", target_names.len().to_string()),
+            ("manifest", args.manifest_path.display().to_string()),
+            ("media roots", args.media_roots.join(", ")),
+            ("targets", plans.len().to_string()),
             ("files changed", changed_files.to_string()),
             ("entries changed", changed_entries.to_string()),
         ],
@@ -87,43 +170,75 @@ fn run_hash(args: &[String]) -> Result<(), String> {
 }
 
 fn run_images_to_refs(args: &[String]) -> Result<(), String> {
-    let migration_args = parse_media_migration_args(args)?;
-    let (target_names, source_files) = collect_manifest_source_files(
-        &migration_args.manifest_path,
-        migration_args.target.as_deref(),
-        migration_args.all_targets,
-        &migration_args.include_paths,
-        &migration_args.package_roots,
+    let args = parse_media_args(args, false)?;
+    let workspace_root = manifest_root(&args.manifest_path);
+    recover_workspace(&workspace_root)?;
+    let registry = ManifestRegistry::load(
+        &args.manifest_path,
+        &args.include_paths,
+        &args.package_roots,
     )?;
-    let media_path_lookup = media_path_lookup_from_sources(&source_files)?;
+    let plans = selected_plans(&registry, args.target.as_deref(), args.all_targets)?;
+    let locked_before = snapshot_locked_packages(&registry)?;
+    let lookup = media_path_lookup(&plans);
+    let sources = mutable_candidate_sources(&plans);
+    let mut replacements = BTreeMap::<PathBuf, Vec<u8>>::new();
+    let mut report = ImageConversionReport::default();
 
-    let mut report = ImageMigrationReport::default();
-    for path in source_files {
-        let input =
-            fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
-        let mut value = parse_yaml_value(&input, &path)?;
-        let before = report.converted;
-        migrate_image_fields_in_source(&mut value, &media_path_lookup, &mut report);
-        if report.converted == before {
-            continue;
+    for source in sources.values() {
+        let loaded = registry_manifest_for_source(&registry, source)?;
+        match source.kind {
+            PlanSourceKind::Base => {
+                let mut document = canonical_document_from_package(
+                    &source.path,
+                    &loaded.root,
+                    &loaded.include_roots,
+                )?;
+                let local = document
+                    .convert_strict_image_fields(&lookup)
+                    .map_err(|error| error.to_string())?;
+                guard_source_mutability("media images-to-refs", source, local.converted)?;
+                add_report(&mut report, &local);
+                if local.converted > 0 {
+                    collect_emission(
+                        document.emit().map_err(|error| error.to_string())?,
+                        &mut replacements,
+                    )?;
+                }
+            }
+            PlanSourceKind::Overlay { .. } => {
+                let mut document = overlay_document_from_package(
+                    &source.path,
+                    &loaded.root,
+                    &loaded.include_roots,
+                )?;
+                let local = document
+                    .convert_strict_image_fields(&lookup)
+                    .map_err(|error| error.to_string())?;
+                guard_source_mutability("media images-to-refs", source, local.converted)?;
+                add_report(&mut report, &local);
+                if local.converted > 0 {
+                    collect_emission(
+                        document.emit().map_err(|error| error.to_string())?,
+                        &mut replacements,
+                    )?;
+                }
+            }
+            _ => {}
         }
-        let updated_yaml = serde_yaml::to_string(&value)
-            .map_err(|error| format!("{}: {error}", path.display()))?;
-        let formatted = format_source_at(&path, &updated_yaml)
-            .map_err(|error| format!("{}: {error}", path.display()))?;
-        fs::write(&path, formatted).map_err(|error| format!("{}: {error}", path.display()))?;
-        report.files_changed += 1;
     }
 
+    ensure_locked_packages_unchanged(&registry, &locked_before)?;
+    let files = planned_replacements(replacements)?;
+    let changed_files = files.len();
+    commit_workspace_files(&workspace_root, files)?;
+    ensure_locked_packages_unchanged(&registry, &locked_before)?;
     output::print_success(
         "converted strict image fields to !image references",
         &[
-            (
-                "manifest",
-                migration_args.manifest_path.display().to_string(),
-            ),
-            ("targets", target_names.len().to_string()),
-            ("files changed", report.files_changed.to_string()),
+            ("manifest", args.manifest_path.display().to_string()),
+            ("targets", plans.len().to_string()),
+            ("files changed", changed_files.to_string()),
             ("converted fields", report.converted.to_string()),
             (
                 "skipped non-strict image fields",
@@ -142,500 +257,317 @@ fn run_images_to_refs(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-struct MediaHashArgs {
+struct MediaArgs {
     manifest_path: PathBuf,
     target: Option<String>,
     all_targets: bool,
-    media_root: PathBuf,
+    media_roots: Vec<String>,
     include_paths: Vec<PathBuf>,
     package_roots: Vec<PathBuf>,
 }
 
-struct MediaMigrationArgs {
-    manifest_path: PathBuf,
-    target: Option<String>,
-    all_targets: bool,
-    include_paths: Vec<PathBuf>,
-    package_roots: Vec<PathBuf>,
-}
-
-fn parse_media_hash_args(args: &[String]) -> Result<MediaHashArgs, String> {
-    let mut parsed = parse_media_manifest_args(args, "media hash")?;
-    let Some(media_root) = parsed.media_root.take() else {
-        return Err("media hash requires --media-root".to_owned());
+fn parse_media_args(args: &[String], require_roots: bool) -> Result<MediaArgs, String> {
+    let mut parsed = MediaArgs {
+        manifest_path: PathBuf::from("brainbrew.yaml"),
+        target: None,
+        all_targets: false,
+        media_roots: Vec::new(),
+        include_paths: Vec::new(),
+        package_roots: Vec::new(),
     };
-    Ok(MediaHashArgs {
-        manifest_path: parsed.manifest_path,
-        target: parsed.target,
-        all_targets: parsed.all_targets,
-        media_root,
-        include_paths: parsed.include_paths,
-        package_roots: parsed.package_roots,
-    })
-}
-
-fn parse_media_migration_args(args: &[String]) -> Result<MediaMigrationArgs, String> {
-    let parsed = parse_media_manifest_args(args, "media images-to-refs")?;
-    if parsed.media_root.is_some() {
-        return Err("media images-to-refs does not use --media-root".to_owned());
-    }
-    Ok(MediaMigrationArgs {
-        manifest_path: parsed.manifest_path,
-        target: parsed.target,
-        all_targets: parsed.all_targets,
-        include_paths: parsed.include_paths,
-        package_roots: parsed.package_roots,
-    })
-}
-
-struct ParsedMediaManifestArgs {
-    manifest_path: PathBuf,
-    target: Option<String>,
-    all_targets: bool,
-    media_root: Option<PathBuf>,
-    include_paths: Vec<PathBuf>,
-    package_roots: Vec<PathBuf>,
-}
-
-fn parse_media_manifest_args(
-    args: &[String],
-    command_name: &str,
-) -> Result<ParsedMediaManifestArgs, String> {
-    let mut manifest_path = None;
-    let mut target = None;
-    let mut all_targets = false;
-    let mut media_root = None;
-    let mut include_paths = Vec::new();
-    let mut package_roots = Vec::new();
     let mut index = 0;
     while index < args.len() {
+        let value = |name: &str, index: usize| {
+            args.get(index + 1)
+                .cloned()
+                .ok_or_else(|| format!("{name} requires a value"))
+        };
         match args[index].as_str() {
             "--manifest" => {
-                let Some(path) = args.get(index + 1) else {
-                    return Err("--manifest requires a path".to_owned());
-                };
-                manifest_path = Some(PathBuf::from(path));
+                parsed.manifest_path = PathBuf::from(value("--manifest", index)?);
                 index += 2;
             }
             "--target" => {
-                let Some(name) = args.get(index + 1) else {
-                    return Err("--target requires a name".to_owned());
-                };
-                target = Some(name.clone());
+                parsed.target = Some(value("--target", index)?);
                 index += 2;
             }
             "--all-targets" => {
-                all_targets = true;
+                parsed.all_targets = true;
                 index += 1;
             }
             "--media-root" => {
-                let Some(path) = args.get(index + 1) else {
-                    return Err("--media-root requires a path".to_owned());
-                };
-                media_root = Some(PathBuf::from(path));
+                parsed.media_roots.push(value("--media-root", index)?);
                 index += 2;
             }
             "--include" => {
-                let Some(path) = args.get(index + 1) else {
-                    return Err("--include requires a path".to_owned());
-                };
-                include_paths.push(PathBuf::from(path));
+                parsed
+                    .include_paths
+                    .push(PathBuf::from(value("--include", index)?));
                 index += 2;
             }
             "--package-root" => {
-                let Some(path) = args.get(index + 1) else {
-                    return Err("--package-root requires a path".to_owned());
-                };
-                package_roots.push(PathBuf::from(path));
+                parsed
+                    .package_roots
+                    .push(PathBuf::from(value("--package-root", index)?));
                 index += 2;
             }
-            other => return Err(format!("unexpected {command_name} argument {other:?}")),
+            other => return Err(format!("unexpected media argument {other:?}")),
         }
     }
-    if all_targets && target.is_some() {
-        return Err("choose --all-targets or --target, not both".to_owned());
+    if parsed.all_targets == parsed.target.is_some() {
+        return Err(
+            "media command requires exactly one of --all-targets or --target <target>".to_owned(),
+        );
     }
-    Ok(ParsedMediaManifestArgs {
-        manifest_path: manifest_path.unwrap_or_else(|| PathBuf::from("brainbrew.yaml")),
-        target,
-        all_targets,
-        media_root,
-        include_paths,
-        package_roots,
-    })
+    if require_roots && parsed.media_roots.is_empty() {
+        return Err("media hash requires --media-root".to_owned());
+    }
+    if !require_roots && !parsed.media_roots.is_empty() {
+        return Err("media images-to-refs does not use --media-root".to_owned());
+    }
+    Ok(parsed)
 }
 
-fn collect_manifest_source_files(
-    manifest_path: &Path,
+fn selected_plans(
+    registry: &ManifestRegistry,
     target: Option<&str>,
     all_targets: bool,
-    include_paths: &[PathBuf],
-    package_roots: &[PathBuf],
-) -> Result<(Vec<String>, BTreeSet<PathBuf>), String> {
-    let registry = ManifestRegistry::load(manifest_path, include_paths, package_roots)?;
-    let target_names = if all_targets {
+) -> Result<Vec<TargetPlan>, String> {
+    let references = if all_targets {
         registry
             .root()
             .manifest
             .targets
             .keys()
-            .cloned()
+            .map(|target| {
+                registry
+                    .root()
+                    .identity
+                    .as_ref()
+                    .map(|identity| format!("{}:{target}", identity.id))
+                    .unwrap_or_else(|| target.clone())
+            })
             .collect::<Vec<_>>()
-    } else if let Some(target) = target {
-        vec![target.to_owned()]
     } else {
-        return Err("media command requires --all-targets or --target <target>".to_owned());
+        vec![target.expect("parser requires target").to_owned()]
     };
+    references
+        .iter()
+        .map(|target| registry.plan(target))
+        .collect()
+}
 
-    let mut source_files = BTreeSet::new();
-    for target in &target_names {
-        let reference = if all_targets {
-            registry
-                .root()
-                .identity
-                .as_ref()
-                .map(|identity| format!("{}:{target}", identity.id))
-                .unwrap_or_else(|| target.clone())
-        } else {
-            target.clone()
-        };
-        let plan = registry.plan(&reference)?;
+fn mutable_candidate_sources(plans: &[TargetPlan]) -> BTreeMap<PathBuf, SourceProvenance> {
+    let mut sources = BTreeMap::new();
+    for plan in plans {
         for source in plan.sources() {
             if matches!(
                 source.kind,
                 PlanSourceKind::Base | PlanSourceKind::Overlay { .. }
             ) {
-                source_files.insert(source.path.clone());
+                sources
+                    .entry(source.path.clone())
+                    .or_insert_with(|| source.clone());
             }
         }
     }
-
-    Ok((target_names, source_files))
+    sources
 }
 
-enum MediaHashUpdateTarget {
-    Source,
-    IncludedMedia(PathBuf, String),
-}
-
-fn update_media_hashes_for_source(
-    path: &Path,
-    value: &mut Value,
-    media_root: &Path,
-) -> Result<(MediaHashUpdateTarget, usize), String> {
-    if let Some(include_path) = top_level_media_include_path(value)
-        .map_err(|error| format!("{}: {error}", path.display()))?
-    {
-        let context = source_context_for_path(path)?;
-        let media_path = resolve_include_target_for_context(&include_path, &context)?;
-        let input = fs::read_to_string(&media_path)
-            .map_err(|error| format!("{}: {error}", media_path.display()))?;
-        media_map::from_str(&input)
-            .map_err(|error| format!("{}: {error}", media_path.display()))?;
-        let mut media_value = parse_yaml_value(&input, &media_path)?;
-        let Some(media_entries) = media_value.as_mapping_mut() else {
-            return Err(format!(
-                "{}: media map root must be a mapping",
-                media_path.display()
-            ));
-        };
-        let updates = update_media_hashes_in_mapping(media_entries, media_root)?;
-        if updates == 0 {
-            return Ok((MediaHashUpdateTarget::IncludedMedia(media_path, input), 0));
-        }
-        let updated_yaml = serde_yaml::to_string(&media_value)
-            .map_err(|error| format!("{}: {error}", media_path.display()))?;
-        let formatted = format_source_at(&media_path, &updated_yaml)
-            .map_err(|error| format!("{}: {error}", media_path.display()))?;
-        return Ok((
-            MediaHashUpdateTarget::IncludedMedia(media_path, formatted),
-            updates,
-        ));
-    }
-
-    let updates = update_media_hashes_in_value(value, media_root)?;
-    Ok((MediaHashUpdateTarget::Source, updates))
-}
-
-fn update_media_hashes_in_value(value: &mut Value, media_root: &Path) -> Result<usize, String> {
-    let Some(media_entries) = value
-        .as_mapping_mut()
-        .and_then(|mapping| mapping.get_mut(Value::String("media".to_owned())))
-        .and_then(Value::as_mapping_mut)
-    else {
-        return Ok(0);
-    };
-    update_media_hashes_in_mapping(media_entries, media_root)
-}
-
-fn update_media_hashes_in_mapping(
-    media_entries: &mut Mapping,
-    media_root: &Path,
-) -> Result<usize, String> {
-    let mut updates = 0;
-    let authorizer = PathAuthorizer::new("media", media_root)?;
-    for (id, entry) in media_entries {
-        let Some(entry) = entry.as_mapping_mut() else {
-            continue;
-        };
-        let Some(path) = string_field(entry, "path") else {
-            continue;
-        };
-        let id = id.as_str().unwrap_or("<unknown>");
-        let full_path = authorizer
-            .authorize_read(
-                Path::new("<media declaration>"),
-                format!("media.{id}.path"),
-                &path,
-            )
-            .map_err(|error| error.to_string())?
-            .into_path_buf();
-        let bytes =
-            fs::read(&full_path).map_err(|error| format!("{}: {error}", full_path.display()))?;
-        let actual = media::sha256_hex(&bytes);
-        let key = Value::String("sha256".to_owned());
-        if entry.get(&key).and_then(Value::as_str) != Some(actual.as_str()) {
-            entry.insert(key, Value::String(actual));
-            updates += 1;
-        }
-    }
-    Ok(updates)
-}
-
-#[derive(Default)]
-struct ImageMigrationReport {
-    converted: usize,
-    files_changed: usize,
-    skipped_non_strict: usize,
-    skipped_no_match: usize,
-    skipped_ambiguous_path: usize,
-}
-
-fn media_path_lookup_from_sources(
-    source_files: &BTreeSet<PathBuf>,
-) -> Result<BTreeMap<String, Option<String>>, String> {
+fn media_path_lookup(plans: &[TargetPlan]) -> BTreeMap<String, Option<StableId>> {
     let mut lookup = BTreeMap::new();
-    for path in source_files {
-        let input =
-            fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-        let value = parse_yaml_value(&input, path)?;
-        collect_media_paths_from_source(path, &value, &mut lookup)?;
-    }
-    Ok(lookup)
-}
-
-fn parse_yaml_value(input: &str, path: &Path) -> Result<Value, String> {
-    strict_yaml::reject_duplicate_keys(input)
-        .map_err(|error| format!("{}: {error}", path.display()))?;
-    serde_yaml::from_str(input).map_err(|error| format!("{}: {error}", path.display()))
-}
-
-fn collect_media_paths_from_source(
-    path: &Path,
-    value: &Value,
-    lookup: &mut BTreeMap<String, Option<String>>,
-) -> Result<(), String> {
-    if let Some(include_path) = top_level_media_include_path(value)
-        .map_err(|error| format!("{}: {error}", path.display()))?
+    for declaration in plans
+        .iter()
+        .flat_map(|plan| plan.media_declarations.values())
     {
-        let context = source_context_for_path(path)?;
-        let media_path = resolve_include_target_for_context(&include_path, &context)?;
-        let input = fs::read_to_string(&media_path)
-            .map_err(|error| format!("{}: {error}", media_path.display()))?;
-        media_map::from_str(&input)
-            .map_err(|error| format!("{}: {error}", media_path.display()))?;
-        let media_value = parse_yaml_value(&input, &media_path)?;
-        let Some(media_entries) = media_value.as_mapping() else {
-            return Err(format!(
-                "{}: media map root must be a mapping",
-                media_path.display()
-            ));
-        };
-        collect_media_paths_from_mapping(media_entries, lookup);
-        return Ok(());
-    }
-
-    collect_media_paths_from_value(value, lookup);
-    Ok(())
-}
-
-fn collect_media_paths_from_value(value: &Value, lookup: &mut BTreeMap<String, Option<String>>) {
-    let Some(media_entries) = value
-        .as_mapping()
-        .and_then(|mapping| mapping.get(Value::String("media".to_owned())))
-        .and_then(Value::as_mapping)
-    else {
-        return;
-    };
-    collect_media_paths_from_mapping(media_entries, lookup);
-}
-
-fn collect_media_paths_from_mapping(
-    media_entries: &Mapping,
-    lookup: &mut BTreeMap<String, Option<String>>,
-) {
-    for (id, entry) in media_entries {
-        let (Some(id), Some(entry)) = (id.as_str(), entry.as_mapping()) else {
-            continue;
-        };
-        let Some(path) = string_field(entry, "path") else {
-            continue;
-        };
+        let id = StableId::new(&declaration.id).expect("planned media ID is valid");
         lookup
-            .entry(path)
-            .and_modify(|existing| {
-                if existing.as_deref() != Some(id) {
+            .entry(declaration.path.clone())
+            .and_modify(|existing: &mut Option<StableId>| {
+                if existing.as_ref() != Some(&id) {
                     *existing = None;
                 }
             })
-            .or_insert_with(|| Some(id.to_owned()));
+            .or_insert(Some(id));
     }
+    lookup
 }
 
-fn migrate_image_fields_in_source(
-    value: &mut Value,
-    media_path_lookup: &BTreeMap<String, Option<String>>,
-    report: &mut ImageMigrationReport,
-) {
-    let Some(root) = value.as_mapping_mut() else {
-        return;
-    };
+fn registry_manifest_for_source<'a>(
+    registry: &'a ManifestRegistry,
+    source: &SourceProvenance,
+) -> Result<&'a RegistryManifest, String> {
+    registry
+        .manifests()
+        .iter()
+        .find(|loaded| loaded.path == source.manifest && loaded.root == source.package_root)
+        .ok_or_else(|| format!("no registry package owns source {}", source.path.display()))
+}
 
-    if let Some(notes) = mapping_value_mut(root, "notes").and_then(Value::as_mapping_mut) {
-        for (_note_id, note_value) in notes {
-            migrate_note_like_value(note_value, media_path_lookup, report);
-        }
+fn plan_source<'a>(plans: &'a [TargetPlan], path: &Path) -> Result<&'a SourceProvenance, String> {
+    plans
+        .iter()
+        .flat_map(TargetPlan::sources)
+        .find(|source| source.path == path)
+        .ok_or_else(|| format!("no target plan owns source {}", path.display()))
+}
+
+fn collect_emission(
+    emission: SourceDocumentEmission,
+    replacements: &mut BTreeMap<PathBuf, Vec<u8>>,
+) -> Result<(), String> {
+    collect_source_file(emission.root(), replacements)?;
+    for included in emission.included() {
+        collect_source_file(included, replacements)?;
     }
+    Ok(())
+}
 
-    if let Some(field_additions) =
-        mapping_value_mut(root, "field_additions").and_then(Value::as_mapping_mut)
+fn collect_source_file(
+    source: &brain_brew_formats::source_document::SourceFile,
+    replacements: &mut BTreeMap<PathBuf, Vec<u8>>,
+) -> Result<(), String> {
+    let path = PathBuf::from(source.provenance().source_name());
+    let bytes = source.text().as_bytes().to_vec();
+    if let Some(previous) = replacements.insert(path.clone(), bytes.clone())
+        && previous != bytes
     {
-        for (_note_type_id, additions_value) in field_additions {
-            let Some(additions) = additions_value.as_mapping_mut() else {
-                continue;
-            };
-            let Some(values) =
-                mapping_value_mut(additions, "values").and_then(Value::as_mapping_mut)
-            else {
-                continue;
-            };
-            for (_note_id, fields_value) in values {
-                migrate_field_mapping(fields_value, media_path_lookup, report);
-            }
+        return Err(format!(
+            "conflicting mutation outputs for {}",
+            path.display()
+        ));
+    }
+    Ok(())
+}
+
+fn planned_replacements(
+    replacements: BTreeMap<PathBuf, Vec<u8>>,
+) -> Result<Vec<PlannedWorkspaceFile>, String> {
+    let mut planned = Vec::new();
+    for (path, replacement) in replacements {
+        let original = fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+        if original == replacement {
+            continue;
+        }
+        let validation_path = path.clone();
+        planned.push(PlannedWorkspaceFile::validated(
+            path,
+            original,
+            replacement,
+            move |bytes| {
+                let text = std::str::from_utf8(bytes).map_err(|error| error.to_string())?;
+                let formatted = format_source_at(&validation_path, text)?;
+                if formatted == text {
+                    Ok(())
+                } else {
+                    Err("replacement is not canonical Brain Brew source".to_owned())
+                }
+            },
+        )?);
+    }
+    Ok(planned)
+}
+
+fn guard_source_mutability(
+    command: &str,
+    source: &SourceProvenance,
+    changes: usize,
+) -> Result<(), String> {
+    if changes == 0 || source.registry_source.is_root_workspace() {
+        return Ok(());
+    }
+    Err(format!(
+        "{command} is read-only for {} package source {} ({}) at {}; requested operation would mutate {changes} field(s). Dependency/include/locked sources cannot be vendored by this command",
+        source
+            .package
+            .as_ref()
+            .map(|package| package.id.as_str())
+            .unwrap_or("unnamed"),
+        source.registry_source.ownership_name(),
+        source.kind_name(),
+        source.path.display()
+    ))
+}
+
+trait SourceKindName {
+    fn kind_name(&self) -> &'static str;
+}
+
+impl SourceKindName for SourceProvenance {
+    fn kind_name(&self) -> &'static str {
+        match self.kind {
+            PlanSourceKind::Base => "base",
+            PlanSourceKind::Overlay { .. } => "overlay",
+            PlanSourceKind::ScalarInclude { .. } => "scalar include",
+            PlanSourceKind::MediaInclude => "media include",
         }
     }
+}
 
-    if let Some(field_fills) =
-        mapping_value_mut(root, "field_fills").and_then(Value::as_mapping_mut)
-    {
-        for (_note_id, fields_value) in field_fills {
-            migrate_field_mapping(fields_value, media_path_lookup, report);
-        }
+fn read_only_declaration_error(
+    command: &str,
+    plan: &TargetPlan,
+    declaration: &MediaDeclarationProvenance,
+) -> String {
+    format!(
+        "{command} is read-only for target {}, package {}, declaration {}, path {:?}, source {} ({}) at {}; dependency/include/locked declarations cannot be mutated",
+        plan.qualified_name,
+        declaration.package_label(),
+        declaration.id,
+        declaration.path,
+        declaration.source_kind.ownership_name(),
+        declaration.source_kind.ownership_name(),
+        declaration.source.display()
+    )
+}
+
+fn mutation_asset_error(
+    declaration: &MediaDeclarationProvenance,
+    root: &Path,
+    reason: &str,
+) -> String {
+    format!(
+        "media hash asset error for package {}, declaration {}, path {:?}, root {}: {reason}",
+        declaration.package_label(),
+        declaration.id,
+        declaration.path,
+        root.display()
+    )
+}
+
+fn snapshot_locked_packages(
+    registry: &ManifestRegistry,
+) -> Result<BTreeMap<PathBuf, String>, String> {
+    registry
+        .manifests()
+        .iter()
+        .filter(|loaded| loaded.discovery == RegistrySourceKind::SiblingLock)
+        .map(|loaded| {
+            Ok((
+                loaded.root.clone(),
+                validated_nar_hash(&loaded.root, "locked package tree")?,
+            ))
+        })
+        .collect()
+}
+
+fn ensure_locked_packages_unchanged(
+    registry: &ManifestRegistry,
+    expected: &BTreeMap<PathBuf, String>,
+) -> Result<(), String> {
+    let actual = snapshot_locked_packages(registry)?;
+    if &actual == expected {
+        Ok(())
+    } else {
+        Err(format!(
+            "locked/cache package integrity changed during media mutation; expected {expected:?}, found {actual:?}; cache was not repaired"
+        ))
     }
 }
 
-fn migrate_note_like_value(
-    note_value: &mut Value,
-    media_path_lookup: &BTreeMap<String, Option<String>>,
-    report: &mut ImageMigrationReport,
-) {
-    let Some(note) = note_value.as_mapping_mut() else {
-        return;
-    };
-
-    if let Some(added_note) = mapping_value_mut(note, "note").and_then(Value::as_mapping_mut)
-        && let Some(fields) = mapping_value_mut(added_note, "fields")
-    {
-        migrate_field_mapping(fields, media_path_lookup, report);
-    }
-
-    if let Some(fields) = mapping_value_mut(note, "fields") {
-        migrate_field_mapping(fields, media_path_lookup, report);
-    }
-}
-
-fn migrate_field_mapping(
-    fields_value: &mut Value,
-    media_path_lookup: &BTreeMap<String, Option<String>>,
-    report: &mut ImageMigrationReport,
-) {
-    let Some(fields) = fields_value.as_mapping_mut() else {
-        return;
-    };
-    for (_field_id, field_value) in fields {
-        if let Some(field_change) = field_value.as_mapping_mut() {
-            if let Some(value) = mapping_value_mut(field_change, "value") {
-                migrate_one_field_value(value, media_path_lookup, report);
-            }
-        } else {
-            migrate_one_field_value(field_value, media_path_lookup, report);
-        }
-    }
-}
-
-fn migrate_one_field_value(
-    value: &mut Value,
-    media_path_lookup: &BTreeMap<String, Option<String>>,
-    report: &mut ImageMigrationReport,
-) {
-    let Some(text) = value.as_str() else {
-        return;
-    };
-    let Some(paths) = media::strict_image_tag_paths(text) else {
-        if text.trim().contains("<img") {
-            report.skipped_non_strict += 1;
-        }
-        return;
-    };
-
-    let mut media_ids = Vec::new();
-    let mut missing = false;
-    let mut ambiguous = false;
-    for path in paths {
-        match media_path_lookup.get(&path) {
-            Some(Some(media_id)) => media_ids.push(media_id.clone()),
-            Some(None) => ambiguous = true,
-            None => missing = true,
-        }
-    }
-
-    if missing {
-        report.skipped_no_match += 1;
-        return;
-    }
-    if ambiguous {
-        report.skipped_ambiguous_path += 1;
-        return;
-    }
-
-    *value = image_reference_value(&media_ids);
-    report.converted += 1;
-}
-
-fn image_reference_value(media_ids: &[String]) -> Value {
-    match media_ids {
-        [media_id] => tagged_image_value(media_id),
-        _ => Value::Sequence(
-            media_ids
-                .iter()
-                .map(|media_id| tagged_image_value(media_id))
-                .collect(),
-        ),
-    }
-}
-
-fn tagged_image_value(media_id: &str) -> Value {
-    serde_yaml::from_str(&format!("!image {media_id}"))
-        .expect("stable media IDs are valid !image scalar values")
-}
-
-fn mapping_value_mut<'a>(mapping: &'a mut Mapping, key: &str) -> Option<&'a mut Value> {
-    mapping.get_mut(Value::String(key.to_owned()))
-}
-
-fn string_field(mapping: &Mapping, key: &str) -> Option<String> {
-    mapping
-        .get(Value::String(key.to_owned()))
-        .and_then(Value::as_str)
-        .map(str::to_owned)
+fn add_report(total: &mut ImageConversionReport, local: &ImageConversionReport) {
+    total.converted += local.converted;
+    total.skipped_non_strict += local.skipped_non_strict;
+    total.skipped_no_match += local.skipped_no_match;
+    total.skipped_ambiguous_path += local.skipped_ambiguous_path;
 }

@@ -43,6 +43,28 @@ media.map.france:
 
 This structural include is deliberately narrow: `media: !include <file>` is supported only for the top-level `media:` key in deck files. It is not supported in overlay files, and `!include` is not a general mapping splice elsewhere. `brainbrew fmt media.yaml` canonicalizes the standalone media map, while formatting the deck preserves `media: !include media.yaml`. `brainbrew media hash` follows the include and writes refreshed `sha256` values back to the included media file.
 
+## Federated ownership and media roots
+
+Every final declaration is owned by the package source that introduced it. An ordered `replace` or `override` transfers ownership to the replacing package; a cross-package `merge`, ambiguous final path/output, or duplicate stable-ID add is rejected. Raw path references and stable-ID `!image` references resolve through that final owner—Brain Brew never guesses from the selected target's root. The narrow compatibility exception is same-package alias IDs with exactly the same owner root, path, and hash; they select identical bytes, while path-to-ID source migration still reports the alias as ambiguous instead of guessing an ID.
+
+An unqualified root remains backward compatible and applies **only to the root package**:
+
+```bash
+brainbrew verify --manifest brainbrew.yaml --target combined --media-root media/
+```
+
+Map dependency roots explicitly with repeatable `<package-id>=<directory>` values:
+
+```bash
+brainbrew verify --manifest brainbrew.yaml --target combined \
+  --media-root media/ \
+  --media-root anki-geo.ultimate-geography=/srv/ug-media
+```
+
+Relative directories are resolved from the root manifest workspace. A qualified mapping takes its package identity from the registry; unknown packages, duplicate mappings (including both unqualified and qualified mappings for the root package), and missing mappings for a declaration owner fail before asset reads. Verify, export, and Workbench authorize each declaration path beneath only that selected owner root.
+
+Media mutation is intentionally narrower: `media hash` and `media images-to-refs` may write only root-workspace Canonical Deck/Overlay sources. Explicit includes, package-root dependencies, and locked/cache packages are read-only. If a requested operation would change one, the entire operation fails before the transaction writes anything; locked package tree hashes are checked around mutation and caches are never repaired silently.
+
 A CrowdAnki import that rewrites a deck emits an ordinary deck file and re-inlines the `media:` block; it does not preserve a previously hoisted media include.
 
 ## Single and multi-image fields

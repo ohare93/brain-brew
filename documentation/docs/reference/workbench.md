@@ -38,7 +38,7 @@ brainbrew workbench serve --manifest brainbrew.yaml --dev-assets target/workbenc
 brainbrew workbench serve --manifest brainbrew.yaml --media-root /path/to/media/
 ```
 
-Workbench does not scan ancestor `external/` directories for media. Each media declaration is authorized beneath the manifest root or the explicitly selected `--media-root`; escaping symlinks are rejected.
+Workbench does not scan ancestor `external/` directories for media. It first resolves the final declaration owner, then authorizes the path beneath that package's root. Without an explicit mapping, the owner's `media/` directory (when present) precedes the owner package root for compatibility. An unqualified `--media-root` maps only the root package; repeat `--media-root <package-id>=<directory>` for dependency-owned media. Unknown, duplicate, missing, ambiguous cross-target, and escaping paths are rejected rather than falling back to another package's bytes. Workbench media catalogs and source fingerprints retain package, root, and root/include/path/locked provenance.
 
 Refresh release-embedded assets after frontend changes:
 

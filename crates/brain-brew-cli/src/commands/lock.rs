@@ -834,7 +834,7 @@ fn verify_locked_manifest_metadata(
     Ok(())
 }
 
-fn validated_nar_hash(path: &Path, tree_name: &str) -> Result<String, String> {
+pub(crate) fn validated_nar_hash(path: &Path, tree_name: &str) -> Result<String, String> {
     package_tree::validate(path, tree_name)?;
     let hash = nar_hash_path(path)?;
     package_tree::validate(path, tree_name)?;

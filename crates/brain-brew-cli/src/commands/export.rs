@@ -7,13 +7,14 @@ use brain_brew_formats::crowdanki;
 use crate::args::{parse_manifest_target_args, parse_overlay_out_media};
 use crate::commands::verify;
 use crate::help;
-use crate::io::{
-    configured_crowdanki_out, manifest_root, read_deck_and_overlays, root_relative_path,
+use crate::io::{configured_crowdanki_out, manifest_root, read_deck_and_overlays};
+use crate::media_assets::{
+    copy_media_assets, copy_owned_media_assets, validate_media_assets, validate_owned_media_assets,
 };
-use crate::media_assets::{copy_media_assets, validate_media_assets};
+use crate::media_ownership::MediaRootSelections;
 use crate::output;
 use crate::path_authorization::PathAuthorizer;
-use crate::planner::plan_manifest_target;
+use crate::planner::{ManifestRegistry, TargetPlan};
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if matches!(args, [flag] if flag == "--help" || flag == "-h")
@@ -33,12 +34,12 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         .any(|arg| arg == "--manifest" || arg == "--target")
     {
         let manifest_args = parse_manifest_target_args(&args[1..])?;
-        let plan = plan_manifest_target(
+        let registry = ManifestRegistry::load(
             &manifest_args.manifest_path,
-            &manifest_args.target,
             &manifest_args.include_paths,
             &manifest_args.package_roots,
         )?;
+        let plan = registry.plan(&manifest_args.target)?;
         // Export destinations belong to the caller-selected workspace, never a
         // dependency package/cache root selected while resolving the target.
         let root = manifest_root(&manifest_args.manifest_path);
@@ -65,11 +66,8 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         };
         verify::emit_stale_translation_warnings(&plan)?;
         let deck = plan.compose()?;
-        let media_root = manifest_args
-            .media_root
-            .as_ref()
-            .map(|path| root_relative_path(&root, path));
-        return write_crowdanki_export(&deck, &out_dir, media_root.as_deref());
+        let media_roots = MediaRootSelections::parse(&registry, &manifest_args.media_roots, &root)?;
+        return write_owned_crowdanki_export(&plan, &deck, &out_dir, &media_roots);
     }
 
     if args.len() < 4 {
@@ -95,6 +93,43 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         )
         .map_err(|error| error.to_string())?;
     write_crowdanki_export(&deck, &out_dir, export_args.media_root.as_deref())
+}
+
+fn write_owned_crowdanki_export(
+    plan: &TargetPlan,
+    deck: &CanonicalDeck,
+    out_dir: &Path,
+    media_roots: &MediaRootSelections,
+) -> Result<(), String> {
+    plan.media_reference_bindings(deck)?;
+    if media_roots.supplied() {
+        validate_owned_media_assets(plan, deck, media_roots)?;
+    }
+    let export = crowdanki::export_deck(deck).map_err(|error| error.to_string())?;
+    fs::create_dir_all(out_dir).map_err(|error| format!("{}: {error}", out_dir.display()))?;
+    fs::write(out_dir.join("deck.json"), export.deck_json)
+        .map_err(|error| format!("{}: {error}", out_dir.display()))?;
+    if media_roots.supplied() {
+        copy_owned_media_assets(plan, deck, media_roots, out_dir)?;
+    }
+    let mut details = vec![("output", out_dir.join("deck.json").display().to_string())];
+    details.extend(output::deck_stats(deck));
+    if media_roots.supplied() {
+        details.push(("media roots", "package-qualified".to_owned()));
+    }
+    if !export.omitted_tombstones.is_empty() {
+        details.push((
+            "omitted tombstones",
+            export
+                .omitted_tombstones
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+        ));
+    }
+    output::print_success("exported CrowdAnki deck", &details);
+    Ok(())
 }
 
 fn write_crowdanki_export(

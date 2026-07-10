@@ -35,8 +35,11 @@ use tower_http::services::{ServeDir, ServeFile};
 use crate::commands::translation_overlay::compose_lenient_translation_overlay;
 use crate::help;
 use crate::io::{manifest_root, read_manifest};
+use crate::media_ownership::MediaRootSelections;
 use crate::path_authorization::PathAuthorizer;
-use crate::planner::{ManifestRegistry, PlannedOverlay, plan_manifest_target};
+use crate::planner::{
+    ManifestRegistry, MediaDeclarationProvenance, PlannedOverlay, plan_manifest_target,
+};
 
 static EMBEDDED_WORKBENCH_ASSETS: Dir<'static> =
     include_dir!("$CARGO_MANIFEST_DIR/assets/workbench");
@@ -86,7 +89,7 @@ struct ServeArgs {
     port: u16,
     open_browser: bool,
     dev_assets: Option<PathBuf>,
-    media_root: Option<PathBuf>,
+    media_roots: Vec<String>,
     enable_write: bool,
 }
 
@@ -96,7 +99,7 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, String> {
         port: 0,
         open_browser: true,
         dev_assets: None,
-        media_root: None,
+        media_roots: Vec::new(),
         enable_write: false,
     };
     let mut index = 0;
@@ -133,7 +136,7 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, String> {
                 let Some(path) = args.get(index + 1) else {
                     return Err("--media-root requires a directory".to_owned());
                 };
-                parsed.media_root = Some(PathBuf::from(path));
+                parsed.media_roots.push(path.clone());
                 index += 2;
             }
             "--enable-write" => {
@@ -148,14 +151,6 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, String> {
     {
         return Err(format!(
             "--dev-assets directory {} does not exist",
-            path.display()
-        ));
-    }
-    if let Some(path) = &parsed.media_root
-        && !path.is_dir()
-    {
-        return Err(format!(
-            "--media-root directory {} does not exist",
             path.display()
         ));
     }
@@ -179,9 +174,9 @@ async fn serve(args: ServeArgs) -> Result<(), String> {
     let metadata = Arc::new(WorkspaceMetadata::load(
         &args.manifest_path,
         manifest,
-        args.media_root.clone(),
+        &args.media_roots,
         args.enable_write,
-    ));
+    )?);
     let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), args.port))
         .await
         .map_err(|error| format!("failed to bind workbench server: {error}"))?;
@@ -462,7 +457,7 @@ fn embedded_content_type(path: &str) -> &'static str {
 struct WorkspaceMetadata {
     manifest_path: PathBuf,
     manifest_root: PathBuf,
-    media_root: Option<PathBuf>,
+    media_roots: MediaRootSelections,
     write_enabled: bool,
     cache: tokio::sync::RwLock<WorkspaceCache>,
     apply_mutex: Mutex<()>,
@@ -491,7 +486,7 @@ struct WorkspaceCache {
     generation: u64,
     manifest: FederatedDeckManifest,
     file_signatures: BTreeMap<PathBuf, Option<FileSignature>>,
-    declared_media_paths: Option<CachedValue<BTreeSet<String>>>,
+    declared_media_paths: Option<CachedValue<BTreeMap<String, MediaDeclarationProvenance>>>,
     selected_contexts: BTreeMap<SelectionCacheKey, CachedValue<SelectedTranslationContext>>,
 }
 
@@ -516,17 +511,20 @@ impl WorkspaceMetadata {
     fn load(
         manifest_path: &Path,
         manifest: FederatedDeckManifest,
-        media_root: Option<PathBuf>,
+        media_root_args: &[String],
         enable_write: bool,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, String> {
+        let root = manifest_root(manifest_path);
+        let registry = ManifestRegistry::load(manifest_path, &[], &[])?;
+        let media_roots = MediaRootSelections::parse(&registry, media_root_args, &root)?;
+        Ok(Self {
             manifest_path: manifest_path.to_path_buf(),
-            manifest_root: manifest_root(manifest_path),
-            media_root,
+            manifest_root: root,
+            media_roots,
             write_enabled: cfg!(feature = "workbench-write-dev") && enable_write,
             cache: tokio::sync::RwLock::new(WorkspaceCache::new(manifest)),
             apply_mutex: Mutex::new(()),
-        }
+        })
     }
 
     fn require_write_capability(&self) -> Result<(), (StatusCode, String)> {
@@ -1110,63 +1108,86 @@ impl WorkspaceMetadata {
 
     fn media_response(&self, requested_path: &str) -> Result<Response, String> {
         let requested_path = safe_media_relative_path(requested_path)?;
-        if !self.media_path_declared(&requested_path)? {
-            return Err(format!("unknown media asset {requested_path:?}"));
+        let declaration = self
+            .media_declaration(&requested_path)?
+            .ok_or_else(|| format!("unknown media asset {requested_path:?}"))?;
+        let root = if let Some(root) = self.media_roots.explicit_for_declaration(&declaration) {
+            root.to_path_buf()
+        } else if self.media_roots.supplied() {
+            self.media_roots
+                .require_for_declaration("Workbench media catalog", &declaration)?
+                .to_path_buf()
+        } else {
+            // Compatibility fallback is owner-derived, never target-root-derived:
+            // package_root/media wins when present, otherwise package_root.
+            let conventional = declaration.package_root.join("media");
+            if conventional.is_dir() {
+                conventional
+            } else {
+                declaration.package_root.clone()
+            }
+        };
+        let authorizer = PathAuthorizer::new(
+            format!(
+                "Workbench media for package {}",
+                declaration.package_label()
+            ),
+            &root,
+        )?;
+        match authorizer.authorize_read(
+            &declaration.source,
+            format!("media.{}.path", declaration.id),
+            &requested_path,
+        ) {
+            Ok(path) => {
+                let path = path.into_path_buf();
+                let bytes =
+                    fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+                Response::builder()
+                    .status(StatusCode::OK)
+                    .header(header::CONTENT_TYPE, media_content_type(&requested_path))
+                    .body(Body::from(bytes))
+                    .map_err(|error| format!("failed to build media response: {error}"))
+            }
+            Err(error) if error.reason.contains("cannot be resolved for reading") => {
+                let placeholder = missing_media_placeholder_svg(&requested_path);
+                Response::builder()
+                    .status(StatusCode::OK)
+                    .header(header::CONTENT_TYPE, "image/svg+xml")
+                    .body(Body::from(placeholder))
+                    .map_err(|error| format!("failed to build missing media placeholder: {error}"))
+            }
+            Err(error) => Err(format!(
+                "Workbench media ownership error for package {}, declaration {}, path {:?}, root {}: {error}",
+                declaration.package_label(),
+                declaration.id,
+                declaration.path,
+                root.display()
+            )),
         }
-
-        let candidates = self.media_file_candidates(&requested_path)?;
-        if let Some(path) = candidates.first() {
-            let bytes = fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
-            return Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, media_content_type(&requested_path))
-                .body(Body::from(bytes))
-                .map_err(|error| format!("failed to build media response: {error}"));
-        }
-
-        let placeholder = missing_media_placeholder_svg(&requested_path);
-        Response::builder()
-            .status(StatusCode::OK)
-            .header(header::CONTENT_TYPE, "image/svg+xml")
-            .body(Body::from(placeholder))
-            .map_err(|error| format!("failed to build missing media placeholder: {error}"))
     }
 
-    fn media_file_candidates(&self, requested_path: &str) -> Result<Vec<PathBuf>, String> {
-        let mut roots = vec![self.manifest_root.clone(), self.manifest_root.join("media")];
-        if let Some(media_root) = &self.media_root {
-            roots.push(media_root.clone());
-            roots.push(media_root.join("media"));
-        }
-        let mut candidates = Vec::new();
-        for root in roots {
-            if !root.is_dir() {
-                continue;
-            }
-            let authorizer = PathAuthorizer::new("media", &root)?;
-            match authorizer.authorize_read(&self.manifest_path, "media.path", requested_path) {
-                Ok(path) => candidates.push(path.into_path_buf()),
-                Err(error) if error.reason.contains("cannot be resolved for reading") => {}
-                Err(error) => return Err(error.to_string()),
-            }
-        }
-        Ok(candidates)
-    }
-
-    fn media_path_declared(&self, requested_path: &str) -> Result<bool, String> {
+    fn media_declaration(
+        &self,
+        requested_path: &str,
+    ) -> Result<Option<MediaDeclarationProvenance>, String> {
         self.ensure_fresh_cache()?;
         let (generation, manifest, cached) = {
             let cache = self.cache.blocking_read();
-            if cache.selected_contexts.values().any(|context| {
-                context.generation == cache.generation
-                    && context
+            if let Some(declaration) = cache
+                .selected_contexts
+                .values()
+                .filter(|context| context.generation == cache.generation)
+                .find_map(|context| {
+                    context
                         .value
-                        .target_deck
-                        .media
+                        .media_declarations
                         .values()
-                        .any(|media| media.path == requested_path)
-            }) {
-                return Ok(true);
+                        .find(|declaration| declaration.path == requested_path)
+                        .cloned()
+                })
+            {
+                return Ok(Some(declaration));
             }
             (
                 cache.generation,
@@ -1177,45 +1198,59 @@ impl WorkspaceMetadata {
         if let Some(cached) = cached
             && cached.generation == generation
         {
-            return Ok(cached.value.contains(requested_path));
+            return Ok(cached.value.get(requested_path).cloned());
         }
 
         let mut cache = self.cache.blocking_write();
         if let Some(cached) = &cache.declared_media_paths
             && cached.generation == cache.generation
         {
-            return Ok(cached.value.contains(requested_path));
+            return Ok(cached.value.get(requested_path).cloned());
         }
         if cache.generation != generation {
             drop(cache);
-            return self.media_path_declared(requested_path);
+            return self.media_declaration(requested_path);
         }
-        let declared_media_paths = self.collect_declared_media_paths(&manifest)?;
-        let declared = declared_media_paths.contains(requested_path);
+        let declarations = self.collect_declared_media_paths(&manifest)?;
+        let declaration = declarations.get(requested_path).cloned();
         cache.declared_media_paths = Some(CachedValue {
             generation,
-            value: declared_media_paths,
+            value: declarations,
         });
-        Ok(declared)
+        Ok(declaration)
     }
 
     fn collect_declared_media_paths(
         &self,
         manifest: &FederatedDeckManifest,
-    ) -> Result<BTreeSet<String>, String> {
-        let mut paths = BTreeSet::new();
+    ) -> Result<BTreeMap<String, MediaDeclarationProvenance>, String> {
+        let mut paths = BTreeMap::new();
+        let registry = ManifestRegistry::load(&self.manifest_path, &[], &[])?;
         for target_id in manifest.targets.keys() {
             let reference = manifest
                 .package
                 .as_ref()
                 .map(|package| format!("{}:{target_id}", package.id))
                 .unwrap_or_else(|| target_id.clone());
-            let plan = plan_manifest_target(&self.manifest_path, &reference, &[], &[])?;
-            paths.extend(
-                plan.media_declarations
-                    .values()
-                    .map(|media| media.path.clone()),
-            );
+            let plan = registry.plan(&reference)?;
+            for declaration in plan.media_declarations.values() {
+                if let Some(previous) = paths.insert(declaration.path.clone(), declaration.clone())
+                    && (previous.id != declaration.id
+                        || previous.package_root != declaration.package_root
+                        || previous.source != declaration.source)
+                {
+                    return Err(format!(
+                        "ambiguous Workbench media path {:?}: declaration {} owned by package {} at {} conflicts with declaration {} owned by package {} at {}",
+                        declaration.path,
+                        previous.id,
+                        previous.package_label(),
+                        previous.source.display(),
+                        declaration.id,
+                        declaration.package_label(),
+                        declaration.source.display()
+                    ));
+                }
+            }
         }
         Ok(paths)
     }
@@ -1310,6 +1345,7 @@ impl WorkspaceMetadata {
             },
             base_deck: plan.base,
             plan_overlays: plan.overlays,
+            media_declarations: plan.media_declarations,
             source_deck,
             target_deck: current,
             report,
@@ -1798,6 +1834,7 @@ struct SelectedTranslationContext {
     selection: WorkbenchSelection,
     base_deck: CanonicalDeck,
     plan_overlays: Vec<(PlannedOverlay, Overlay)>,
+    media_declarations: BTreeMap<String, MediaDeclarationProvenance>,
     source_deck: CanonicalDeck,
     target_deck: CanonicalDeck,
     report: brain_brew_core::TranslationCoverageReport,
@@ -4909,6 +4946,7 @@ fn context_with_modified_base_and_overlay(
         selection: context.selection.clone(),
         base_deck: modified_base,
         plan_overlays: context.plan_overlays.clone(),
+        media_declarations: context.media_declarations.clone(),
         source_deck,
         target_deck: current,
         report,
@@ -4967,13 +5005,34 @@ fn targets_json(manifest: &FederatedDeckManifest) -> Value {
 fn file_fingerprints(
     manifest_path: &Path,
     root: &Path,
-    manifest: &FederatedDeckManifest,
+    _manifest: &FederatedDeckManifest,
 ) -> Result<Vec<Value>, String> {
-    let files = authorized_manifest_source_files(manifest_path, root, manifest)?;
-    files
-        .into_iter()
-        .map(|path| file_fingerprint(root, &path))
-        .collect()
+    let registry = ManifestRegistry::load(manifest_path, &[], &[])?;
+    let mut entries = Vec::new();
+    for loaded in registry.manifests() {
+        entries.push(file_fingerprint(
+            root,
+            &loaded.path,
+            loaded
+                .identity
+                .as_ref()
+                .map(|identity| identity.id.as_str()),
+            &loaded.root,
+            loaded.discovery.ownership_name(),
+        )?);
+    }
+    for source in registry.registered_sources()? {
+        entries.push(file_fingerprint(
+            root,
+            &source.path,
+            source.package.as_ref().map(|identity| identity.id.as_str()),
+            &source.package_root,
+            source.registry_source.ownership_name(),
+        )?);
+    }
+    entries.sort_by(|left, right| left["path"].as_str().cmp(&right["path"].as_str()));
+    entries.dedup_by(|left, right| left["path"] == right["path"]);
+    Ok(entries)
 }
 
 fn authorized_manifest_source_files(
@@ -4998,12 +5057,21 @@ fn authorized_manifest_source_files(
     Ok(files)
 }
 
-fn file_fingerprint(root: &Path, path: &Path) -> Result<Value, String> {
+fn file_fingerprint(
+    root: &Path,
+    path: &Path,
+    package: Option<&str>,
+    package_root: &Path,
+    source_kind: &str,
+) -> Result<Value, String> {
     let bytes = fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
     let hash = Sha256::digest(&bytes);
     Ok(json!({
         "path": workspace_path(root, path),
         "sha256": format!("{hash:x}"),
+        "package": package,
+        "package_root": package_root.display().to_string(),
+        "source_kind": source_kind,
     }))
 }
 

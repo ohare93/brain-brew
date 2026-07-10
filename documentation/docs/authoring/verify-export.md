@@ -62,7 +62,7 @@ brainbrew verify --manifest brainbrew.yaml --all-targets --media-root media/
 
 Without `--media-root`, Brain Brew checks rendered field/template media references (`<img src>`, `[sound:]`, and related URL forms) against declarations. Referenced-but-undeclared media is an error; declared-but-unreferenced media is a warning.
 
-With `--media-root`, Brain Brew also checks that every declared media file exists and that every declaration has a non-empty SHA-256 matching the file. Refresh hashes after intentional media edits with:
+With `--media-root`, Brain Brew also checks that every declared media file exists and that every declaration has a non-empty SHA-256 matching the file. In a federation, unqualified `--media-root media/` maps only the root package. Repeat the option as `--media-root <package-id>=<directory>` for every dependency that owns a final declaration; duplicate, unknown, and missing package mappings fail before reads. Refresh hashes after intentional root-workspace media edits with:
 
 ```bash
 brainbrew media hash --manifest brainbrew.yaml --all-targets --media-root media/
@@ -89,7 +89,7 @@ brainbrew export crowdanki \
   --out build/crowdanki/de-standard
 ```
 
-Export copies the declared media set itself, so release scripts do not need a separate `cp media/*` step. Files present under `media-root` but not declared are not exported.
+Export copies the declared media set itself, so release scripts do not need a separate `cp media/*` step. Files present under a media root but not declared are not exported. Each declaration is read only from its final declaring package's authorized root; a same-named file under the root package cannot satisfy a dependency declaration.
 
 ## Default and configured export paths
 

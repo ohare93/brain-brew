@@ -108,3 +108,5 @@ brainbrew explain --manifest brainbrew.yaml --target en-america
 ```
 
 Expected failures are the review surface: stale translation entries, expected-base mismatches, missing targets, media mismatches, or changed golden exports.
+
+Federated media keeps the same trust boundary as package source. Final declarations retain their declaring package/source kind and must use that package's media-root mapping (for example `--media-root anki-geo.ultimate-geography=/srv/ug-media`). Locked/cache source files are read-only to root-workspace media mutators, and their package tree hashes are checked before and after mutation; Brain Brew never edits or silently repairs a dependency cache.

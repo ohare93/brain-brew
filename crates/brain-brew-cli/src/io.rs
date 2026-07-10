@@ -225,14 +225,6 @@ where
     Ok(())
 }
 
-pub(crate) fn root_relative_path(root: &Path, path: &Path) -> PathBuf {
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        root.join(path)
-    }
-}
-
 pub(crate) fn configured_crowdanki_out(
     manifest: &manifest::FederatedDeckManifest,
     target: &str,

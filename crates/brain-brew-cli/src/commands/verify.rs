@@ -8,10 +8,11 @@ use crate::args::parse_verify_args;
 use crate::help;
 use crate::io::{
     SourceContext, include_roots_from_manifest, manifest_root, read_manifest,
-    resolve_include_target_for_context, root_relative_path, top_level_media_include_path,
-    verify_canonical_deck_format, verify_manifest_format, verify_overlay_format,
+    resolve_include_target_for_context, top_level_media_include_path, verify_canonical_deck_format,
+    verify_manifest_format, verify_overlay_format,
 };
-use crate::media_assets::{validate_media_assets, validate_media_references};
+use crate::media_assets::{validate_media_references, validate_owned_media_assets};
+use crate::media_ownership::MediaRootSelections;
 use crate::output;
 use crate::path_authorization::PathAuthorizer;
 use crate::planner::{ManifestRegistry, PlanSourceKind, TargetPlan};
@@ -66,10 +67,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             )?,
         },
     )?;
-    let media_root = verify_args
-        .media_root
-        .as_ref()
-        .map(|path| root_relative_path(&root, path));
+    let media_roots = MediaRootSelections::parse(&registry, &verify_args.media_roots, &root)?;
     for target in &target_names {
         let target_reference = if verify_args.all_targets {
             registry
@@ -93,8 +91,9 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         verify_translation_coverage_policy(&plan, policy)?;
         let deck = plan.compose()?;
         deck.validate().map_err(|error| error.to_string())?;
-        if let Some(media_root) = &media_root {
-            validate_media_assets(&deck, media_root)?;
+        plan.media_reference_bindings(&deck)?;
+        if media_roots.supplied() {
+            validate_owned_media_assets(&plan, &deck, &media_roots)?;
         } else {
             validate_media_references(&deck)?;
         }
@@ -111,8 +110,8 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
 
     let suffix = if target_names.len() == 1 { "" } else { "s" };
     let mut details = vec![("manifest", verify_args.manifest_path.display().to_string())];
-    if let Some(media_root) = &media_root {
-        details.push(("media root", media_root.display().to_string()));
+    if media_roots.supplied() {
+        details.push(("media roots", verify_args.media_roots.join(", ")));
     }
     output::print_success(
         format!("verified {} target{suffix}", target_names.len()),

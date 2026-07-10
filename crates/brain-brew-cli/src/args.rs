@@ -7,7 +7,7 @@ pub(crate) struct ManifestTargetArgs {
     pub(crate) manifest_path: PathBuf,
     pub(crate) target: String,
     pub(crate) out_path: Option<PathBuf>,
-    pub(crate) media_root: Option<PathBuf>,
+    pub(crate) media_roots: Vec<String>,
     pub(crate) include_paths: Vec<PathBuf>,
     pub(crate) package_roots: Vec<PathBuf>,
 }
@@ -16,7 +16,7 @@ pub(crate) struct VerifyArgs {
     pub(crate) manifest_path: PathBuf,
     pub(crate) target: Option<String>,
     pub(crate) all_targets: bool,
-    pub(crate) media_root: Option<PathBuf>,
+    pub(crate) media_roots: Vec<String>,
     pub(crate) include_paths: Vec<PathBuf>,
     pub(crate) package_roots: Vec<PathBuf>,
     pub(crate) translation_coverage: Option<TranslationCoveragePolicy>,
@@ -90,7 +90,7 @@ pub(crate) fn parse_manifest_target_args(args: &[String]) -> Result<ManifestTarg
     let mut manifest_path = None;
     let mut target = None;
     let mut out_path = None;
-    let mut media_root = None;
+    let mut media_roots = Vec::new();
     let mut include_paths = Vec::new();
     let mut package_roots = Vec::new();
     let mut index = 0;
@@ -121,7 +121,7 @@ pub(crate) fn parse_manifest_target_args(args: &[String]) -> Result<ManifestTarg
                 let Some(path) = args.get(index + 1) else {
                     return Err("--media-root requires a path".to_owned());
                 };
-                media_root = Some(PathBuf::from(path));
+                media_roots.push(path.clone());
                 index += 2;
             }
             "--include" => {
@@ -148,7 +148,7 @@ pub(crate) fn parse_manifest_target_args(args: &[String]) -> Result<ManifestTarg
         manifest_path: manifest_path.unwrap_or_else(|| PathBuf::from("brainbrew.yaml")),
         target,
         out_path,
-        media_root,
+        media_roots,
         include_paths,
         package_roots,
     })
@@ -158,7 +158,7 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
     let mut manifest_path = None;
     let mut target = None;
     let mut all_targets = false;
-    let mut media_root = None;
+    let mut media_roots = Vec::new();
     let mut include_paths = Vec::new();
     let mut package_roots = Vec::new();
     let mut translation_coverage = None;
@@ -188,7 +188,7 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
                 let Some(path) = args.get(index + 1) else {
                     return Err("--media-root requires a path".to_owned());
                 };
-                media_root = Some(PathBuf::from(path));
+                media_roots.push(path.clone());
                 index += 2;
             }
             "--include" => {
@@ -226,7 +226,7 @@ pub(crate) fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
         manifest_path: manifest_path.unwrap_or_else(|| PathBuf::from("brainbrew.yaml")),
         target,
         all_targets,
-        media_root,
+        media_roots,
         include_paths,
         package_roots,
         translation_coverage,

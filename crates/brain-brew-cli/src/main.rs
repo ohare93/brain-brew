@@ -9,6 +9,7 @@ mod fetch_policy;
 mod help;
 mod io;
 mod media_assets;
+mod media_ownership;
 mod output;
 mod overlay_draft;
 mod package_resolver;

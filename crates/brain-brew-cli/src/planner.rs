@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use brain_brew_core::{CanonicalDeck, ChangeIntent, Overlay, OverlayKind};
 use brain_brew_formats::manifest::{self, FederatedDeckManifest};
+use brain_brew_formats::media;
 use brain_brew_formats::source_document::{
     IncludedSourceKind, SourceProvenance as DocumentProvenance,
 };
@@ -37,6 +38,21 @@ pub(crate) enum RegistrySourceKind {
     SiblingLock,
 }
 
+impl RegistrySourceKind {
+    pub(crate) fn ownership_name(self) -> &'static str {
+        match self {
+            Self::RootManifest => "root",
+            Self::ExplicitInclude => "include",
+            Self::PackageRoot => "path",
+            Self::SiblingLock => "locked",
+        }
+    }
+
+    pub(crate) fn is_root_workspace(self) -> bool {
+        self == Self::RootManifest
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum PlanSourceKind {
     Base,
@@ -50,6 +66,7 @@ pub(crate) struct SourceProvenance {
     pub(crate) package: Option<PackageIdentity>,
     pub(crate) package_root: PathBuf,
     pub(crate) manifest: PathBuf,
+    pub(crate) registry_source: RegistrySourceKind,
     pub(crate) path: PathBuf,
     pub(crate) kind: PlanSourceKind,
     pub(crate) sha256: String,
@@ -101,9 +118,30 @@ pub(crate) struct PlannedOverlay {
 pub(crate) struct MediaDeclarationProvenance {
     pub(crate) id: String,
     pub(crate) path: String,
+    pub(crate) sha256: String,
     pub(crate) package: Option<PackageIdentity>,
     pub(crate) package_root: PathBuf,
+    pub(crate) source_kind: RegistrySourceKind,
+    /// File that contains the declaration (for example an included media map).
     pub(crate) source: PathBuf,
+    /// Canonical Deck or Overlay document through which typed mutation occurs.
+    pub(crate) document_source: PathBuf,
+}
+
+impl MediaDeclarationProvenance {
+    pub(crate) fn package_label(&self) -> &str {
+        self.package
+            .as_ref()
+            .map(|package| package.id.as_str())
+            .unwrap_or("<root-workspace>")
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct MediaReferenceBinding {
+    /// Stable-ID or rendered-path reference selected by the composed deck.
+    pub(crate) reference: String,
+    pub(crate) declaration: MediaDeclarationProvenance,
 }
 
 pub(crate) struct TargetPlan {
@@ -133,6 +171,13 @@ impl TargetPlan {
                     .collect::<Vec<_>>(),
             )
             .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn media_reference_bindings(
+        &self,
+        deck: &CanonicalDeck,
+    ) -> Result<Vec<MediaReferenceBinding>, String> {
+        bind_media_references(&self.qualified_name, deck, &self.media_declarations)
     }
 
     pub(crate) fn sources(&self) -> impl Iterator<Item = &SourceProvenance> {
@@ -383,8 +428,8 @@ impl ManifestRegistry {
                     media_owner(
                         base_loaded,
                         media_declaration_source,
-                        media.id.to_string(),
-                        media.path.clone(),
+                        &base_source.path,
+                        media,
                     ),
                 )
             })
@@ -414,14 +459,25 @@ impl ManifestRegistry {
                     }
                     _ => {
                         if let Some(media) = &change.media {
+                            if let Some(previous) = media_declarations.get(id.as_str())
+                                && previous.package_root != loaded.root
+                                && change.intent == ChangeIntent::Merge
+                            {
+                                return Err(format!(
+                                    "cross-package media stable-ID collision for target {selected_qualified}: declaration {id} is owned by package {} at {}, but package {} attempts an ambiguous merge from {}; use an explicit replace/override with expected_base to transfer ownership",
+                                    previous.package_label(),
+                                    previous.source.display(),
+                                    loaded
+                                        .identity
+                                        .as_ref()
+                                        .map(|package| package.id.as_str())
+                                        .unwrap_or("<root-workspace>"),
+                                    source.path.display()
+                                ));
+                            }
                             media_declarations.insert(
                                 id.to_string(),
-                                media_owner(
-                                    loaded,
-                                    &source.path,
-                                    id.to_string(),
-                                    media.path.clone(),
-                                ),
+                                media_owner(loaded, &source.path, &source.path, media),
                             );
                         }
                     }
@@ -454,6 +510,8 @@ impl ManifestRegistry {
                 overlay,
             ));
         }
+
+        validate_media_declaration_collisions(&selected_qualified, &media_declarations)?;
 
         let selected = &self.manifests[manifest_index];
         Ok(TargetPlan {
@@ -823,6 +881,7 @@ fn source_provenance(
         package: loaded.identity.clone(),
         package_root: loaded.root.clone(),
         manifest: loaded.path.clone(),
+        registry_source: loaded.discovery,
         path,
         kind,
         sha256: format!("{:x}", Sha256::digest(bytes)),
@@ -862,16 +921,128 @@ fn provenance_path(provenance: &DocumentProvenance) -> Result<PathBuf, String> {
 fn media_owner(
     loaded: &RegistryManifest,
     source: &Path,
-    id: String,
-    path: String,
+    document_source: &Path,
+    media: &brain_brew_core::MediaReference,
 ) -> MediaDeclarationProvenance {
     MediaDeclarationProvenance {
-        id,
-        path,
+        id: media.id.to_string(),
+        path: media.path.clone(),
+        sha256: media.sha256.clone(),
         package: loaded.identity.clone(),
         package_root: loaded.root.clone(),
+        source_kind: loaded.discovery,
         source: source.to_path_buf(),
+        document_source: document_source.to_path_buf(),
     }
+}
+
+fn validate_media_declaration_collisions(
+    target: &str,
+    declarations: &BTreeMap<String, MediaDeclarationProvenance>,
+) -> Result<(), String> {
+    let mut paths = BTreeMap::<&str, &MediaDeclarationProvenance>::new();
+    for declaration in declarations.values() {
+        if let Some(previous) = paths.insert(&declaration.path, declaration)
+            && (previous.package_root != declaration.package_root
+                || previous.sha256 != declaration.sha256)
+        {
+            return Err(format!(
+                "media path/output collision for target {target}: declaration {} owned by package {} at {} and declaration {} owned by package {} at {} both resolve to {:?}",
+                previous.id,
+                previous.package_label(),
+                previous.source.display(),
+                declaration.id,
+                declaration.package_label(),
+                declaration.source.display(),
+                declaration.path
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn bind_media_references(
+    target: &str,
+    deck: &CanonicalDeck,
+    declarations: &BTreeMap<String, MediaDeclarationProvenance>,
+) -> Result<Vec<MediaReferenceBinding>, String> {
+    let report = media::reference_report(deck);
+    if !report.errors.is_empty() {
+        return Err(format!(
+            "media reference ownership failed for target {target}: {}",
+            report
+                .errors
+                .iter()
+                .map(|error| error.message.clone())
+                .collect::<Vec<_>>()
+                .join("; ")
+        ));
+    }
+
+    let mut bindings = BTreeMap::<String, MediaReferenceBinding>::new();
+    for note in deck.notes.values() {
+        for images in note.field_images.values() {
+            for image in images {
+                let declaration = declarations.get(image.media_id.as_str()).ok_or_else(|| {
+                    format!(
+                        "media reference ownership failed for target {target}: unknown stable ID {}",
+                        image.media_id
+                    )
+                })?;
+                let reference = format!("id:{}", image.media_id);
+                bindings.insert(
+                    reference.clone(),
+                    MediaReferenceBinding {
+                        reference,
+                        declaration: declaration.clone(),
+                    },
+                );
+            }
+        }
+    }
+    for path in media::referenced_paths(deck) {
+        let candidates = declarations
+            .values()
+            .filter(|declaration| declaration.path == path)
+            .collect::<Vec<_>>();
+        let Some(first) = candidates.first() else {
+            return Err(format!(
+                "media reference ownership failed for target {target}: path {path:?} is undeclared"
+            ));
+        };
+        // Same-package aliases are the compatibility policy for historical maps:
+        // they are unambiguous only when they select the exact same owner root,
+        // path, and hash bytes. Cross-package aliases are rejected earlier.
+        if candidates.iter().skip(1).any(|candidate| {
+            candidate.package_root != first.package_root
+                || candidate.path != first.path
+                || candidate.sha256 != first.sha256
+        }) {
+            return Err(format!(
+                "ambiguous media reference ownership for target {target}, path {path:?}: {}",
+                candidates
+                    .iter()
+                    .map(|candidate| format!(
+                        "{} (package {}, hash {:?}, source {})",
+                        candidate.id,
+                        candidate.package_label(),
+                        candidate.sha256,
+                        candidate.source.display()
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        let reference = format!("path:{path}");
+        bindings.insert(
+            reference.clone(),
+            MediaReferenceBinding {
+                reference,
+                declaration: (*first).clone(),
+            },
+        );
+    }
+    Ok(bindings.into_values().collect())
 }
 
 fn split_qualified(reference: &str) -> Result<Option<(&str, &str)>, String> {
