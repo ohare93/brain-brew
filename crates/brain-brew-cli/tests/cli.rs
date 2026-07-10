@@ -674,6 +674,151 @@ fn workbench_navigation_lists_reject_invalid_pagination() {
         400,
         "invalid pagination limit",
     );
+    let response = ureq::get(&server.url("/api/workbench/note-list?limit=0"))
+        .call()
+        .unwrap_err()
+        .into_response()
+        .unwrap();
+    assert_eq!(
+        response.header("content-type").unwrap_or_default(),
+        "application/json"
+    );
+    let body: serde_json::Value = serde_json::from_str(&response.into_string().unwrap()).unwrap();
+    assert_eq!(body["error"]["schema_version"], 1);
+    assert_eq!(body["error"]["code"], "invalid_request");
+    assert_eq!(body["error"]["category"], "request");
+    assert!(body["error"]["diagnostics"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn workbench_domain_conflict_uses_versioned_typed_http_envelope() {
+    let dir = temp_dir("workbench-domain-conflict");
+    write_workbench_workspace(&dir);
+    fs::write(
+        dir.join("da.yaml"),
+        "id: overlay.translation.da\nkind: translation\ntranslations:\n  direct:\n    Finland: Suomi\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("patch.yaml"),
+        "id: overlay.patch.country\nkind: patch\nnotes:\n  note.finland:\n    intent: merge\n    fields:\n      field.country:\n        intent: replace\n        value: Suomi\n        expected_base:\n          value: Suomi\n",
+    )
+    .unwrap();
+    let manifest = fs::read_to_string(dir.join("brainbrew.yaml")).unwrap();
+    let manifest = manifest
+        .replacen(
+            "targets:\n",
+            "  overlay.patch.country:\n    file: patch.yaml\n    kind: patch\ntargets:\n",
+            1,
+        )
+        .replace(
+            "      - overlay.translation.da\n",
+            "      - overlay.translation.da\n      - overlay.patch.country\n",
+        );
+    fs::write(dir.join("brainbrew.yaml"), manifest).unwrap();
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+    ]);
+
+    let response = ureq::get(&server.url("/api/workbench/note-list?language=da&target=standard"))
+        .call()
+        .unwrap_err();
+    let response = response.into_response().unwrap();
+    assert_eq!(response.status(), 422);
+    let body: serde_json::Value = serde_json::from_str(&response.into_string().unwrap()).unwrap();
+    assert_eq!(body["error"]["schema_version"], 1);
+    assert_eq!(body["error"]["code"], "overlay_conflict");
+    assert_eq!(body["error"]["category"], "conflict");
+    let diagnostic = &body["error"]["diagnostics"][0];
+    assert_eq!(
+        diagnostic["path"],
+        "notes.note.finland.fields.field.country"
+    );
+    assert_eq!(diagnostic["overlay"], "overlay.patch.country");
+    assert_eq!(diagnostic["conflict"]["first"], "overlay.translation.da");
+    assert_eq!(diagnostic["conflict"]["current"], "overlay.patch.country");
+}
+
+#[test]
+fn workbench_message_reference_and_cycle_failures_keep_field_graph_details() {
+    for (name, reference, code) in [
+        (
+            "missing",
+            "notes.note.missing.fields.field.capital",
+            "invalid_message_reference",
+        ),
+        (
+            "cycle",
+            "notes.note.finland.fields.field.capital",
+            "message_dependency_cycle",
+        ),
+    ] {
+        let dir = temp_dir(&format!("workbench-message-{name}"));
+        write_workbench_workspace(&dir);
+        fs::write(
+            dir.join("message.yaml"),
+            format!(
+                "id: overlay.patch.message\nkind: patch\nnotes:\n  note.finland:\n    intent: merge\n    fields:\n      field.capital:\n        intent: replace\n        message:\n          - ref: {reference}\n        expected_base:\n          value: Helsinki\n"
+            ),
+        )
+        .unwrap();
+        let manifest = fs::read_to_string(dir.join("brainbrew.yaml")).unwrap();
+        let manifest = manifest
+            .replacen(
+                "targets:\n",
+                "  overlay.patch.message:\n    file: message.yaml\n    kind: patch\ntargets:\n",
+                1,
+            )
+            .replace(
+                "      - overlay.translation.da\n",
+                "      - overlay.translation.da\n      - overlay.patch.message\n",
+            );
+        fs::write(dir.join("brainbrew.yaml"), manifest).unwrap();
+        let server = spawn_workbench_server([
+            "workbench",
+            "serve",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--port",
+            "0",
+            "--no-open",
+        ]);
+        let response =
+            ureq::get(&server.url("/api/workbench/note-list?language=da&target=standard"))
+                .call()
+                .unwrap_err()
+                .into_response()
+                .unwrap();
+        assert_eq!(response.status(), 422);
+        let body: serde_json::Value =
+            serde_json::from_str(&response.into_string().unwrap()).unwrap();
+        assert_eq!(body["error"]["schema_version"], 1);
+        let child = &body["error"]["diagnostics"][0]["children"][0];
+        assert_eq!(child["code"], code);
+        assert!(
+            child["path"]
+                .as_str()
+                .unwrap()
+                .starts_with("notes.note.finland.fields.field.capital")
+        );
+        assert!(
+            child["field_graph"]["consuming_path"]
+                .as_str()
+                .unwrap()
+                .starts_with("notes.note.finland.fields.field.capital")
+        );
+        if name == "cycle" {
+            assert!(child["field_graph"]["cycle"].as_array().unwrap().len() >= 2);
+        } else {
+            assert_eq!(child["field_graph"]["dependency"], reference);
+        }
+    }
 }
 
 #[test]
@@ -791,7 +936,7 @@ fn workbench_media_cache_refreshes_after_workspace_edit_and_rejects_undeclared_p
     assert_eq!(refreshed.status(), 200);
     assert_get_status_contains(
         &server.url("/api/media/flags/nope.png"),
-        400,
+        404,
         "unknown media asset",
     );
 }
@@ -5561,17 +5706,80 @@ fn explain_reports_json_conflicts_for_ui_consumers() {
     assert!(!output.status.success());
     assert!(stderr(&output).is_empty());
     let json: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
-    assert_eq!(json["error"]["message"], "target composition failed");
-    assert_eq!(json["error"]["target"], "conflict");
+    assert_eq!(json["error"]["schema_version"], 1);
+    assert_eq!(json["error"]["command"], "explain");
+    assert_eq!(json["error"]["context"]["target"], "conflict");
+    let diagnostic = &json["error"]["diagnostics"][0];
+    assert_eq!(diagnostic["code"], "overlay_conflict");
+    assert_eq!(diagnostic["category"], "conflict");
     assert_eq!(
-        json["error"]["overlay_stack"][1]["id"],
-        "patch.capital.second"
-    );
-    assert_eq!(json["error"]["errors"][0]["kind"], "Conflict");
-    assert_eq!(
-        json["error"]["errors"][0]["path"],
+        diagnostic["path"],
         "notes.note.finland.fields.field.capital"
     );
+    assert_eq!(diagnostic["conflict"]["first"], "patch.capital");
+    assert_eq!(diagnostic["conflict"]["current"], "patch.capital.second");
+}
+
+#[test]
+fn composition_backed_json_routes_share_the_same_diagnostic_projection() {
+    let dir = temp_dir("composition-route-matrix");
+    write_manifest_workspace(&dir);
+    fs::write(
+        dir.join("second.yaml"),
+        SECOND_CAPITAL_OVERLAY_YAML.replace("value: Helsinki\n", "value: Helsingfors\n"),
+    )
+    .unwrap();
+    fs::write(dir.join("brainbrew.yaml"), CONFLICT_MANIFEST_YAML).unwrap();
+    let manifest = dir.join("brainbrew.yaml");
+    let manifest = manifest.to_str().unwrap();
+
+    let routes = [
+        vec![
+            "explain",
+            "--manifest",
+            manifest,
+            "--target",
+            "conflict",
+            "--json",
+        ],
+        vec![
+            "validate",
+            "--manifest",
+            manifest,
+            "--target",
+            "conflict",
+            "--json",
+        ],
+        vec![
+            "export",
+            "crowdanki",
+            "--manifest",
+            manifest,
+            "--target",
+            "conflict",
+            "--json",
+        ],
+    ];
+    for args in routes {
+        let output = Command::new(env!("CARGO_BIN_EXE_brainbrew"))
+            .args(args)
+            .output()
+            .expect("brainbrew command runs");
+        assert!(!output.status.success());
+        assert!(stderr(&output).is_empty());
+        let json: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+        assert_eq!(json["error"]["schema_version"], 1);
+        let diagnostic = &json["error"]["diagnostics"][0];
+        assert_eq!(diagnostic["code"], "overlay_conflict");
+        assert_eq!(diagnostic["category"], "conflict");
+        assert_eq!(
+            diagnostic["path"],
+            "notes.note.finland.fields.field.capital"
+        );
+        assert_eq!(diagnostic["overlay"], "patch.capital.second");
+        assert_eq!(diagnostic["conflict"]["first"], "patch.capital");
+        assert_eq!(diagnostic["conflict"]["current"], "patch.capital.second");
+    }
 }
 
 #[test]
@@ -5601,15 +5809,15 @@ fn explain_json_reports_typed_entity_precondition_details() {
     assert!(!output.status.success());
     assert!(stderr(&output).is_empty());
     let json: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
-    let error = &json["error"]["errors"][0];
+    let error = &json["error"]["diagnostics"][0];
     assert_eq!(error["code"], "expected_base_mismatch");
     assert_eq!(error["category"], "precondition");
-    assert_eq!(error["deck_path"], "media.media.flags-fi-png");
+    assert_eq!(error["path"], "media.media.flags-fi-png");
     assert_eq!(error["entity_kind"], "media_reference");
     assert_eq!(error["intent"], "override");
     assert_eq!(error["overlay"], "patch.media.stale");
-    assert_eq!(error["expected"]["kind"], "entity_fingerprint");
-    assert_eq!(error["actual"]["kind"], "entity_fingerprint");
+    assert_eq!(error["expected"]["kind"], "fingerprint");
+    assert_eq!(error["actual"]["kind"], "fingerprint");
 }
 
 #[test]

@@ -164,16 +164,14 @@ pub(crate) struct TargetPlan {
 }
 
 impl TargetPlan {
-    pub(crate) fn compose(&self) -> Result<CanonicalDeck, String> {
-        self.base
-            .compose(
-                &self
-                    .overlays
-                    .iter()
-                    .map(|(_, overlay)| overlay.clone())
-                    .collect::<Vec<_>>(),
-            )
-            .map_err(|error| error.to_string())
+    pub(crate) fn compose(&self) -> Result<CanonicalDeck, brain_brew_core::ComposeReport> {
+        self.base.compose(
+            &self
+                .overlays
+                .iter()
+                .map(|(_, overlay)| overlay.clone())
+                .collect::<Vec<_>>(),
+        )
     }
 
     pub(crate) fn media_reference_bindings(

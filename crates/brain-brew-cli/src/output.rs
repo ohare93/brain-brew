@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::env;
 use std::io::{self, IsTerminal};
 
@@ -11,6 +12,88 @@ use serde_json::{Value, json};
 pub(crate) const JSON_ERROR_ALREADY_PRINTED: &str = "__brainbrew_json_error_already_printed";
 pub(crate) const DIFFERENCES_FOUND: &str = "__brainbrew_differences_found";
 pub(crate) const DIAGNOSTIC_SCHEMA_VERSION: u32 = 1;
+pub(crate) const TYPED_ERROR_PENDING: &str = "__brainbrew_typed_error_pending";
+
+#[derive(Clone, Debug)]
+pub(crate) struct PendingDiagnosticError {
+    command: String,
+    context: Value,
+    message: String,
+    diagnostics: Vec<DomainDiagnostic>,
+}
+
+thread_local! {
+    static PENDING_DIAGNOSTIC_ERROR: RefCell<Option<PendingDiagnosticError>> = const { RefCell::new(None) };
+}
+
+pub(crate) fn domain_error(
+    command: &str,
+    context: Value,
+    message: impl Into<String>,
+    diagnostics: Vec<DomainDiagnostic>,
+) -> String {
+    PENDING_DIAGNOSTIC_ERROR.with(|pending| {
+        *pending.borrow_mut() = Some(PendingDiagnosticError {
+            command: command.to_owned(),
+            context,
+            message: message.into(),
+            diagnostics,
+        });
+    });
+    TYPED_ERROR_PENDING.to_owned()
+}
+
+pub(crate) fn compose_error(
+    command: &str,
+    context: Value,
+    report: &brain_brew_core::ComposeReport,
+) -> String {
+    domain_error(
+        command,
+        context,
+        "composition failed",
+        report
+            .errors
+            .iter()
+            .map(|error| error.diagnostic())
+            .collect(),
+    )
+}
+
+pub(crate) fn validation_error(
+    command: &str,
+    context: Value,
+    report: &brain_brew_core::ValidationReport,
+) -> String {
+    domain_error(
+        command,
+        context,
+        "validation failed",
+        report
+            .errors
+            .iter()
+            .map(|error| error.diagnostic())
+            .collect(),
+    )
+}
+
+pub(crate) fn print_pending_error(json_output: bool) -> bool {
+    let pending = PENDING_DIAGNOSTIC_ERROR.with(|pending| pending.borrow_mut().take());
+    let Some(pending) = pending else {
+        return false;
+    };
+    if json_output {
+        print_json_diagnostic_error(
+            &pending.command,
+            pending.context,
+            &pending.message,
+            &pending.diagnostics,
+        );
+    } else {
+        eprintln!("{}", render_diagnostics(&pending.diagnostics));
+    }
+    true
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct CliError {
@@ -26,35 +109,8 @@ pub(crate) struct CliError {
 impl CliError {
     pub(crate) fn from_message(message: impl Into<String>) -> Self {
         let message = message.into();
-        let lower = message.to_ascii_lowercase();
-        let (code, category) = if lower.contains("usage:")
-            || lower.contains("unexpected")
-            || lower.contains("requires a ")
-            || lower.contains("missing --")
-            || lower.contains("choose --")
-            || lower.contains("duplicate argument")
-        {
-            ("invalid_arguments", "usage")
-        } else if lower.contains("transaction") || lower.contains("recover") {
-            ("transaction_failed", "filesystem")
-        } else if lower.contains("yaml")
-            || lower.contains("json")
-            || lower.contains("schema")
-            || lower.contains("parse")
-            || lower.contains("invalid overlay")
-        {
-            ("source_invalid", "format")
-        } else if lower.contains("no such file")
-            || lower.contains("permission denied")
-            || lower.contains("refusing to")
-        {
-            ("filesystem_error", "filesystem")
-        } else if lower.contains("validation") || lower.contains("invalid deck") {
-            ("validation_failed", "validation")
-        } else {
-            ("command_failed", "command")
-        };
-        let (source, path) = diagnostic_location(&message);
+        let (code, category) = ("adapter_error", "adapter");
+        let (source, path) = (None, None);
         Self {
             version: 1,
             code,
@@ -64,29 +120,6 @@ impl CliError {
             path,
             details: serde_json::Map::new(),
         }
-    }
-
-    fn from_value(value: Value) -> Self {
-        let mut object = value
-            .as_object()
-            .cloned()
-            .unwrap_or_else(|| serde_json::Map::from_iter([("message".to_owned(), value.clone())]));
-        let message = object
-            .remove("message")
-            .and_then(|value| value.as_str().map(str::to_owned))
-            .unwrap_or_else(|| "command failed".to_owned());
-        let mut error = Self::from_message(message);
-        if let Some(errors) = object.get("errors").and_then(Value::as_array) {
-            error.code = "validation_failed";
-            error.category = "validation";
-            error.path = errors
-                .first()
-                .and_then(|item| item.get("path"))
-                .and_then(Value::as_str)
-                .map(str::to_owned);
-        }
-        error.details = object;
-        error
     }
 
     pub(crate) fn human_message(&self) -> &str {
@@ -113,43 +146,6 @@ impl CliError {
         }
         value
     }
-}
-
-fn diagnostic_location(message: &str) -> (Option<String>, Option<String>) {
-    let first_line = message.lines().next().unwrap_or(message);
-    let source = first_line
-        .split(':')
-        .next()
-        .and_then(|candidate| {
-            let candidate = candidate.trim().split(" (").next().unwrap_or_default();
-            (candidate.contains('/')
-                || candidate.ends_with(".yaml")
-                || candidate.ends_with(".json"))
-            .then(|| candidate.to_owned())
-        })
-        .or_else(|| {
-            message.split_whitespace().find_map(|word| {
-                let candidate = word.trim_matches(|character: char| {
-                    matches!(character, '`' | '"' | '\'' | '(' | ')' | ',' | '.' | ':')
-                });
-                (candidate.ends_with(".yaml") || candidate.ends_with(".json"))
-                    .then(|| candidate.to_owned())
-            })
-        });
-    let path = first_line
-        .split("schema path ")
-        .nth(1)
-        .and_then(|suffix| suffix.split([':', ',']).next())
-        .or_else(|| {
-            first_line
-                .split("YAML: ")
-                .nth(1)
-                .and_then(|suffix| suffix.split(':').next())
-        })
-        .map(str::trim)
-        .filter(|path| !path.is_empty())
-        .map(str::to_owned);
-    (source, path)
 }
 
 pub(crate) fn diagnostic_json(diagnostic: &DomainDiagnostic) -> Value {
@@ -304,18 +300,17 @@ pub(crate) fn print_error(message: &str) {
     eprintln!("{}", error_text(error.human_message()));
 }
 
-pub(crate) fn print_json_error(message: &str) {
-    print_json_cli_error(&CliError::from_message(message));
-}
-
-pub(crate) fn print_json_error_value(error: Value) {
-    print_json_cli_error(&CliError::from_value(error));
-}
-
-fn print_json_cli_error(error: &CliError) {
+pub(crate) fn print_json_error(command: &str, message: &str) {
+    let error = CliError::from_message(message);
+    let mut value = error.json();
+    if let Some(object) = value.as_object_mut() {
+        object.insert("command".to_owned(), json!(command));
+        object.insert("context".to_owned(), Value::Null);
+        object.insert("diagnostics".to_owned(), json!([]));
+    }
     println!(
         "{}",
-        serde_json::to_string_pretty(&json!({"error": error.json()})).unwrap()
+        serde_json::to_string_pretty(&json!({"error": value})).unwrap()
     );
 }
 

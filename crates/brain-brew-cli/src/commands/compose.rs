@@ -29,7 +29,16 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             &manifest_args.discovery_policy,
         )?;
         verify::emit_stale_translation_warnings(&plan)?;
-        let deck = plan.compose()?;
+        let deck = plan.compose().map_err(|report| {
+            output::compose_error(
+                "compose",
+                serde_json::json!({
+                    "manifest": manifest_args.manifest_path,
+                    "target": manifest_args.target,
+                }),
+                &report,
+            )
+        })?;
         let yaml = canonical_yaml::to_string(&deck).map_err(|error| error.to_string())?;
         if let Some(path) = manifest_args.out_path {
             write_canonical_output(&path, yaml.into_bytes(), manifest_args.force)?;
@@ -72,7 +81,16 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                 .map(|(_, overlay)| overlay.clone())
                 .collect::<Vec<_>>(),
         )
-        .map_err(|error| error.to_string())?;
+        .map_err(|report| {
+            output::compose_error(
+                "compose",
+                serde_json::json!({
+                    "source": deck_path,
+                    "overlays": overlay_paths,
+                }),
+                &report,
+            )
+        })?;
     let yaml = canonical_yaml::to_string(&deck).map_err(|error| error.to_string())?;
     if let Some(path) = out_path {
         write_canonical_output(&path, yaml.into_bytes(), force)?;

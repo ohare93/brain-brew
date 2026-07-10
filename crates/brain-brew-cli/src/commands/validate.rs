@@ -41,7 +41,17 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                 &manifest_args.package_roots,
                 &manifest_args.discovery_policy,
             )?
-            .compose()?
+            .compose()
+            .map_err(|report| {
+                output::compose_error(
+                    "validate",
+                    json!({
+                        "manifest": manifest_args.manifest_path,
+                        "target": manifest_args.target,
+                    }),
+                    &report,
+                )
+            })?
         };
         let mut details = vec![
             (

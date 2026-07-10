@@ -65,7 +65,16 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                 .into_path_buf()
         };
         let warnings = verify::stale_translation_warnings(&plan)?;
-        let deck = plan.compose()?;
+        let deck = plan.compose().map_err(|report| {
+            output::compose_error(
+                "export",
+                serde_json::json!({
+                    "manifest": manifest_args.manifest_path,
+                    "target": manifest_args.target,
+                }),
+                &report,
+            )
+        })?;
         if manifest_args.media_mode == MediaVerificationMode::ReferenceOnly
             && !manifest_args.media_roots.is_empty()
         {
@@ -107,7 +116,16 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                 .map(|(_, overlay)| overlay.clone())
                 .collect::<Vec<_>>(),
         )
-        .map_err(|error| error.to_string())?;
+        .map_err(|report| {
+            output::compose_error(
+                "export",
+                serde_json::json!({
+                    "source": deck_path,
+                    "overlays": export_args.overlay_paths,
+                }),
+                &report,
+            )
+        })?;
     write_crowdanki_export(
         &deck,
         &out_dir,

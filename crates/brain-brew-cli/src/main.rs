@@ -25,12 +25,18 @@ fn main() {
     let args = env::args().skip(1).collect::<Vec<_>>();
     let json_error_output = json_error_output_requested(&args);
     if let Err(error) = run(&args) {
+        if error == output::TYPED_ERROR_PENDING && output::print_pending_error(json_error_output) {
+            process::exit(1);
+        }
         if error == output::DIFFERENCES_FOUND {
             process::exit(2);
         }
         if error != output::JSON_ERROR_ALREADY_PRINTED {
             if json_error_output {
-                output::print_json_error(&error);
+                output::print_json_error(
+                    args.first().map(String::as_str).unwrap_or("brainbrew"),
+                    &error,
+                );
             } else {
                 output::print_error(&error);
             }

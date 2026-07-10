@@ -14,9 +14,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use brain_brew_core::{
-    CanonicalDeck, CardTemplate, FieldValue, Note, NoteType, Overlay, OverlayKind, StableId,
-    TranslationCoverageCategory, TranslationCoverageEntry, TranslationDictionary,
-    validate_deck_content,
+    CanonicalDeck, CardTemplate, DomainDiagnostic, FieldValue, Note, NoteType, Overlay,
+    OverlayKind, StableId, TranslationCoverageCategory, TranslationCoverageEntry,
+    TranslationDictionary, validate_deck_content,
 };
 use brain_brew_formats::canonical_source_document::CanonicalScalarTarget;
 use brain_brew_formats::manifest::{
@@ -37,7 +37,9 @@ use tokio::net::TcpListener;
 use tokio::task;
 use tower_http::services::{ServeDir, ServeFile};
 
-use crate::commands::translation_overlay::compose_lenient_translation_overlay;
+use crate::commands::translation_overlay::{
+    compose_lenient_translation_overlay, sanitize_lenient_translation_overlay,
+};
 use crate::help;
 use crate::io::{canonical_source_document, manifest_root, overlay_source_document, read_manifest};
 use crate::media_ownership::MediaRootSelections;
@@ -181,12 +183,15 @@ async fn serve(args: ServeArgs) -> Result<(), String> {
         recover_workspace(&manifest_root(&args.manifest_path))?;
     }
     let manifest = read_manifest(&args.manifest_path)?;
-    let metadata = Arc::new(WorkspaceMetadata::load(
-        &args.manifest_path,
-        manifest,
-        &args.media_roots,
-        args.enable_write,
-    )?);
+    let metadata = Arc::new(
+        WorkspaceMetadata::load(
+            &args.manifest_path,
+            manifest,
+            &args.media_roots,
+            args.enable_write,
+        )
+        .map_err(WorkbenchError::message)?,
+    );
     let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), args.port))
         .await
         .map_err(|error| format!("failed to bind workbench server: {error}"))?;
@@ -251,27 +256,141 @@ fn app(metadata: Arc<WorkspaceMetadata>, dev_assets: Option<PathBuf>) -> Router 
     }
 }
 
-#[derive(Debug)]
-struct WorkbenchApiError {
-    status: StatusCode,
-    code: String,
-    category: String,
-    message: String,
-    diagnostics: Vec<Value>,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WorkbenchErrorKind {
+    InvalidRequest,
+    NotFound,
+    Conflict,
+    ReadOnly,
+    Domain,
+    Adapter,
+    Internal,
 }
 
-type WorkbenchResult<T> = Result<T, WorkbenchApiError>;
+impl WorkbenchErrorKind {
+    fn status(self) -> StatusCode {
+        match self {
+            Self::InvalidRequest => StatusCode::BAD_REQUEST,
+            Self::NotFound => StatusCode::NOT_FOUND,
+            Self::Conflict => StatusCode::CONFLICT,
+            Self::ReadOnly => StatusCode::FORBIDDEN,
+            Self::Domain => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::Adapter | Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
 
-impl IntoResponse for WorkbenchApiError {
+    fn code(self) -> &'static str {
+        match self {
+            Self::InvalidRequest => "invalid_request",
+            Self::NotFound => "not_found",
+            Self::Conflict => "workspace_conflict",
+            Self::ReadOnly => "workbench_read_only",
+            Self::Domain => "domain_failed",
+            Self::Adapter => "adapter_error",
+            Self::Internal => "workbench_internal_error",
+        }
+    }
+
+    fn category(self) -> &'static str {
+        match self {
+            Self::InvalidRequest => "request",
+            Self::NotFound => "not_found",
+            Self::Conflict => "conflict",
+            Self::ReadOnly => "authorization",
+            Self::Domain => "domain",
+            Self::Adapter => "adapter",
+            Self::Internal => "internal",
+        }
+    }
+}
+
+#[derive(Debug)]
+struct WorkbenchError {
+    kind: WorkbenchErrorKind,
+    message: String,
+    diagnostics: Vec<DomainDiagnostic>,
+}
+
+type WorkbenchResult<T> = Result<T, WorkbenchError>;
+type WorkbenchCoreResult<T> = Result<T, WorkbenchError>;
+
+impl WorkbenchError {
+    fn new(kind: WorkbenchErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+            diagnostics: Vec::new(),
+        }
+    }
+
+    fn request(message: impl Into<String>) -> Self {
+        Self::new(WorkbenchErrorKind::InvalidRequest, message)
+    }
+    fn not_found(message: impl Into<String>) -> Self {
+        Self::new(WorkbenchErrorKind::NotFound, message)
+    }
+    fn conflict(message: impl Into<String>) -> Self {
+        Self::new(WorkbenchErrorKind::Conflict, message)
+    }
+    fn adapter(message: impl Into<String>) -> Self {
+        Self::new(WorkbenchErrorKind::Adapter, message)
+    }
+    fn internal(message: impl Into<String>) -> Self {
+        Self::new(WorkbenchErrorKind::Internal, message)
+    }
+    fn message(self) -> String {
+        self.message
+    }
+
+    fn compose(message: impl Into<String>, report: brain_brew_core::ComposeReport) -> Self {
+        Self {
+            kind: WorkbenchErrorKind::Domain,
+            message: message.into(),
+            diagnostics: report
+                .errors
+                .iter()
+                .map(|error| error.diagnostic())
+                .collect(),
+        }
+    }
+}
+
+impl From<String> for WorkbenchError {
+    fn from(message: String) -> Self {
+        Self::adapter(message)
+    }
+}
+
+impl IntoResponse for WorkbenchError {
     fn into_response(self) -> Response {
-        let diagnostics = self.diagnostics;
+        let code = if self.kind == WorkbenchErrorKind::Domain {
+            self.diagnostics
+                .first()
+                .map(|item| item.code)
+                .unwrap_or(self.kind.code())
+        } else {
+            self.kind.code()
+        };
+        let category = if self.kind == WorkbenchErrorKind::Domain {
+            self.diagnostics
+                .first()
+                .map(|item| item.category.as_str())
+                .unwrap_or(self.kind.category())
+        } else {
+            self.kind.category()
+        };
+        let diagnostics = self
+            .diagnostics
+            .iter()
+            .map(crate::output::diagnostic_json)
+            .collect::<Vec<_>>();
         (
-            self.status,
+            self.kind.status(),
             Json(json!({
                 "error": {
                     "schema_version": crate::output::DIAGNOSTIC_SCHEMA_VERSION,
-                    "code": self.code,
-                    "category": self.category,
+                    "code": code,
+                    "category": category,
                     "message": self.message,
                     "diagnostics": diagnostics,
                 }
@@ -291,8 +410,7 @@ async fn health(State(metadata): State<Arc<WorkspaceMetadata>>) -> Json<Value> {
 async fn workspace(State(metadata): State<Arc<WorkspaceMetadata>>) -> WorkbenchResult<Json<Value>> {
     task::spawn_blocking(move || metadata.workspace_json().map(Json))
         .await
-        .map_err(|error| workbench_internal_error(format!("workbench task failed: {error}")))?
-        .map_err(workbench_internal_error)
+        .map_err(|error| WorkbenchError::internal(format!("workbench task failed: {error}")))?
 }
 
 async fn note_list(
@@ -422,82 +540,11 @@ async fn favicon() -> Response {
 async fn run_workbench_blocking<T, F>(operation: F) -> WorkbenchResult<T>
 where
     T: Send + 'static,
-    F: FnOnce() -> Result<T, String> + Send + 'static,
+    F: FnOnce() -> WorkbenchCoreResult<T> + Send + 'static,
 {
     task::spawn_blocking(operation)
         .await
-        .map_err(|error| workbench_internal_error(format!("workbench task failed: {error}")))?
-        .map_err(workbench_api_error)
-}
-
-fn workbench_api_error(error: String) -> WorkbenchApiError {
-    const DOMAIN_PREFIX: &str = "__brainbrew_domain_diagnostics__:";
-    eprintln!("Workbench API error: {error}");
-    if let Some(payload) = error.strip_prefix(DOMAIN_PREFIX)
-        && let Ok(value) = serde_json::from_str::<Value>(payload)
-    {
-        let diagnostics = value["diagnostics"].as_array().cloned().unwrap_or_default();
-        let code = diagnostics
-            .first()
-            .and_then(|item| item["code"].as_str())
-            .unwrap_or("composition_failed");
-        let category = diagnostics
-            .first()
-            .and_then(|item| item["category"].as_str())
-            .unwrap_or("composition");
-        return WorkbenchApiError {
-            status: StatusCode::UNPROCESSABLE_ENTITY,
-            code: code.to_owned(),
-            category: category.to_owned(),
-            message: value["message"]
-                .as_str()
-                .unwrap_or("composition failed")
-                .to_owned(),
-            diagnostics,
-        };
-    }
-    let client_error = error.starts_with("invalid ")
-        || error.starts_with("missing ")
-        || error.starts_with("no ")
-        || error.starts_with("unknown ");
-    WorkbenchApiError {
-        status: if client_error {
-            StatusCode::BAD_REQUEST
-        } else {
-            StatusCode::INTERNAL_SERVER_ERROR
-        },
-        code: if client_error {
-            "invalid_request"
-        } else {
-            "workbench_failed"
-        }
-        .to_owned(),
-        category: if client_error { "request" } else { "adapter" }.to_owned(),
-        message: error,
-        diagnostics: Vec::new(),
-    }
-}
-
-fn workbench_compose_error(context: &str, report: &brain_brew_core::ComposeReport) -> String {
-    let diagnostics = report
-        .errors
-        .iter()
-        .map(|error| crate::output::diagnostic_json(&error.diagnostic()))
-        .collect::<Vec<_>>();
-    format!(
-        "__brainbrew_domain_diagnostics__:{}",
-        serde_json::to_string(&json!({"message": context, "diagnostics": diagnostics})).unwrap()
-    )
-}
-
-fn workbench_internal_error(message: String) -> WorkbenchApiError {
-    WorkbenchApiError {
-        status: StatusCode::INTERNAL_SERVER_ERROR,
-        code: "workbench_internal_error".to_owned(),
-        category: "adapter".to_owned(),
-        message,
-        diagnostics: Vec::new(),
-    }
+        .map_err(|error| WorkbenchError::internal(format!("workbench task failed: {error}")))?
 }
 
 async fn embedded_asset(uri: Uri) -> Response {
@@ -598,7 +645,7 @@ impl WorkspaceMetadata {
         manifest: FederatedDeckManifest,
         media_root_args: &[String],
         enable_write: bool,
-    ) -> Result<Self, String> {
+    ) -> WorkbenchCoreResult<Self> {
         let root = manifest_root(manifest_path);
         let registry = ManifestRegistry::load(manifest_path, &[], &[])?;
         let media_roots = MediaRootSelections::parse(&registry, media_root_args, &root)?;
@@ -616,29 +663,25 @@ impl WorkspaceMetadata {
         if self.write_enabled {
             Ok(())
         } else {
-            Err(WorkbenchApiError {
-                status: StatusCode::FORBIDDEN,
-                code: "workbench_read_only".to_owned(),
-                category: "authorization".to_owned(),
-                message: "Workbench is read-only; source mutation is unavailable in this server"
-                    .to_owned(),
-                diagnostics: Vec::new(),
-            })
+            Err(WorkbenchError::new(
+                WorkbenchErrorKind::ReadOnly,
+                "Workbench is read-only; source mutation is unavailable in this server",
+            ))
         }
     }
 
-    fn lock_apply(&self) -> Result<MutexGuard<'_, ()>, String> {
+    fn lock_apply(&self) -> WorkbenchCoreResult<MutexGuard<'_, ()>> {
         self.apply_mutex
             .lock()
-            .map_err(|_| "workbench apply lock poisoned".to_owned())
+            .map_err(|_| WorkbenchError::internal("workbench apply lock poisoned"))
     }
 
-    fn current_manifest(&self) -> Result<FederatedDeckManifest, String> {
+    fn current_manifest(&self) -> WorkbenchCoreResult<FederatedDeckManifest> {
         self.ensure_fresh_cache()?;
         Ok(self.cache.blocking_read().manifest.clone())
     }
 
-    fn current_manifest_snapshot(&self) -> Result<(FederatedDeckManifest, Vec<u8>), String> {
+    fn current_manifest_snapshot(&self) -> WorkbenchCoreResult<(FederatedDeckManifest, Vec<u8>)> {
         let bytes = fs::read(&self.manifest_path)
             .map_err(|error| format!("{}: {error}", self.manifest_path.display()))?;
         let text = std::str::from_utf8(&bytes)
@@ -648,7 +691,7 @@ impl WorkspaceMetadata {
         Ok((manifest, bytes))
     }
 
-    fn ensure_fresh_cache(&self) -> Result<(), String> {
+    fn ensure_fresh_cache(&self) -> WorkbenchCoreResult<()> {
         let (generation, manifest, previous_signatures) = {
             let cache = self.cache.blocking_read();
             (
@@ -688,7 +731,7 @@ impl WorkspaceMetadata {
         Ok(())
     }
 
-    fn invalidate_workspace_cache_after_write(&self) -> Result<(), String> {
+    fn invalidate_workspace_cache_after_write(&self) -> WorkbenchCoreResult<()> {
         let manifest = read_manifest(&self.manifest_path)?;
         let signatures = self.tracked_file_signatures(&manifest)?;
         let mut cache = self.cache.blocking_write();
@@ -702,7 +745,7 @@ impl WorkspaceMetadata {
     fn tracked_file_signatures(
         &self,
         manifest: &FederatedDeckManifest,
-    ) -> Result<BTreeMap<PathBuf, Option<FileSignature>>, String> {
+    ) -> WorkbenchCoreResult<BTreeMap<PathBuf, Option<FileSignature>>> {
         let paths =
             authorized_manifest_source_files(&self.manifest_path, &self.manifest_root, manifest)?;
         Ok(paths
@@ -717,7 +760,7 @@ impl WorkspaceMetadata {
             .collect())
     }
 
-    fn workspace_json(&self) -> Result<Value, String> {
+    fn workspace_json(&self) -> WorkbenchCoreResult<Value> {
         let manifest = self.current_manifest()?;
         let fingerprints = file_fingerprints(&self.manifest_path, &self.manifest_root, &manifest)?;
         Ok(json!({
@@ -748,7 +791,7 @@ impl WorkspaceMetadata {
         }))
     }
 
-    fn note_list_json(&self, query: &NoteListQuery) -> Result<Value, String> {
+    fn note_list_json(&self, query: &NoteListQuery) -> WorkbenchCoreResult<Value> {
         let manifest = self.current_manifest()?;
         let pagination = parse_pagination(query.limit.as_deref(), query.offset.as_deref())?;
         let context = self.selected_translation_context(
@@ -765,7 +808,7 @@ impl WorkspaceMetadata {
         ))
     }
 
-    fn note_detail_json(&self, query: &NoteDetailQuery) -> Result<Value, String> {
+    fn note_detail_json(&self, query: &NoteDetailQuery) -> WorkbenchCoreResult<Value> {
         let manifest = self.current_manifest()?;
         let note = query
             .note
@@ -779,12 +822,12 @@ impl WorkspaceMetadata {
         )?;
         let detail = note_pivot_json_from_context(&context, &manifest, None, Some(note));
         if detail["notes"].as_array().is_none_or(Vec::is_empty) {
-            return Err(format!("unknown note {note:?}"));
+            return Err(WorkbenchError::not_found(format!("unknown note {note:?}")));
         }
         Ok(detail)
     }
 
-    fn card_list_json(&self, query: &CardListQuery) -> Result<Value, String> {
+    fn card_list_json(&self, query: &CardListQuery) -> WorkbenchCoreResult<Value> {
         let manifest = self.current_manifest()?;
         let pagination = parse_pagination(query.limit.as_deref(), query.offset.as_deref())?;
         let context = self.selected_translation_context(
@@ -802,7 +845,7 @@ impl WorkspaceMetadata {
         ))
     }
 
-    fn source_string_list_json(&self, query: &SourceStringListQuery) -> Result<Value, String> {
+    fn source_string_list_json(&self, query: &SourceStringListQuery) -> WorkbenchCoreResult<Value> {
         let manifest = self.current_manifest()?;
         let pagination = parse_pagination(query.limit.as_deref(), query.offset.as_deref())?;
         let context = self.selected_translation_context(
@@ -823,7 +866,7 @@ impl WorkspaceMetadata {
     fn optional_metadata_list_json(
         &self,
         query: &OptionalMetadataListQuery,
-    ) -> Result<Value, String> {
+    ) -> WorkbenchCoreResult<Value> {
         let manifest = self.current_manifest()?;
         let pagination = parse_pagination(query.limit.as_deref(), query.offset.as_deref())?;
         let context = self.selected_translation_context(
@@ -837,7 +880,7 @@ impl WorkspaceMetadata {
         ))
     }
 
-    fn note_pivot_json(&self, query: &NotePivotQuery) -> Result<Value, String> {
+    fn note_pivot_json(&self, query: &NotePivotQuery) -> WorkbenchCoreResult<Value> {
         let manifest = self.current_manifest()?;
         let context = self.selected_translation_context(
             &manifest,
@@ -853,7 +896,10 @@ impl WorkspaceMetadata {
         ))
     }
 
-    fn source_string_pivot_json(&self, query: &SourceStringPivotQuery) -> Result<Value, String> {
+    fn source_string_pivot_json(
+        &self,
+        query: &SourceStringPivotQuery,
+    ) -> WorkbenchCoreResult<Value> {
         let manifest = self.current_manifest()?;
         let context = self.selected_translation_context(
             &manifest,
@@ -870,7 +916,7 @@ impl WorkspaceMetadata {
         ))
     }
 
-    fn card_pivot_json(&self, query: &CardPivotQuery) -> Result<Value, String> {
+    fn card_pivot_json(&self, query: &CardPivotQuery) -> WorkbenchCoreResult<Value> {
         let manifest = self.current_manifest()?;
         let context = self.selected_translation_context(
             &manifest,
@@ -887,7 +933,7 @@ impl WorkspaceMetadata {
         ))
     }
 
-    fn optional_metadata_json(&self, query: &OptionalMetadataQuery) -> Result<Value, String> {
+    fn optional_metadata_json(&self, query: &OptionalMetadataQuery) -> WorkbenchCoreResult<Value> {
         let manifest = self.current_manifest()?;
         let context = self.selected_translation_context(
             &manifest,
@@ -898,7 +944,7 @@ impl WorkspaceMetadata {
         Ok(optional_metadata_json_from_context(&context, &manifest))
     }
 
-    fn comparison_pane_json(&self, query: &ComparisonPaneQuery) -> Result<Value, String> {
+    fn comparison_pane_json(&self, query: &ComparisonPaneQuery) -> WorkbenchCoreResult<Value> {
         let manifest = self.current_manifest()?;
         let context = self.selected_translation_context(
             &manifest,
@@ -942,7 +988,10 @@ impl WorkspaceMetadata {
         }))
     }
 
-    fn new_language_preview_json(&self, query: &NewLanguagePreviewQuery) -> Result<Value, String> {
+    fn new_language_preview_json(
+        &self,
+        query: &NewLanguagePreviewQuery,
+    ) -> WorkbenchCoreResult<Value> {
         let manifest = self.current_manifest()?;
         let template = if let Some(template) = &query.template {
             template.clone()
@@ -958,7 +1007,7 @@ impl WorkspaceMetadata {
         new_language_preview_response(&updated, &request, &overlay_writes)
     }
 
-    fn create_new_language_json(&self, request: NewLanguageRequest) -> Result<Value, String> {
+    fn create_new_language_json(&self, request: NewLanguageRequest) -> WorkbenchCoreResult<Value> {
         let _apply_guard = self.lock_apply()?;
         recover_workspace(&self.manifest_root)?;
         let (manifest, manifest_original) = self.current_manifest_snapshot()?;
@@ -997,13 +1046,14 @@ impl WorkspaceMetadata {
             )
             .is_some()
         {
-            return Err(format!(
+            return Err((format!(
                 "new-language overlay output conflicts with manifest {}",
                 self.manifest_path.display()
-            ));
+            ))
+            .into());
         }
         let writes = planned_workbench_outputs(&self.manifest_root, outputs)?;
-        commit_workspace_files(&self.manifest_root, writes)?;
+        commit_workspace_files(&self.manifest_root, writes).map_err(WorkbenchError::conflict)?;
         self.invalidate_workspace_cache_after_write()?;
 
         Ok(json!({
@@ -1013,7 +1063,11 @@ impl WorkspaceMetadata {
         }))
     }
 
-    fn apply_request_json(&self, request: ApplyRequest, mode: ApplyMode) -> Result<Value, String> {
+    fn apply_request_json(
+        &self,
+        request: ApplyRequest,
+        mode: ApplyMode,
+    ) -> WorkbenchCoreResult<Value> {
         let _apply_guard = if mode == ApplyMode::Write {
             Some(self.lock_apply()?)
         } else {
@@ -1030,7 +1084,7 @@ impl WorkspaceMetadata {
             request.overlay.as_deref(),
         )?;
         if request.edits.is_empty() {
-            return Err("missing staged edits".to_owned());
+            return Err(("missing staged edits".to_owned()).into());
         }
 
         let source_edits = request
@@ -1167,7 +1221,7 @@ impl WorkspaceMetadata {
         }
 
         if changes.is_empty() {
-            return Err("missing staged edits".to_owned());
+            return Err(("missing staged edits".to_owned()).into());
         }
         let mut outputs = source_plan.outputs.clone();
         for (display_file, document, _overlay, changed) in overlay_writes.values() {
@@ -1186,14 +1240,15 @@ impl WorkspaceMetadata {
             &overlay_writes,
             &validation_contexts,
         ) {
-            validation_errors.push(error);
+            validation_errors.push(error.message);
         }
         if mode == ApplyMode::Write && !validation_errors.is_empty() {
-            return Err("validation failed; preview before applying".to_owned());
+            return Err(("validation failed; preview before applying".to_owned()).into());
         }
         if mode == ApplyMode::Write {
             let writes = planned_workbench_outputs(&self.manifest_root, outputs)?;
-            commit_workspace_files(&self.manifest_root, writes)?;
+            commit_workspace_files(&self.manifest_root, writes)
+                .map_err(WorkbenchError::conflict)?;
             self.invalidate_workspace_cache_after_write()?;
         }
 
@@ -1229,11 +1284,11 @@ impl WorkspaceMetadata {
         }))
     }
 
-    fn media_response(&self, requested_path: &str) -> Result<Response, String> {
+    fn media_response(&self, requested_path: &str) -> WorkbenchCoreResult<Response> {
         let requested_path = safe_media_relative_path(requested_path)?;
-        let declaration = self
-            .media_declaration(&requested_path)?
-            .ok_or_else(|| format!("unknown media asset {requested_path:?}"))?;
+        let declaration = self.media_declaration(&requested_path)?.ok_or_else(|| {
+            WorkbenchError::not_found(format!("unknown media asset {requested_path:?}"))
+        })?;
         let root = if let Some(root) = self.media_roots.explicit_for_declaration(&declaration) {
             root.to_path_buf()
         } else if self.media_roots.supplied() {
@@ -1270,30 +1325,36 @@ impl WorkspaceMetadata {
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, media_content_type(&requested_path))
                     .body(Body::from(bytes))
-                    .map_err(|error| format!("failed to build media response: {error}"))
+                    .map_err(|error| {
+                        WorkbenchError::internal(format!("failed to build media response: {error}"))
+                    })
             }
-            Err(error) if error.reason.contains("cannot be resolved for reading") => {
+            Err(_error) if !root.join(&requested_path).exists() => {
                 let placeholder = missing_media_placeholder_svg(&requested_path);
                 Response::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, "image/svg+xml")
                     .body(Body::from(placeholder))
-                    .map_err(|error| format!("failed to build missing media placeholder: {error}"))
+                    .map_err(|error| {
+                        WorkbenchError::internal(format!(
+                            "failed to build missing media placeholder: {error}"
+                        ))
+                    })
             }
-            Err(error) => Err(format!(
+            Err(error) => Err(WorkbenchError::adapter(format!(
                 "Workbench media ownership error for package {}, declaration {}, path {:?}, root {}: {error}",
                 declaration.package_label(),
                 declaration.id,
                 declaration.path,
                 root.display()
-            )),
+            ))),
         }
     }
 
     fn media_declaration(
         &self,
         requested_path: &str,
-    ) -> Result<Option<MediaDeclarationProvenance>, String> {
+    ) -> WorkbenchCoreResult<Option<MediaDeclarationProvenance>> {
         self.ensure_fresh_cache()?;
         let (generation, manifest, cached) = {
             let cache = self.cache.blocking_read();
@@ -1346,7 +1407,7 @@ impl WorkspaceMetadata {
     fn collect_declared_media_paths(
         &self,
         manifest: &FederatedDeckManifest,
-    ) -> Result<BTreeMap<String, MediaDeclarationProvenance>, String> {
+    ) -> WorkbenchCoreResult<BTreeMap<String, MediaDeclarationProvenance>> {
         let mut paths = BTreeMap::new();
         let registry = ManifestRegistry::load(&self.manifest_path, &[], &[])?;
         for target_id in manifest.targets.keys() {
@@ -1362,7 +1423,7 @@ impl WorkspaceMetadata {
                         || previous.package_root != declaration.package_root
                         || previous.source != declaration.source)
                 {
-                    return Err(format!(
+                    return Err((format!(
                         "ambiguous Workbench media path {:?}: declaration {} owned by package {} at {} conflicts with declaration {} owned by package {} at {}",
                         declaration.path,
                         previous.id,
@@ -1371,7 +1432,7 @@ impl WorkspaceMetadata {
                         declaration.id,
                         declaration.package_label(),
                         declaration.source.display()
-                    ));
+                    )).into());
                 }
             }
         }
@@ -1384,7 +1445,7 @@ impl WorkspaceMetadata {
         language: Option<&str>,
         target_label: Option<&str>,
         overlay_label: Option<&str>,
-    ) -> Result<SelectedTranslationContext, String> {
+    ) -> WorkbenchCoreResult<SelectedTranslationContext> {
         let selection =
             self.select_translation_target(manifest, language, target_label, overlay_label)?;
         let key = SelectionCacheKey {
@@ -1424,7 +1485,7 @@ impl WorkspaceMetadata {
     fn build_selected_translation_context(
         &self,
         selection: WorkbenchSelection,
-    ) -> Result<SelectedTranslationContext, String> {
+    ) -> WorkbenchCoreResult<SelectedTranslationContext> {
         let plan = plan_manifest_target(
             &self.manifest_path,
             &selection.target_id,
@@ -1433,6 +1494,7 @@ impl WorkspaceMetadata {
             &crate::package_resolver::DiscoveryPolicy::default(),
         )?;
         let mut current = plan.base.clone();
+        let mut diagnostic_overlays = Vec::new();
         let mut selected_source_deck = None;
         let mut selected_report = None;
         let mut selected_display_file = selection.overlay_display_file.clone();
@@ -1447,31 +1509,41 @@ impl WorkspaceMetadata {
                     format!("failed to resolve translation source fields: {error}")
                 })?);
             }
-            current = if overlay.translations.is_some() {
-                compose_lenient_translation_overlay(&current, overlay)?
+            let effective_overlay = if overlay.translations.is_some() {
+                sanitize_lenient_translation_overlay(&current, overlay)?
             } else {
-                current
-                    .compose(std::slice::from_ref(overlay))
-                    .map_err(|error| {
-                        workbench_compose_error(
-                            &format!("failed to compose overlay {}", planned.id),
-                            &error,
-                        )
-                    })?
+                overlay.clone()
             };
+            current = current
+                .compose(std::slice::from_ref(&effective_overlay))
+                .map_err(|report| {
+                    WorkbenchError::compose(
+                        format!("failed to compose overlay {}", planned.id),
+                        report,
+                    )
+                })?;
+            diagnostic_overlays.push(effective_overlay);
         }
+        plan.base.compose(&diagnostic_overlays).map_err(|report| {
+            WorkbenchError::compose(
+                format!("failed to compose target {}", selection.target_id),
+                report,
+            )
+        })?;
 
         let Some(source_deck) = selected_source_deck else {
-            return Err(format!(
+            return Err((format!(
                 "target {} does not include translation overlay {}",
                 selection.target_id, selection.overlay_id
-            ));
+            ))
+            .into());
         };
         let Some(report) = selected_report else {
-            return Err(format!(
+            return Err((format!(
                 "overlay {} is not a translation overlay",
                 selection.overlay_id
-            ));
+            ))
+            .into());
         };
         Ok(SelectedTranslationContext {
             selection: WorkbenchSelection {
@@ -1496,12 +1568,11 @@ impl WorkspaceMetadata {
         language: Option<&str>,
         target_label: Option<&str>,
         overlay_label: Option<&str>,
-    ) -> Result<WorkbenchSelection, String> {
+    ) -> WorkbenchCoreResult<WorkbenchSelection> {
         let (language_code, language_entry) = if let Some(language) = language {
-            let entry = manifest
-                .languages
-                .get(language)
-                .ok_or_else(|| format!("unknown language {language:?}"))?;
+            let entry = manifest.languages.get(language).ok_or_else(|| {
+                WorkbenchError::not_found(format!("unknown language {language:?}"))
+            })?;
             (language.to_owned(), entry)
         } else {
             manifest
@@ -1510,18 +1581,20 @@ impl WorkspaceMetadata {
                 .find(|(_, entry)| !entry.source && !entry.translation_overlays.is_empty())
                 .map(|(code, entry)| (code.clone(), entry))
                 .ok_or_else(|| {
-                    "no target language with translation overlays is configured".to_owned()
+                    WorkbenchError::not_found(
+                        "no target language with translation overlays is configured",
+                    )
                 })?
         };
         if language_entry.source {
-            return Err(format!(
+            return Err(WorkbenchError::request(format!(
                 "invalid source language {language_code:?}; choose a target language"
-            ));
+            )));
         }
         if language_entry.translation_overlays.is_empty() {
-            return Err(format!(
+            return Err(WorkbenchError::request(format!(
                 "language {language_code:?} has no translation overlays"
-            ));
+            )));
         }
 
         let target_label = target_label
@@ -1531,12 +1604,16 @@ impl WorkspaceMetadata {
                     .then(|| language_entry.primary_target.clone())
             })
             .or_else(|| language_entry.targets.keys().next().cloned())
-            .ok_or_else(|| format!("language {language_code:?} has no targets"))?;
+            .ok_or_else(|| {
+                WorkbenchError::not_found(format!("language {language_code:?} has no targets"))
+            })?;
         let target_id = language_entry
             .targets
             .get(&target_label)
             .ok_or_else(|| {
-                format!("language {language_code:?} has no target label {target_label:?}")
+                WorkbenchError::not_found(format!(
+                    "language {language_code:?} has no target label {target_label:?}"
+                ))
             })?
             .clone();
 
@@ -1549,12 +1626,18 @@ impl WorkspaceMetadata {
                     .then(|| "base".to_owned())
             })
             .or_else(|| language_entry.translation_overlays.keys().next().cloned())
-            .ok_or_else(|| format!("language {language_code:?} has no translation overlays"))?;
+            .ok_or_else(|| {
+                WorkbenchError::not_found(format!(
+                    "language {language_code:?} has no translation overlays"
+                ))
+            })?;
         let overlay_id = language_entry
             .translation_overlays
             .get(&overlay_label)
             .ok_or_else(|| {
-                format!("language {language_code:?} has no overlay label {overlay_label:?}")
+                WorkbenchError::not_found(format!(
+                    "language {language_code:?} has no overlay label {overlay_label:?}"
+                ))
             })?
             .clone();
         let target_reference = if target_id.contains(':') {
@@ -1803,23 +1886,25 @@ struct Pagination {
     offset: usize,
 }
 
-fn parse_pagination(limit: Option<&str>, offset: Option<&str>) -> Result<Pagination, String> {
+fn parse_pagination(limit: Option<&str>, offset: Option<&str>) -> WorkbenchCoreResult<Pagination> {
     let limit = match limit {
         Some(raw) => raw.parse::<usize>().map_err(|_| {
-            format!(
+            WorkbenchError::request(format!(
                 "invalid pagination limit {raw:?}: expected an integer from 1 to {MAX_LIST_LIMIT}"
-            )
+            ))
         })?,
         None => DEFAULT_LIST_LIMIT,
     };
     if limit == 0 || limit > MAX_LIST_LIMIT {
-        return Err(format!(
+        return Err(WorkbenchError::request(format!(
             "invalid pagination limit {limit}: expected a value from 1 to {MAX_LIST_LIMIT}"
-        ));
+        )));
     }
     let offset = match offset {
         Some(raw) => raw.parse::<usize>().map_err(|_| {
-            format!("invalid pagination offset {raw:?}: expected a non-negative integer")
+            WorkbenchError::request(format!(
+                "invalid pagination offset {raw:?}: expected a non-negative integer"
+            ))
         })?,
         None => 0,
     };
@@ -2005,15 +2090,16 @@ fn default_new_language_request(
     code: &str,
     display_name: &str,
     template_language: &str,
-) -> Result<NewLanguageRequest, String> {
+) -> WorkbenchCoreResult<NewLanguageRequest> {
     let template = manifest
         .languages
         .get(template_language)
         .ok_or_else(|| format!("unknown template language {template_language:?}"))?;
     if template.source || template.translation_overlays.is_empty() {
-        return Err(format!(
+        return Err((format!(
             "invalid template language {template_language:?}; choose a target language"
-        ));
+        ))
+        .into());
     }
 
     let groups = template
@@ -2071,26 +2157,30 @@ fn apply_new_language_request(
     manifest_root: &Path,
     manifest: &FederatedDeckManifest,
     request: &NewLanguageRequest,
-) -> Result<(FederatedDeckManifest, Vec<(String, Overlay)>), String> {
+) -> WorkbenchCoreResult<(FederatedDeckManifest, Vec<(String, Overlay)>)> {
     validate_new_language_code(&request.code)?;
     if request.display_name.trim().is_empty() {
-        return Err("invalid new language display name: expected a non-empty value".to_owned());
+        return Err(
+            ("invalid new language display name: expected a non-empty value".to_owned()).into(),
+        );
     }
     if manifest.languages.contains_key(&request.code) {
-        return Err(format!(
+        return Err((format!(
             "invalid new language code {:?}: language already exists",
             request.code
-        ));
+        ))
+        .into());
     }
     let template = manifest
         .languages
         .get(&request.template_language)
         .ok_or_else(|| format!("unknown template language {:?}", request.template_language))?;
     if template.source || template.translation_overlays.is_empty() {
-        return Err(format!(
+        return Err((format!(
             "invalid template language {:?}; choose a target language",
             request.template_language
-        ));
+        ))
+        .into());
     }
 
     let template_translation_ids = template
@@ -2100,10 +2190,9 @@ fn apply_new_language_request(
         .collect::<BTreeSet<_>>();
     let selected_groups = selected_new_language_groups(template, request)?;
     if selected_groups.is_empty() {
-        return Err(
-            "invalid new language scaffold: select at least one translation overlay group"
-                .to_owned(),
-        );
+        return Err(WorkbenchError::request(
+            "invalid new language scaffold: select at least one translation overlay group",
+        ));
     }
     let selected_template_to_new = selected_groups
         .iter()
@@ -2115,10 +2204,11 @@ fn apply_new_language_request(
     for group in &selected_groups {
         validate_stable_id("overlay id", &group.overlay_id)?;
         if manifest.overlays.contains_key(&group.overlay_id) {
-            return Err(format!(
+            return Err((format!(
                 "invalid new language overlay id {:?}: overlay already exists",
                 group.overlay_id
-            ));
+            ))
+            .into());
         }
         let absolute_path = PathAuthorizer::new("workspace", manifest_root)?
             .authorize_create(
@@ -2129,10 +2219,11 @@ fn apply_new_language_request(
             .map_err(|error| error.to_string())?
             .into_path_buf();
         if absolute_path.exists() {
-            return Err(format!(
+            return Err((format!(
                 "invalid new language overlay file already exists: {}",
                 absolute_path.display()
-            ));
+            ))
+            .into());
         }
         let template_overlay = manifest
             .overlays
@@ -2177,10 +2268,11 @@ fn apply_new_language_request(
     for target in &request.targets {
         validate_stable_id("target id", &target.target_id)?;
         if manifest.targets.contains_key(&target.target_id) {
-            return Err(format!(
+            return Err((format!(
                 "invalid new language target id {:?}: target already exists",
                 target.target_id
-            ));
+            ))
+            .into());
         }
         let template_target_id = template.targets.get(&target.label).ok_or_else(|| {
             format!(
@@ -2217,13 +2309,16 @@ fn apply_new_language_request(
         language_targets.insert(target.label.clone(), target.target_id.clone());
     }
     if language_targets.is_empty() {
-        return Err("invalid new language scaffold: expected at least one target".to_owned());
+        return Err(
+            ("invalid new language scaffold: expected at least one target".to_owned()).into(),
+        );
     }
     if !language_targets.contains_key(&request.primary_target) {
-        return Err(format!(
+        return Err((format!(
             "invalid new language primary target {:?}: not found in target labels",
             request.primary_target
-        ));
+        ))
+        .into());
     }
 
     let translation_overlays = selected_groups
@@ -2251,27 +2346,30 @@ fn apply_new_language_request(
 fn selected_new_language_groups<'a>(
     template: &LanguageManifestEntry,
     request: &'a NewLanguageRequest,
-) -> Result<Vec<&'a NewLanguageGroupRequest>, String> {
+) -> WorkbenchCoreResult<Vec<&'a NewLanguageGroupRequest>> {
     let mut seen_labels = BTreeSet::new();
     let mut selected = Vec::new();
     for group in &request.groups {
         if !seen_labels.insert(group.label.clone()) {
-            return Err(format!(
+            return Err((format!(
                 "invalid new language overlay group {:?}: duplicate label",
                 group.label
-            ));
+            ))
+            .into());
         }
         let Some(template_overlay_id) = template.translation_overlays.get(&group.label) else {
-            return Err(format!(
+            return Err((format!(
                 "invalid new language overlay group {:?}: not found on template language",
                 group.label
-            ));
+            ))
+            .into());
         };
         if template_overlay_id != &group.template_overlay_id {
-            return Err(format!(
+            return Err((format!(
                 "invalid new language overlay group {:?}: template overlay changed",
                 group.label
-            ));
+            ))
+            .into());
         }
         if group.selected {
             selected.push(group);
@@ -2284,7 +2382,7 @@ fn new_language_preview_response(
     manifest: &FederatedDeckManifest,
     request: &NewLanguageRequest,
     overlay_writes: &[(String, Overlay)],
-) -> Result<Value, String> {
+) -> WorkbenchCoreResult<Value> {
     let overlay_files = overlay_writes
         .iter()
         .map(|(path, overlay)| {
@@ -2294,7 +2392,7 @@ fn new_language_preview_response(
                     .map_err(|error| error.to_string())?,
             }))
         })
-        .collect::<Result<Vec<_>, String>>()?;
+        .collect::<WorkbenchCoreResult<Vec<_>>>()?;
     let manifest_yaml = manifest::to_string(manifest).map_err(|error| error.to_string())?;
     let mut affected_files = vec![json!({ "path": "brainbrew.yaml" })];
     affected_files.extend(
@@ -2319,23 +2417,26 @@ fn new_language_preview_response(
     }))
 }
 
-fn validate_new_language_code(code: &str) -> Result<(), String> {
+fn validate_new_language_code(code: &str) -> WorkbenchCoreResult<()> {
     if code.is_empty()
         || !code
             .chars()
             .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
     {
-        return Err(format!(
+        return Err((format!(
             "invalid new language code {code:?}: expected letters, numbers, '-' or '_'"
-        ));
+        ))
+        .into());
     }
     Ok(())
 }
 
-fn validate_stable_id(kind: &str, value: &str) -> Result<(), String> {
+fn validate_stable_id(kind: &str, value: &str) -> WorkbenchCoreResult<()> {
     StableId::new(value.to_owned())
         .map(|_| ())
-        .map_err(|error| format!("invalid new language {kind} {value:?}: {error}"))
+        .map_err(|error| {
+            WorkbenchError::request(format!("invalid new language {kind} {value:?}: {error}"))
+        })
 }
 
 fn note_list_json_from_context(
@@ -4103,10 +4204,10 @@ fn is_external_or_already_routed_media(path: &str) -> bool {
         || path.starts_with("data:")
 }
 
-fn safe_media_relative_path(path: &str) -> Result<String, String> {
+fn safe_media_relative_path(path: &str) -> WorkbenchCoreResult<String> {
     SafeRelativePath::new(path)
         .map(|path| path.as_str().to_owned())
-        .map_err(|reason| format!("invalid media path {path:?}: {reason}"))
+        .map_err(|reason| WorkbenchError::request(format!("invalid media path {path:?}: {reason}")))
 }
 
 fn missing_media_placeholder_svg(path: &str) -> String {
@@ -4130,28 +4231,31 @@ fn media_content_type(path: &str) -> &'static str {
     }
 }
 
-fn read_overlay_document(path: &Path) -> Result<OverlaySourceDocument, String> {
+fn read_overlay_document(path: &Path) -> WorkbenchCoreResult<OverlaySourceDocument> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    overlay_source_document(path, &input)
+    overlay_source_document(path, &input).map_err(WorkbenchError::adapter)
 }
 
 fn ensure_root_source_mutable(
     operation: &str,
     source: &PlannedSourceProvenance,
-) -> Result<(), String> {
+) -> WorkbenchCoreResult<()> {
     if source.registry_source == RegistrySourceKind::RootManifest {
         Ok(())
     } else {
-        Err(format!(
-            "{operation} is read-only for {} source {} at {}; dependency/include/locked/cache sources cannot be selected for Workbench mutation",
-            source.registry_source.ownership_name(),
-            match source.kind {
-                crate::planner::PlanSourceKind::Base => "base",
-                crate::planner::PlanSourceKind::Overlay { .. } => "overlay",
-                crate::planner::PlanSourceKind::ScalarInclude { .. } => "scalar include",
-                crate::planner::PlanSourceKind::MediaInclude => "media include",
-            },
-            source.path.display()
+        Err(WorkbenchError::new(
+            WorkbenchErrorKind::ReadOnly,
+            format!(
+                "{operation} is read-only for {} source {} at {}; dependency/include/locked/cache sources cannot be selected for Workbench mutation",
+                source.registry_source.ownership_name(),
+                match source.kind {
+                    crate::planner::PlanSourceKind::Base => "base",
+                    crate::planner::PlanSourceKind::Overlay { .. } => "overlay",
+                    crate::planner::PlanSourceKind::ScalarInclude { .. } => "scalar include",
+                    crate::planner::PlanSourceKind::MediaInclude => "media include",
+                },
+                source.path.display()
+            ),
         ))
     }
 }
@@ -4159,13 +4263,15 @@ fn ensure_root_source_mutable(
 fn planned_overlay_for_path<'a>(
     context: &'a SelectedTranslationContext,
     path: &Path,
-) -> Result<&'a PlannedOverlay, String> {
+) -> WorkbenchCoreResult<&'a PlannedOverlay> {
     context
         .plan_overlays
         .iter()
         .map(|(planned, _)| planned)
         .find(|planned| planned.file == path)
-        .ok_or_else(|| format!("no planned overlay owns {}", path.display()))
+        .ok_or_else(|| {
+            WorkbenchError::not_found(format!("no planned overlay owns {}", path.display()))
+        })
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -4210,7 +4316,7 @@ fn apply_staged_source_edits(
     context: &SelectedTranslationContext,
     base_file: &Path,
     manifest_root: &Path,
-) -> Result<SourceApplyPlan, String> {
+) -> WorkbenchCoreResult<SourceApplyPlan> {
     let mut plan = SourceApplyPlan::default();
     if edits.is_empty() {
         return Ok(plan);
@@ -4235,25 +4341,24 @@ fn apply_staged_source_edits(
 
     for edit in edits {
         if !edit.path.starts_with("notes.") || !edit.path.contains(".fields.") {
-            return Err(format!(
-                "invalid source note-field edit path {:?}",
-                edit.path
-            ));
+            return Err((format!("invalid source note-field edit path {:?}", edit.path)).into());
         }
         if edit.source.is_empty() {
-            return Err(format!("invalid empty source for {}", edit.path));
+            return Err((format!("invalid empty source for {}", edit.path)).into());
         }
         let Some(anchor_row) = row_by_path.get(&edit.path) else {
-            return Err(format!(
+            return Err((format!(
                 "invalid source edit path {:?}; choose an editable source note field",
                 edit.path
-            ));
+            ))
+            .into());
         };
         if anchor_row.source != edit.source {
-            return Err(format!(
+            return Err((format!(
                 "invalid source {:?} for {}; expected {:?}",
                 edit.source, edit.path, anchor_row.source
-            ));
+            ))
+            .into());
         }
         let target_rows = match edit.scope {
             SourceEditScope::Field => vec![anchor_row.clone()],
@@ -4330,7 +4435,7 @@ fn apply_source_translation_impact(
     old_source_remains: bool,
     context: &SelectedTranslationContext,
     changed_entries: &mut Vec<Value>,
-) -> Result<bool, String> {
+) -> WorkbenchCoreResult<bool> {
     let mut changed = false;
     if target_rows.is_empty() {
         return Ok(false);
@@ -4426,7 +4531,7 @@ fn set_deck_note_field(
     path: &str,
     expected_source: &str,
     value: &str,
-) -> Result<(), String> {
+) -> WorkbenchCoreResult<()> {
     let (note_id, field_id) = note_field_path(path)?;
     let note_id = StableId::new(note_id).map_err(|error| error.to_string())?;
     let field_id = StableId::new(field_id).map_err(|error| error.to_string())?;
@@ -4440,25 +4545,26 @@ fn set_deck_note_field(
         .and_then(FieldValue::as_scalar)
         .unwrap_or_default();
     if current != expected_source {
-        return Err(format!(
+        return Err((format!(
             "invalid source {:?} for {}; expected canonical deck value {:?}",
             expected_source, path, current
-        ));
+        ))
+        .into());
     }
     note.fields
         .insert(field_id, FieldValue::Scalar(value.to_owned()));
     Ok(())
 }
 
-fn note_field_path(path: &str) -> Result<(&str, &str), String> {
+fn note_field_path(path: &str) -> WorkbenchCoreResult<(&str, &str)> {
     let Some(rest) = path.strip_prefix("notes.") else {
-        return Err(format!("invalid note-field path {path:?}"));
+        return Err((format!("invalid note-field path {path:?}")).into());
     };
     let Some((note_id, field_id)) = rest.split_once(".fields.") else {
-        return Err(format!("invalid note-field path {path:?}"));
+        return Err((format!("invalid note-field path {path:?}")).into());
     };
     if note_id.is_empty() || field_id.is_empty() {
-        return Err(format!("invalid note-field path {path:?}"));
+        return Err((format!("invalid note-field path {path:?}")).into());
     }
     Ok((note_id, field_id))
 }
@@ -4466,7 +4572,7 @@ fn note_field_path(path: &str) -> Result<(&str, &str), String> {
 fn collect_document_emission(
     emission: SourceDocumentEmission,
     outputs: &mut BTreeMap<PathBuf, PlannedSourceOutput>,
-) -> Result<(), String> {
+) -> WorkbenchCoreResult<()> {
     collect_document_source(
         emission.root(),
         emission.original_source(emission.root().provenance()),
@@ -4486,7 +4592,7 @@ fn collect_document_source(
     source: &brain_brew_formats::source_document::SourceFile,
     original: Option<&brain_brew_formats::source_document::SourceFile>,
     outputs: &mut BTreeMap<PathBuf, PlannedSourceOutput>,
-) -> Result<(), String> {
+) -> WorkbenchCoreResult<()> {
     let path = PathBuf::from(source.provenance().source_name());
     let output = PlannedSourceOutput {
         original: original.map_or(OriginalSourceSnapshot::Absent, |original| {
@@ -4497,10 +4603,11 @@ fn collect_document_source(
     if let Some(previous) = outputs.insert(path.clone(), output.clone())
         && previous != output
     {
-        return Err(format!(
+        return Err((format!(
             "conflicting Workbench outputs or original snapshots for {}",
             path.display()
-        ));
+        ))
+        .into());
     }
     Ok(())
 }
@@ -4508,7 +4615,7 @@ fn collect_document_source(
 fn planned_workbench_outputs(
     workspace_root: &Path,
     outputs: BTreeMap<PathBuf, PlannedSourceOutput>,
-) -> Result<Vec<PlannedWorkspaceFile>, String> {
+) -> WorkbenchCoreResult<Vec<PlannedWorkspaceFile>> {
     let canonical_root = fs::canonicalize(workspace_root)
         .map_err(|error| format!("{}: {error}", workspace_root.display()))?;
     outputs
@@ -4576,7 +4683,8 @@ fn planned_workbench_outputs(
                 ),
             }
         })
-        .collect()
+        .collect::<Result<Vec<_>, String>>()
+        .map_err(WorkbenchError::adapter)
 }
 
 fn validate_utf8_workbench_output(bytes: &[u8]) -> Result<(), String> {
@@ -4589,7 +4697,7 @@ fn validate_complete_workbench_result(
     modified_base: &CanonicalDeck,
     overlays: &BTreeMap<PathBuf, (String, OverlaySourceDocument, Overlay, bool)>,
     contexts: &[SelectedTranslationContext],
-) -> Result<(), String> {
+) -> WorkbenchCoreResult<()> {
     canonical_yaml::to_string(modified_base).map_err(|error| error.to_string())?;
     if !modified_base.media.is_empty() {
         media::validate_references(modified_base).map_err(|error| error.to_string())?;
@@ -4620,13 +4728,13 @@ fn validate_complete_workbench_result(
                 compose_lenient_translation_overlay(&deck, overlay)?
             } else {
                 deck.compose(std::slice::from_ref(overlay))
-                    .map_err(|error| {
-                        workbench_compose_error(
-                            &format!(
+                    .map_err(|report| {
+                        WorkbenchError::compose(
+                            format!(
                                 "failed to validate complete Workbench target {} at overlay {}",
                                 context.selection.target_id, planned.id
                             ),
-                            &error,
+                            report,
                         )
                     })?
             };
@@ -4639,10 +4747,11 @@ fn validate_complete_workbench_result(
         })?;
         let content = validate_deck_content(&rendered);
         if !content.is_empty() {
-            return Err(format!(
+            return Err((format!(
                 "content validation failed for complete Workbench target {}: {content}",
                 context.selection.target_id
-            ));
+            ))
+            .into());
         }
         if !deck.media.is_empty() {
             media::validate_references(&deck).map_err(|error| {
@@ -4711,7 +4820,7 @@ fn editable_sources_by_path(context: &SelectedTranslationContext) -> BTreeMap<St
 fn contextual_path_for_edit(
     context: &SelectedTranslationContext,
     edit: &StagedWorkbenchEdit,
-) -> Result<String, String> {
+) -> WorkbenchCoreResult<String> {
     let rows = main_field_rows(
         &context.source_deck,
         &context.selection,
@@ -4738,10 +4847,11 @@ fn contextual_path_for_edit(
             {
                 return Ok(context_path.clone());
             }
-            return Err(format!(
+            return Err((format!(
                 "invalid contextual edit context {:?} for {}",
                 context_path, edit.path
-            ));
+            ))
+            .into());
         }
         return Ok(contextual_path_for_row(row, &context.report.entries));
     }
@@ -4763,15 +4873,19 @@ fn contextual_path_for_edit(
             {
                 return Ok(context_path.clone());
             }
-            return Err(format!(
+            return Err((format!(
                 "invalid contextual edit context {:?} for {}",
                 context_path, edit.path
-            ));
+            ))
+            .into());
         }
         return Ok(edit.path.clone());
     }
 
-    Err(format!("invalid contextual edit path {:?}", edit.path))
+    Err(WorkbenchError::request(format!(
+        "invalid contextual edit path {:?}",
+        edit.path
+    )))
 }
 
 fn apply_staged_edits_to_overlay(
@@ -4779,24 +4893,25 @@ fn apply_staged_edits_to_overlay(
     document: &mut OverlaySourceDocument,
     edits: &[StagedWorkbenchEdit],
     context: &SelectedTranslationContext,
-) -> Result<Vec<Value>, String> {
+) -> WorkbenchCoreResult<Vec<Value>> {
     let editable_sources = editable_sources_by_path(context);
     let mut changed = Vec::new();
     for edit in edits {
         if edit.source.is_empty() {
-            return Err(format!("invalid empty source for {}", edit.path));
+            return Err((format!("invalid empty source for {}", edit.path)).into());
         }
         let Some(expected_source) = editable_sources.get(edit.path.as_str()) else {
-            return Err(format!(
+            return Err((format!(
                 "invalid edit path {:?}; choose an editable translation source in the selected target",
                 edit.path
-            ));
+            )).into());
         };
         if expected_source != &edit.source {
-            return Err(format!(
+            return Err((format!(
                 "invalid source {:?} for {}; expected {:?}",
                 edit.source, edit.path, expected_source
-            ));
+            ))
+            .into());
         }
         let translations = overlay.translations.as_ref();
         match edit.mode {
@@ -4898,7 +5013,7 @@ fn validate_modified_base_and_overlay(
         }
         Err(error) => ApplyValidation {
             ok: false,
-            errors: vec![error],
+            errors: vec![error.message],
         },
     }
 }
@@ -4907,7 +5022,7 @@ fn context_with_modified_base_and_overlay(
     context: &SelectedTranslationContext,
     modified_base: CanonicalDeck,
     modified_overlay: &Overlay,
-) -> Result<SelectedTranslationContext, String> {
+) -> WorkbenchCoreResult<SelectedTranslationContext> {
     let mut current = modified_base.clone();
     let mut selected_source_deck = None;
     let mut selected_report = None;
@@ -4928,20 +5043,27 @@ fn context_with_modified_base_and_overlay(
         } else {
             current
                 .compose(std::slice::from_ref(active_overlay))
-                .map_err(|error| format!("failed to compose overlay {}: {error}", planned.id))?
+                .map_err(|report| {
+                    WorkbenchError::compose(
+                        format!("failed to compose overlay {}", planned.id),
+                        report,
+                    )
+                })?
         };
     }
     let Some(source_deck) = selected_source_deck else {
-        return Err(format!(
+        return Err((format!(
             "target {} does not include translation overlay {}",
             context.selection.target_id, context.selection.overlay_id
-        ));
+        ))
+        .into());
     };
     let Some(report) = selected_report else {
-        return Err(format!(
+        return Err((format!(
             "overlay {} is not a translation overlay",
             context.selection.overlay_id
-        ));
+        ))
+        .into());
     };
     Ok(SelectedTranslationContext {
         selection: context.selection.clone(),
@@ -5009,7 +5131,7 @@ fn file_fingerprints(
     manifest_path: &Path,
     root: &Path,
     _manifest: &FederatedDeckManifest,
-) -> Result<Vec<Value>, String> {
+) -> WorkbenchCoreResult<Vec<Value>> {
     let registry = ManifestRegistry::load(manifest_path, &[], &[])?;
     let mut entries = Vec::new();
     for loaded in registry.manifests() {
@@ -5042,7 +5164,7 @@ fn authorized_manifest_source_files(
     manifest_path: &Path,
     _root: &Path,
     _manifest: &FederatedDeckManifest,
-) -> Result<Vec<PathBuf>, String> {
+) -> WorkbenchCoreResult<Vec<PathBuf>> {
     let registry = ManifestRegistry::load(manifest_path, &[], &[])?;
     let mut files = registry
         .manifests()
@@ -5066,7 +5188,7 @@ fn file_fingerprint(
     package: Option<&str>,
     package_root: &Path,
     source_kind: &str,
-) -> Result<Value, String> {
+) -> WorkbenchCoreResult<Value> {
     let bytes = fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
     let hash = Sha256::digest(&bytes);
     Ok(json!({

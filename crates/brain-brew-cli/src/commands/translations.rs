@@ -1054,10 +1054,11 @@ fn collect_translation_reports(
             } else {
                 current = current
                     .compose(std::slice::from_ref(overlay))
-                    .map_err(|error| {
-                        format!(
-                            "failed to compose overlay {} for target {target}: {error}",
-                            planned.id
+                    .map_err(|report| {
+                        output::compose_error(
+                            "translations",
+                            json!({"target": target, "overlay": planned.id}),
+                            &report,
                         )
                     })?;
             }
@@ -2756,10 +2757,11 @@ fn validate_final_translation_composition(
             } else {
                 current = current
                     .compose(std::slice::from_ref(overlay))
-                    .map_err(|error| {
-                        format!(
-                            "failed to validate final translation composition for target {target} at overlay {}: {error}",
-                            planned.id
+                    .map_err(|report| {
+                        output::compose_error(
+                            "translations",
+                            json!({"target": target, "overlay": planned.id}),
+                            &report,
                         )
                     })?;
             }

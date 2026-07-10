@@ -1,5 +1,4 @@
-use brain_brew_core::ComposePrecondition;
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::args::{parse_manifest_target_args, split_json_flag};
 use crate::output::{self, one_line, package_json, semantic_kind_name};
@@ -144,67 +143,17 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             }
             Ok(())
         }
-        Err(report) => {
-            if json_output {
-                let errors = report
-                    .errors
-                    .iter()
-                    .map(|error| {
-                        json!({
-                            "kind": format!("{:?}", error.kind),
-                            "code": error.kind.code(),
-                            "category": error.kind.category().as_str(),
-                            "path": error.path,
-                            "deck_path": error.deck_path.as_ref().map(ToString::to_string),
-                            "entity_kind": error.entity_kind.map(|kind| kind.as_str()),
-                            "intent": error.intent.map(|intent| intent.as_str()),
-                            "overlay": error.overlay_id.as_ref().map(ToString::to_string),
-                            "expected": error.expected.as_ref().map(precondition_json),
-                            "actual": error.actual.as_ref().map(precondition_json),
-                            "original_removal": error.original_removal.as_ref().map(|record| json!({
-                                "kind": record.address.kind(),
-                                "path": record.address.to_string(),
-                                "overlay": record.provenance.as_ref().map(|value| value.overlay_id.to_string()),
-                                "operation": record.provenance.as_ref().map(|value| value.operation.as_str()),
-                            })),
-                            "message": error.message,
-                        })
-                    })
-                    .collect::<Vec<_>>();
-                output::print_json_error_value(json!({
-                    "message": "target composition failed",
-                    "errors": errors,
-                    "package": plan.package.as_ref().map(package_json),
-                    "target": plan.target,
-                    "qualified_name": plan.qualified_name,
-                    "owner": plan.owner.as_ref().map(|package| json!({
-                        "id": package.id,
-                        "version": package.version,
-                    })),
-                    "target_expansion": target_expansion,
-                    "base": plan.base_label,
-                    "overlay_stack": overlay_stack,
-                }));
-                Err(output::JSON_ERROR_ALREADY_PRINTED.to_owned())
-            } else {
-                for error in report.errors {
-                    eprintln!("{:?} {}: {}", error.kind, error.path, error.message);
-                }
-                Err("target composition failed".to_owned())
-            }
-        }
-    }
-}
-
-fn precondition_json(value: &ComposePrecondition) -> Value {
-    match value {
-        ComposePrecondition::Fingerprint(fingerprint) => {
-            json!({"kind": "entity_fingerprint", "value": fingerprint.to_string()})
-        }
-        ComposePrecondition::Value(value) => json!({"kind": "value", "value": value}),
-        ComposePrecondition::FieldValue(value) => {
-            json!({"kind": "field_value", "value": format!("{value:?}")})
-        }
-        ComposePrecondition::Missing => json!({"kind": "missing"}),
+        Err(report) => Err(output::compose_error(
+            "explain",
+            json!({
+                "package": plan.package.as_ref().map(package_json),
+                "target": plan.target,
+                "qualified_name": plan.qualified_name,
+                "target_expansion": target_expansion,
+                "base": plan.base_label,
+                "overlay_stack": overlay_stack,
+            }),
+            &report,
+        )),
     }
 }

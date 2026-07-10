@@ -97,8 +97,20 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                 .unwrap_or_default()
         });
         verify_translation_coverage_policy(&plan, policy, &mut warnings)?;
-        let deck = plan.compose()?;
-        deck.validate().map_err(|error| error.to_string())?;
+        let deck = plan.compose().map_err(|report| {
+            output::compose_error(
+                "verify",
+                serde_json::json!({"target": target, "manifest": verify_args.manifest_path}),
+                &report,
+            )
+        })?;
+        deck.validate().map_err(|report| {
+            output::validation_error(
+                "verify",
+                serde_json::json!({"target": target, "manifest": verify_args.manifest_path}),
+                &report,
+            )
+        })?;
         let result = verify_owned_media(&plan, &deck, &media_roots, verify_args.media_mode, false)?;
         warnings.extend(
             result
@@ -287,12 +299,15 @@ fn verify_translation_coverage_policy(
                 warnings.push(message);
             }
         }
-        current = current.compose(std::slice::from_ref(overlay)).map_err(|error| {
-            format!(
-                "failed to compose overlay {} for target {} while checking translation coverage: {error}",
-                planned.id, plan.target
-            )
-        })?;
+        current = current
+            .compose(std::slice::from_ref(overlay))
+            .map_err(|report| {
+                output::compose_error(
+                    "verify",
+                    serde_json::json!({"target": plan.target, "overlay": planned.id}),
+                    &report,
+                )
+            })?;
     }
     Ok(())
 }
@@ -345,12 +360,15 @@ fn stale_translation_warning_messages(plan: &TargetPlan) -> Result<Vec<String>, 
         ) {
             messages.push(message);
         }
-        current = current.compose(std::slice::from_ref(overlay)).map_err(|error| {
-            format!(
-                "failed to compose overlay {} for target {} while checking stale translations: {error}",
-                planned.id, plan.target
-            )
-        })?;
+        current = current
+            .compose(std::slice::from_ref(overlay))
+            .map_err(|report| {
+                output::compose_error(
+                    "composition",
+                    serde_json::json!({"target": plan.target, "overlay": planned.id}),
+                    &report,
+                )
+            })?;
     }
     Ok(messages)
 }
@@ -376,10 +394,11 @@ fn stale_translation_warning_messages_for_overlays(
         }
         current = current
             .compose(std::slice::from_ref(overlay))
-            .map_err(|error| {
-                format!(
-                    "failed to compose overlay {} while checking stale translations: {error}",
-                    overlay.id
+            .map_err(|report| {
+                output::compose_error(
+                    "composition",
+                    serde_json::json!({"target": target, "overlay": overlay.id.as_str()}),
+                    &report,
                 )
             })?;
     }

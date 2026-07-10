@@ -324,8 +324,11 @@ fn targets_stdout_stderr_contract_covers_human_and_json_success_and_error() {
     ]);
     assert_json_error(&malformed_error, "manifest YAML");
     let json: serde_json::Value = serde_json::from_slice(&malformed_error.stdout).unwrap();
-    assert_eq!(json["error"]["source"], malformed.display().to_string());
-    assert_eq!(json["error"]["path"], "base");
+    assert_eq!(json["error"]["code"], "adapter_error");
+    assert_eq!(json["error"]["category"], "adapter");
+    assert_eq!(json["error"]["source"], serde_json::Value::Null);
+    assert_eq!(json["error"]["path"], serde_json::Value::Null);
+    assert!(json["error"]["diagnostics"].as_array().unwrap().is_empty());
 }
 
 #[test]

@@ -4,6 +4,19 @@ pub(crate) fn compose_lenient_translation_overlay(
     current: &CanonicalDeck,
     overlay: &Overlay,
 ) -> Result<CanonicalDeck, String> {
+    let sanitized = sanitize_lenient_translation_overlay(current, overlay)?;
+    current.compose(&[sanitized]).map_err(|error| {
+        format!(
+            "failed to compose translation overlay {}: {error}",
+            overlay.id
+        )
+    })
+}
+
+pub(crate) fn sanitize_lenient_translation_overlay(
+    current: &CanonicalDeck,
+    overlay: &Overlay,
+) -> Result<Overlay, String> {
     let mut sanitized = overlay.clone();
     if let Some(translations) = &mut sanitized.translations {
         translations.require_complete = false;
@@ -57,10 +70,5 @@ pub(crate) fn compose_lenient_translation_overlay(
             }
         }
     }
-    current.compose(&[sanitized]).map_err(|error| {
-        format!(
-            "failed to compose translation overlay {}: {error}",
-            overlay.id
-        )
-    })
+    Ok(sanitized)
 }
