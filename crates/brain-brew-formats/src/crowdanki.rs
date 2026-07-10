@@ -8,6 +8,8 @@ use brain_brew_core::{
     VariableRenderReport,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use unicode_normalization::UnicodeNormalization;
 
 /// Normalized CrowdAnki export artifacts and adapter report data.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -277,7 +279,8 @@ fn normalize_projected_stable_ids(deck: &mut CanonicalDeck) -> Result<(), CrowdA
     }
     deck.note_types = normalized_note_types;
 
-    let mut normalized_notes = BTreeMap::new();
+    let mut normalized_note_values = Vec::new();
+    let mut note_identities = Vec::new();
     for (_old_note_id, mut note) in std::mem::take(&mut deck.notes) {
         let old_note_type_id = note.note_type_id.clone();
         let new_note_type_id = note_type_ids.get(&old_note_type_id).ok_or_else(|| {
@@ -316,13 +319,26 @@ fn normalize_projected_stable_ids(deck: &mut CanonicalDeck) -> Result<(), CrowdA
             .first()
             .and_then(|field| note.fields.get(&field.id))
             .and_then(FieldValue::as_scalar)
-            .unwrap_or_else(|| {
-                note.adapter_ids
-                    .get("crowdanki:guid")
-                    .expect("exported notes always have a first field or effective GUID")
-            });
-        note.id = prefixed_stable_id("note", first_field)?;
-        if normalized_notes.insert(note.id.clone(), note).is_some() {
+            .unwrap_or_default()
+            .to_owned();
+        let source_guid = note
+            .adapter_ids
+            .get("crowdanki:guid")
+            .expect("exported notes have an effective GUID")
+            .to_owned();
+        note_identities.push(ImportedNoteIdentity {
+            first_field,
+            source_guid,
+        });
+        normalized_note_values.push(note);
+    }
+    let mut normalized_notes = BTreeMap::new();
+    for (mut note, id) in normalized_note_values
+        .into_iter()
+        .zip(suggest_imported_note_stable_ids(&note_identities)?)
+    {
+        note.id = id.clone();
+        if normalized_notes.insert(id, note).is_some() {
             return Err(CrowdAnkiError::Unsupported(format!(
                 "{} profile generated duplicate note stable ID",
                 CROWDANKI_ROUND_TRIP_PROFILE.name
@@ -1203,22 +1219,21 @@ impl CrowdAnkiDeckJson {
             note_types.insert(id, note_type);
         }
 
-        let mut note_sources: BTreeMap<StableId, CrowdAnkiNoteSource> = BTreeMap::new();
+        let note_identities = self
+            .notes
+            .iter()
+            .map(CrowdAnkiNoteSource::from_note_json)
+            .map(CrowdAnkiNoteSource::identity)
+            .collect::<Vec<_>>();
+        let suggested_note_ids = suggest_imported_note_stable_ids(&note_identities)?;
         let mut notes: BTreeMap<StableId, Note> = BTreeMap::new();
-        for note_json in self.notes {
-            let source = CrowdAnkiNoteSource::from_note_json(&note_json);
-            let (id, note) = note_json.into_note(&note_types, &note_type_by_uuid)?;
-            if let Some(existing) = note_sources.get(&id) {
+        for (note_json, id) in self.notes.into_iter().zip(suggested_note_ids) {
+            let note = note_json.into_note(&note_types, &note_type_by_uuid, id.clone())?;
+            if notes.insert(id.clone(), note).is_some() {
                 return Err(CrowdAnkiError::Unsupported(format!(
-                    "CrowdAnki notes {} and {} both derive suggested stable ID {}; {}",
-                    existing.describe(),
-                    source.describe(),
-                    id,
-                    suggested_id_collision_resolution()
+                    "CrowdAnki imported-note identity algorithm generated duplicate stable ID {id}"
                 )));
             }
-            note_sources.insert(id.clone(), source);
-            notes.insert(id, note);
         }
 
         let ambiguous_media_file_paths = duplicate_paths(&self.media_files);
@@ -1462,20 +1477,122 @@ impl CrowdAnkiNoteSource {
     fn from_note_json(note: &CrowdAnkiNoteJson) -> Self {
         Self {
             guid: note.guid.clone(),
-            first_field: note
-                .fields
-                .first()
-                .cloned()
-                .unwrap_or_else(|| note.guid.clone()),
+            first_field: note.fields.first().cloned().unwrap_or_default(),
         }
     }
 
-    fn describe(&self) -> String {
-        format!(
-            "guid {:?} with first field {:?}",
-            self.guid, self.first_field
-        )
+    fn identity(self) -> ImportedNoteIdentity {
+        ImportedNoteIdentity {
+            first_field: self.first_field,
+            source_guid: self.guid,
+        }
     }
+}
+
+/// The CrowdAnki-visible source identity used when suggesting an imported note ID.
+///
+/// `source_guid` is preserved separately as `crowdanki:guid`; it only makes a suggested
+/// canonical ID collision-resistant and never replaces the adapter identity.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ImportedNoteIdentity {
+    pub first_field: String,
+    pub source_guid: String,
+}
+
+/// Suggest canonical note IDs from CrowdAnki-visible note identity.
+///
+/// The algorithm NFC-normalizes first-field text, uses an ASCII-only readable slug when one
+/// exists, and otherwise uses `note.imported`. A 48-bit SHA-256 prefix of the normalized first
+/// field and source GUID disambiguates every fallback or repeated slug. If that prefix collides
+/// within a group, it deterministically expands by four hexadecimal characters through the full
+/// 256-bit digest, then appends an ordinal sorted by normalized text and GUID. Consequently input
+/// order, locale, and hash-map iteration cannot affect suggestions.
+pub fn suggest_imported_note_stable_ids(
+    identities: &[ImportedNoteIdentity],
+) -> Result<Vec<StableId>, CrowdAnkiError> {
+    let mut seen_guids = BTreeSet::new();
+    let normalized = identities
+        .iter()
+        .map(|identity| {
+            if identity.source_guid.is_empty() {
+                return Err(CrowdAnkiError::Unsupported(
+                    "CrowdAnki note has an empty guid; imported note identity requires a source GUID"
+                        .to_owned(),
+                ));
+            }
+            if !seen_guids.insert(identity.source_guid.as_str()) {
+                return Err(CrowdAnkiError::Unsupported(format!(
+                    "CrowdAnki notes share guid {:?}; source GUIDs must be unique",
+                    identity.source_guid
+                )));
+            }
+            Ok((
+                identity.first_field.nfc().collect::<String>(),
+                identity.source_guid.as_str(),
+            ))
+        })
+        .collect::<Result<Vec<_>, CrowdAnkiError>>()?;
+
+    let mut groups = BTreeMap::<String, Vec<usize>>::new();
+    for (index, (first_field, _)) in normalized.iter().enumerate() {
+        let slug = ascii_slug(first_field);
+        let base = if slug.is_empty() {
+            "note.imported".to_owned()
+        } else {
+            format!("note.{slug}")
+        };
+        groups.entry(base).or_default().push(index);
+    }
+
+    let mut suggestions = vec![None; identities.len()];
+    for (base, indexes) in groups {
+        let needs_suffix = indexes.len() > 1 || base == "note.imported";
+        if !needs_suffix {
+            suggestions[indexes[0]] = Some(stable_id(&base)?);
+            continue;
+        }
+
+        let digests = indexes
+            .iter()
+            .map(|&index| {
+                let (first_field, guid) = &normalized[index];
+                (index, note_identity_digest(first_field, guid))
+            })
+            .collect::<Vec<_>>();
+        let digest_length = (12..=64)
+            .step_by(4)
+            .find(|&length| {
+                let mut prefixes = BTreeSet::new();
+                digests
+                    .iter()
+                    .all(|(_, digest)| prefixes.insert(&digest[..length]))
+            })
+            .unwrap_or(64);
+
+        let mut equal_digests = BTreeMap::<String, Vec<usize>>::new();
+        for (index, digest) in digests {
+            equal_digests
+                .entry(digest[..digest_length].to_owned())
+                .or_default()
+                .push(index);
+        }
+        for (digest, mut equal_indexes) in equal_digests {
+            equal_indexes.sort_by_key(|&index| normalized[index].clone());
+            for (ordinal, index) in equal_indexes.into_iter().enumerate() {
+                let suffix = if ordinal == 0 {
+                    digest.clone()
+                } else {
+                    format!("{digest}-{}", ordinal + 1)
+                };
+                suggestions[index] = Some(stable_id(&format!("{base}-{suffix}"))?);
+            }
+        }
+    }
+
+    Ok(suggestions
+        .into_iter()
+        .map(|suggestion| suggestion.expect("every identity suggestion group was populated"))
+        .collect())
 }
 
 impl CrowdAnkiNoteJson {
@@ -1483,7 +1600,8 @@ impl CrowdAnkiNoteJson {
         self,
         note_types: &BTreeMap<StableId, NoteType>,
         note_type_by_uuid: &BTreeMap<String, StableId>,
-    ) -> Result<(StableId, Note), CrowdAnkiError> {
+        id: StableId,
+    ) -> Result<Note, CrowdAnkiError> {
         if self.type_ != "Note" {
             return Err(CrowdAnkiError::Unsupported(format!(
                 "expected note __type__ Note, found {}",
@@ -1518,12 +1636,6 @@ impl CrowdAnkiNoteJson {
             )));
         }
 
-        let first_field = self
-            .fields
-            .first()
-            .map(String::as_str)
-            .unwrap_or(&self.guid);
-        let id = prefixed_stable_id("note", first_field)?;
         let fields = note_type
             .fields
             .iter()
@@ -1533,22 +1645,19 @@ impl CrowdAnkiNoteJson {
         let mut adapter_ids = AdapterIds::new();
         adapter_ids.insert("crowdanki:guid", self.guid);
 
-        Ok((
-            id.clone(),
-            Note {
-                id,
-                note_type_id,
-                variables: BTreeMap::new(),
-                fields,
-                tags: self.tags.into_iter().collect(),
-                adapter_ids,
-            },
-        ))
+        Ok(Note {
+            id,
+            note_type_id,
+            variables: BTreeMap::new(),
+            fields,
+            tags: self.tags.into_iter().collect(),
+            adapter_ids,
+        })
     }
 }
 
 fn suggested_id_collision_resolution() -> &'static str {
-    "resolve by correcting the suggested-ID override path before calling import_deck_accept_suggested_ids"
+    "automatic disambiguation applies only to imported notes; this import API has no suggested-ID override input"
 }
 
 fn reverse_map_strict_image_fields(
@@ -1617,17 +1726,25 @@ fn duplicate_paths(paths: &[String]) -> BTreeSet<String> {
 }
 
 fn prefixed_stable_id(prefix: &str, source: &str) -> Result<StableId, CrowdAnkiError> {
-    let slug = slugify(source);
-    let id = format!("{prefix}.{slug}");
-    StableId::new(&id).map_err(|_| CrowdAnkiError::StableId(id))
+    let normalized = source.nfc().collect::<String>();
+    let slug = ascii_slug(&normalized);
+    let suffix = if slug.is_empty() {
+        format!(
+            "imported-{}",
+            text_identity_digest(prefix, &normalized)[..12].to_owned()
+        )
+    } else {
+        slug
+    };
+    stable_id(&format!("{prefix}.{suffix}"))
 }
 
-fn slugify(source: &str) -> String {
+fn ascii_slug(source: &str) -> String {
     let mut slug = String::new();
     let mut last_was_separator = false;
-    for ch in source.chars().flat_map(char::to_lowercase) {
+    for ch in source.chars() {
         if ch.is_ascii_alphanumeric() {
-            slug.push(ch);
+            slug.push(ch.to_ascii_lowercase());
             last_was_separator = false;
         } else if !last_was_separator && !slug.is_empty() {
             slug.push('-');
@@ -1637,9 +1754,30 @@ fn slugify(source: &str) -> String {
     while slug.ends_with('-') {
         slug.pop();
     }
-    if slug.is_empty() {
-        "unnamed".to_owned()
-    } else {
-        slug
-    }
+    slug
+}
+
+fn note_identity_digest(first_field: &str, source_guid: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"brain-brew/crowdanki/imported-note-id/v1\0");
+    hash_text_part(&mut hasher, first_field);
+    hash_text_part(&mut hasher, source_guid);
+    format!("{:x}", hasher.finalize())
+}
+
+fn text_identity_digest(prefix: &str, normalized_source: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"brain-brew/crowdanki/imported-text-id/v1\0");
+    hash_text_part(&mut hasher, prefix);
+    hash_text_part(&mut hasher, normalized_source);
+    format!("{:x}", hasher.finalize())
+}
+
+fn hash_text_part(hasher: &mut Sha256, text: &str) {
+    hasher.update((text.len() as u64).to_be_bytes());
+    hasher.update(text.as_bytes());
+}
+
+fn stable_id(value: &str) -> Result<StableId, CrowdAnkiError> {
+    StableId::new(value).map_err(|_| CrowdAnkiError::StableId(value.to_owned()))
 }

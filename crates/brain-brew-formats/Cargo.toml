@@ -18,6 +18,7 @@ serde_json = "1"
 serde_path_to_error = "0.1"
 serde_yaml = "0.9"
 sha2 = "0.10"
+unicode-normalization.workspace = true
 
 [lints]
 workspace = true

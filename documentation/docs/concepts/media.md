@@ -57,7 +57,7 @@ The command writes missing or stale SHA-256 values into deck or overlay source Y
 
 ## CrowdAnki import
 
-CrowdAnki import suggests stable media IDs from media file paths. If two different media paths would derive the same suggested stable ID, import fails closed and names both paths so the ambiguity can be resolved before accepting suggested IDs. Exact duplicate paths are deduplicated instead of treated as a collision. Use `import_deck_accept_suggested_ids`/`brainbrew import crowdanki --accept-suggested-ids` only after reviewing those suggested IDs.
+CrowdAnki import suggests stable media IDs from media file paths. If two different media paths would derive the same suggested stable ID, import fails closed and names both paths. Exact duplicate paths are deduplicated instead of treated as a collision. The current API has no suggested-ID override input, so resolve such a media collision in the CrowdAnki source before importing. `import_deck_accept_suggested_ids`/`brainbrew import crowdanki --accept-suggested-ids` automatically disambiguates imported **note** IDs; see [Import CrowdAnki](../authoring/importing-crowdanki.md) for that separate contract.
 
 ## Export media
 

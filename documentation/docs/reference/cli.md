@@ -121,7 +121,7 @@ brainbrew import crowdanki build/crowdanki/en-standard --accept-suggested-ids --
 brainbrew import crowdanki build/crowdanki/en-standard --accept-suggested-ids --force --out deck.yaml
 ```
 
-Imports a CrowdAnki folder into typed, canonical Deck YAML. By default import creates a new output and refuses an existing file, directory, or symlink. `--force` may replace an existing regular file; Brain Brew fingerprints and backs up that file and commits the replacement through one recoverable workspace transaction. Import writes a complete deck file and re-inlines the `media:` block; it does not preserve a previously hoisted `media: !include ...` source layout.
+Imports a CrowdAnki folder into typed, canonical Deck YAML. `--accept-suggested-ids` accepts the current deterministic automatic suggestions; no suggested-ID override file or selective override argument exists. Imported note suggestions NFC-normalize the first field, keep a unique ASCII-readable `note.<slug>`, and otherwise use a GUID-assisted SHA-256 suffix for repeated, blank, or non-Latin first fields. The original CrowdAnki GUID remains independently stored as `crowdanki:guid`. See [Import CrowdAnki](../authoring/importing-crowdanki.md) for the exact suffix, normalization, and collision contract. By default import creates a new output and refuses an existing file, directory, or symlink. `--force` may replace an existing regular file; Brain Brew fingerprints and backs up that file and commits the replacement through one recoverable workspace transaction. Import writes a complete deck file and re-inlines the `media:` block; it does not preserve a previously hoisted `media: !include ...` source layout.
 
 ## `diff`
 

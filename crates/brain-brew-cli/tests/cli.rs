@@ -6585,6 +6585,48 @@ fn import_force_backup_interruption_is_recovered_before_retry() {
 }
 
 #[test]
+fn import_crowdanki_cli_accepts_unicode_first_fields_without_losing_source_guid() {
+    let dir = temp_dir("crowdanki-unicode-import");
+    let export_dir = dir.join("crowdanki");
+    let imported_path = dir.join("imported.yaml");
+    fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML).unwrap();
+    let export = run([
+        "export",
+        "crowdanki",
+        dir.join("deck.yaml").to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
+        "--out",
+        export_dir.to_str().unwrap(),
+    ]);
+    assert!(export.status.success(), "stderr: {}", stderr(&export));
+
+    let deck_json_path = export_dir.join("deck.json");
+    let mut deck_json: serde_json::Value =
+        serde_json::from_slice(&fs::read(&deck_json_path).unwrap()).unwrap();
+    deck_json["notes"][0]["fields"][0] = serde_json::json!("Москва");
+    fs::write(
+        &deck_json_path,
+        serde_json::to_vec_pretty(&deck_json).unwrap(),
+    )
+    .unwrap();
+
+    let imported = run([
+        "import",
+        "crowdanki",
+        export_dir.to_str().unwrap(),
+        "--accept-suggested-ids",
+        "--out",
+        imported_path.to_str().unwrap(),
+    ]);
+    assert!(imported.status.success(), "stderr: {}", stderr(&imported));
+    let yaml = fs::read_to_string(imported_path).unwrap();
+    assert!(yaml.contains("note.imported-"), "{yaml}");
+    assert!(yaml.contains("crowdanki:guid: ug-finland-guid"), "{yaml}");
+    assert!(!yaml.contains("note.unnamed"), "{yaml}");
+}
+
+#[test]
 fn export_and_import_crowdanki_deck_folder() {
     let dir = temp_dir("crowdanki-roundtrip");
     let deck_path = dir.join("deck.yaml");

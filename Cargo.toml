@@ -21,6 +21,7 @@ brain-brew-core = { path = "crates/brain-brew-core", version = "=1.0.0-alpha.1" 
 brain-brew-formats = { path = "crates/brain-brew-formats", version = "=1.0.0-alpha.1" }
 semver = "1"
 sha2 = "0.10"
+unicode-normalization = "0.1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

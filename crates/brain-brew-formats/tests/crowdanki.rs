@@ -318,7 +318,136 @@ fn import_preserves_crowdanki_adapter_identities() {
 }
 
 #[test]
-fn importing_notes_with_colliding_suggested_stable_ids_fails_closed() {
+fn imported_note_id_suggestions_are_unicode_safe_normalized_and_order_independent() {
+    let identities = vec![
+        crowdanki::ImportedNoteIdentity {
+            first_field: "Москва".to_owned(),
+            source_guid: "guid-cyrillic".to_owned(),
+        },
+        crowdanki::ImportedNoteIdentity {
+            first_field: "日本".to_owned(),
+            source_guid: "guid-cjk".to_owned(),
+        },
+        crowdanki::ImportedNoteIdentity {
+            first_field: "العَرَبِيَّة".to_owned(),
+            source_guid: "guid-rtl".to_owned(),
+        },
+        crowdanki::ImportedNoteIdentity {
+            first_field: "Finland".to_owned(),
+            source_guid: "guid-finland-a".to_owned(),
+        },
+        crowdanki::ImportedNoteIdentity {
+            first_field: "Finland".to_owned(),
+            source_guid: "guid-finland-b".to_owned(),
+        },
+        crowdanki::ImportedNoteIdentity {
+            first_field: "".to_owned(),
+            source_guid: "guid-blank".to_owned(),
+        },
+    ];
+
+    let suggestions = crowdanki::suggest_imported_note_stable_ids(&identities)
+        .expect("unique CrowdAnki GUIDs produce suggestions");
+    assert!(suggestions.iter().all(|id| id.as_str() != "note.unnamed"));
+    assert!(suggestions[0].as_str().starts_with("note.imported-"));
+    assert!(suggestions[1].as_str().starts_with("note.imported-"));
+    assert!(suggestions[2].as_str().starts_with("note.imported-"));
+    assert!(suggestions[3].as_str().starts_with("note.finland-"));
+    assert!(suggestions[4].as_str().starts_with("note.finland-"));
+    assert!(suggestions[5].as_str().starts_with("note.imported-"));
+    assert_ne!(suggestions[3], suggestions[4]);
+
+    let original_by_guid = identities
+        .iter()
+        .zip(&suggestions)
+        .map(|(identity, id)| (identity.source_guid.clone(), id.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let mut reversed = identities.clone();
+    reversed.reverse();
+    let reversed_by_guid = reversed
+        .iter()
+        .zip(
+            crowdanki::suggest_imported_note_stable_ids(&reversed)
+                .expect("permuted identities produce suggestions"),
+        )
+        .map(|(identity, id)| (identity.source_guid.clone(), id))
+        .collect::<BTreeMap<_, _>>();
+    assert_eq!(original_by_guid, reversed_by_guid);
+
+    let composed =
+        crowdanki::suggest_imported_note_stable_ids(&[crowdanki::ImportedNoteIdentity {
+            first_field: "Café".to_owned(),
+            source_guid: "guid-normalized".to_owned(),
+        }])
+        .unwrap();
+    let decomposed =
+        crowdanki::suggest_imported_note_stable_ids(&[crowdanki::ImportedNoteIdentity {
+            first_field: "Cafe\u{301}".to_owned(),
+            source_guid: "guid-normalized".to_owned(),
+        }])
+        .unwrap();
+    assert_eq!(composed, decomposed, "suggestions use NFC normalization");
+
+    let duplicate_guid = crowdanki::suggest_imported_note_stable_ids(&[
+        crowdanki::ImportedNoteIdentity {
+            first_field: "One".to_owned(),
+            source_guid: "duplicate-guid".to_owned(),
+        },
+        crowdanki::ImportedNoteIdentity {
+            first_field: "Two".to_owned(),
+            source_guid: "duplicate-guid".to_owned(),
+        },
+    ])
+    .expect_err("source GUIDs are adapter identities and must remain unique");
+    assert!(duplicate_guid.to_string().contains("share guid"));
+}
+
+#[test]
+fn importing_notes_with_repeated_first_fields_disambiguates_and_preserves_guids() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["notes"] = serde_json::json!([
+        {
+            "__type__": "Note", "data": "", "fields": ["Repeated", "One", ""],
+            "flags": 0, "guid": "repeated-guid-a",
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "tags": []
+        },
+        {
+            "__type__": "Note", "data": "", "fields": ["Repeated", "Two", ""],
+            "flags": 0, "guid": "repeated-guid-b",
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "tags": []
+        },
+        {
+            "__type__": "Note", "data": "", "fields": ["", "Blank", ""],
+            "flags": 0, "guid": "blank-guid",
+            "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "tags": []
+        }
+    ]);
+
+    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect("repeated and blank first fields are disambiguated");
+    assert_eq!(imported.notes.len(), 3);
+    assert!(
+        imported
+            .notes
+            .keys()
+            .all(|id| id.as_str() != "note.unnamed")
+    );
+    assert_eq!(
+        imported
+            .notes
+            .values()
+            .map(|note| note.adapter_ids.get("crowdanki:guid").unwrap().to_owned())
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([
+            "blank-guid".to_owned(),
+            "repeated-guid-a".to_owned(),
+            "repeated-guid-b".to_owned(),
+        ])
+    );
+}
+
+#[test]
+fn importing_notes_with_colliding_suggested_stable_ids_disambiguates() {
     let mut deck_json = expected_crowdanki_json_value();
     deck_json["notes"]
         .as_array_mut()
@@ -337,18 +466,22 @@ fn importing_notes_with_colliding_suggested_stable_ids_fails_closed() {
             "tags": ["duplicate"]
         }));
 
-    let error = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
-        .expect_err("colliding note stable IDs fail closed");
-    let message = error.to_string();
-
-    assert!(message.contains("note.finland"), "{message}");
-    assert!(message.contains("ug-finland-guid"), "{message}");
-    assert!(message.contains("Finland"), "{message}");
-    assert!(message.contains("ug-finland-duplicate-guid"), "{message}");
-    assert!(message.contains("Finland!"), "{message}");
+    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect("colliding readable note IDs are disambiguated");
+    assert_eq!(imported.notes.len(), 2);
     assert!(
-        message.contains("import_deck_accept_suggested_ids"),
-        "{message}"
+        imported
+            .notes
+            .keys()
+            .all(|id| id.as_str().starts_with("note.finland-"))
+    );
+    assert_eq!(
+        imported
+            .notes
+            .values()
+            .map(|note| note.adapter_ids.get("crowdanki:guid").unwrap())
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from(["ug-finland-guid", "ug-finland-duplicate-guid"])
     );
 }
 
@@ -370,10 +503,7 @@ fn importing_note_models_with_colliding_suggested_stable_ids_fails_closed() {
     assert!(message.contains("note-type.country"), "{message}");
     assert!(message.contains("Country"), "{message}");
     assert!(message.contains("Country!"), "{message}");
-    assert!(
-        message.contains("import_deck_accept_suggested_ids"),
-        "{message}"
-    );
+    assert!(message.contains("automatic disambiguation"), "{message}");
 }
 
 #[test]
@@ -397,10 +527,7 @@ fn importing_note_models_with_duplicate_crowdanki_uuid_fails_closed() {
     );
     assert!(message.contains("Country"), "{message}");
     assert!(message.contains("Country Duplicate UUID"), "{message}");
-    assert!(
-        message.contains("import_deck_accept_suggested_ids"),
-        "{message}"
-    );
+    assert!(message.contains("automatic disambiguation"), "{message}");
 }
 
 #[test]
@@ -413,10 +540,7 @@ fn importing_media_files_with_colliding_suggested_stable_ids_fails_closed() {
     assert!(message.contains("media.foo-bar-png"), "{message}");
     assert!(message.contains("foo/bar.png"), "{message}");
     assert!(message.contains("foo_bar.png"), "{message}");
-    assert!(
-        message.contains("import_deck_accept_suggested_ids"),
-        "{message}"
-    );
+    assert!(message.contains("automatic disambiguation"), "{message}");
 }
 
 #[test]
