@@ -53,6 +53,7 @@ const sidebars = {
         'reference/yaml',
         'reference/cli',
         'reference/workbench',
+        'reference/workspace-transactions',
         'reference/lockfile',
         'reference/release-oracle',
         'reference/releasing',

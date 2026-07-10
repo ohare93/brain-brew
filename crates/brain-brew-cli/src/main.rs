@@ -11,6 +11,7 @@ mod media_assets;
 mod output;
 mod overlay_draft;
 mod package_resolver;
+mod workspace_transaction;
 
 fn main() {
     let args = env::args().skip(1).collect::<Vec<_>>();
