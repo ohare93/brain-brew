@@ -181,6 +181,7 @@ fn ultimate_geography_fixture_manifest_composes_all_targets() {
             .unwrap_or_else(|error| panic!("{target} validates: {error}"));
         media::validate_references(&deck)
             .unwrap_or_else(|error| panic!("{target} media references validate: {error}"));
+        assert_crowdanki_round_trip_profile(&deck, target);
     }
 }
 
@@ -357,6 +358,7 @@ fn ultimate_geography_hardcore_companion_manifest_composes_all_targets() {
             .unwrap_or_else(|error| panic!("{target} validates: {error}"));
         media::validate_references(&deck)
             .unwrap_or_else(|error| panic!("{target} media references validate: {error}"));
+        assert_crowdanki_round_trip_profile(&deck, target);
     }
 
     let english = compose_target(&root, &manifest, "en-hardcore-companion-standard");
@@ -570,7 +572,20 @@ fn ultimate_geography_fixture_exports_match_release_oracle_semantics_when_availa
         )
         .unwrap();
 
-        assert_crowdanki_semantic_subset_eq(&old, &new, target);
+        let old_deck = crowdanki::import_deck_accept_suggested_ids(&old.to_string())
+            .unwrap_or_else(|error| panic!("{target} release oracle imports: {error}"));
+        let new_deck = crowdanki::import_deck_accept_suggested_ids(&new.to_string())
+            .unwrap_or_else(|error| panic!("{target} generated export imports: {error}"));
+        let old_projection = crowdanki::project_deck_for_crowdanki_round_trip(&old_deck)
+            .unwrap_or_else(|error| panic!("{target} release oracle projects: {error}"));
+        let new_projection = crowdanki::project_deck_for_crowdanki_round_trip(&new_deck)
+            .unwrap_or_else(|error| panic!("{target} generated export projects: {error}"));
+        let diff = old_projection.semantic_diff(&new_projection);
+        assert!(
+            diff.is_empty(),
+            "{target} {} mismatch: {diff:#?}",
+            crowdanki::CROWDANKI_ROUND_TRIP_PROFILE.name
+        );
     }
 }
 
@@ -1535,6 +1550,42 @@ fn exported_json(deck: &CanonicalDeck) -> serde_json::Value {
     serde_json::from_str(&export.deck_json).expect("CrowdAnki export is JSON")
 }
 
+fn assert_crowdanki_round_trip_profile(deck: &CanonicalDeck, target: &str) {
+    let export = crowdanki::export_deck(deck)
+        .unwrap_or_else(|error| panic!("{target} exports for round-trip parity: {error}"));
+    let imported = match crowdanki::import_deck_accept_suggested_ids(&export.deck_json) {
+        Ok(imported) => imported,
+        Err(error)
+            if error
+                .to_string()
+                .contains("both derive suggested stable ID") =>
+        {
+            assert!(
+                crowdanki::CROWDANKI_ROUND_TRIP_PROFILE.losses.contains(
+                    &crowdanki::CrowdAnkiRoundTripLoss::StableIdsAreRegeneratedFromAdapterContent
+                ),
+                "{target} collision must be an explicitly declared profile loss"
+            );
+            eprintln!(
+                "{target}: explicit {} stable-ID loss: {error}",
+                crowdanki::CROWDANKI_ROUND_TRIP_PROFILE.name
+            );
+            return;
+        }
+        Err(error) => panic!("{target} export re-imports: {error}"),
+    };
+    let expected = crowdanki::project_deck_for_crowdanki_round_trip(deck)
+        .unwrap_or_else(|error| panic!("{target} source projects: {error}"));
+    let actual = crowdanki::project_deck_for_crowdanki_round_trip(&imported)
+        .unwrap_or_else(|error| panic!("{target} import projects: {error}"));
+    let diff = expected.semantic_diff(&actual);
+    assert!(
+        diff.is_empty(),
+        "{target} {} mismatch: {diff:#?}",
+        crowdanki::CROWDANKI_ROUND_TRIP_PROFILE.name
+    );
+}
+
 fn json_diff_paths(left: &serde_json::Value, right: &serde_json::Value) -> BTreeSet<String> {
     let mut paths = BTreeSet::new();
     collect_json_diff_paths(left, right, "", &mut paths);
@@ -1812,109 +1863,6 @@ fn target_parts(target: &str) -> (&str, &str) {
     }
     let (language, variant) = target.split_once('-').unwrap();
     (language.to_ascii_uppercase().leak(), variant)
-}
-
-fn assert_crowdanki_semantic_subset_eq(
-    old: &serde_json::Value,
-    new: &serde_json::Value,
-    target: &str,
-) {
-    assert_eq!(new["name"], old["name"], "{target} deck name");
-    assert_eq!(
-        new["crowdanki_uuid"], old["crowdanki_uuid"],
-        "{target} deck UUID"
-    );
-    assert_eq!(new["desc"], old["desc"], "{target} deck description");
-
-    assert_eq!(
-        string_set(new["media_files"].as_array().unwrap()),
-        string_set(old["media_files"].as_array().unwrap()),
-        "{target} media files"
-    );
-
-    let old_model = &old["note_models"][0];
-    let new_model = &new["note_models"][0];
-    assert_eq!(new_model["name"], old_model["name"], "{target} model name");
-    assert_eq!(
-        new_model["crowdanki_uuid"], old_model["crowdanki_uuid"],
-        "{target} model UUID"
-    );
-    assert_eq!(new_model["css"], old_model["css"], "{target} CSS");
-    assert_eq!(
-        field_names(new_model),
-        field_names(old_model),
-        "{target} fields"
-    );
-    assert_eq!(
-        templates_by_ord(new_model),
-        templates_by_ord(old_model),
-        "{target} templates"
-    );
-
-    let old_notes = notes_by_guid(old);
-    let new_notes = notes_by_guid(new);
-    assert_eq!(new_notes.len(), old_notes.len(), "{target} note count");
-    for (guid, old_note) in old_notes {
-        let new_note = new_notes
-            .get(&guid)
-            .unwrap_or_else(|| panic!("{target} missing note {guid}"));
-        assert_eq!(
-            new_note["note_model_uuid"], old_note["note_model_uuid"],
-            "{target} note model differs for {guid}"
-        );
-        assert_eq!(
-            new_note["fields"], old_note["fields"],
-            "{target} fields differ for {guid}"
-        );
-        assert_eq!(
-            string_set(new_note["tags"].as_array().unwrap()),
-            string_set(old_note["tags"].as_array().unwrap()),
-            "{target} tags differ for {guid}"
-        );
-    }
-}
-
-fn field_names(model: &serde_json::Value) -> Vec<String> {
-    model["flds"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|field| field["name"].as_str().unwrap().to_owned())
-        .collect()
-}
-
-fn templates_by_ord(model: &serde_json::Value) -> BTreeMap<i64, (String, String, String)> {
-    model["tmpls"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|template| {
-            (
-                template["ord"].as_i64().unwrap(),
-                (
-                    template["name"].as_str().unwrap().to_owned(),
-                    template["qfmt"].as_str().unwrap().to_owned(),
-                    template["afmt"].as_str().unwrap().to_owned(),
-                ),
-            )
-        })
-        .collect()
-}
-
-fn notes_by_guid(deck: &serde_json::Value) -> BTreeMap<String, &serde_json::Value> {
-    deck["notes"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|note| (note["guid"].as_str().unwrap().to_owned(), note))
-        .collect()
-}
-
-fn string_set(values: &[serde_json::Value]) -> BTreeSet<String> {
-    values
-        .iter()
-        .map(|value| value.as_str().unwrap().to_owned())
-        .collect()
 }
 
 fn sid(value: &str) -> StableId {

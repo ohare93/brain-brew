@@ -118,6 +118,259 @@ pub fn import_deck_accept_suggested_ids(input: &str) -> Result<CanonicalDeck, Cr
     deck_json.into_deck()
 }
 
+/// Named canonical equivalence profile for a CrowdAnki export/import round trip.
+///
+/// Exact canonical diff is never weakened. Callers explicitly project both sides with this
+/// profile, then use [`CanonicalDeck::semantic_diff`] as the exact oracle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CrowdAnkiRoundTripProfile {
+    pub name: &'static str,
+    pub losses: &'static [CrowdAnkiRoundTripLoss],
+}
+
+/// Canonical information CrowdAnki cannot preserve through `deck.json`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CrowdAnkiRoundTripLoss {
+    SourceVariablesAreRendered,
+    StructuredFieldRepresentationsAreLowered,
+    MediaHashesAreNotStored,
+    TypedTombstonesBecomePhysicalOmissions,
+    UnsupportedAdapterIdsAreDiscarded,
+    StableIdsAreRegeneratedFromAdapterContent,
+}
+
+pub const CROWDANKI_ROUND_TRIP_PROFILE: CrowdAnkiRoundTripProfile = CrowdAnkiRoundTripProfile {
+    name: "crowdanki-export-import-v1",
+    losses: &[
+        CrowdAnkiRoundTripLoss::SourceVariablesAreRendered,
+        CrowdAnkiRoundTripLoss::StructuredFieldRepresentationsAreLowered,
+        CrowdAnkiRoundTripLoss::MediaHashesAreNotStored,
+        CrowdAnkiRoundTripLoss::TypedTombstonesBecomePhysicalOmissions,
+        CrowdAnkiRoundTripLoss::UnsupportedAdapterIdsAreDiscarded,
+        CrowdAnkiRoundTripLoss::StableIdsAreRegeneratedFromAdapterContent,
+    ],
+};
+
+/// Project a canonical deck to the exact semantics representable by a CrowdAnki round trip.
+///
+/// Stable IDs are normalized with the import suggestion algorithm because `deck.json` does not
+/// store canonical identity. Colliding suggestions fail explicitly instead of being equated.
+/// Adapter-visible fallback UUIDs/GUIDs are materialized before this normalization.
+pub fn project_deck_for_crowdanki_round_trip(
+    deck: &CanonicalDeck,
+) -> Result<CanonicalDeck, CrowdAnkiError> {
+    deck.validate().map_err(CrowdAnkiError::Validation)?;
+    let mut projected = deck
+        .render_variables()
+        .map_err(CrowdAnkiError::VariableRender)?;
+    let tombstones = projected.tombstones.clone();
+
+    projected.note_types.retain(|note_type_id, _| {
+        tombstones
+            .blocking(&TombstoneAddress::NoteType {
+                note_type_id: note_type_id.clone(),
+            })
+            .is_none()
+    });
+    for (note_type_id, note_type) in &mut projected.note_types {
+        note_type.fields.retain(|field| {
+            tombstones
+                .blocking(&TombstoneAddress::FieldDefinition {
+                    note_type_id: note_type_id.clone(),
+                    field_id: field.id.clone(),
+                })
+                .is_none()
+        });
+        note_type.card_templates.retain(|template| {
+            tombstones
+                .blocking(&TombstoneAddress::CardTemplate {
+                    note_type_id: note_type_id.clone(),
+                    template_id: template.id.clone(),
+                })
+                .is_none()
+        });
+    }
+    projected.notes.retain(|note_id, _| {
+        tombstones
+            .blocking(&TombstoneAddress::Note {
+                note_id: note_id.clone(),
+            })
+            .is_none()
+    });
+    for note in projected.notes.values_mut() {
+        if let Some(note_type) = projected.note_types.get(&note.note_type_id) {
+            let exported_fields = note_type
+                .fields
+                .iter()
+                .map(|field| field.id.clone())
+                .collect::<BTreeSet<_>>();
+            note.fields
+                .retain(|field_id, _| exported_fields.contains(field_id));
+        }
+    }
+    projected.media.retain(|media_id, _| {
+        tombstones
+            .blocking(&TombstoneAddress::MediaReference {
+                media_id: media_id.clone(),
+            })
+            .is_none()
+    });
+
+    // Materialize adapter-visible fallback identities before canonical stable IDs are
+    // normalized to the IDs import will suggest.
+    projected.adapter_ids = projected_deck_adapter_ids(&projected);
+    for note_type in projected.note_types.values_mut() {
+        note_type.adapter_ids = projected_note_type_adapter_ids(note_type)?;
+    }
+    for note in projected.notes.values_mut() {
+        note.adapter_ids = projected_note_adapter_ids(note);
+    }
+
+    normalize_projected_stable_ids(&mut projected)?;
+    projected.variables.clear();
+    for note_type in projected.note_types.values_mut() {
+        note_type.variables.clear();
+        for template in &mut note_type.card_templates {
+            template.variables.clear();
+            template.adapter_ids = AdapterIds::new();
+        }
+    }
+    for note in projected.notes.values_mut() {
+        note.variables.clear();
+    }
+    for media in projected.media.values_mut() {
+        media.sha256.clear();
+    }
+    projected.tombstones = Tombstones::default();
+    Ok(projected)
+}
+
+fn normalize_projected_stable_ids(deck: &mut CanonicalDeck) -> Result<(), CrowdAnkiError> {
+    deck.id = prefixed_stable_id("deck", &deck.name)?;
+
+    let mut note_type_ids = BTreeMap::new();
+    let mut field_ids = BTreeMap::<StableId, BTreeMap<StableId, StableId>>::new();
+    let mut normalized_note_types = BTreeMap::new();
+    for (old_note_type_id, mut note_type) in std::mem::take(&mut deck.note_types) {
+        let new_note_type_id = prefixed_stable_id("note-type", &note_type.name)?;
+        let mut note_type_field_ids = BTreeMap::new();
+        for field in &mut note_type.fields {
+            let old_field_id = field.id.clone();
+            field.id = prefixed_stable_id("field", &field.name)?;
+            note_type_field_ids.insert(old_field_id, field.id.clone());
+        }
+        for template in &mut note_type.card_templates {
+            template.id = prefixed_stable_id("template", &template.name)?;
+        }
+        note_type.id = new_note_type_id.clone();
+        if normalized_note_types
+            .insert(new_note_type_id.clone(), note_type)
+            .is_some()
+        {
+            return Err(CrowdAnkiError::Unsupported(format!(
+                "{} profile generated duplicate note type stable ID {}",
+                CROWDANKI_ROUND_TRIP_PROFILE.name, new_note_type_id
+            )));
+        }
+        field_ids.insert(old_note_type_id.clone(), note_type_field_ids);
+        note_type_ids.insert(old_note_type_id, new_note_type_id);
+    }
+    deck.note_types = normalized_note_types;
+
+    let mut normalized_notes = BTreeMap::new();
+    for (_old_note_id, mut note) in std::mem::take(&mut deck.notes) {
+        let old_note_type_id = note.note_type_id.clone();
+        let new_note_type_id = note_type_ids.get(&old_note_type_id).ok_or_else(|| {
+            CrowdAnkiError::Unsupported(format!(
+                "{} profile cannot map note type {}",
+                CROWDANKI_ROUND_TRIP_PROFILE.name, old_note_type_id
+            ))
+        })?;
+        let note_type = deck
+            .note_types
+            .get(new_note_type_id)
+            .expect("normalized note type ID was inserted");
+        let mapping = field_ids
+            .get(&old_note_type_id)
+            .expect("normalized field IDs were recorded");
+        note.fields = note
+            .fields
+            .iter()
+            .map(|(old_field_id, value)| {
+                mapping
+                    .get(old_field_id)
+                    .cloned()
+                    .map(|field_id| (field_id, value.clone()))
+                    .ok_or_else(|| {
+                        CrowdAnkiError::Unsupported(format!(
+                            "{} profile cannot map field {}",
+                            CROWDANKI_ROUND_TRIP_PROFILE.name, old_field_id
+                        ))
+                    })
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?
+            .into();
+        note.note_type_id = new_note_type_id.clone();
+        let first_field = note_type
+            .fields
+            .first()
+            .and_then(|field| note.fields.get(&field.id))
+            .and_then(FieldValue::as_scalar)
+            .unwrap_or_else(|| {
+                note.adapter_ids
+                    .get("crowdanki:guid")
+                    .expect("exported notes always have a first field or effective GUID")
+            });
+        note.id = prefixed_stable_id("note", first_field)?;
+        if normalized_notes.insert(note.id.clone(), note).is_some() {
+            return Err(CrowdAnkiError::Unsupported(format!(
+                "{} profile generated duplicate note stable ID",
+                CROWDANKI_ROUND_TRIP_PROFILE.name
+            )));
+        }
+    }
+    deck.notes = normalized_notes;
+
+    let mut normalized_media = BTreeMap::new();
+    for (_old_media_id, mut media) in std::mem::take(&mut deck.media) {
+        media.id = prefixed_stable_id("media", &media.path)?;
+        if normalized_media.insert(media.id.clone(), media).is_some() {
+            return Err(CrowdAnkiError::Unsupported(format!(
+                "{} profile generated duplicate media stable ID",
+                CROWDANKI_ROUND_TRIP_PROFILE.name
+            )));
+        }
+    }
+    deck.media = normalized_media;
+    Ok(())
+}
+
+fn projected_deck_adapter_ids(deck: &CanonicalDeck) -> AdapterIds {
+    let mut ids = AdapterIds::new();
+    ids.insert("crowdanki:uuid", crowdanki_deck_uuid(deck));
+    ids.insert(
+        "crowdanki:deck_config_uuid",
+        crowdanki_deck_config_uuid(deck),
+    );
+    ids.insert(
+        "crowdanki:deck_config_name",
+        crowdanki_deck_config_name(deck),
+    );
+    ids
+}
+
+fn projected_note_type_adapter_ids(note_type: &NoteType) -> Result<AdapterIds, CrowdAnkiError> {
+    let mut ids = AdapterIds::new();
+    ids.insert("crowdanki:uuid", crowdanki_note_model_uuid(note_type)?);
+    Ok(ids)
+}
+
+fn projected_note_adapter_ids(note: &Note) -> AdapterIds {
+    let mut ids = AdapterIds::new();
+    ids.insert("crowdanki:guid", crowdanki_note_guid(note));
+    ids
+}
+
 fn json_path(path: &serde_path_to_error::Path) -> String {
     let path = path.to_string();
     if path.is_empty() || path == "." {

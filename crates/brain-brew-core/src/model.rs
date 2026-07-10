@@ -69,14 +69,15 @@ impl std::error::Error for InvalidStableId {}
 /// this printer/parser boundary injective for StableId path segments, deck validation
 /// rejects StableIds containing `..`, reserved container marker substrings
 /// (`.fields.`, `.card_templates.`, `.variables.`, `.adapter_ids.`, `.tags.`,
-/// `.message.`), or reserved property suffixes (`.id`, `.name`, `.styling`,
-/// `.fields`, `.card_templates`, `.variables`, `.adapter_ids`, `.tags`,
+/// `.images.`, `.message.`), or reserved property suffixes (`.id`, `.name`, `.styling`,
+/// `.fields`, `.card_templates`, `.variables`, `.adapter_ids`, `.tags`, `.images`,
 /// `.note_type_id`, `.message`, `.path`, `.sha256`, `.question_format`,
 /// `.answer_format`). Non-StableId map keys and tag strings are exempt from that
 /// StableId-only invariant, so keys such as `note-type.name` remain legal after
 /// the first reserved container split.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DeckPath {
+    DeckId,
     DeckName,
     DeckDescription,
     DeckVariables,
@@ -113,6 +114,10 @@ pub enum DeckPath {
         note_type_id: StableId,
         field_id: StableId,
     },
+    NoteTypeFieldId {
+        note_type_id: StableId,
+        field_id: StableId,
+    },
     NoteTypeFieldName {
         note_type_id: StableId,
         field_id: StableId,
@@ -121,6 +126,10 @@ pub enum DeckPath {
         note_type_id: StableId,
     },
     NoteTypeCardTemplate {
+        note_type_id: StableId,
+        template_id: StableId,
+    },
+    NoteTypeCardTemplateId {
         note_type_id: StableId,
         template_id: StableId,
     },
@@ -181,6 +190,11 @@ pub enum DeckPath {
         note_id: StableId,
         field_id: StableId,
     },
+    NoteFieldImage {
+        note_id: StableId,
+        field_id: StableId,
+        index: usize,
+    },
     NoteFieldMessage {
         note_id: StableId,
         field_id: StableId,
@@ -233,6 +247,7 @@ pub enum DeckPath {
 impl fmt::Display for DeckPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::DeckId => f.write_str("deck.id"),
             Self::DeckName => f.write_str("deck.name"),
             Self::DeckDescription => f.write_str("deck.description"),
             Self::DeckVariables => f.write_str("deck.variables"),
@@ -256,6 +271,10 @@ impl fmt::Display for DeckPath {
                 note_type_id,
                 field_id,
             } => write!(f, "note_types.{note_type_id}.fields.{field_id}"),
+            Self::NoteTypeFieldId {
+                note_type_id,
+                field_id,
+            } => write!(f, "note_types.{note_type_id}.fields.{field_id}.id"),
             Self::NoteTypeFieldName {
                 note_type_id,
                 field_id,
@@ -267,6 +286,13 @@ impl fmt::Display for DeckPath {
                 note_type_id,
                 template_id,
             } => write!(f, "note_types.{note_type_id}.card_templates.{template_id}"),
+            Self::NoteTypeCardTemplateId {
+                note_type_id,
+                template_id,
+            } => write!(
+                f,
+                "note_types.{note_type_id}.card_templates.{template_id}.id"
+            ),
             Self::NoteTypeCardTemplateName {
                 note_type_id,
                 template_id,
@@ -330,6 +356,11 @@ impl fmt::Display for DeckPath {
             Self::NoteVariables { note_id } => write!(f, "notes.{note_id}.variables"),
             Self::NoteVariable { note_id, key } => write!(f, "notes.{note_id}.variables.{key}"),
             Self::NoteField { note_id, field_id } => write!(f, "notes.{note_id}.fields.{field_id}"),
+            Self::NoteFieldImage {
+                note_id,
+                field_id,
+                index,
+            } => write!(f, "notes.{note_id}.fields.{field_id}.images.{index}"),
             Self::NoteFieldMessage { note_id, field_id } => {
                 write!(f, "notes.{note_id}.fields.{field_id}.message")
             }
@@ -394,6 +425,7 @@ impl std::error::Error for InvalidDeckPath {}
 
 fn parse_deck_path(value: &str) -> Option<DeckPath> {
     match value {
+        "deck.id" => return Some(DeckPath::DeckId),
         "deck.name" => return Some(DeckPath::DeckName),
         "deck.description" => return Some(DeckPath::DeckDescription),
         "deck.variables" => return Some(DeckPath::DeckVariables),
@@ -473,6 +505,12 @@ fn parse_note_type_path(rest: &str) -> Option<DeckPath> {
 }
 
 fn parse_note_type_field_path(note_type_id: StableId, rest: &str) -> Option<DeckPath> {
+    if let Some(field_text) = rest.strip_suffix(".id") {
+        return stable_id(field_text).map(|field_id| DeckPath::NoteTypeFieldId {
+            note_type_id,
+            field_id,
+        });
+    }
     if let Some(field_text) = rest.strip_suffix(".name") {
         return stable_id(field_text).map(|field_id| DeckPath::NoteTypeFieldName {
             note_type_id,
@@ -486,6 +524,13 @@ fn parse_note_type_field_path(note_type_id: StableId, rest: &str) -> Option<Deck
 }
 
 fn parse_note_type_template_path(note_type_id: StableId, rest: &str) -> Option<DeckPath> {
+    if let Some(template_text) = rest.strip_suffix(".id") {
+        let template_id = stable_id(template_text)?;
+        return Some(DeckPath::NoteTypeCardTemplateId {
+            note_type_id,
+            template_id,
+        });
+    }
     if let Some((template_text, key)) = rest.split_once(".variables.") {
         let template_id = stable_id(template_text)?;
         return non_empty_string(key).map(|key| DeckPath::NoteTypeCardTemplateVariable {
@@ -582,6 +627,15 @@ fn parse_note_path(rest: &str) -> Option<DeckPath> {
 }
 
 fn parse_note_field_path(note_id: StableId, rest: &str) -> Option<DeckPath> {
+    if let Some((field_text, index_text)) = rest.rsplit_once(".images.") {
+        let field_id = stable_id(field_text)?;
+        let index = index_text.parse::<usize>().ok()?;
+        return Some(DeckPath::NoteFieldImage {
+            note_id,
+            field_id,
+            index,
+        });
+    }
     if let Some((field_text, variable)) = rest.split_once(".message.variables.") {
         let field_id = stable_id(field_text)?;
         return non_empty_string(variable).map(|variable| DeckPath::NoteFieldMessageVariable {
@@ -2145,14 +2199,6 @@ impl SemanticChange {
             before,
             after,
         }
-    }
-
-    pub(crate) fn added(path: String) -> Self {
-        Self::new(SemanticChangeKind::Added, path, None, None)
-    }
-
-    pub(crate) fn removed(path: String) -> Self {
-        Self::new(SemanticChangeKind::Removed, path, None, None)
     }
 }
 

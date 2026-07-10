@@ -20,6 +20,7 @@ fn deck_path_display_and_parse_round_trip_current_grammar() {
     let media_id = sid("media.flag.finland");
 
     let cases = [
+        (DeckPath::DeckId, "deck.id"),
         (DeckPath::DeckName, "deck.name"),
         (DeckPath::DeckDescription, "deck.description"),
         (DeckPath::DeckVariables, "deck.variables"),
@@ -87,6 +88,13 @@ fn deck_path_display_and_parse_round_trip_current_grammar() {
             "note_types.note-type.country.fields.field.capital",
         ),
         (
+            DeckPath::NoteTypeFieldId {
+                note_type_id: note_type_id.clone(),
+                field_id: field_id.clone(),
+            },
+            "note_types.note-type.country.fields.field.capital.id",
+        ),
+        (
             DeckPath::NoteTypeFieldName {
                 note_type_id: note_type_id.clone(),
                 field_id: field_id.clone(),
@@ -105,6 +113,13 @@ fn deck_path_display_and_parse_round_trip_current_grammar() {
                 template_id: template_id.clone(),
             },
             "note_types.note-type.country.card_templates.template.card-1",
+        ),
+        (
+            DeckPath::NoteTypeCardTemplateId {
+                note_type_id: note_type_id.clone(),
+                template_id: template_id.clone(),
+            },
+            "note_types.note-type.country.card_templates.template.card-1.id",
         ),
         (
             DeckPath::NoteTypeCardTemplateName {
@@ -207,6 +222,14 @@ fn deck_path_display_and_parse_round_trip_current_grammar() {
                 field_id: field_id.clone(),
             },
             "notes.note.finland.fields.field.capital",
+        ),
+        (
+            DeckPath::NoteFieldImage {
+                note_id: note_id.clone(),
+                field_id: field_id.clone(),
+                index: 1,
+            },
+            "notes.note.finland.fields.field.capital.images.1",
         ),
         (
             DeckPath::NoteFieldMessage {

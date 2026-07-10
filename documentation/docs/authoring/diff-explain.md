@@ -38,7 +38,23 @@ Example output:
   + Helsingfors
 ```
 
-The path uses stable IDs, not row numbers or raw YAML positions.
+The path uses stable IDs, not row numbers or raw YAML positions. Added and removed entities include a deterministic typed summary in `after` or `before`; modified values include both.
+
+### Exact semantic laws
+
+The default diff is the exact canonical equivalence oracle. An empty diff means the two `CanonicalDeck` values are equal under only these normalizations:
+
+- map insertion order is nonsemantic;
+- set insertion order is nonsemantic;
+- field-definition, card-template, structured-image, and positional message-component order is semantic;
+- stable IDs participate whether stored as entity values or collection keys;
+- scalar, structured-image, and structured-message field representations remain distinct even when they lower to identical adapter text.
+
+Changes are sorted by canonical path and kind, so repeated runs are deterministic. Reversing operands swaps added/removed direction and before/after values; modifications keep their kind. Comparison uses typed domain values, never YAML, JSON, `Debug`, or another presentation serialization.
+
+### Lossy CrowdAnki equivalence
+
+CrowdAnki round trips use the explicit `crowdanki-export-import-v1` projection before applying this exact oracle. The projection documents and applies only adapter losses: source variables are rendered, structured fields are lowered, media hashes and typed tombstones are not stored, unsupported adapter IDs are discarded, and stable IDs are regenerated from adapter-visible content. Suggested-ID collisions are reported as an unrepresentable adapter loss rather than treated as exact equality. The unprojected semantic diff is never weakened.
 
 ## JSON diff
 

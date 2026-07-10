@@ -3,8 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use brain_brew_core::StableId;
-use brain_brew_formats::{canonical_yaml, media};
+use brain_brew_formats::{canonical_yaml, crowdanki, media};
 
 #[test]
 fn ug_style_fixture_composes_exports_imports_and_diffs_semantically() {
@@ -114,18 +113,20 @@ fn ug_style_fixture_composes_exports_imports_and_diffs_semantically() {
         stderr(&import_output)
     );
 
-    let mut expected_export_projection =
-        canonical_yaml::from_str(&fs::read_to_string(resolved_path).unwrap()).unwrap();
-    media::validate_references(&expected_export_projection)
-        .expect("fixture media references validate");
-    expected_export_projection
-        .notes
-        .remove(&sid("note.australia"));
-    expected_export_projection.tombstones.clear();
+    let resolved = canonical_yaml::from_str(&fs::read_to_string(resolved_path).unwrap()).unwrap();
+    media::validate_references(&resolved).expect("fixture media references validate");
     let imported = canonical_yaml::from_str(&fs::read_to_string(imported_path).unwrap()).unwrap();
+    let expected = crowdanki::project_deck_for_crowdanki_round_trip(&resolved)
+        .expect("resolved fixture projects to CrowdAnki semantics");
+    let actual = crowdanki::project_deck_for_crowdanki_round_trip(&imported)
+        .expect("imported fixture projects to CrowdAnki semantics");
 
-    let diff = expected_export_projection.semantic_diff(&imported);
-    assert!(diff.is_empty(), "unexpected semantic diff: {diff:#?}");
+    let diff = expected.semantic_diff(&actual);
+    assert!(
+        diff.is_empty(),
+        "{} mismatch: {diff:#?}",
+        crowdanki::CROWDANKI_ROUND_TRIP_PROFILE.name
+    );
 }
 
 fn run<const N: usize>(args: [&str; N]) -> std::process::Output {
@@ -155,8 +156,4 @@ fn temp_dir(name: &str) -> PathBuf {
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/ug-style")
-}
-
-fn sid(value: &str) -> StableId {
-    StableId::new(value).expect("test stable id is valid")
 }

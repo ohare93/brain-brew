@@ -9,6 +9,7 @@ mod content_validation;
 mod fingerprint;
 mod messages;
 mod model;
+mod semantic_diff;
 mod translation;
 mod validate;
 

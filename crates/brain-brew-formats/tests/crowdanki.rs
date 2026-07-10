@@ -30,8 +30,17 @@ fn import_export_round_trip_is_semantically_equal_when_suggested_ids_match_sourc
 
     let imported = crowdanki::import_deck_accept_suggested_ids(&export.deck_json)
         .expect("exported CrowdAnki imports");
+    let expected = crowdanki::project_deck_for_crowdanki_round_trip(&original)
+        .expect("source projects to the named CrowdAnki profile");
+    let actual = crowdanki::project_deck_for_crowdanki_round_trip(&imported)
+        .expect("import projects to the named CrowdAnki profile");
+    let diff = expected.semantic_diff(&actual);
 
-    assert!(original.semantic_diff(&imported).is_empty());
+    assert!(
+        diff.is_empty(),
+        "{} mismatch: {diff:#?}",
+        crowdanki::CROWDANKI_ROUND_TRIP_PROFILE.name
+    );
 }
 
 #[test]
@@ -258,8 +267,17 @@ fn structured_image_fields_survive_crowdanki_export_import_round_trip() {
     let export = crowdanki::export_deck(&original).expect("structured deck exports");
     let imported = crowdanki::import_deck_accept_suggested_ids(&export.deck_json)
         .expect("exported CrowdAnki re-imports");
+    let expected = crowdanki::project_deck_for_crowdanki_round_trip(&original)
+        .expect("structured source projects");
+    let actual = crowdanki::project_deck_for_crowdanki_round_trip(&imported)
+        .expect("imported source projects");
+    let diff = expected.semantic_diff(&actual);
 
-    assert!(original.semantic_diff(&imported).is_empty());
+    assert!(
+        diff.is_empty(),
+        "{} mismatch: {diff:#?}",
+        crowdanki::CROWDANKI_ROUND_TRIP_PROFILE.name
+    );
 }
 
 #[test]

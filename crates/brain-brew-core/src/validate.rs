@@ -460,6 +460,7 @@ const RESERVED_CONTAINER_MARKERS: &[&str] = &[
     ".variables.",
     ".adapter_ids.",
     ".tags.",
+    ".images.",
     ".message.",
 ];
 
@@ -472,6 +473,7 @@ const RESERVED_PROPERTY_SUFFIXES: &[&str] = &[
     ".variables",
     ".adapter_ids",
     ".tags",
+    ".images",
     ".note_type_id",
     ".message",
     ".path",

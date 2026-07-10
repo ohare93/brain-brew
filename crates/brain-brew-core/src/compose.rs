@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use crate::messages::lower_images_from_deck;
 use crate::translation::apply_translation_dictionary;
@@ -38,29 +38,12 @@ impl CanonicalDeck {
         Ok(resolved)
     }
 
+    /// Compare every canonical property using exact typed semantics.
+    ///
+    /// Map/set insertion order is normalized by their domain collections. Explicit field,
+    /// template, image, and message-component sequence order remains semantic.
     pub fn semantic_diff(&self, other: &Self) -> SemanticDiff {
-        let mut changes = Vec::new();
-
-        push_modified_if_changed(&mut changes, deck_name_path(), &self.name, &other.name);
-        push_modified_if_changed(
-            &mut changes,
-            deck_description_path(),
-            &self.description,
-            &other.description,
-        );
-        push_modified_if_changed(
-            &mut changes,
-            deck_variables_path(),
-            &string_map_summary(&self.variables),
-            &string_map_summary(&other.variables),
-        );
-
-        diff_note_types(&self.note_types, &other.note_types, &mut changes);
-        diff_notes(&self.notes, &other.notes, &mut changes);
-        diff_media(&self.media, &other.media, &mut changes);
-        diff_tombstones(&self.tombstones, &other.tombstones, &mut changes);
-
-        SemanticDiff { changes }
+        crate::semantic_diff::diff(self, other)
     }
 
     /// Render `${variable}` references in deck text using deck, note type, card template, and note scopes.
@@ -1746,29 +1729,8 @@ fn note_type_variables_path(note_type_id: &StableId) -> String {
     .to_string()
 }
 
-fn note_type_fields_path(note_type_id: &StableId) -> String {
-    DeckPath::NoteTypeFields {
-        note_type_id: note_type_id.clone(),
-    }
-    .to_string()
-}
-
-fn note_type_card_templates_path(note_type_id: &StableId) -> String {
-    DeckPath::NoteTypeCardTemplates {
-        note_type_id: note_type_id.clone(),
-    }
-    .to_string()
-}
-
 fn note_type_styling_path(note_type_id: &StableId) -> String {
     DeckPath::NoteTypeStyling {
-        note_type_id: note_type_id.clone(),
-    }
-    .to_string()
-}
-
-fn note_type_adapter_ids_path(note_type_id: &StableId) -> String {
-    DeckPath::NoteTypeAdapterIds {
         note_type_id: note_type_id.clone(),
     }
     .to_string()
@@ -1850,22 +1812,8 @@ fn note_path(note_id: &StableId) -> String {
     .to_string()
 }
 
-fn note_note_type_id_path(note_id: &StableId) -> String {
-    DeckPath::NoteNoteTypeId {
-        note_id: note_id.clone(),
-    }
-    .to_string()
-}
-
 fn note_variables_path(note_id: &StableId) -> String {
     DeckPath::NoteVariables {
-        note_id: note_id.clone(),
-    }
-    .to_string()
-}
-
-fn note_tags_path(note_id: &StableId) -> String {
-    DeckPath::NoteTags {
         note_id: note_id.clone(),
     }
     .to_string()
@@ -1875,13 +1823,6 @@ fn note_tag_path(note_id: &StableId, tag: &str) -> String {
     DeckPath::NoteTag {
         note_id: note_id.clone(),
         tag: tag.to_owned(),
-    }
-    .to_string()
-}
-
-fn note_adapter_ids_path(note_id: &StableId) -> String {
-    DeckPath::NoteAdapterIds {
-        note_id: note_id.clone(),
     }
     .to_string()
 }
@@ -1913,27 +1854,6 @@ fn note_field_message_path(note_id: &StableId, field_id: &StableId) -> String {
 fn media_path(media_id: &StableId) -> String {
     DeckPath::Media {
         media_id: media_id.clone(),
-    }
-    .to_string()
-}
-
-fn media_path_path(media_id: &StableId) -> String {
-    DeckPath::MediaPath {
-        media_id: media_id.clone(),
-    }
-    .to_string()
-}
-
-fn media_sha256_path(media_id: &StableId) -> String {
-    DeckPath::MediaSha256 {
-        media_id: media_id.clone(),
-    }
-    .to_string()
-}
-
-fn tombstone_path(address: &TombstoneAddress) -> String {
-    DeckPath::Tombstone {
-        address: address.clone(),
     }
     .to_string()
 }
@@ -2419,282 +2339,4 @@ fn lookup_variable<'a>(scopes: &[&'a BTreeMap<String, String>], key: &str) -> Op
     scopes
         .iter()
         .find_map(|scope| scope.get(key).map(String::as_str))
-}
-
-fn diff_note_types(
-    left: &BTreeMap<StableId, NoteType>,
-    right: &BTreeMap<StableId, NoteType>,
-    changes: &mut Vec<SemanticChange>,
-) {
-    for id in left.keys() {
-        if !right.contains_key(id) {
-            changes.push(SemanticChange::removed(note_type_path(id)));
-        }
-    }
-
-    for (id, right_note_type) in right {
-        let Some(left_note_type) = left.get(id) else {
-            changes.push(SemanticChange::added(note_type_path(id)));
-            continue;
-        };
-
-        push_modified_if_changed(
-            changes,
-            note_type_name_path(id),
-            &left_note_type.name,
-            &right_note_type.name,
-        );
-        push_modified_if_changed(
-            changes,
-            note_type_styling_path(id),
-            &left_note_type.styling,
-            &right_note_type.styling,
-        );
-        push_modified_if_changed(
-            changes,
-            note_type_variables_path(id),
-            &string_map_summary(&left_note_type.variables),
-            &string_map_summary(&right_note_type.variables),
-        );
-        push_modified_if_changed(
-            changes,
-            note_type_fields_path(id),
-            &field_summary(&left_note_type.fields),
-            &field_summary(&right_note_type.fields),
-        );
-        push_modified_if_changed(
-            changes,
-            note_type_card_templates_path(id),
-            &template_summary(&left_note_type.card_templates),
-            &template_summary(&right_note_type.card_templates),
-        );
-        push_modified_if_changed(
-            changes,
-            note_type_adapter_ids_path(id),
-            &adapter_ids_summary(&left_note_type.adapter_ids),
-            &adapter_ids_summary(&right_note_type.adapter_ids),
-        );
-    }
-}
-
-fn diff_notes(
-    left: &BTreeMap<StableId, Note>,
-    right: &BTreeMap<StableId, Note>,
-    changes: &mut Vec<SemanticChange>,
-) {
-    for id in left.keys() {
-        if !right.contains_key(id) {
-            changes.push(SemanticChange::removed(note_path(id)));
-        }
-    }
-
-    for (id, right_note) in right {
-        let Some(left_note) = left.get(id) else {
-            changes.push(SemanticChange::added(note_path(id)));
-            continue;
-        };
-
-        push_modified_if_changed(
-            changes,
-            note_note_type_id_path(id),
-            &left_note.note_type_id.to_string(),
-            &right_note.note_type_id.to_string(),
-        );
-        push_modified_if_changed(
-            changes,
-            note_variables_path(id),
-            &string_map_summary(&left_note.variables),
-            &string_map_summary(&right_note.variables),
-        );
-        diff_note_fields(id, &left_note.fields, &right_note.fields, changes);
-        push_modified_if_changed(
-            changes,
-            note_tags_path(id),
-            &set_summary(&left_note.tags),
-            &set_summary(&right_note.tags),
-        );
-        push_modified_if_changed(
-            changes,
-            note_adapter_ids_path(id),
-            &adapter_ids_summary(&left_note.adapter_ids),
-            &adapter_ids_summary(&right_note.adapter_ids),
-        );
-    }
-}
-
-fn diff_note_fields(
-    note_id: &StableId,
-    left: &BTreeMap<StableId, FieldValue>,
-    right: &BTreeMap<StableId, FieldValue>,
-    changes: &mut Vec<SemanticChange>,
-) {
-    for field_id in left.keys() {
-        if !right.contains_key(field_id) {
-            changes.push(SemanticChange::new(
-                SemanticChangeKind::Removed,
-                note_field_path(note_id, field_id),
-                left.get(field_id).map(field_value_summary),
-                None,
-            ));
-        }
-    }
-
-    for (field_id, right_value) in right {
-        let Some(left_value) = left.get(field_id) else {
-            changes.push(SemanticChange::new(
-                SemanticChangeKind::Added,
-                note_field_path(note_id, field_id),
-                None,
-                Some(field_value_summary(right_value)),
-            ));
-            continue;
-        };
-
-        push_modified_if_changed(
-            changes,
-            note_field_path(note_id, field_id),
-            &field_value_summary(left_value),
-            &field_value_summary(right_value),
-        );
-    }
-}
-
-fn diff_media(
-    left: &BTreeMap<StableId, MediaReference>,
-    right: &BTreeMap<StableId, MediaReference>,
-    changes: &mut Vec<SemanticChange>,
-) {
-    for id in left.keys() {
-        if !right.contains_key(id) {
-            changes.push(SemanticChange::removed(media_path(id)));
-        }
-    }
-
-    for (id, right_media) in right {
-        let Some(left_media) = left.get(id) else {
-            changes.push(SemanticChange::added(media_path(id)));
-            continue;
-        };
-
-        push_modified_if_changed(
-            changes,
-            media_path_path(id),
-            &left_media.path,
-            &right_media.path,
-        );
-        push_modified_if_changed(
-            changes,
-            media_sha256_path(id),
-            &left_media.sha256,
-            &right_media.sha256,
-        );
-    }
-}
-
-fn diff_tombstones(left: &Tombstones, right: &Tombstones, changes: &mut Vec<SemanticChange>) {
-    for record in left.iter() {
-        if !right.contains_address(&record.address) {
-            changes.push(SemanticChange::removed(tombstone_path(&record.address)));
-        }
-    }
-
-    for record in right.iter() {
-        if !left.contains_address(&record.address) {
-            changes.push(SemanticChange::new(
-                SemanticChangeKind::Tombstoned,
-                tombstone_path(&record.address),
-                None,
-                Some(tombstone_summary(record)),
-            ));
-        } else if left.get(&record.address) != Some(record) {
-            changes.push(SemanticChange::new(
-                SemanticChangeKind::Modified,
-                tombstone_path(&record.address),
-                left.get(&record.address).map(tombstone_summary),
-                Some(tombstone_summary(record)),
-            ));
-        }
-    }
-}
-
-fn tombstone_summary(record: &TombstoneRecord) -> String {
-    match &record.provenance {
-        Some(provenance) => format!(
-            "{} removed_by={} operation={}",
-            record.address,
-            provenance.overlay_id,
-            provenance.operation.as_str()
-        ),
-        None => format!("{} legacy", record.address),
-    }
-}
-
-fn push_modified_if_changed(
-    changes: &mut Vec<SemanticChange>,
-    path: String,
-    left: &str,
-    right: &str,
-) {
-    if left != right {
-        changes.push(SemanticChange::new(
-            SemanticChangeKind::Modified,
-            path,
-            Some(left.to_owned()),
-            Some(right.to_owned()),
-        ));
-    }
-}
-
-fn field_value_summary(value: &FieldValue) -> String {
-    match value {
-        FieldValue::Scalar(value) => value.clone(),
-        FieldValue::Images(images) => format!("images:{images:?}"),
-        FieldValue::Message(message) => format!("message:{message:?}"),
-    }
-}
-
-fn field_summary(fields: &[FieldDefinition]) -> String {
-    fields
-        .iter()
-        .map(|field| format!("{}={}", field.id, field.name))
-        .collect::<Vec<_>>()
-        .join("|")
-}
-
-fn template_summary(templates: &[CardTemplate]) -> String {
-    templates
-        .iter()
-        .map(|template| {
-            format!(
-                "{}={}:{}:{}:{}:{}",
-                template.id,
-                template.name,
-                string_map_summary(&template.variables),
-                template.question_format,
-                template.answer_format,
-                adapter_ids_summary(&template.adapter_ids)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("|")
-}
-
-fn set_summary(values: &BTreeSet<String>) -> String {
-    values.iter().cloned().collect::<Vec<_>>().join("|")
-}
-
-fn string_map_summary(values: &BTreeMap<String, String>) -> String {
-    values
-        .iter()
-        .map(|(key, value)| format!("{key}={value}"))
-        .collect::<Vec<_>>()
-        .join("|")
-}
-
-fn adapter_ids_summary(adapter_ids: &AdapterIds) -> String {
-    adapter_ids
-        .iter()
-        .map(|(key, value)| format!("{key}={value}"))
-        .collect::<Vec<_>>()
-        .join("|")
 }
