@@ -119,6 +119,35 @@ pre {
   padding: 0.35rem 0.8rem;
 }
 
+.workbench-access-banner {
+  border: 2px solid var(--warning-border);
+  border-radius: 0.75rem;
+  background: var(--warning-bg);
+  color: var(--text);
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+.workbench-access-banner.development-write {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.workbench-access-banner strong {
+  color: var(--warning);
+  font-size: 1.05rem;
+}
+
+.workbench-access-banner.development-write strong {
+  color: var(--danger);
+}
+
+.workbench-access-banner p,
+.draft-retention-copy {
+  margin: 0.35rem 0 0;
+  color: var(--muted-strong);
+}
+
 #workbench-dom-panel {
   position: static;
   z-index: 2;

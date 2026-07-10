@@ -13,6 +13,12 @@ homepage = "https://github.com/jeprecated/brain-brew"
 dist = true
 formula = "brainbrew"
 
+[features]
+default = []
+# Development/test-only access to unsafe Workbench mutation implementations.
+# Normal and distributed release artifacts must not enable this feature.
+workbench-write-dev = []
+
 [[bin]]
 name = "brainbrew"
 path = "src/main.rs"

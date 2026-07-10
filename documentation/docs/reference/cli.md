@@ -136,7 +136,11 @@ brainbrew workbench serve --manifest brainbrew.yaml --dev-assets target/workbenc
 brainbrew workbench serve --manifest brainbrew.yaml --media-root media/
 ```
 
-Starts the local Deck Workbench server on `127.0.0.1`, serving the browser UI plus JSON APIs for health and workspace metadata. Release builds serve embedded Leptos/WASM assets from the `brainbrew` binary; during UI development run `devenv shell workbench-ui-watch` and pass `--dev-assets target/workbench-ui`. Use `devenv shell workbench-ui-build` for a one-shot development WASM asset build, or `devenv shell workbench-ui-embed` to refresh the release assets checked into the CLI crate. Use `--media-root` when declared media files live outside the manifest root.
+Starts the local Deck Workbench server on `127.0.0.1`, serving the browser UI plus JSON APIs for health and workspace metadata. Normal and distributed builds are read-only: browse, compare, preview, media, and browser-local drafts work, while direct HTTP requests to state-changing routes return HTTP 403. `/api/workspace` exposes the authoritative `write_capability` shown by the UI.
+
+Write-path development requires both `cargo build -p brainbrew --features workbench-write-dev` and the explicit runtime flag `--enable-write`. Normal binaries reject that flag, and no environment variable enables writes. This unsafe development mode is visibly marked and is not a supported release workflow.
+
+Release builds serve embedded Leptos/WASM assets from the `brainbrew` binary; during UI development run `devenv shell workbench-ui-watch` and pass `--dev-assets target/workbench-ui`. Use `devenv shell workbench-ui-build` for a one-shot development WASM asset build, or `devenv shell workbench-ui-embed` to refresh the release assets checked into the CLI crate. Use `--media-root` when declared media files live outside the manifest root. See [Deck Workbench](workbench.md) for risks, draft retention, and exact removal conditions.
 
 ## `verify`
 

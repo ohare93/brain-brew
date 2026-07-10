@@ -122,6 +122,7 @@ pub fn App() -> impl IntoView {
     let selection_generation = RwSignal::new(0_u64);
     let selected_view = RwSignal::new(WorkbenchView::Notes);
     let top_level_error = RwSignal::new(None::<String>);
+    let write_capability = RwSignal::new(WorkbenchWriteCapability::default());
     let note_pivot = RwSignal::new(None::<Value>);
     let selected_note_id = RwSignal::new(None::<String>);
     let note_detail = RwSignal::new(NoteDetailState::Empty);
@@ -162,11 +163,14 @@ pub fn App() -> impl IntoView {
 
     spawn_local(async move {
         match fetch_workspace().await {
-            Ok(summary) => publish_workspace_probe(
-                "loaded",
-                "Workspace metadata loaded from /api/workspace.",
-                Some(&summary),
-            ),
+            Ok(summary) => {
+                write_capability.set(summary.write_capability.clone());
+                publish_workspace_probe(
+                    "loaded",
+                    "Workspace metadata loaded from /api/workspace.",
+                    Some(&summary),
+                );
+            }
             Err(error) => publish_workspace_probe(
                 "error",
                 &format!("Unable to load workspace metadata: {error}"),
@@ -196,6 +200,7 @@ pub fn App() -> impl IntoView {
                 {move || top_level_error.get().unwrap_or_default()}
             </section>
             <article id="workbench-current-workspace" class="workbench-panel">
+                <WorkbenchAccessBanner capability=write_capability />
                 <GlobalControls pivot=note_pivot />
                 <nav id="workbench-view-switch" class="workbench-view-switch" aria-label="Workbench views">
                     <button
@@ -287,9 +292,9 @@ pub fn App() -> impl IntoView {
                         <OptionalMetadataPanel state=optional_metadata />
                     </section>
                 </div>
-                <WorkbenchWorkflowPanels pivot=note_pivot />
+                <WorkbenchWorkflowPanels pivot=note_pivot capability=write_capability />
                 <section id="workbench-apply-box" class="apply-box">
-                    <ApplyBox pivot=note_pivot />
+                    <ApplyBox pivot=note_pivot capability=write_capability />
                 </section>
             </article>
         </section>
@@ -317,6 +322,28 @@ fn workbench_view_button_class(current: WorkbenchView, view: WorkbenchView) -> &
 #[cfg(target_arch = "wasm32")]
 fn workbench_view_aria_current(current: WorkbenchView, view: WorkbenchView) -> &'static str {
     if current == view { "page" } else { "" }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[component]
+fn WorkbenchAccessBanner(capability: RwSignal<WorkbenchWriteCapability>) -> impl IntoView {
+    view! {
+        <section
+            id="workbench-access-banner"
+            class=move || if capability.get().enabled { "workbench-access-banner development-write" } else { "workbench-access-banner read-only" }
+            data-write-enabled=move || capability.get().enabled.to_string()
+            data-write-mode=move || capability.get().mode
+            role="status"
+        >
+            <strong>{move || if capability.get().enabled { "Unsafe development writes enabled" } else { "Read-only Workbench" }}</strong>
+            <p>{move || capability.get().warning}</p>
+            <p>{move || if capability.get().enabled {
+                "This build has the development-only write capability and the server was started with explicit write opt-in. The mode is not supported for release use."
+            } else {
+                "Browse, compare, and Apply preview remain available. Edits are staged only in this browser's localStorage, survive refresh, and are not written to source files. Keep or copy drafts before clearing browser data."
+            }}</p>
+        </section>
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1612,12 +1639,15 @@ fn OptionalMetadataRow(
 
 #[cfg(target_arch = "wasm32")]
 #[component]
-fn WorkbenchWorkflowPanels(pivot: RwSignal<Option<Value>>) -> impl IntoView {
+fn WorkbenchWorkflowPanels(
+    pivot: RwSignal<Option<Value>>,
+    capability: RwSignal<WorkbenchWriteCapability>,
+) -> impl IntoView {
     view! {
         {move || match pivot.get() {
             Some(pivot) => view! {
                 <PaneLayoutPanel pivot=pivot.clone() />
-                <NewLanguagePanel pivot=pivot />
+                <NewLanguagePanel pivot=pivot capability=capability />
             }.into_any(),
             None => "".into_any(),
         }}
@@ -1626,11 +1656,22 @@ fn WorkbenchWorkflowPanels(pivot: RwSignal<Option<Value>>) -> impl IntoView {
 
 #[cfg(target_arch = "wasm32")]
 #[component]
-fn ApplyBox(pivot: RwSignal<Option<Value>>) -> impl IntoView {
+fn ApplyBox(
+    pivot: RwSignal<Option<Value>>,
+    capability: RwSignal<WorkbenchWriteCapability>,
+) -> impl IntoView {
     let output_text = RwSignal::new(String::new());
     let validation_ok = RwSignal::new(None::<bool>);
 
     let run_apply = move |write: bool| {
+        if write && !capability.get_untracked().enabled {
+            output_text.set(
+                "Read-only: draft retained in this browser; no source files were changed."
+                    .to_owned(),
+            );
+            validation_ok.set(Some(false));
+            return;
+        }
         let Some(pivot_value) = pivot.get_untracked() else {
             output_text.set("Apply failed: note pivot is not loaded".to_owned());
             validation_ok.set(Some(false));
@@ -1685,7 +1726,16 @@ fn ApplyBox(pivot: RwSignal<Option<Value>>) -> impl IntoView {
     view! {
         <button id="apply-preview-button" type="button" on:click=move |_| run_preview(false)>Apply preview</button>
         " "
-        <button id="apply-confirm-button" type="button" on:click=move |_| run_apply(true)>Confirm Apply</button>
+        <button
+            id="apply-confirm-button"
+            type="button"
+            disabled=move || !capability.get().enabled
+            title=move || if capability.get().enabled { "Unsafe development Apply" } else { "Read-only Workbench: drafts stay in browser localStorage" }
+            on:click=move |_| run_apply(true)
+        >
+            {move || if capability.get().enabled { "Confirm unsafe development Apply" } else { "Apply unavailable — read-only" }}
+        </button>
+        <p class="draft-retention-copy">{"Drafts remain in this browser's localStorage until an enabled Apply succeeds or browser data is cleared."}</p>
         <pre
             id="apply-preview-output"
             data-validation-ok=move || validation_ok.get().map(|ok| ok.to_string()).unwrap_or_default()
@@ -1964,7 +2014,7 @@ fn SecondaryTargetPane(comparison: Value) -> impl IntoView {
 
 #[cfg(target_arch = "wasm32")]
 #[component]
-fn NewLanguagePanel(pivot: Value) -> impl IntoView {
+fn NewLanguagePanel(pivot: Value, capability: RwSignal<WorkbenchWriteCapability>) -> impl IntoView {
     let languages = pivot["selection_options"]["languages"]
         .as_array()
         .cloned()
@@ -2069,7 +2119,15 @@ fn NewLanguagePanel(pivot: Value) -> impl IntoView {
             <label>"Display name "<input id="new-language-display-name" placeholder="Norwegian Bokmal" on:input=move |event| display_name.set(event_input_value(&event)) /></label>
             <button id="new-language-preview-button" type="button" on:click=preview>Preview new language</button>
             " "
-            <button id="new-language-confirm-button" type="button" on:click=confirm>Create language</button>
+            <button
+                id="new-language-confirm-button"
+                type="button"
+                disabled=move || !capability.get().enabled
+                title=move || if capability.get().enabled { "Unsafe development source mutation" } else { "Read-only Workbench" }
+                on:click=confirm
+            >
+                {move || if capability.get().enabled { "Create language (unsafe development)" } else { "Create unavailable — read-only" }}
+            </button>
             <div
                 id="new-language-preview-output"
                 data-validation-ok=move || matches!(status.get(), NewLanguageStatus::Preview(_)).to_string()
@@ -2516,11 +2574,33 @@ fn maybe_load_current_view(view: WorkbenchView) {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkbenchWriteCapability {
+    pub enabled: bool,
+    pub mode: String,
+    pub development_build: bool,
+    pub runtime_opt_in: bool,
+    pub warning: String,
+}
+
+impl Default for WorkbenchWriteCapability {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            mode: "read_only".to_owned(),
+            development_build: false,
+            runtime_opt_in: false,
+            warning: "Loading server capability; source writes remain disabled.".to_owned(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkspaceSummary {
     pub manifest: String,
     pub language_count: usize,
     pub target_count: usize,
     pub fingerprint_count: usize,
+    pub write_capability: WorkbenchWriteCapability,
 }
 
 impl WorkspaceSummary {
@@ -2535,6 +2615,25 @@ impl WorkspaceSummary {
                 .map_or(0, serde_json::Map::len),
             target_count: value["targets"].as_object().map_or(0, serde_json::Map::len),
             fingerprint_count: value["fingerprints"].as_array().map_or(0, Vec::len),
+            write_capability: WorkbenchWriteCapability {
+                enabled: value["write_capability"]["enabled"]
+                    .as_bool()
+                    .unwrap_or(false),
+                mode: value["write_capability"]["mode"]
+                    .as_str()
+                    .unwrap_or("read_only")
+                    .to_owned(),
+                development_build: value["write_capability"]["development_build"]
+                    .as_bool()
+                    .unwrap_or(false),
+                runtime_opt_in: value["write_capability"]["runtime_opt_in"]
+                    .as_bool()
+                    .unwrap_or(false),
+                warning: value["write_capability"]["warning"]
+                    .as_str()
+                    .unwrap_or("Workbench write capability is unavailable.")
+                    .to_owned(),
+            },
         }
     }
 }
@@ -2558,6 +2657,11 @@ fn publish_workspace_probe(status: &str, message: &str, workspace: Option<&Works
         let _ = element.set_attribute("data-language-count", language_count.as_str());
         let _ = element.set_attribute("data-target-count", target_count.as_str());
         let _ = element.set_attribute("data-fingerprint-count", fingerprint_count.as_str());
+        let _ = element.set_attribute("data-write-mode", &workspace.write_capability.mode);
+        let _ = element.set_attribute(
+            "data-write-enabled",
+            &workspace.write_capability.enabled.to_string(),
+        );
         element.set_text_content(Some(&format!(
             "Brain Brew Deck Workbench loaded {} language(s), {} target(s), and {} watched file(s) from {}",
             workspace.language_count,

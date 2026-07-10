@@ -6,12 +6,12 @@ This crate contains browser E2E tests for `brainbrew workbench serve`. It is a w
 devenv shell e2e
 ```
 
-The `e2e` script builds the Iced/WASM UI into `target/workbench-ui`, builds the `brainbrew` binary, starts the devenv-provided `chromedriver`, and runs the Rust `thirtyfour` tests against a real local workbench server.
+The `e2e` script builds the Leptos/WASM UI into `target/workbench-ui`, builds `brainbrew` with the development-only `workbench-write-dev` feature, starts write scenarios with explicit `--enable-write`, keeps the app-shell containment scenario read-only, starts the devenv-provided `chromedriver`, and runs the Rust `thirtyfour` tests against a real local Workbench server. The app-shell scenario verifies the read-only banner and disabled Apply control; the edit/apply scenario verifies the visible/API `development_write` marker before writing. Normal release binaries do not contain this capability.
 
 ## Fixtures
 
 - Small purpose-built fixtures should be created in temp directories by each test. They keep failures focused and allow tests to inspect mutated YAML files directly.
-- UG-like smoke coverage should use a reduced fixture with the same shape as Ultimate Geography: a source language, a target language, a translation overlay, a target variant, and file-backed assets/includes when that behavior is under test. Full `fixtures/ultimate-geography/brainbrew.yaml` coverage can be added as a slower smoke once the workbench exposes enough UI to navigate real-world decks.
+- UG-like smoke coverage uses both reduced fixtures and the real `fixtures/ultimate-geography/brainbrew.yaml` manifest for bounded navigation/media checks.
 
 ## Failure artifacts
 

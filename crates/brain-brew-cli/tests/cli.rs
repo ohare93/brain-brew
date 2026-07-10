@@ -3,6 +3,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdout, Command, Stdio};
+#[cfg(feature = "workbench-write-dev")]
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -51,6 +52,9 @@ fn workbench_help_includes_serve_entrypoint() {
     assert!(out.contains("--no-open"));
     assert!(out.contains("--dev-assets"));
     assert!(out.contains("target/workbench-ui"));
+    assert!(out.contains("workbench-write-dev"));
+    assert!(out.contains("--enable-write"));
+    assert!(out.contains("read-only"));
 
     let serve = run(["workbench", "serve", "--help"]);
     assert!(serve.status.success(), "stderr: {}", stderr(&serve));
@@ -79,6 +83,18 @@ fn workbench_serve_exposes_workspace_metadata_api() {
     );
 
     let workspace = get_json(&server.url("/api/workspace"));
+    assert_eq!(
+        workspace["write_capability"]["enabled"],
+        cfg!(feature = "workbench-write-dev")
+    );
+    assert_eq!(
+        workspace["write_capability"]["mode"],
+        if cfg!(feature = "workbench-write-dev") {
+            "development_write"
+        } else {
+            "read_only"
+        }
+    );
     assert_eq!(
         workspace["manifest"],
         dir.join("brainbrew.yaml").display().to_string()
@@ -152,6 +168,100 @@ translations:
     assert_ne!(updated_da_fingerprint, original_da_fingerprint);
 }
 
+#[test]
+fn workbench_read_only_server_rejects_every_state_changing_route_without_writes() {
+    let dir = temp_dir("workbench-read-only-routes");
+    write_workbench_workspace(&dir);
+    let manifest_before = fs::read(dir.join("brainbrew.yaml")).unwrap();
+    let deck_before = fs::read(dir.join("deck.yaml")).unwrap();
+    let overlay_before = fs::read(dir.join("da.yaml")).unwrap();
+    let server = spawn_read_only_workbench_server_with_env(
+        [
+            "workbench",
+            "serve",
+            "--manifest",
+            dir.join("brainbrew.yaml").to_str().unwrap(),
+            "--port",
+            "0",
+            "--no-open",
+        ],
+        &[
+            ("BRAINBREW_ATOMIC_WRITE_FAIL_VALIDATE_INDEX", "0"),
+            ("BRAINBREW_ATOMIC_WRITE_FAIL_TEMP_INDEX", "0"),
+            ("BRAINBREW_ATOMIC_WRITE_FAIL_RENAME_INDEX", "0"),
+            ("BRAINBREW_ATOMIC_WRITE_SLEEP_BEFORE_RENAME_MS", "1"),
+        ],
+    );
+
+    let workspace = get_json(&server.url("/api/workspace"));
+    assert_eq!(workspace["write_capability"]["enabled"], false);
+    assert_eq!(workspace["write_capability"]["mode"], "read_only");
+    assert_eq!(workspace["write_capability"]["runtime_opt_in"], false);
+
+    let preview = get_json(
+        &server
+            .url("/api/workbench/new-language-preview?template=da&code=nb&display_name=Norwegian"),
+    );
+    assert_eq!(preview["validation"]["ok"], true);
+    let (status, body) = post_json_error(
+        &server.url("/api/workbench/new-language"),
+        preview["draft"].clone(),
+    );
+    assert_eq!(status, 403);
+    assert!(body.contains("Workbench is read-only"));
+
+    let apply_request = serde_json::json!({
+        "language": "da",
+        "target": "standard",
+        "overlay": "base",
+        "edits": [{
+            "kind": "translation",
+            "path": "notes.note.finland.fields.field.capital",
+            "source": "Helsinki",
+            "value": "Helsingfors",
+            "mode": "direct"
+        }]
+    });
+    let apply_preview = post_json(
+        &server.url("/api/workbench/apply-preview"),
+        apply_request.clone(),
+    );
+    assert_eq!(apply_preview["validation"]["ok"], true);
+    let (status, body) = post_json_error(&server.url("/api/workbench/apply"), apply_request);
+    assert_eq!(status, 403);
+    assert!(body.contains("Workbench is read-only"));
+
+    assert_eq!(
+        fs::read(dir.join("brainbrew.yaml")).unwrap(),
+        manifest_before
+    );
+    assert_eq!(fs::read(dir.join("deck.yaml")).unwrap(), deck_before);
+    assert_eq!(fs::read(dir.join("da.yaml")).unwrap(), overlay_before);
+    assert!(!dir.join("overlays/languages/nb.yaml").exists());
+}
+
+#[cfg(not(feature = "workbench-write-dev"))]
+#[test]
+fn workbench_runtime_flag_cannot_bypass_missing_compile_capability() {
+    let dir = temp_dir("workbench-no-compile-bypass");
+    write_workbench_workspace(&dir);
+    let output = run([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--no-open",
+        "--enable-write",
+    ]);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output)
+            .contains("built without the development-only workbench-write-dev capability")
+    );
+}
+
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_new_language_scaffold_preview_write_and_initial_edit() {
     let dir = temp_dir("workbench-new-language");
@@ -243,6 +353,7 @@ fn workbench_new_language_scaffold_preview_write_and_initial_edit() {
     assert!(overlay.contains("Helsinki: Helsingfors"));
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_new_language_scaffold_can_deselect_template_overlay_groups() {
     let dir = temp_dir("workbench-new-language-groups");
@@ -806,6 +917,7 @@ fn workbench_ug_detail_media_urls_serve_declared_bytes_from_media_root() {
     }
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_optional_metadata_progress_and_apply_are_separate_from_main_fields() {
     let dir = temp_dir("workbench-optional-metadata");
@@ -909,6 +1021,7 @@ fn workbench_optional_metadata_progress_and_apply_are_separate_from_main_fields(
     );
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_apply_rejects_invalid_rendered_description_content() {
     let dir = temp_dir("workbench-content-validation");
@@ -992,6 +1105,7 @@ fn workbench_comparison_pane_summarizes_note_source_string_and_card_context() {
     assert!(comparison["note_pivot"]["notes"].as_array().unwrap().len() >= 2);
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_apply_groups_multi_pane_edits_by_file_and_content_group() {
     let dir = temp_dir("workbench-multi-pane-apply");
@@ -1079,6 +1193,7 @@ fn workbench_apply_groups_multi_pane_edits_by_file_and_content_group() {
     assert!(nb.contains("Helsinki: Helsinki norsk"));
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_apply_validation_failure_leaves_all_targets_unchanged() {
     let dir = temp_dir("workbench-atomic-validate");
@@ -1115,6 +1230,7 @@ fn workbench_apply_validation_failure_leaves_all_targets_unchanged() {
     assert_eq!(fs::read(dir.join("nb.yaml")).unwrap(), original_nb);
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_apply_temp_write_failure_leaves_targets_unchanged() {
     let dir = temp_dir("workbench-atomic-temp-fail");
@@ -1151,6 +1267,7 @@ fn workbench_apply_temp_write_failure_leaves_targets_unchanged() {
     assert_eq!(fs::read(dir.join("nb.yaml")).unwrap(), original_nb);
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_apply_rename_failure_reports_updated_and_not_updated_files() {
     let dir = temp_dir("workbench-atomic-rename-fail");
@@ -1184,6 +1301,7 @@ fn workbench_apply_rename_failure_reports_updated_and_not_updated_files() {
     );
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_apply_uses_atomic_temp_rename_helper() {
     let dir = temp_dir("workbench-atomic-trace");
@@ -1218,6 +1336,7 @@ fn workbench_apply_uses_atomic_temp_rename_helper() {
     );
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_concurrent_apply_requests_are_serialized() {
     let dir = temp_dir("workbench-atomic-concurrent");
@@ -1267,6 +1386,7 @@ fn workbench_concurrent_apply_requests_are_serialized() {
     assert_eq!(active_transactions, 0, "unterminated transaction: {trace}");
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_card_pivot_navigates_previews_and_applies_field_edit() {
     let dir = temp_dir("workbench-card-pivot");
@@ -1345,6 +1465,7 @@ fn workbench_card_pivot_navigates_previews_and_applies_field_edit() {
     );
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_source_string_pivot_supports_direct_contextual_and_no_change_edits() {
     let dir = temp_dir("workbench-source-string");
@@ -1453,6 +1574,7 @@ fn workbench_source_string_pivot_supports_direct_contextual_and_no_change_edits(
     assert!(overlay.contains("Estonia: Estonia"));
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_source_string_pivot_exposes_structured_message_components() {
     let dir = temp_dir("workbench-source-string-structured");
@@ -1544,6 +1666,7 @@ translation_profile:
     assert!(overlay.contains("blå bakgrunn med kvitt kors"));
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_apply_preview_and_apply_write_translation_overlay() {
     let dir = temp_dir("workbench-apply");
@@ -1654,6 +1777,7 @@ fn workbench_apply_preview_and_apply_write_translation_overlay() {
     assert_eq!(capital["status"], "direct_translation");
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_source_edits_create_contextual_stale_translations_for_changed_occurrence() {
     let dir = temp_dir("workbench-source-stale");
@@ -1771,6 +1895,7 @@ fn workbench_source_edits_create_contextual_stale_translations_for_changed_occur
     assert_eq!(estonia_capital["status"], "direct_translation");
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_source_edits_preserve_contextual_impacts_per_occurrence() {
     let dir = temp_dir("workbench-source-contextual-stale");
@@ -1861,6 +1986,7 @@ fn workbench_source_edits_preserve_contextual_impacts_per_occurrence() {
     assert!(!overlay.contains("stale_translations"));
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_source_edits_can_migrate_keys_change_all_and_preserve_includes() {
     let dir = temp_dir("workbench-source-migrate");
@@ -1913,6 +2039,7 @@ fn workbench_source_edits_can_migrate_keys_change_all_and_preserve_includes() {
     assert!(!overlay.contains("stale_translations"));
 }
 
+#[cfg(feature = "workbench-write-dev")]
 #[test]
 fn workbench_mixed_source_then_translation_apply_uses_new_source_state() {
     let dir = temp_dir("workbench-source-mixed");
@@ -5800,12 +5927,30 @@ fn spawn_workbench_server<const N: usize>(args: [&str; N]) -> RunningWorkbenchSe
     spawn_workbench_server_with_env(args, &[])
 }
 
+fn spawn_read_only_workbench_server_with_env<const N: usize>(
+    args: [&str; N],
+    envs: &[(&str, &str)],
+) -> RunningWorkbenchServer {
+    spawn_workbench_server_internal(args, envs, false)
+}
+
 fn spawn_workbench_server_with_env<const N: usize>(
     args: [&str; N],
     envs: &[(&str, &str)],
 ) -> RunningWorkbenchServer {
+    spawn_workbench_server_internal(args, envs, cfg!(feature = "workbench-write-dev"))
+}
+
+fn spawn_workbench_server_internal<const N: usize>(
+    args: [&str; N],
+    envs: &[(&str, &str)],
+    enable_write: bool,
+) -> RunningWorkbenchServer {
     let mut command = Command::new(env!("CARGO_BIN_EXE_brainbrew"));
     command.args(args);
+    if enable_write {
+        command.arg("--enable-write");
+    }
     for (name, value) in envs {
         command.env(name, value);
     }
@@ -5969,6 +6114,7 @@ fn post_json_error(url: &str, body: serde_json::Value) -> (u16, String) {
     }
 }
 
+#[cfg(feature = "workbench-write-dev")]
 fn atomic_translation_apply_request(value_suffix: &str) -> serde_json::Value {
     serde_json::json!({
         "language": "da",
@@ -5984,6 +6130,7 @@ fn atomic_translation_apply_request(value_suffix: &str) -> serde_json::Value {
     })
 }
 
+#[cfg(feature = "workbench-write-dev")]
 fn atomic_multi_file_apply_request(value_suffix: &str) -> serde_json::Value {
     serde_json::json!({
         "language": "da",
@@ -6093,6 +6240,7 @@ translations:
     );
 }
 
+#[cfg(feature = "workbench-write-dev")]
 fn write_workbench_repeated_source_contextual_workspace(dir: &Path) {
     write_workbench_repeated_source_deck(dir);
     write_workbench_manifest_and_overlay(
@@ -6344,6 +6492,7 @@ tombstones: []
     .unwrap();
 }
 
+#[cfg(feature = "workbench-write-dev")]
 fn write_multi_language_workbench_workspace(dir: &Path) {
     fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML).unwrap();
     fs::write(

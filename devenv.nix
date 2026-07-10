@@ -34,6 +34,7 @@ in
   scripts.check.exec = "cargo check --workspace --exclude brain-brew-workbench-e2e --all-targets";
   scripts.test.exec = "cargo test --workspace --exclude brain-brew-workbench-e2e --all-targets";
   scripts.clippy.exec = "cargo clippy --workspace --exclude brain-brew-workbench-e2e --all-targets -- -D warnings";
+  scripts."test:workbench-write".exec = "cargo test -p brainbrew --features workbench-write-dev --test cli workbench_";
   scripts."workbench-ui-build".exec = ''
     set -euo pipefail
     cd crates/brain-brew-workbench-ui
@@ -58,7 +59,7 @@ in
     mkdir -p "$artifact_dir"
 
     (cd crates/brain-brew-workbench-ui && trunk build --dist ../../target/workbench-ui --public-url /)
-    cargo build -p brainbrew
+    cargo build -p brainbrew --features workbench-write-dev
 
     export BRAINBREW_E2E_ARTIFACT_DIR="$artifact_dir"
     export BRAINBREW_E2E_BIN="''${BRAINBREW_E2E_BIN:-$PWD/target/debug/brainbrew}"
@@ -109,7 +110,9 @@ in
     set -euo pipefail
     cargo fmt --all -- --check
     cargo test --workspace --exclude brain-brew-workbench-e2e --all-targets
+    cargo test -p brainbrew --features workbench-write-dev --test cli workbench_
     cargo clippy --workspace --exclude brain-brew-workbench-e2e --all-targets -- -D warnings
+    cargo clippy -p brainbrew --features workbench-write-dev --all-targets -- -D warnings
     workbench-ui-embed-check
     e2e
   '';

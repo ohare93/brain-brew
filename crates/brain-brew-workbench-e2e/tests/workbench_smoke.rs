@@ -28,14 +28,14 @@ async fn workbench_app_shell_loads_workspace_metadata() -> Result<()> {
     let workspace = TempDir::new().context("create E2E workspace")?;
     write_small_workbench_fixture(workspace.path())?;
 
-    let server = RunningWorkbenchServer::spawn(
+    let server = RunningWorkbenchServer::spawn_read_only(
         workspace.path().join("brainbrew.yaml"),
         dev_assets_path(),
         artifacts.path(),
     )?;
     let driver = new_driver().await.context("connect to WebDriver")?;
 
-    let smoke_result = run_app_shell_smoke(&driver, &server).await;
+    let smoke_result = run_app_shell_smoke(&driver, &server, false).await;
     if let Err(error) = &smoke_result {
         let _ = artifacts.save_browser_failure(&driver, error).await;
     }
@@ -342,7 +342,11 @@ async fn workbench_loads_ug_like_repeated_source_smoke_path() -> Result<()> {
     Ok(())
 }
 
-async fn run_app_shell_smoke(driver: &WebDriver, server: &RunningWorkbenchServer) -> Result<()> {
+async fn run_app_shell_smoke(
+    driver: &WebDriver,
+    server: &RunningWorkbenchServer,
+    expect_write_enabled: bool,
+) -> Result<()> {
     driver
         .goto(server.url("/"))
         .await
@@ -367,6 +371,47 @@ async fn run_app_shell_smoke(driver: &WebDriver, server: &RunningWorkbenchServer
         Some("2")
     );
     assert_eq!(probe.attr("data-target-count").await?.as_deref(), Some("2"));
+    let expected_mode = if expect_write_enabled {
+        "development_write"
+    } else {
+        "read_only"
+    };
+    let expected_enabled = expect_write_enabled.to_string();
+    assert_eq!(
+        probe.attr("data-write-mode").await?.as_deref(),
+        Some(expected_mode)
+    );
+    assert_eq!(
+        probe.attr("data-write-enabled").await?.as_deref(),
+        Some(expected_enabled.as_str())
+    );
+    let access_banner = wait_for_element(driver, "#workbench-access-banner").await?;
+    assert_eq!(
+        access_banner.attr("data-write-enabled").await?.as_deref(),
+        Some(expected_enabled.as_str())
+    );
+    let banner_text = access_banner.text().await?;
+    if expect_write_enabled {
+        assert!(
+            banner_text.contains("Unsafe development writes enabled"),
+            "E2E write mode must be visibly identifiable"
+        );
+    } else {
+        assert!(banner_text.contains("Read-only Workbench"));
+        assert!(banner_text.contains("localStorage"));
+        assert!(
+            !wait_for_element(driver, "#apply-confirm-button")
+                .await?
+                .is_enabled()
+                .await?
+        );
+        assert!(
+            wait_for_element(driver, "#apply-preview-button")
+                .await?
+                .is_enabled()
+                .await?
+        );
+    }
 
     let wasm_loaded = driver
         .execute("return Boolean(window.wasmBindings);", Vec::new())
@@ -498,7 +543,7 @@ async fn run_edit_apply_smoke(
     server: &RunningWorkbenchServer,
     workspace: &Path,
 ) -> Result<()> {
-    run_app_shell_smoke(driver, server).await?;
+    run_app_shell_smoke(driver, server, true).await?;
     let input_id = "translation-input-notes_note_finland_fields_field_capital";
     let inline_selector = ".note-card[data-note-id='note.finland'] .target-preview [data-preview-field-id='field.capital']";
     wait_for_js_bool(
@@ -2410,7 +2455,15 @@ struct RunningWorkbenchServer {
 
 impl RunningWorkbenchServer {
     fn spawn(manifest: PathBuf, dev_assets: Option<PathBuf>, artifact_dir: &Path) -> Result<Self> {
-        Self::spawn_with_media_root(manifest, dev_assets, artifact_dir, None)
+        Self::spawn_internal(manifest, dev_assets, artifact_dir, None, true)
+    }
+
+    fn spawn_read_only(
+        manifest: PathBuf,
+        dev_assets: Option<PathBuf>,
+        artifact_dir: &Path,
+    ) -> Result<Self> {
+        Self::spawn_internal(manifest, dev_assets, artifact_dir, None, false)
     }
 
     fn spawn_with_media_root(
@@ -2418,6 +2471,16 @@ impl RunningWorkbenchServer {
         dev_assets: Option<PathBuf>,
         artifact_dir: &Path,
         media_root: Option<PathBuf>,
+    ) -> Result<Self> {
+        Self::spawn_internal(manifest, dev_assets, artifact_dir, media_root, true)
+    }
+
+    fn spawn_internal(
+        manifest: PathBuf,
+        dev_assets: Option<PathBuf>,
+        artifact_dir: &Path,
+        media_root: Option<PathBuf>,
+        enable_write: bool,
     ) -> Result<Self> {
         let brainbrew = std::env::var_os("BRAINBREW_E2E_BIN")
             .map(PathBuf::from)
@@ -2443,6 +2506,9 @@ impl RunningWorkbenchServer {
             "0",
             "--no-open",
         ]);
+        if enable_write {
+            command.arg("--enable-write");
+        }
         if let Some(dev_assets) = dev_assets {
             command.arg("--dev-assets").arg(dev_assets);
         }

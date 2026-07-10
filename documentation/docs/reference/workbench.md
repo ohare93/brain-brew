@@ -10,7 +10,25 @@ The Deck Workbench is launched locally:
 brainbrew workbench serve --manifest brainbrew.yaml
 ```
 
-The server binds `127.0.0.1` on an available port by default and serves JSON APIs plus browser UI assets. Release builds embed the checked-in Trunk output from `crates/brain-brew-cli/assets/workbench` in the `brainbrew` binary. For frontend development, build or watch the Leptos/WASM UI into a server-readable directory:
+The server binds `127.0.0.1` on an available port by default and serves JSON APIs plus browser UI assets.
+
+## Temporary read-only safety boundary
+
+**Normal builds and every distributed release artifact are read-only.** Browsing, language/target selection, comparison panes, media previews, Apply preview, and browser-local draft staging remain available. `POST /api/workbench/apply` and `POST /api/workbench/new-language` return HTTP 403 before any source mutation.
+
+Staged edits remain in that browser profile's `localStorage` across navigation and refresh. They are not copied to canonical YAML while the Workbench is read-only. Keep the browser profile or copy important draft text before clearing site data. The UI displays the server-provided `write_capability` from `/api/workspace`; it never guesses capability from build type or an environment variable.
+
+This containment can be removed only after all of these conditions land and are tested together:
+
+1. source-document mutation preserves canonical source and includes (canonical-source-integrity 0060, tracked as `.frontloop/canonical-source-integrity/ready/0060-migrate-media-import-and-workbench-writes-to-safe-mutation-modules.md`);
+2. every Apply input has complete compare-and-swap fingerprints (Workbench hardening 0040);
+3. Confirm is bound to an immutable, validated preview token (Workbench hardening 0050);
+4. writes use a recoverable transaction with startup recovery (Workbench hardening 0060); and
+5. the applicable Workbench security gate is complete for the accepted threat model.
+
+There is no promised removal date.
+
+Release builds embed the checked-in Trunk output from `crates/brain-brew-cli/assets/workbench` in the `brainbrew` binary. For frontend development, build or watch the Leptos/WASM UI into a server-readable directory:
 
 ```bash
 devenv shell workbench-ui-build
@@ -26,7 +44,20 @@ Refresh release-embedded assets after frontend changes:
 devenv shell workbench-ui-embed
 ```
 
-The Leptos/WASM source lives in `crates/brain-brew-workbench-ui`. It builds with Trunk for `wasm32-unknown-unknown`, renders the Workbench view switcher and lazy pivot/detail panes, and fetches workspace metadata from `/api/workspace`.
+The Leptos/WASM source lives in `crates/brain-brew-workbench-ui`. It builds with Trunk for `wasm32-unknown-unknown`, renders the Workbench view switcher and lazy pivot/detail panes, and fetches workspace metadata and the authoritative write capability from `/api/workspace`.
+
+### Unsafe write-path development only
+
+Write implementations remain available only so the hardening tasks can migrate and test them. Enabling them requires both an unmistakable compile-time capability and explicit runtime opt-in:
+
+```bash
+cargo build -p brainbrew --features workbench-write-dev
+./target/debug/brainbrew workbench serve \
+  --manifest brainbrew.yaml \
+  --enable-write
+```
+
+The server and UI identify this as `development_write` mode and show a prominent unsafe-development warning. A normal binary rejects `--enable-write`; there is no environment-variable bypass. Cargo's default feature set is empty, and release/cargo-dist commands do not enable `workbench-write-dev`, so distributed artifacts cannot enter write mode.
 
 The target Workbench interaction model is documented in [ADR-015: Use Lazy Single-Work-Item Workbench Editing](decisions/0015-use-lazy-single-work-item-workbench-editing.md). In short: pivots should be compact paginated navigation lists, editing should happen in one selected item detail pane at a time, multilingual context should be lazy and selected-item scoped, and browser-local staged edits remain unapplied until explicit Apply.
 
@@ -53,7 +84,7 @@ The current note pivot supports target-translation edits and constrained source 
 
 - `GET /api/workbench/note-pivot` returns the selected target language, target, translation overlay, main note-field progress, note rows, field statuses, occurrence counts, source edit controls, and near-Anki source/target previews.
 - `POST /api/workbench/apply-preview` accepts browser-local staged edits and returns changed entries, affected source/overlay files, and validation results without writing YAML.
-- `POST /api/workbench/apply` repeats validation, applies source edits first, then applies target translation edits against the updated source state.
+- `POST /api/workbench/apply` is blocked in normal/read-only mode. In explicitly enabled unsafe development mode it repeats validation, applies source edits first, then applies target translation edits against the updated source state.
 - Target translation edits rewrite the selected Translation Overlay as canonical YAML.
 - Source note-field edits rewrite the Canonical Deck File, except `!include`-backed scalar fields rewrite the included file and keep the include reference intact.
 - Repeated source text edits default to the current field only. The browser UI shows the occurrence count and offers an all-occurrences scope.
@@ -115,7 +146,7 @@ Pane layout controls turn read/write status into a workflow preset instead of a 
 The Workbench can scaffold a new target language from an existing target-language template:
 
 - `GET /api/workbench/new-language-preview` derives an editable draft without writing files.
-- `POST /api/workbench/new-language` writes the confirmed manifest changes and new translation overlay files.
+- `POST /api/workbench/new-language` is blocked in normal/read-only mode. It writes confirmed manifest changes and new translation overlay files only in explicitly enabled unsafe development mode.
 - Defaults follow workspace conventions: `overlay.translation.<code>`, `overlays/languages/<code>.yaml`, target IDs `<code>-<target-label>`, and copied language target labels from the template.
 - Every template `translation_overlays` group is selected in the preview by default; maintainers can deselect groups or edit generated overlay IDs, file paths, and target IDs before creation.
 - New translation overlay files start with an empty `translations: {}` dictionary so progress reports all source strings as missing until reviewed.

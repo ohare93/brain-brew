@@ -84,6 +84,7 @@ struct ServeArgs {
     open_browser: bool,
     dev_assets: Option<PathBuf>,
     media_root: Option<PathBuf>,
+    enable_write: bool,
 }
 
 fn parse_serve_args(args: &[String]) -> Result<ServeArgs, String> {
@@ -93,6 +94,7 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, String> {
         open_browser: true,
         dev_assets: None,
         media_root: None,
+        enable_write: false,
     };
     let mut index = 0;
     while index < args.len() {
@@ -131,6 +133,10 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, String> {
                 parsed.media_root = Some(PathBuf::from(path));
                 index += 2;
             }
+            "--enable-write" => {
+                parsed.enable_write = true;
+                index += 1;
+            }
             other => return Err(format!("unexpected workbench serve argument {other:?}")),
         }
     }
@@ -150,6 +156,12 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, String> {
             path.display()
         ));
     }
+    if parsed.enable_write && !cfg!(feature = "workbench-write-dev") {
+        return Err(
+            "--enable-write is unavailable: this binary was built without the development-only workbench-write-dev capability"
+                .to_owned(),
+        );
+    }
     Ok(parsed)
 }
 
@@ -165,6 +177,7 @@ async fn serve(args: ServeArgs) -> Result<(), String> {
         &args.manifest_path,
         manifest,
         args.media_root.clone(),
+        args.enable_write,
     ));
     let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), args.port))
         .await
@@ -332,6 +345,7 @@ async fn create_new_language(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Json(request): Json<NewLanguageRequest>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    metadata.require_write_capability()?;
     run_workbench_blocking(move || metadata.create_new_language_json(request).map(Json)).await
 }
 
@@ -351,6 +365,7 @@ async fn apply_edits(
     State(metadata): State<Arc<WorkspaceMetadata>>,
     Json(request): Json<ApplyRequest>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    metadata.require_write_capability()?;
     run_workbench_blocking(move || {
         metadata
             .apply_request_json(request, ApplyMode::Write)
@@ -445,6 +460,7 @@ struct WorkspaceMetadata {
     manifest_path: PathBuf,
     manifest_root: PathBuf,
     media_root: Option<PathBuf>,
+    write_enabled: bool,
     cache: tokio::sync::RwLock<WorkspaceCache>,
     apply_mutex: Mutex<()>,
 }
@@ -498,13 +514,26 @@ impl WorkspaceMetadata {
         manifest_path: &Path,
         manifest: FederatedDeckManifest,
         media_root: Option<PathBuf>,
+        enable_write: bool,
     ) -> Self {
         Self {
             manifest_path: manifest_path.to_path_buf(),
             manifest_root: manifest_root(manifest_path),
             media_root,
+            write_enabled: cfg!(feature = "workbench-write-dev") && enable_write,
             cache: tokio::sync::RwLock::new(WorkspaceCache::new(manifest)),
             apply_mutex: Mutex::new(()),
+        }
+    }
+
+    fn require_write_capability(&self) -> Result<(), (StatusCode, String)> {
+        if self.write_enabled {
+            Ok(())
+        } else {
+            Err((
+                StatusCode::FORBIDDEN,
+                "Workbench is read-only; source mutation is unavailable in this server".to_owned(),
+            ))
         }
     }
 
@@ -615,6 +644,17 @@ impl WorkspaceMetadata {
                 "metadata_category_order": manifest.translation_profile.metadata_category_order,
             },
             "fingerprints": fingerprints,
+            "write_capability": {
+                "enabled": self.write_enabled,
+                "mode": if self.write_enabled { "development_write" } else { "read_only" },
+                "development_build": cfg!(feature = "workbench-write-dev"),
+                "runtime_opt_in": self.write_enabled,
+                "warning": if self.write_enabled {
+                    "UNSAFE DEVELOPMENT MODE: Workbench writes can overwrite stale edits, partially commit, or produce non-canonical source. Do not use on irreplaceable work."
+                } else {
+                    "Workbench is read-only while source mutation, complete compare-and-swap fingerprints, bound preview confirmation, recoverable transactions, and applicable security gates are incomplete."
+                },
+            },
         }))
     }
 
