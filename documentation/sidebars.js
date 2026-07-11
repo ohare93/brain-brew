@@ -57,6 +57,7 @@ const sidebars = {
         'reference/workspace-transactions',
         'reference/lockfile',
         'reference/release-oracle',
+        'reference/crowdanki-equivalence-oracle',
         'reference/releasing',
         'reference/project-scope',
         {

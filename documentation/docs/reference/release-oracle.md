@@ -8,6 +8,13 @@ The Ultimate Geography fixture can compare against public release artifacts when
 
 The repository does not check in release ZIPs or extracted `deck.json` files.
 
+This fixture-level JSON parity aid is separate from the typed
+[normalized CrowdAnki equivalence oracle](./crowdanki-equivalence-oracle.md).
+Release-oracle comparisons prove output parity with a chosen external artifact;
+the normalized oracle proves supported canonical/import semantics and explicitly
+marks reference-only media as byte-unproven. Use byte-bound media verification in
+addition to either comparison for a release claim.
+
 ## Fetch an oracle
 
 ```bash

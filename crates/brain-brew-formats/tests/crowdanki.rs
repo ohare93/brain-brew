@@ -50,6 +50,222 @@ fn import_export_round_trip_is_semantically_equal_when_suggested_ids_match_sourc
 }
 
 #[test]
+fn normalized_equivalence_oracle_projects_only_documented_adapter_losses() {
+    let original = ug_style_deck();
+    let export = crowdanki::export_deck(&original).expect("deck exports");
+
+    let success =
+        crowdanki::canonical_crowdanki_equivalence(&original, export.deck_json.as_bytes(), None)
+            .expect("exported JSON is equivalent under the documented profile");
+    assert_eq!(
+        success.profile,
+        crowdanki::CROWDANKI_ROUND_TRIP_PROFILE.name
+    );
+    assert_eq!(
+        success.media_bytes,
+        crowdanki::CrowdAnkiMediaByteProof::NotProven
+    );
+
+    let mut changed = expected_crowdanki_json_value();
+    changed["notes"][0]["fields"][1] = serde_json::json!("Espoo");
+    let report = match crowdanki::canonical_crowdanki_equivalence(
+        &original,
+        changed.to_string().as_bytes(),
+        None,
+    )
+    .expect_err("one supported property mutation must be observed")
+    {
+        crowdanki::CrowdAnkiEquivalenceError::Differences(report) => report,
+        error => panic!("expected equivalence differences, got {error}"),
+    };
+    assert!(report.differences.iter().any(|difference| {
+        difference.category == crowdanki::CrowdAnkiEquivalenceDifferenceCategory::Modified
+            && difference.canonical_path == "notes.note.finland.fields.field.capital"
+            && difference.crowdanki_path.as_deref() == Some("$.notes[0].fields[1]")
+            && difference.expected.as_deref() == Some("Helsinki")
+            && difference.actual.as_deref() == Some("Espoo")
+    }));
+}
+
+#[test]
+fn normalized_equivalence_oracle_fails_closed_for_unsupported_or_unproven_media() {
+    let original = ug_style_deck();
+    let mut unsupported = expected_crowdanki_json_value();
+    unsupported["note_models"][0]["sortf"] = serde_json::json!(1);
+    assert!(matches!(
+        crowdanki::canonical_crowdanki_equivalence(
+            &original,
+            unsupported.to_string().as_bytes(),
+            None
+        ),
+        Err(crowdanki::CrowdAnkiEquivalenceError::Unsupported(_))
+    ));
+
+    let mut hashed = original.clone();
+    hashed
+        .media
+        .get_mut(&sid("media.flags-fi-png"))
+        .unwrap()
+        .sha256 = "a".repeat(64);
+    let export = crowdanki::export_deck(&hashed).expect("hash is not serialized by CrowdAnki");
+    assert!(matches!(
+        crowdanki::canonical_crowdanki_equivalence(&hashed, export.deck_json.as_bytes(), None),
+        Err(crowdanki::CrowdAnkiEquivalenceError::MediaBytesRequired { .. })
+    ));
+}
+
+#[test]
+fn normalized_equivalence_oracle_mutation_matrix_observes_every_supported_json_property() {
+    // Each case changes exactly one modeled property (identity values repeated by CrowdAnki's
+    // schema are updated as one property) from the same valid round-trip fixture.
+    for property in [
+        "deck name",
+        "deck description",
+        "deck UUID",
+        "deck config UUID",
+        "deck config name",
+        "note model UUID",
+        "note model name",
+        "note model CSS",
+        "field name",
+        "template name",
+        "template question HTML",
+        "template answer HTML",
+        "note GUID",
+        "note field",
+        "note tags",
+        "media declaration",
+    ] {
+        let mut changed = expected_crowdanki_json_value();
+        match property {
+            "deck name" => changed["name"] = serde_json::json!("Changed deck"),
+            "deck description" => changed["desc"] = serde_json::json!("Changed description"),
+            "deck UUID" => changed["crowdanki_uuid"] = serde_json::json!("changed-deck-uuid"),
+            "deck config UUID" => {
+                changed["deck_config_uuid"] = serde_json::json!("changed-config-uuid");
+                changed["deck_configurations"][0]["crowdanki_uuid"] =
+                    serde_json::json!("changed-config-uuid");
+            }
+            "deck config name" => {
+                changed["deck_configurations"][0]["name"] = serde_json::json!("Changed config")
+            }
+            "note model UUID" => {
+                changed["note_models"][0]["crowdanki_uuid"] =
+                    serde_json::json!("changed-model-uuid");
+                changed["notes"][0]["note_model_uuid"] = serde_json::json!("changed-model-uuid");
+            }
+            "note model name" => {
+                changed["note_models"][0]["name"] = serde_json::json!("Changed model")
+            }
+            "note model CSS" => changed["note_models"][0]["css"] = serde_json::json!(".changed {}"),
+            "field name" => {
+                changed["note_models"][0]["flds"][1]["name"] = serde_json::json!("Changed field")
+            }
+            "template name" => {
+                changed["note_models"][0]["tmpls"][0]["name"] =
+                    serde_json::json!("Changed template")
+            }
+            "template question HTML" => {
+                changed["note_models"][0]["tmpls"][0]["qfmt"] =
+                    serde_json::json!("<b>{{Country}}</b>")
+            }
+            "template answer HTML" => {
+                changed["note_models"][0]["tmpls"][0]["afmt"] =
+                    serde_json::json!("<b>{{Capital}}</b>")
+            }
+            "note GUID" => changed["notes"][0]["guid"] = serde_json::json!("changed-guid"),
+            "note field" => {
+                changed["notes"][0]["fields"][1] = serde_json::json!("Changed field value")
+            }
+            "note tags" => changed["notes"][0]["tags"] = serde_json::json!(["Changed tag"]),
+            "media declaration" => {
+                changed["media_files"][0] = serde_json::json!("flags/changed.png")
+            }
+            _ => unreachable!("the table is exhaustive"),
+        }
+        assert!(
+            matches!(
+                crowdanki::canonical_crowdanki_equivalence(
+                    &ug_style_deck(),
+                    changed.to_string().as_bytes(),
+                    None,
+                ),
+                Err(crowdanki::CrowdAnkiEquivalenceError::Differences(_))
+            ),
+            "{property} mutation must be observed"
+        );
+    }
+
+    let mut reordered_tags = expected_crowdanki_json_value();
+    reordered_tags["notes"][0]["tags"] = serde_json::json!(["Nordic", "Europe"]);
+    crowdanki::canonical_crowdanki_equivalence(
+        &ug_style_deck(),
+        reordered_tags.to_string().as_bytes(),
+        None,
+    )
+    .expect("tag array order is the one supported unordered representation difference");
+}
+
+#[test]
+fn normalized_equivalence_oracle_verifies_hashed_media_only_with_byte_handoff() {
+    let mut original = ug_style_deck();
+    original
+        .notes
+        .get_mut(&sid("note.finland"))
+        .unwrap()
+        .fields
+        .insert(sid("field.flag"), "<img src=\"flags/fi.png\" />".to_owned());
+    original
+        .media
+        .get_mut(&sid("media.flags-fi-png"))
+        .unwrap()
+        .sha256 = "d59386e0ae435e292fbe0ebcdb954b75ed5fb3922091277cb19f798fc5d50718".to_owned();
+    let export = crowdanki::export_deck(&original).expect("hashed media deck exports");
+
+    let success = crowdanki::canonical_crowdanki_equivalence(
+        &original,
+        export.deck_json.as_bytes(),
+        Some(&[crowdanki::CrowdAnkiImportMediaBytes {
+            path: "flags/fi.png".to_owned(),
+            bytes: b"asset".to_vec(),
+        }]),
+    )
+    .expect("byte-bound media evidence verifies canonical hash");
+    assert_eq!(
+        success.media_bytes,
+        crowdanki::CrowdAnkiMediaByteProof::Verified
+    );
+}
+
+#[test]
+fn normalized_equivalence_oracle_law_preserves_unicode_and_structured_rendering() {
+    let mut original = ug_style_deck();
+    let note = original.notes.get_mut(&sid("note.finland")).unwrap();
+    note.fields
+        .insert(sid("field.country"), "Cafe\u{301} 日本 العَرَبِيَّة".to_owned());
+    note.fields.insert(
+        sid("field.flag"),
+        FieldValue::Images(vec![FieldImageReference {
+            media_id: sid("media.flags-fi-png"),
+        }]),
+    );
+    note.fields.insert(
+        sid("field.capital"),
+        FieldValue::Message(StructuredMessage {
+            components: vec![MessageComponent::FieldRef(
+                "notes.note.finland.fields.field.flag".to_owned(),
+            )],
+            format: None,
+            variables: BTreeMap::new(),
+        }),
+    );
+
+    let export = crowdanki::export_deck(&original).expect("unicode structured deck exports");
+    crowdanki::canonical_crowdanki_equivalence(&original, export.deck_json.as_bytes(), None)
+        .expect("export/import law retains normalized Unicode and rendered structured values");
+}
+
+#[test]
 fn export_is_byte_identical_for_structured_image_and_equivalent_raw_img_field() {
     let mut raw = ug_style_deck();
     raw.notes

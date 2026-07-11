@@ -1,11 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::str::FromStr;
 
 use crate::media;
 use brain_brew_core::{
-    AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, FieldValue,
-    MediaReference, Note, NoteType, StableId, TombstoneAddress, Tombstones, ValidationReport,
-    VariableRenderReport,
+    AdapterIds, CanonicalDeck, CardTemplate, DeckPath, FieldDefinition, FieldImageReference,
+    FieldValue, MediaReference, Note, NoteType, SemanticChangeKind, StableId, TombstoneAddress,
+    Tombstones, ValidationReport, VariableRenderReport,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -297,6 +298,423 @@ pub const CROWDANKI_ROUND_TRIP_PROFILE: CrowdAnkiRoundTripProfile = CrowdAnkiRou
         CrowdAnkiRoundTripLoss::StableIdsAreRegeneratedFromAdapterContent,
     ],
 };
+
+/// The outcome of a successful canonical-to-CrowdAnki comparison.
+///
+/// `NotProven` is deliberately distinct from equality: a reference-only `deck.json` contains
+/// media names but no bytes or hashes, and therefore cannot establish media-byte equivalence.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CrowdAnkiEquivalenceSuccess {
+    pub profile: &'static str,
+    pub media_bytes: CrowdAnkiMediaByteProof,
+}
+
+/// Whether the successful comparison also checked media bytes against canonical hashes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CrowdAnkiMediaByteProof {
+    NotProven,
+    Verified,
+}
+
+/// One complete, typed difference found by the normalized CrowdAnki equivalence oracle.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CrowdAnkiEquivalenceDifference {
+    /// The complete semantic-diff canonical path, after the named round-trip projection.
+    pub canonical_path: String,
+    /// The exact CrowdAnki JSON location when the differing actual value has one.
+    pub crowdanki_path: Option<String>,
+    pub category: CrowdAnkiEquivalenceDifferenceCategory,
+    pub expected: Option<String>,
+    pub actual: Option<String>,
+}
+
+/// Classification of an oracle difference.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CrowdAnkiEquivalenceDifferenceCategory {
+    Added,
+    Removed,
+    Modified,
+    Tombstoned,
+    MediaBytes,
+}
+
+/// All semantic differences from one canonical-to-CrowdAnki comparison.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CrowdAnkiEquivalenceReport {
+    pub profile: &'static str,
+    pub differences: Vec<CrowdAnkiEquivalenceDifference>,
+}
+
+/// Fail-closed result from the normalized CrowdAnki equivalence oracle.
+#[derive(Debug)]
+pub enum CrowdAnkiEquivalenceError {
+    /// The source uses a CrowdAnki property that Brain Brew does not model.
+    Unsupported(CrowdAnkiError),
+    /// The canonical source cannot be projected through the named adapter profile.
+    Canonical(CrowdAnkiError),
+    /// A canonical media hash exists but only reference-only CrowdAnki input was supplied.
+    MediaBytesRequired {
+        canonical_paths: Vec<String>,
+        crowdanki_paths: Vec<String>,
+    },
+    /// Both states are supported but differ after the documented projection.
+    Differences(CrowdAnkiEquivalenceReport),
+}
+
+impl fmt::Display for CrowdAnkiEquivalenceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unsupported(error) => {
+                write!(f, "unsupported CrowdAnki equivalence input: {error}")
+            }
+            Self::Canonical(error) => write!(f, "canonical CrowdAnki projection failed: {error}"),
+            Self::MediaBytesRequired {
+                canonical_paths,
+                crowdanki_paths,
+            } => write!(
+                f,
+                "CrowdAnki reference-only input cannot prove media bytes for canonical paths {:?}; supply bytes for {:?}",
+                canonical_paths, crowdanki_paths
+            ),
+            Self::Differences(report) => write!(
+                f,
+                "{} CrowdAnki equivalence difference(s) under {}",
+                report.differences.len(),
+                report.profile
+            ),
+        }
+    }
+}
+
+impl std::error::Error for CrowdAnkiEquivalenceError {}
+
+/// Compare canonical state to CrowdAnki JSON with the only normalization permitted by
+/// [`CROWDANKI_ROUND_TRIP_PROFILE`]. This is a typed adapter oracle, not a JSON-tree subset
+/// comparison. Unsupported JSON is rejected before comparison.
+///
+/// Passing media bytes binds them through the import plan and compares every non-empty canonical
+/// SHA-256 declaration. Omitting bytes is accepted only when canonical media hashes are empty;
+/// success then explicitly returns [`CrowdAnkiMediaByteProof::NotProven`].
+pub fn canonical_crowdanki_equivalence(
+    canonical: &CanonicalDeck,
+    input: &[u8],
+    media_bytes: Option<&[CrowdAnkiImportMediaBytes]>,
+) -> Result<CrowdAnkiEquivalenceSuccess, CrowdAnkiEquivalenceError> {
+    let source = parse_import_source(input).map_err(CrowdAnkiEquivalenceError::Unsupported)?;
+    let hashed_media = canonical
+        .media
+        .values()
+        .filter(|media| !media.sha256.is_empty())
+        .collect::<Vec<_>>();
+    if media_bytes.is_none() && !hashed_media.is_empty() {
+        return Err(CrowdAnkiEquivalenceError::MediaBytesRequired {
+            canonical_paths: hashed_media
+                .iter()
+                .map(|media| format!("media.{}.sha256", media.id))
+                .collect(),
+            crowdanki_paths: hashed_media
+                .iter()
+                .map(|media| format!("$.media_files[path={}]", json_path_label(&media.path)))
+                .collect(),
+        });
+    }
+
+    let imported = match media_bytes {
+        Some(bytes) => {
+            let plan = plan_import_with_media(input, bytes)
+                .map_err(CrowdAnkiEquivalenceError::Unsupported)?;
+            apply_import_plan_with_media(input, &plan, true, bytes)
+                .map_err(CrowdAnkiEquivalenceError::Unsupported)?
+        }
+        None => {
+            let plan = source
+                .import_plan(input)
+                .map_err(CrowdAnkiEquivalenceError::Unsupported)?;
+            apply_import_plan(input, &plan, true).map_err(CrowdAnkiEquivalenceError::Unsupported)?
+        }
+    };
+    let expected = project_deck_for_crowdanki_round_trip(canonical)
+        .map_err(CrowdAnkiEquivalenceError::Canonical)?;
+    let actual = project_deck_for_crowdanki_round_trip(&imported)
+        .map_err(CrowdAnkiEquivalenceError::Unsupported)?;
+
+    let mut differences = expected
+        .semantic_diff(&actual)
+        .changes
+        .into_iter()
+        .map(|change| CrowdAnkiEquivalenceDifference {
+            canonical_path: change.path.clone(),
+            crowdanki_path: crowdanki_source_path(&change.path, &actual, &source),
+            category: match change.kind {
+                SemanticChangeKind::Added => CrowdAnkiEquivalenceDifferenceCategory::Added,
+                SemanticChangeKind::Removed => CrowdAnkiEquivalenceDifferenceCategory::Removed,
+                SemanticChangeKind::Modified => CrowdAnkiEquivalenceDifferenceCategory::Modified,
+                SemanticChangeKind::Tombstoned => {
+                    CrowdAnkiEquivalenceDifferenceCategory::Tombstoned
+                }
+            },
+            expected: change.before,
+            actual: change.after,
+        })
+        .collect::<Vec<_>>();
+
+    if media_bytes.is_some() {
+        differences.extend(media_byte_differences(canonical, &imported, &source));
+    }
+    if !differences.is_empty() {
+        return Err(CrowdAnkiEquivalenceError::Differences(
+            CrowdAnkiEquivalenceReport {
+                profile: CROWDANKI_ROUND_TRIP_PROFILE.name,
+                differences,
+            },
+        ));
+    }
+
+    Ok(CrowdAnkiEquivalenceSuccess {
+        profile: CROWDANKI_ROUND_TRIP_PROFILE.name,
+        media_bytes: if media_bytes.is_some()
+            && !canonical.media.is_empty()
+            && canonical
+                .media
+                .values()
+                .all(|media| !media.sha256.is_empty())
+        {
+            CrowdAnkiMediaByteProof::Verified
+        } else {
+            CrowdAnkiMediaByteProof::NotProven
+        },
+    })
+}
+
+fn media_byte_differences(
+    canonical: &CanonicalDeck,
+    imported: &CanonicalDeck,
+    source: &CrowdAnkiDeckJson,
+) -> Vec<CrowdAnkiEquivalenceDifference> {
+    canonical
+        .media
+        .values()
+        .filter(|media| !media.sha256.is_empty())
+        .filter_map(|expected| {
+            let actual = imported
+                .media
+                .values()
+                .find(|media| media.path == expected.path);
+            let actual_hash = actual.map(|media| media.sha256.as_str());
+            (actual_hash != Some(expected.sha256.as_str())).then(|| {
+                CrowdAnkiEquivalenceDifference {
+                    canonical_path: format!("media.{}.sha256", expected.id),
+                    crowdanki_path: source
+                        .media_files
+                        .iter()
+                        .position(|path| path == &expected.path)
+                        .map(|index| format!("$.media_files[{index}]")),
+                    category: CrowdAnkiEquivalenceDifferenceCategory::MediaBytes,
+                    expected: Some(expected.sha256.clone()),
+                    actual: actual_hash.map(str::to_owned),
+                }
+            })
+        })
+        .collect()
+}
+
+fn crowdanki_source_path(
+    canonical_path: &str,
+    actual: &CanonicalDeck,
+    source: &CrowdAnkiDeckJson,
+) -> Option<String> {
+    let path = DeckPath::from_str(canonical_path).ok()?;
+    match path {
+        DeckPath::DeckName => Some("$.name".to_owned()),
+        DeckPath::DeckDescription => Some("$.desc".to_owned()),
+        DeckPath::DeckAdapterId { key } => match key.as_str() {
+            "crowdanki:uuid" => Some("$.crowdanki_uuid".to_owned()),
+            "crowdanki:deck_config_uuid" => Some("$.deck_config_uuid".to_owned()),
+            "crowdanki:deck_config_name" => Some("$.deck_configurations[0].name".to_owned()),
+            _ => None,
+        },
+        DeckPath::NoteType { note_type_id }
+        | DeckPath::NoteTypeId { note_type_id }
+        | DeckPath::NoteTypeName { note_type_id }
+        | DeckPath::NoteTypeStyling { note_type_id }
+        | DeckPath::NoteTypeFields { note_type_id }
+        | DeckPath::NoteTypeCardTemplates { note_type_id }
+        | DeckPath::NoteTypeAdapterIds { note_type_id } => {
+            note_model_path(actual, source, &note_type_id)
+        }
+        DeckPath::NoteTypeAdapterId { note_type_id, key } => {
+            let index = note_model_index(actual, source, &note_type_id)?;
+            (key == "crowdanki:uuid").then(|| format!("$.note_models[{index}].crowdanki_uuid"))
+        }
+        DeckPath::NoteTypeField {
+            note_type_id,
+            field_id,
+        }
+        | DeckPath::NoteTypeFieldId {
+            note_type_id,
+            field_id,
+        }
+        | DeckPath::NoteTypeFieldName {
+            note_type_id,
+            field_id,
+        } => {
+            let (model, field) = note_field_index(actual, source, &note_type_id, &field_id)?;
+            Some(format!("$.note_models[{model}].flds[{field}]"))
+        }
+        DeckPath::NoteTypeCardTemplate {
+            note_type_id,
+            template_id,
+        }
+        | DeckPath::NoteTypeCardTemplateId {
+            note_type_id,
+            template_id,
+        }
+        | DeckPath::NoteTypeCardTemplateName {
+            note_type_id,
+            template_id,
+        }
+        | DeckPath::NoteTypeCardTemplateQuestionFormat {
+            note_type_id,
+            template_id,
+        }
+        | DeckPath::NoteTypeCardTemplateAnswerFormat {
+            note_type_id,
+            template_id,
+        }
+        | DeckPath::NoteTypeCardTemplateAdapterIds {
+            note_type_id,
+            template_id,
+        } => {
+            let (model, template) =
+                note_template_index(actual, source, &note_type_id, &template_id)?;
+            Some(format!("$.note_models[{model}].tmpls[{template}]"))
+        }
+        DeckPath::Note { note_id }
+        | DeckPath::NoteId { note_id }
+        | DeckPath::NoteNoteTypeId { note_id }
+        | DeckPath::NoteTags { note_id }
+        | DeckPath::NoteAdapterIds { note_id } => note_path(actual, source, &note_id),
+        DeckPath::NoteAdapterId { note_id, key } => {
+            let index = note_index(actual, source, &note_id)?;
+            (key == "crowdanki:guid").then(|| format!("$.notes[{index}].guid"))
+        }
+        DeckPath::NoteField { note_id, field_id }
+        | DeckPath::NoteFieldImage {
+            note_id, field_id, ..
+        }
+        | DeckPath::NoteFieldMessage { note_id, field_id }
+        | DeckPath::NoteFieldMessageComponent {
+            note_id, field_id, ..
+        }
+        | DeckPath::NoteFieldMessageFormat { note_id, field_id }
+        | DeckPath::NoteFieldMessageVariable {
+            note_id, field_id, ..
+        } => {
+            let note_index = note_index(actual, source, &note_id)?;
+            let note = actual.notes.get(&note_id)?;
+            let note_type = actual.note_types.get(&note.note_type_id)?;
+            let field_index = note_type
+                .fields
+                .iter()
+                .position(|field| field.id == field_id)?;
+            Some(format!("$.notes[{note_index}].fields[{field_index}]"))
+        }
+        DeckPath::NoteTag { note_id, .. } => {
+            note_path(actual, source, &note_id).map(|path| format!("{path}.tags"))
+        }
+        DeckPath::Media { media_id }
+        | DeckPath::MediaId { media_id }
+        | DeckPath::MediaPath { media_id }
+        | DeckPath::MediaSha256 { media_id } => actual
+            .media
+            .get(&media_id)
+            .and_then(|media| {
+                source
+                    .media_files
+                    .iter()
+                    .position(|path| path == &media.path)
+            })
+            .map(|index| format!("$.media_files[{index}]")),
+        _ => None,
+    }
+}
+
+fn note_model_index(
+    actual: &CanonicalDeck,
+    source: &CrowdAnkiDeckJson,
+    note_type_id: &StableId,
+) -> Option<usize> {
+    let uuid = actual
+        .note_types
+        .get(note_type_id)?
+        .adapter_ids
+        .get("crowdanki:uuid")?;
+    source
+        .note_models
+        .iter()
+        .position(|model| model.crowdanki_uuid == uuid)
+}
+
+fn note_model_path(
+    actual: &CanonicalDeck,
+    source: &CrowdAnkiDeckJson,
+    note_type_id: &StableId,
+) -> Option<String> {
+    note_model_index(actual, source, note_type_id).map(|index| format!("$.note_models[{index}]"))
+}
+
+fn note_field_index(
+    actual: &CanonicalDeck,
+    source: &CrowdAnkiDeckJson,
+    note_type_id: &StableId,
+    field_id: &StableId,
+) -> Option<(usize, usize)> {
+    let model = note_model_index(actual, source, note_type_id)?;
+    let field = actual
+        .note_types
+        .get(note_type_id)?
+        .fields
+        .iter()
+        .position(|field| &field.id == field_id)?;
+    Some((model, field))
+}
+
+fn note_template_index(
+    actual: &CanonicalDeck,
+    source: &CrowdAnkiDeckJson,
+    note_type_id: &StableId,
+    template_id: &StableId,
+) -> Option<(usize, usize)> {
+    let model = note_model_index(actual, source, note_type_id)?;
+    let template = actual
+        .note_types
+        .get(note_type_id)?
+        .card_templates
+        .iter()
+        .position(|template| &template.id == template_id)?;
+    Some((model, template))
+}
+
+fn note_index(
+    actual: &CanonicalDeck,
+    source: &CrowdAnkiDeckJson,
+    note_id: &StableId,
+) -> Option<usize> {
+    let guid = actual
+        .notes
+        .get(note_id)?
+        .adapter_ids
+        .get("crowdanki:guid")?;
+    source.notes.iter().position(|note| note.guid == guid)
+}
+
+fn note_path(
+    actual: &CanonicalDeck,
+    source: &CrowdAnkiDeckJson,
+    note_id: &StableId,
+) -> Option<String> {
+    note_index(actual, source, note_id).map(|index| format!("$.notes[{index}]"))
+}
 
 /// Project a canonical deck to the exact semantics representable by a CrowdAnki round trip.
 ///
