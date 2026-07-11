@@ -82,36 +82,9 @@ in
     trunk build --release --dist ../brain-brew-cli/assets/workbench --public-url /
   '';
   scripts."workbench-ui-embed-check".exec = "scripts/check_workbench_ui_embed.sh";
-  scripts.e2e.exec = ''
-    set -euo pipefail
-    artifact_dir="''${BRAINBREW_E2E_ARTIFACT_DIR:-$PWD/target/workbench-e2e-artifacts}"
-    webdriver_port="''${BRAINBREW_WEBDRIVER_PORT:-9515}"
-    webdriver_url="http://127.0.0.1:''${webdriver_port}"
-    mkdir -p "$artifact_dir"
-
-    (cd crates/brain-brew-workbench-ui && trunk build --dist ../../target/workbench-ui --public-url /)
-    cargo build -p brainbrew --features workbench-write-dev
-
-    export BRAINBREW_E2E_ARTIFACT_DIR="$artifact_dir"
-    export BRAINBREW_E2E_BIN="''${BRAINBREW_E2E_BIN:-$PWD/target/debug/brainbrew}"
-    export BRAINBREW_E2E_DEV_ASSETS="''${BRAINBREW_E2E_DEV_ASSETS:-$PWD/target/workbench-ui}"
-    export BRAINBREW_CHROME_BINARY="''${BRAINBREW_CHROME_BINARY:-$(command -v chromium)}"
-    export WEBDRIVER_URL="''${WEBDRIVER_URL:-$webdriver_url}"
-
-    chromedriver --port="$webdriver_port" --log-path="$artifact_dir/chromedriver.log" &
-    webdriver_pid=$!
-    trap 'kill "$webdriver_pid" 2>/dev/null || true; wait "$webdriver_pid" 2>/dev/null || true' EXIT
-
-    for _ in $(seq 1 50); do
-      if curl --silent --fail "$webdriver_url/status" > "$artifact_dir/chromedriver-status.json"; then
-        break
-      fi
-      sleep 0.2
-    done
-    curl --silent --fail "$webdriver_url/status" > "$artifact_dir/chromedriver-status.json"
-
-    cargo test -p brain-brew-workbench-e2e -- --nocapture
-  '';
+  # Browser-owned E2E is deliberately prepared outside the deterministic
+  # workspace test partition. CI and release invoke this prepared runner.
+  scripts.e2e.exec = "bash scripts/run_workbench_e2e.sh";
 
   scripts."docs:install".exec = "npm --prefix documentation install";
   scripts."docs:start".exec = "npm --prefix documentation run start";
@@ -160,7 +133,6 @@ in
     cargo clippy --workspace --exclude brain-brew-workbench-e2e --all-targets -- -D warnings
     cargo clippy -p brainbrew --features workbench-write-dev --all-targets -- -D warnings
     workbench-ui-embed-check
-    e2e
   '';
 
   enterTest = ''

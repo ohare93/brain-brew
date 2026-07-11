@@ -487,11 +487,20 @@ fn package_snapshot_permissions_discard_setid_and_preserve_only_executable_inten
     fs::create_dir_all(package.join("nested")).unwrap();
     write_package(&package, "0.1.0", "executable source");
     fs::write(package.join("nested/plain"), "plain").unwrap();
-    fs::set_permissions(
+    // Nix's restricted build sandbox may deny setting set-id bits even though
+    // it permits ordinary executable modes. Exercise set-id normalization when
+    // the host allows it and preserve the executable-mode assertion otherwise.
+    if let Err(error) = fs::set_permissions(
         package.join("source.txt"),
         fs::Permissions::from_mode(0o6755),
-    )
-    .unwrap();
+    ) {
+        assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+        fs::set_permissions(
+            package.join("source.txt"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+    }
     fs::set_permissions(
         package.join("nested/plain"),
         fs::Permissions::from_mode(0o666),

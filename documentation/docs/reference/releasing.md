@@ -26,11 +26,15 @@ Before creating the tag, run:
 
 ```bash
 devenv shell ci
+devenv shell e2e
+nix build .#checks.x86_64-linux.brainbrew -L
 devenv shell crates:metadata-check
 devenv shell dist:plan > /tmp/brainbrew-dist-manifest.json
 devenv shell release:smoke
 devenv shell release:crates
 ```
+
+`nix build .#checks.x86_64-linux.brainbrew` is the real release-CLI build gate: it builds the distributable binary and explicitly tests every non-browser workspace package. It must stay independent from `workbench-e2e`; do not add WebDriver filters or browser dependencies to it. `devenv shell e2e` is the separate prepared Linux browser gate. It builds the write-enabled test CLI, fresh UI assets, Chromium, and chromedriver before running all browser scenarios. It is required by CI and the release workflow, but is not a supported Nix/Darwin check. On a local failure, inspect `target/workbench-e2e-artifacts/`; CI uploads that directory regardless of outcome.
 
 `crates:metadata-check` verifies version references across Cargo metadata/lock data, dist planning, flake derivation, and current release docs, then verifies crates.io metadata and exact internal requirements. `release:crates` runs the required pre-publish artifact gate: Cargo creates fresh `.crate` files, the gate enumerates each archive's README, license, generated files, and symlinks, safely extracts its exact bytes into a clean temporary tree, and builds core → formats → CLI. Formats and CLI resolve exact alpha.2 internal dependencies from a checksum-verified staged Cargo directory source made only from those extracted archives; no workspace path is evidence. Evidence JSON is retained under `target/release-evidence/`.
 

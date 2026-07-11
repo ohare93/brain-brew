@@ -82,13 +82,27 @@ From another deck workspace, pin the same release tag (or pin its resolved flake
 nix run github:jeprecated/brain-brew/v1.0.0-alpha.2 -- targets --manifest brainbrew.yaml
 ```
 
-Build a local binary:
+Build and test the distributable CLI plus its deterministic unit/integration
+partition (core, formats, CLI, and non-browser UI tests):
 
 ```bash
 cd /path/to/brain-brew
-nix build .#brainbrew
-./result/bin/brainbrew --help
+nix build .#checks.x86_64-linux.brainbrew
+nix run .#brainbrew -- --help
 ```
+
+This gate intentionally does **not** start WebDriver or a browser. Browser E2E
+is a separate prepared Linux CI/development job, not a Nix package check:
+
+```bash
+devenv shell e2e
+```
+
+It builds the write-enabled test CLI and fresh UI assets, provisions Chromium
+with its matching chromedriver, and runs all browser scenarios. Browser E2E is
+not currently supported on Nix/Darwin runners. If it fails locally, inspect
+`target/workbench-e2e-artifacts/` for chromedriver status/logs and browser
+screenshots; CI uploads the same directory.
 
 Install into a Nix profile:
 

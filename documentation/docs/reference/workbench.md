@@ -80,7 +80,7 @@ Browser E2E tests are required for user-visible workbench slices:
 devenv shell e2e
 ```
 
-The E2E harness lives in `crates/brain-brew-workbench-e2e`, uses Rust `thirtyfour` with devenv-provided Chromium/chromedriver, and writes failure screenshots/logs under `target/workbench-e2e-artifacts` by default. `devenv shell ci` includes this E2E gate; `devenv shell test` remains the faster non-browser Rust suite.
+The E2E harness lives in `crates/brain-brew-workbench-e2e`, uses Rust `thirtyfour` with Devenv-provided Chromium/chromedriver, and writes failure screenshots/logs under `target/workbench-e2e-artifacts` by default. `devenv shell e2e` is the explicit prepared Linux CI/development gate: it builds the write-enabled test CLI and fresh UI bundle before starting Chromium/chromedriver. `devenv shell ci` and `devenv shell test` remain deterministic non-browser Rust suites. Browser E2E is not offered as a supported Nix/Darwin check.
 
 ## Note pivot editing slice
 

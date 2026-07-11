@@ -45,8 +45,41 @@ on:
       - '**[0-9]+.[0-9]+.[0-9]+*'
 
 jobs:
+  # Release artifacts must not bypass the same deterministic package and
+  # prepared-browser gates required for ordinary CI. Browser E2E is explicitly
+  # Linux/x86_64 only; it is not a Darwin release-target claim.
+  quality-gates:
+    name: release package and prepared browser gates
+    runs-on: "ubuntu-22.04"
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build the Nix CLI package and deterministic tests
+        run: nix build .#checks.x86_64-linux.brainbrew -L --no-link
+      - name: Install devenv for the prepared browser gate
+        run: nix profile add nixpkgs#devenv
+      - name: Assert Nix and browser E2E ownership
+        run: devenv shell -- python3 -m unittest scripts.tests.test_nix_e2e_partition -v
+      - name: Run prepared Chromium Workbench E2E
+        run: devenv shell e2e
+      - name: Upload Workbench E2E diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-workbench-e2e-artifacts
+          path: target/workbench-e2e-artifacts
+          if-no-files-found: ignore
+
   # Run 'dist plan' (or host) to determine what tasks we need to do
   plan:
+    needs:
+      - quality-gates
     runs-on: "ubuntu-22.04"
     outputs:
       val: ${{ steps.plan.outputs.manifest }}
