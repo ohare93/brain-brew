@@ -8,17 +8,19 @@ Import is a review-first three-step workflow. It never turns generated IDs into 
 
 ```bash
 # 1. This reads deck.json and writes only the review artifact.
-brainbrew import crowdanki plan build/crowdanki/en-standard --out import-plan.json
+brainbrew import crowdanki plan build/crowdanki/en-standard \
+  --media-root build/crowdanki/en-standard/media --out import-plan.json
 
 # 2. Inspect source locations, GUID/model/template evidence, suggestions, and decisions.
 brainbrew import crowdanki review --plan import-plan.json
 
 # 3. Apply the exact reviewed source and plan.
 brainbrew import crowdanki apply build/crowdanki/en-standard \
-  --plan import-plan.json --approve-plan --out deck.yaml
+  --plan import-plan.json --approve-plan \
+  --media-root build/crowdanki/en-standard/media --out imported-workspace
 ```
 
-The version-1 `brain-brew.crowdanki-import-plan` is canonical pretty JSON (or deterministic YAML when the plan output ends in `.yaml`/`.yml`). It contains the raw `deck.json` SHA-256 and byte length, import-options fingerprint, source JSON path, source GUID, model UUID/name, template name where relevant, suggested stable ID, status, and decision for every deck, note type, field, template, note, and media identity. `plan` has no Canonical Deck source side effect and writes through the recoverable output transaction.
+The version-2 `brain-brew.crowdanki-import-plan` is canonical pretty JSON (or deterministic YAML when the plan output ends in `.yaml`/`.yml`). It contains the raw `deck.json` SHA-256 and byte length, import-options fingerprint, source JSON path, source GUID, model UUID/name, template name where relevant, suggested stable ID, status, and decision for every deck, note type, field, template, note, and media identity. `plan` has no Canonical Deck source side effect and writes through the recoverable output transaction.
 
 Automatic suggestions have `status: automatic` and `decision: { kind: automatic }`. Do not edit them merely to accept them: `apply --approve-plan` is the explicit review acknowledgement. A collision has `status: requires_override`; edit only its decision, for example:
 
@@ -28,9 +30,11 @@ decision:
   stable_id: note-type.country-imported
 ```
 
-`apply` validates the complete generated inventory and evidence, legal Stable ID syntax, unique selected IDs globally and in each identity domain, selected-ID conflicts, the source fingerprint, and source locations before it opens a source-output transaction. Missing approval, unresolved/rejected decisions, duplicate or invalid overrides, edited evidence, stale plans, and changed `deck.json` all fail closed before `deck.yaml` is written. The old `--accept-suggested-ids` bypass is removed.
+In normal strict mode, `plan` inventories every `media_files` declaration, rejects duplicate, case-colliding, traversal, Windows, UNC, backslash, and symlink-escaping paths, reads every authorized byte once from `--media-root`, and stores each declaration location, SHA-256, and byte length as plan evidence. `apply` re-reads and verifies that exact evidence before any output is staged; it writes hashed declarations, `deck.yaml`, and the matching `media/` bytes together. `--media-mode reference-only` is the only intentional no-byte mode and is non-release behavior.
 
-If a process interruption leaves a workspace transaction journal, rerun the same `plan` or `apply` command; Brain Brew performs journal recovery before reading or writing. It reports a recovery conflict rather than overwriting a changed output. For a deliberate destination replacement, add `--force`; only an existing regular file can be replaced.
+`apply` validates the complete generated inventory and evidence, legal Stable ID syntax, unique selected IDs globally and in each identity domain, selected-ID conflicts, the source fingerprint, media byte evidence, and source locations before it opens an output transaction. Missing approval, unresolved/rejected decisions, duplicate or invalid overrides, edited evidence, stale plans, and changed `deck.json` all fail closed before `deck.yaml` is written. The old `--accept-suggested-ids` bypass is removed.
+
+`apply --out` names a destination workspace directory, not a source file. It must not exist by default. The complete source-plus-media tree is privately staged and recoverably published; `--force` cleanly replaces an existing directory, never retains stale media, and refuses symlink or special-file destinations. If a process interruption leaves a transaction journal, rerun the same command; recovery reports a conflict rather than overwriting changed output.
 
 ## Imported note IDs
 

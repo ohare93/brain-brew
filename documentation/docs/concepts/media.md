@@ -57,7 +57,7 @@ The command writes missing or stale SHA-256 values into deck or overlay source Y
 
 ## CrowdAnki import
 
-CrowdAnki import plans suggest stable media IDs from media file paths. Exact duplicate paths are deduplicated. Different paths that suggest the same ID are recorded as `requires_override` entries with their exact JSON locations; maintainers select distinct legal IDs in the reviewed import plan before apply. The same versioned plan records note, note-type, field, and template evidence, and apply verifies it against the unchanged source. See [Import CrowdAnki](../authoring/importing-crowdanki.md).
+CrowdAnki import plans suggest stable media IDs from media file paths. Duplicate or case-colliding physical paths are rejected rather than deduplicated; different safe paths that suggest the same ID are recorded as `requires_override` entries with exact JSON locations, and overrides must remain globally unique. Normal import requires an authorized `--media-root`, reads every declared byte once, records its SHA-256 and length in plan provenance, and publishes only those bytes below the destination `media/` directory with the canonical declarations. `--media-mode reference-only` is the explicit no-byte, non-release alternative. See [Import CrowdAnki](../authoring/importing-crowdanki.md).
 
 ## Export media
 

@@ -49,6 +49,7 @@ fn import_plan_review_apply_and_legacy_migration_are_machine_safe() {
         .arg(&export)
         .arg("--out")
         .arg(&interrupted_plan)
+        .args(["--media-mode", "reference-only"])
         .env("BRAINBREW_TRANSACTION_FAIL_POINT", "stage:0")
         .env("BRAINBREW_TRANSACTION_FAIL_MODE", "crash")
         .output()
@@ -61,6 +62,8 @@ fn import_plan_review_apply_and_legacy_migration_are_machine_safe() {
         export.to_str().unwrap(),
         "--out",
         interrupted_plan.to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(
         recovered.status.success(),
@@ -75,6 +78,8 @@ fn import_plan_review_apply_and_legacy_migration_are_machine_safe() {
         export.to_str().unwrap(),
         "--out",
         plan.to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
         "--json",
     ]);
     assert!(
@@ -106,6 +111,8 @@ fn import_plan_review_apply_and_legacy_migration_are_machine_safe() {
         plan.to_str().unwrap(),
         "--out",
         output.to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(!unapproved.status.success());
     assert!(String::from_utf8_lossy(&unapproved.stderr).contains("--approve-plan"));
@@ -121,6 +128,8 @@ fn import_plan_review_apply_and_legacy_migration_are_machine_safe() {
         "--approve-plan",
         "--out",
         output.to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
         "--json",
     ]);
     assert!(

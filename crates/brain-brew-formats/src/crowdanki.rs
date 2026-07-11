@@ -120,6 +120,62 @@ pub fn plan_import(input: &[u8]) -> Result<CrowdAnkiImportPlan, CrowdAnkiError> 
     deck.import_plan(input)
 }
 
+/// A byte handoff from the adapter boundary. `path` must be one declared CrowdAnki
+/// media path; bytes are deliberately not serialized into the review plan.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CrowdAnkiImportMediaBytes {
+    pub path: String,
+    pub bytes: Vec<u8>,
+}
+
+/// Bind a reviewed import plan to the exact media bytes that will be published.
+///
+/// This is intentionally separate from [`plan_import`]: format parsing remains filesystem-free,
+/// while the CLI reads every authorized source file exactly once and hands its bytes here.
+pub fn plan_import_with_media(
+    input: &[u8],
+    supplied: &[CrowdAnkiImportMediaBytes],
+) -> Result<CrowdAnkiImportPlan, CrowdAnkiError> {
+    let mut plan = plan_import(input)?;
+    plan.provenance.media = import_media_evidence(input, supplied)?;
+    Ok(plan)
+}
+
+/// Apply a byte-bound reviewed plan and populate canonical media declarations with their
+/// verified SHA-256 values.
+pub fn apply_import_plan_with_media(
+    input: &[u8],
+    plan: &CrowdAnkiImportPlan,
+    approve_automatic: bool,
+    supplied: &[CrowdAnkiImportMediaBytes],
+) -> Result<CanonicalDeck, CrowdAnkiError> {
+    let evidence = import_media_evidence(input, supplied)?;
+    if plan.provenance.media != evidence {
+        return Err(CrowdAnkiError::Plan(
+            "stale or mutated import plan: media byte evidence does not match".to_owned(),
+        ));
+    }
+    let source = parse_import_source(input)?;
+    let expected = plan_import_with_media(input, supplied)?;
+    let selections = plan.validate_against(&expected, approve_automatic)?;
+    let mut deck = source.into_deck_with_ids(&selections)?;
+    for declaration in deck.media.values_mut() {
+        let evidence = evidence
+            .iter()
+            .find(|evidence| evidence.path == declaration.path)
+            .expect("validated media evidence covers every declaration");
+        declaration.sha256 = evidence.sha256.clone();
+    }
+    Ok(deck)
+}
+
+/// Return canonical, safe CrowdAnki media declarations and their source locations.
+pub fn import_media_references(
+    input: &[u8],
+) -> Result<Vec<CrowdAnkiImportMediaReference>, CrowdAnkiError> {
+    parse_import_source(input)?.import_media_references()
+}
+
 /// Apply a reviewed import plan to exactly the CrowdAnki source bytes it describes.
 ///
 /// `approve_automatic` is the explicit review acknowledgement for deterministic automatic
@@ -143,6 +199,70 @@ fn parse_import_source(input: &[u8]) -> Result<CrowdAnkiDeckJson, CrowdAnkiError
         path: json_path(error.path()),
         message: error.inner().to_string(),
     })
+}
+
+fn import_media_evidence(
+    input: &[u8],
+    supplied: &[CrowdAnkiImportMediaBytes],
+) -> Result<Vec<CrowdAnkiImportMediaEvidence>, CrowdAnkiError> {
+    let references = import_media_references(input)?;
+    let expected = references
+        .iter()
+        .map(|reference| reference.path.as_str())
+        .collect::<BTreeSet<_>>();
+    let deck = parse_import_source(input)?;
+    let used = deck.content_media_paths();
+    let declared = expected
+        .iter()
+        .map(|path| (*path).to_owned())
+        .collect::<BTreeSet<_>>();
+    if let Some(path) = used.difference(&declared).next() {
+        return Err(CrowdAnkiError::Plan(format!(
+            "CrowdAnki content references undeclared media path {path:?}"
+        )));
+    }
+    if let Some(path) = declared.difference(&used).next() {
+        return Err(CrowdAnkiError::Plan(format!(
+            "unused supplied CrowdAnki media declaration {path:?}; remove it or use it in supported content"
+        )));
+    }
+    let mut supplied_by_path = BTreeMap::new();
+    for asset in supplied {
+        if !expected.contains(asset.path.as_str()) {
+            return Err(CrowdAnkiError::Plan(format!(
+                "unused supplied CrowdAnki media bytes for {:?}; bytes must name one declared media path",
+                asset.path
+            )));
+        }
+        if supplied_by_path
+            .insert(asset.path.as_str(), asset)
+            .is_some()
+        {
+            return Err(CrowdAnkiError::Plan(format!(
+                "duplicate supplied CrowdAnki media bytes for {:?}",
+                asset.path
+            )));
+        }
+    }
+    references
+        .into_iter()
+        .map(|reference| {
+            let asset = supplied_by_path
+                .get(reference.path.as_str())
+                .ok_or_else(|| {
+                    CrowdAnkiError::Plan(format!(
+                        "missing supplied CrowdAnki media bytes for {} {:?}",
+                        reference.source_path, reference.path
+                    ))
+                })?;
+            Ok(CrowdAnkiImportMediaEvidence {
+                source_path: reference.source_path,
+                path: reference.path,
+                sha256: format!("{:x}", Sha256::digest(&asset.bytes)),
+                bytes: asset.bytes.len() as u64,
+            })
+        })
+        .collect()
 }
 
 /// Named canonical equivalence profile for a CrowdAnki export/import round trip.
@@ -1318,6 +1438,25 @@ pub struct CrowdAnkiImportProvenance {
     pub source_sha256: String,
     pub source_bytes: u64,
     pub import_options_sha256: String,
+    /// Ordered media evidence is absent only for the explicitly reference-only API.
+    #[serde(default)]
+    pub media: Vec<CrowdAnkiImportMediaEvidence>,
+}
+
+/// One declared media path, source location, and byte-level proof selected at import time.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CrowdAnkiImportMediaEvidence {
+    pub source_path: String,
+    pub path: String,
+    pub sha256: String,
+    pub bytes: u64,
+}
+
+/// A media declaration discovered in a CrowdAnki document before any filesystem access.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CrowdAnkiImportMediaReference {
+    pub source_path: String,
+    pub path: String,
 }
 
 /// One source identity proposed for a Canonical Deck stable ID.
@@ -1533,7 +1672,7 @@ impl CrowdAnkiImportPlan {
 }
 
 const IMPORT_PLAN_FORMAT: &str = "brain-brew.crowdanki-import-plan";
-const IMPORT_PLAN_VERSION: u32 = 1;
+const IMPORT_PLAN_VERSION: u32 = 2;
 const IMPORT_OPTIONS_FINGERPRINT_INPUT: &[u8] =
     b"brain-brew/crowdanki-import/options/v1;strict-image-reverse-map=true";
 
@@ -1580,6 +1719,63 @@ fn validate_crowdanki_identity(input: CrowdAnkiIdentityInput<'_>) -> Result<(), 
 }
 
 impl CrowdAnkiDeckJson {
+    fn content_media_paths(&self) -> BTreeSet<String> {
+        let mut paths = media::extract_media_references_from_rendered_field(&self.desc);
+        for model in &self.note_models {
+            paths.extend(media::extract_media_references_from_rendered_field(
+                &model.css,
+            ));
+            for template in &model.tmpls {
+                paths.extend(media::extract_media_references_from_rendered_field(
+                    &template.qfmt,
+                ));
+                paths.extend(media::extract_media_references_from_rendered_field(
+                    &template.afmt,
+                ));
+            }
+        }
+        for note in &self.notes {
+            for field in &note.fields {
+                paths.extend(media::extract_media_references_from_rendered_field(field));
+            }
+        }
+        paths
+    }
+
+    fn import_media_references(
+        &self,
+    ) -> Result<Vec<CrowdAnkiImportMediaReference>, CrowdAnkiError> {
+        let mut references = Vec::new();
+        let mut exact = BTreeMap::<String, String>::new();
+        let mut portable_case = BTreeMap::<String, String>::new();
+        for (index, path) in self.media_files.iter().enumerate() {
+            let source_path = format!("$.media_files[{index}]");
+            crate::safe_relative_path::SafeRelativePath::new(path).map_err(|error| {
+                CrowdAnkiError::Plan(format!(
+                    "unsafe CrowdAnki media path at {source_path} {path:?}: {error}"
+                ))
+            })?;
+            if let Some(first) = exact.insert(path.clone(), source_path.clone()) {
+                return Err(CrowdAnkiError::Plan(format!(
+                    "duplicate CrowdAnki media path {path:?} at {first} and {source_path}"
+                )));
+            }
+            // Case-insensitive filesystems would otherwise let two declarations select one
+            // physical file. Unicode lowercase is deliberately conservative: collisions reject.
+            let folded = path.to_lowercase();
+            if let Some(first) = portable_case.insert(folded, source_path.clone()) {
+                return Err(CrowdAnkiError::Plan(format!(
+                    "case-colliding CrowdAnki media path {path:?} at {first} and {source_path}"
+                )));
+            }
+            references.push(CrowdAnkiImportMediaReference {
+                source_path,
+                path: path.clone(),
+            });
+        }
+        Ok(references)
+    }
+
     /// Collect raw CrowdAnki identity defects before any data is sorted, indexed, or converted.
     ///
     /// CrowdAnki GUIDs are opaque strings: Brain Brew performs no trimming, Unicode
@@ -1683,8 +1879,10 @@ impl CrowdAnkiDeckJson {
     }
 
     fn import_plan(&self, source_bytes: &[u8]) -> Result<CrowdAnkiImportPlan, CrowdAnkiError> {
-        // Keep plan generation fail-closed on adapter identities whose evidence is ambiguous.
+        // Keep plan generation fail-closed on adapter identities and physical media paths whose
+        // evidence is ambiguous. Byte handoff later uses this exact inventory.
         validate_crowdanki_identity(CrowdAnkiIdentityInput::Import(self))?;
+        self.import_media_references()?;
         let mut model_by_uuid = BTreeMap::<&str, &str>::new();
         for model in &self.note_models {
             if let Some(existing_name) = model_by_uuid.insert(&model.crowdanki_uuid, &model.name) {
@@ -1777,13 +1975,7 @@ impl CrowdAnkiDeckJson {
                 template_name: None,
             });
         }
-        let mut planned_media_paths = BTreeSet::new();
         for (index, path) in self.media_files.iter().enumerate() {
-            // Exact duplicate filenames already have explicit adapter semantics: import folds them
-            // into one media reference. They are not competing suggested identities.
-            if !planned_media_paths.insert(path.clone()) {
-                continue;
-            }
             entries.push(CrowdAnkiImportPlanEntry {
                 kind: CrowdAnkiImportPlanEntryKind::Media,
                 source_path: format!("$.media_files[{index}]"),
@@ -1816,6 +2008,7 @@ impl CrowdAnkiDeckJson {
                     "{:x}",
                     Sha256::digest(IMPORT_OPTIONS_FINGERPRINT_INPUT)
                 ),
+                media: Vec::new(),
             },
             entries,
         })

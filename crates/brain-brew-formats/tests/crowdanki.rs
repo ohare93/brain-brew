@@ -189,10 +189,9 @@ fn import_keeps_non_strict_or_ambiguous_image_html_as_raw_fields() {
         ("Non Self Closing", "<img src=\"x.png\">"),
         ("Surrounding Text", "before <img src=\"x.png\" />"),
         ("Missing Declaration", "<img src=\"missing.png\" />"),
-        ("Duplicate Path", "<img src=\"dup.png\" />"),
     ];
     let mut deck_json = expected_crowdanki_json_value();
-    deck_json["media_files"] = serde_json::json!(["x.png", "dup.png", "dup.png"]);
+    deck_json["media_files"] = serde_json::json!(["x.png"]);
     deck_json["notes"] = serde_json::Value::Array(
         cases
             .iter()
@@ -224,10 +223,6 @@ fn import_keeps_non_strict_or_ambiguous_image_html_as_raw_fields() {
     }
     assert!(
         yaml.contains("field.flag: '<img src=\"x.png\" alt=\"y\" />'"),
-        "{yaml}"
-    );
-    assert!(
-        yaml.contains("field.flag: '<img src=\"dup.png\" />'"),
         "{yaml}"
     );
 }
@@ -596,18 +591,17 @@ fn importing_media_files_with_colliding_suggested_stable_ids_fails_closed() {
 }
 
 #[test]
-fn importing_exact_duplicate_media_files_is_tolerated() {
+fn importing_exact_duplicate_media_files_fails_closed() {
     let mut deck_json = expected_crowdanki_json_value();
     deck_json["media_files"] = serde_json::json!(["flags/fi.png", "flags/fi.png"]);
 
-    let imported = import_approved(&deck_json.to_string())
-        .expect("exact duplicate media entries are deduplicated");
-
-    assert_eq!(imported.media.len(), 1);
-    assert_eq!(
-        imported.media.get(&sid("media.flags-fi-png")).unwrap().path,
-        "flags/fi.png"
+    let message = import_error_message(&deck_json, "duplicate physical media paths fail closed");
+    assert!(
+        message.contains("duplicate CrowdAnki media path"),
+        "{message}"
     );
+    assert!(message.contains("$.media_files[0]"), "{message}");
+    assert!(message.contains("$.media_files[1]"), "{message}");
 }
 
 #[test]

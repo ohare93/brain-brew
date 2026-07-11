@@ -6,12 +6,11 @@ use brain_brew_formats::crowdanki::{self, CrowdAnkiImportPlan};
 use brain_brew_formats::source_document::{SourceFile, SourceProvenance};
 use serde_json::json;
 
-use crate::workspace_mutation::{
-    PlannedWorkspaceFile, commit_workspace_files, nearest_existing_ancestor, recover_workspace,
-    write_output_file,
-};
+use crate::output_transaction::{OutputArtifact, publish_output_tree};
+use crate::path_authorization::PathAuthorizer;
+use crate::workspace_mutation::write_output_file;
 
-const USAGE: &str = "usage:\n  brainbrew import crowdanki plan <deck-folder> --out import-plan.json [--force] [--json]\n  brainbrew import crowdanki review --plan import-plan.json [--json]\n  brainbrew import crowdanki apply <deck-folder> --plan import-plan.json --approve-plan --out deck.yaml [--force] [--json]";
+const USAGE: &str = "usage:\n  brainbrew import crowdanki plan <deck-folder> --out import-plan.json [--media-root media/ | --media-mode reference-only] [--force] [--json]\n  brainbrew import crowdanki review --plan import-plan.json [--json]\n  brainbrew import crowdanki apply <deck-folder> --plan import-plan.json --approve-plan --out workspace-dir [--media-root media/ | --media-mode reference-only] [--force] [--json]";
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if args.first().map(String::as_str) != Some("crowdanki") {
@@ -34,8 +33,18 @@ fn run_plan(args: &[String]) -> Result<(), String> {
     let source_path = parsed.deck_dir.join("deck.json");
     let source =
         fs::read(&source_path).map_err(|error| format!("{}: {error}", source_path.display()))?;
-    let plan = crowdanki::plan_import(&source)
-        .map_err(|error| format!("{}: {error}", source_path.display()))?;
+    let supplied = read_import_media_bytes(
+        &source,
+        &source_path,
+        parsed.media_root.as_deref(),
+        parsed.reference_only,
+    )?;
+    let plan = if parsed.reference_only {
+        crowdanki::plan_import(&source)
+    } else {
+        crowdanki::plan_import_with_media(&source, &supplied)
+    }
+    .map_err(|error| format!("{}: {error}", source_path.display()))?;
     let plan_bytes = if parsed
         .out_path
         .extension()
@@ -117,9 +126,6 @@ fn run_review(args: &[String]) -> Result<(), String> {
 
 fn run_apply(args: &[String]) -> Result<(), String> {
     let parsed = parse_apply_args(args)?;
-    let output_path = absolute_output_path(&parsed.out_path)?;
-    let output_root = output_root(&output_path)?;
-    recover_workspace(&output_root)?;
     let deck_json_path = parsed.deck_dir.join("deck.json");
     let deck_json = fs::read(&deck_json_path)
         .map_err(|error| format!("{}: {error}", deck_json_path.display()))?;
@@ -127,19 +133,45 @@ fn run_apply(args: &[String]) -> Result<(), String> {
         .map_err(|error| format!("{}: {error}", parsed.plan_path.display()))?;
     let plan = CrowdAnkiImportPlan::from_bytes(&plan_bytes)
         .map_err(|error| format!("{}: {error}", parsed.plan_path.display()))?;
-    let deck = crowdanki::apply_import_plan(&deck_json, &plan, parsed.approve_plan)
-        .map_err(|error| format!("{}: {error}", deck_json_path.display()))?;
-    let provenance = SourceProvenance::new(output_path.display().to_string())
-        .with_source_root(output_root.display().to_string());
+    let supplied = read_import_media_bytes(
+        &deck_json,
+        &deck_json_path,
+        parsed.media_root.as_deref(),
+        parsed.reference_only,
+    )?;
+    let deck = if parsed.reference_only {
+        crowdanki::apply_import_plan(&deck_json, &plan, parsed.approve_plan)
+    } else {
+        crowdanki::apply_import_plan_with_media(&deck_json, &plan, parsed.approve_plan, &supplied)
+    }
+    .map_err(|error| format!("{}: {error}", deck_json_path.display()))?;
+    let provenance = SourceProvenance::new(parsed.out_path.join("deck.yaml").display().to_string())
+        .with_source_root(parsed.out_path.display().to_string());
     let emission = CanonicalSourceDocument::from_deck(provenance, deck)
         .and_then(|document| document.emit())
         .map_err(|error| error.to_string())?;
     if !emission.included().is_empty() {
         return Err("CrowdAnki import unexpectedly planned included source outputs".to_owned());
     }
-    let replacement = emission.root().text().as_bytes().to_vec();
-    let planned = planned_output(&output_path, parsed.force, replacement)?;
-    commit_workspace_files(&output_root, vec![planned])?;
+    let source_bytes = emission.root().text().as_bytes().to_vec();
+    // Keep the pre-v2 source-file destination only for explicit reference-only imports.
+    // Strict imports always use the clean source-plus-media workspace transaction below.
+    if parsed.reference_only && parsed.out_path.extension().is_some() {
+        write_output_file(
+            &parsed.out_path,
+            source_bytes,
+            parsed.force,
+            canonical_import_validator(&parsed.out_path),
+        )?;
+    } else {
+        let mut artifacts = vec![OutputArtifact::new("deck.yaml", source_bytes)];
+        if !parsed.reference_only {
+            artifacts.extend(supplied.into_iter().map(|asset| {
+                OutputArtifact::new(PathBuf::from("media").join(asset.path), asset.bytes)
+            }));
+        }
+        publish_output_tree(&parsed.out_path, artifacts, parsed.force)?;
+    }
     if parsed.json {
         println!(
             "{}",
@@ -148,6 +180,7 @@ fn run_apply(args: &[String]) -> Result<(), String> {
                 "action": "apply",
                 "plan": parsed.plan_path,
                 "out": parsed.out_path,
+                "media_mode": if parsed.reference_only { "reference_only" } else { "strict" },
                 "status": "imported",
             }))
             .expect("JSON success serializes")
@@ -202,6 +235,8 @@ fn print_review_summary(plan: &CrowdAnkiImportPlan) {
 struct PlanArgs {
     deck_dir: PathBuf,
     out_path: PathBuf,
+    media_root: Option<PathBuf>,
+    reference_only: bool,
     force: bool,
     json: bool,
 }
@@ -213,6 +248,8 @@ struct ApplyArgs {
     deck_dir: PathBuf,
     plan_path: PathBuf,
     out_path: PathBuf,
+    media_root: Option<PathBuf>,
+    reference_only: bool,
     force: bool,
     approve_plan: bool,
     json: bool,
@@ -220,6 +257,8 @@ struct ApplyArgs {
 
 struct ImportFlags {
     out_path: Option<PathBuf>,
+    media_root: Option<PathBuf>,
+    reference_only: bool,
     force: bool,
     plan_path: Option<PathBuf>,
     approve_plan: bool,
@@ -230,11 +269,13 @@ fn parse_plan_args(args: &[String]) -> Result<PlanArgs, String> {
     let (deck_dir, flags) = positional_and_flags(args)?;
     let flags = parse_import_flags(&flags)?;
     if flags.approve_plan || flags.plan_path.is_some() {
-        return Err("plan generation accepts only --out, --force, and --json".to_owned());
+        return Err("plan generation does not accept --plan or --approve-plan".to_owned());
     }
     Ok(PlanArgs {
         deck_dir,
         out_path: flags.out_path.ok_or_else(|| "missing --out".to_owned())?,
+        media_root: flags.media_root,
+        reference_only: flags.reference_only,
         force: flags.force,
         json: flags.json,
     })
@@ -245,7 +286,7 @@ fn parse_review_args(args: &[String]) -> Result<ReviewArgs, String> {
         return Err(USAGE.to_owned());
     }
     let flags = parse_import_flags(&flags)?;
-    if flags.force || flags.approve_plan {
+    if flags.force || flags.approve_plan || flags.media_root.is_some() || flags.reference_only {
         return Err("review accepts only --plan and --json".to_owned());
     }
     Ok(ReviewArgs {
@@ -260,6 +301,8 @@ fn parse_apply_args(args: &[String]) -> Result<ApplyArgs, String> {
         deck_dir,
         plan_path: flags.plan_path.ok_or_else(|| "missing --plan".to_owned())?,
         out_path: flags.out_path.ok_or_else(|| "missing --out".to_owned())?,
+        media_root: flags.media_root,
+        reference_only: flags.reference_only,
         force: flags.force,
         approve_plan: flags.approve_plan,
         json: flags.json,
@@ -280,7 +323,11 @@ fn split_positionals(args: &[String]) -> (Vec<String>, Vec<String>) {
     while index < args.len() {
         if args[index].starts_with('-') {
             flags.push(args[index].clone());
-            if matches!(args[index].as_str(), "--out" | "--plan") && index + 1 < args.len() {
+            if matches!(
+                args[index].as_str(),
+                "--out" | "--plan" | "--media-root" | "--media-mode"
+            ) && index + 1 < args.len()
+            {
                 index += 1;
                 flags.push(args[index].clone());
             }
@@ -293,6 +340,8 @@ fn split_positionals(args: &[String]) -> (Vec<String>, Vec<String>) {
 }
 fn parse_import_flags(args: &[String]) -> Result<ImportFlags, String> {
     let mut out = None;
+    let mut media_root = None;
+    let mut reference_only = false;
     let mut force = false;
     let mut plan = None;
     let mut approve = false;
@@ -316,6 +365,24 @@ fn parse_import_flags(args: &[String]) -> Result<ImportFlags, String> {
                 plan = Some(PathBuf::from(value));
                 index += 2;
             }
+            "--media-root" if media_root.is_none() => {
+                let value = args
+                    .get(index + 1)
+                    .filter(|value| !value.starts_with('-'))
+                    .ok_or_else(|| "--media-root requires a directory".to_owned())?;
+                media_root = Some(PathBuf::from(value));
+                index += 2;
+            }
+            "--media-mode" if !reference_only => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--media-mode requires reference-only".to_owned())?;
+                if value != "reference-only" {
+                    return Err("import supports only --media-mode reference-only".to_owned());
+                }
+                reference_only = true;
+                index += 2;
+            }
             "--force" if !force => {
                 force = true;
                 index += 1;
@@ -328,14 +395,20 @@ fn parse_import_flags(args: &[String]) -> Result<ImportFlags, String> {
                 json = true;
                 index += 1;
             }
-            "--out" | "--plan" | "--force" | "--approve-plan" | "--json" => {
+            "--out" | "--plan" | "--media-root" | "--media-mode" | "--force" | "--approve-plan"
+            | "--json" => {
                 return Err(format!("duplicate import argument {:?}", args[index]));
             }
             other => return Err(format!("unexpected import argument {other:?}")),
         }
     }
+    if media_root.is_some() && reference_only {
+        return Err("--media-root cannot be combined with --media-mode reference-only".to_owned());
+    }
     Ok(ImportFlags {
         out_path: out,
+        media_root,
+        reference_only,
         force,
         plan_path: plan,
         approve_plan: approve,
@@ -343,54 +416,6 @@ fn parse_import_flags(args: &[String]) -> Result<ImportFlags, String> {
     })
 }
 
-fn planned_output(
-    path: &Path,
-    force: bool,
-    replacement: Vec<u8>,
-) -> Result<PlannedWorkspaceFile, String> {
-    match fs::symlink_metadata(path) {
-        Ok(_) if !force => Err(format!(
-            "refusing to overwrite existing import output {}; pass --force to replace an existing regular file",
-            path.display()
-        )),
-        Ok(metadata) if !metadata.file_type().is_file() => Err(format!(
-            "refusing to replace non-file import output {}",
-            path.display()
-        )),
-        Ok(_) => PlannedWorkspaceFile::validated(
-            path,
-            fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?,
-            replacement,
-            canonical_import_validator(path),
-        ),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            PlannedWorkspaceFile::validated_new(path, replacement, canonical_import_validator(path))
-        }
-        Err(error) => Err(format!("{}: {error}", path.display())),
-    }
-}
-fn output_root(out_path: &Path) -> Result<PathBuf, String> {
-    nearest_existing_ancestor(
-        out_path
-            .parent()
-            .ok_or_else(|| format!("import output {} has no parent", out_path.display()))?,
-    )
-}
-fn absolute_output_path(out_path: &Path) -> Result<PathBuf, String> {
-    if out_path.file_name().is_none() {
-        return Err(format!(
-            "import output {} has no file name",
-            out_path.display()
-        ));
-    }
-    if out_path.is_absolute() {
-        Ok(out_path.to_path_buf())
-    } else {
-        std::env::current_dir()
-            .map(|directory| directory.join(out_path))
-            .map_err(|error| format!("cannot resolve current directory: {error}"))
-    }
-}
 fn canonical_import_validator(path: &Path) -> impl FnOnce(&[u8]) -> Result<(), String> + '_ {
     move |bytes| {
         let text = std::str::from_utf8(bytes).map_err(|error| error.to_string())?;
@@ -403,4 +428,38 @@ fn canonical_import_validator(path: &Path) -> impl FnOnce(&[u8]) -> Result<(), S
             Err("generated import output is not canonical Canonical Deck source".to_owned())
         }
     }
+}
+
+fn read_import_media_bytes(
+    deck_json: &[u8],
+    source_path: &Path,
+    media_root: Option<&Path>,
+    reference_only: bool,
+) -> Result<Vec<crowdanki::CrowdAnkiImportMediaBytes>, String> {
+    let references = crowdanki::import_media_references(deck_json)
+        .map_err(|error| format!("{}: {error}", source_path.display()))?;
+    if references.is_empty() || reference_only {
+        return Ok(Vec::new());
+    }
+    let root = media_root.ok_or_else(|| {
+        format!(
+            "CrowdAnki import has {} declared media paths; pass --media-root <directory> to import verified bytes or --media-mode reference-only for explicit non-release source-only output",
+            references.len()
+        )
+    })?;
+    let authorizer = PathAuthorizer::new("CrowdAnki import media", root)?;
+    references
+        .into_iter()
+        .map(|reference| {
+            let path = authorizer
+                .authorize_read(source_path, &reference.source_path, &reference.path)
+                .map_err(|error| error.to_string())?
+                .into_path_buf();
+            let bytes = fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+            Ok(crowdanki::CrowdAnkiImportMediaBytes {
+                path: reference.path,
+                bytes,
+            })
+        })
+        .collect()
 }

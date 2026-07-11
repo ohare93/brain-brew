@@ -6661,6 +6661,8 @@ fn import_crowdanki_cli_reports_all_duplicate_guid_locations() {
         export_dir.to_str().unwrap(),
         "--out",
         dir.join("import-plan.json").to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(!imported.status.success());
     let diagnostic = stderr(&imported);
@@ -6761,6 +6763,7 @@ fn modernize_legacy_import(args: Vec<OsString>) -> Vec<OsString> {
         .arg("--out")
         .arg(&plan)
         .arg("--force")
+        .args(["--media-mode", "reference-only"])
         .output()
         .expect("plan command runs");
     assert!(
@@ -6776,6 +6779,8 @@ fn modernize_legacy_import(args: Vec<OsString>) -> Vec<OsString> {
         OsString::from("--plan"),
         plan.into_os_string(),
         OsString::from("--approve-plan"),
+        OsString::from("--media-mode"),
+        OsString::from("reference-only"),
     ];
     modern.extend(
         args.into_iter()

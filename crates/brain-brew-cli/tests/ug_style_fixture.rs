@@ -107,6 +107,8 @@ fn ug_style_fixture_composes_exports_imports_and_diffs_semantically() {
         export_dir.to_str().unwrap(),
         "--out",
         plan_path.to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(
         plan_output.status.success(),
@@ -123,6 +125,8 @@ fn ug_style_fixture_composes_exports_imports_and_diffs_semantically() {
         "--approve-plan",
         "--out",
         imported_path.to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
     ]);
     assert!(
         import_output.status.success(),

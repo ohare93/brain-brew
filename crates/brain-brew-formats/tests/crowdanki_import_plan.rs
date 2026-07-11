@@ -73,6 +73,78 @@ fn selected_override_is_applied_but_invalid_or_duplicate_values_fail_closed() {
 }
 
 #[test]
+fn media_byte_handoff_hashes_bytes_and_rejects_missing_duplicate_or_stale_evidence() {
+    let mut source: serde_json::Value = serde_json::from_str(&deck_json()).expect("JSON parses");
+    source["media_files"] = serde_json::json!(["flags/fi.png"]);
+    let mut note = source["notes"][0].clone();
+    for field in note["fields"].as_array_mut().unwrap() {
+        *field = serde_json::json!("");
+    }
+    note["fields"][0] = serde_json::json!("<img src=\"flags/fi.png\" />");
+    source["notes"] = serde_json::json!([note]);
+    let source = serde_json::to_vec(&source).expect("JSON serializes");
+    let bytes = crowdanki::CrowdAnkiImportMediaBytes {
+        path: "flags/fi.png".to_owned(),
+        bytes: b"real image bytes".to_vec(),
+    };
+    let plan = crowdanki::plan_import_with_media(&source, std::slice::from_ref(&bytes))
+        .expect("media-byte plan succeeds");
+    assert_eq!(plan.provenance.media[0].source_path, "$.media_files[0]");
+    assert_eq!(
+        plan.provenance.media[0].sha256,
+        brain_brew_formats::media::sha256_hex(&bytes.bytes)
+    );
+    let deck =
+        crowdanki::apply_import_plan_with_media(&source, &plan, true, std::slice::from_ref(&bytes))
+            .expect("byte-bound plan applies");
+    assert_eq!(
+        deck.media.values().next().unwrap().sha256,
+        plan.provenance.media[0].sha256
+    );
+
+    assert!(
+        crowdanki::plan_import_with_media(&source, &[])
+            .expect_err("referenced byte is required")
+            .to_string()
+            .contains("missing supplied")
+    );
+    assert!(
+        crowdanki::plan_import_with_media(&source, &[bytes.clone(), bytes.clone()])
+            .expect_err("duplicate supplied byte is rejected")
+            .to_string()
+            .contains("duplicate supplied")
+    );
+    let changed = crowdanki::CrowdAnkiImportMediaBytes {
+        bytes: b"changed".to_vec(),
+        ..bytes
+    };
+    assert!(
+        crowdanki::apply_import_plan_with_media(&source, &plan, true, &[changed])
+            .expect_err("byte change makes plan stale")
+            .to_string()
+            .contains("media byte evidence")
+    );
+}
+
+#[test]
+fn import_media_declarations_reject_duplicate_case_and_unsafe_paths() {
+    let source = deck_json();
+    for paths in [
+        serde_json::json!(["flags/fi.png", "flags/fi.png"]),
+        serde_json::json!(["flags/fi.png", "flags/FI.png"]),
+        serde_json::json!(["../outside.png"]),
+        serde_json::json!(["C:\\\\outside.png"]),
+    ] {
+        let mut value: serde_json::Value = serde_json::from_str(&source).unwrap();
+        value["media_files"] = paths;
+        let error = crowdanki::plan_import(&serde_json::to_vec(&value).unwrap())
+            .expect_err("unsafe physical declaration fails before planning")
+            .to_string();
+        assert!(error.contains("$.media_files"), "{error}");
+    }
+}
+
+#[test]
 fn stale_source_and_unresolved_collisions_are_refused_before_conversion() {
     let source = deck_json();
     let plan = crowdanki::plan_import(source.as_bytes()).expect("source plans");
