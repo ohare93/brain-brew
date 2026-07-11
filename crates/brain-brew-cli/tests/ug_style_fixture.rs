@@ -99,11 +99,28 @@ fn ug_style_fixture_composes_exports_imports_and_diffs_semantically() {
     assert!(deck_json.contains("Starts with H"));
     assert!(!deck_json.contains("ug-australia-guid"));
 
+    let plan_path = dir.join("import-plan.json");
+    let plan_output = run([
+        "import",
+        "crowdanki",
+        "plan",
+        export_dir.to_str().unwrap(),
+        "--out",
+        plan_path.to_str().unwrap(),
+    ]);
+    assert!(
+        plan_output.status.success(),
+        "stderr: {}",
+        stderr(&plan_output)
+    );
     let import_output = run([
         "import",
         "crowdanki",
+        "apply",
         export_dir.to_str().unwrap(),
-        "--accept-suggested-ids",
+        "--plan",
+        plan_path.to_str().unwrap(),
+        "--approve-plan",
         "--out",
         imported_path.to_str().unwrap(),
     ]);

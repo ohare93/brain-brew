@@ -13,6 +13,11 @@ use brain_brew_formats::{
     canonical_yaml, crowdanki, lockfile, manifest, media, media_map, source_includes,
 };
 
+fn import_approved(input: &str) -> Result<CanonicalDeck, crowdanki::CrowdAnkiError> {
+    let plan = crowdanki::plan_import(input.as_bytes())?;
+    crowdanki::apply_import_plan(input.as_bytes(), &plan, true)
+}
+
 #[test]
 fn ultimate_geography_fixture_uses_file_includes_for_large_source_text() {
     let root = fixture_root();
@@ -572,9 +577,9 @@ fn ultimate_geography_fixture_exports_match_release_oracle_semantics_when_availa
         )
         .unwrap();
 
-        let old_deck = crowdanki::import_deck_accept_suggested_ids(&old.to_string())
+        let old_deck = import_approved(&old.to_string())
             .unwrap_or_else(|error| panic!("{target} release oracle imports: {error}"));
-        let new_deck = crowdanki::import_deck_accept_suggested_ids(&new.to_string())
+        let new_deck = import_approved(&new.to_string())
             .unwrap_or_else(|error| panic!("{target} generated export imports: {error}"));
         let old_projection = crowdanki::project_deck_for_crowdanki_round_trip(&old_deck)
             .unwrap_or_else(|error| panic!("{target} release oracle projects: {error}"));
@@ -1553,7 +1558,7 @@ fn exported_json(deck: &CanonicalDeck) -> serde_json::Value {
 fn assert_crowdanki_round_trip_profile(deck: &CanonicalDeck, target: &str) {
     let export = crowdanki::export_deck(deck)
         .unwrap_or_else(|error| panic!("{target} exports for round-trip parity: {error}"));
-    let imported = match crowdanki::import_deck_accept_suggested_ids(&export.deck_json) {
+    let imported = match import_approved(&export.deck_json) {
         Ok(imported) => imported,
         Err(error)
             if error

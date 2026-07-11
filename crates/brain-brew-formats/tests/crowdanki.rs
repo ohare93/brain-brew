@@ -7,6 +7,13 @@ use brain_brew_core::{
 };
 use brain_brew_formats::{canonical_yaml, crowdanki};
 
+fn import_approved(
+    input: &str,
+) -> Result<brain_brew_core::CanonicalDeck, crowdanki::CrowdAnkiError> {
+    let plan = crowdanki::plan_import(input.as_bytes())?;
+    crowdanki::apply_import_plan(input.as_bytes(), &plan, true)
+}
+
 #[test]
 fn exports_deterministic_crowdanki_json_preserving_adapter_identities() {
     let export = crowdanki::export_deck(&ug_style_deck()).expect("deck exports");
@@ -28,8 +35,7 @@ fn import_export_round_trip_is_semantically_equal_when_suggested_ids_match_sourc
     let original = ug_style_deck();
     let export = crowdanki::export_deck(&original).expect("deck exports");
 
-    let imported = crowdanki::import_deck_accept_suggested_ids(&export.deck_json)
-        .expect("exported CrowdAnki imports");
+    let imported = import_approved(&export.deck_json).expect("exported CrowdAnki imports");
     let expected = crowdanki::project_deck_for_crowdanki_round_trip(&original)
         .expect("source projects to the named CrowdAnki profile");
     let actual = crowdanki::project_deck_for_crowdanki_round_trip(&imported)
@@ -109,8 +115,7 @@ fn import_emits_strict_image_fields_as_structured_references() {
         "<img src=\"flags/fi.png\" />\t\n <img src=\"maps/fi.png\" />"
     ]);
 
-    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
-        .expect("strict image fields import");
+    let imported = import_approved(&deck_json.to_string()).expect("strict image fields import");
     let note = imported.notes.get(&sid("note.finland")).unwrap();
 
     assert_eq!(
@@ -155,8 +160,8 @@ fn import_decodes_safe_rendered_image_url_back_to_original_media_filename() {
         r#"<img src="images/%E6%97%97%20%26%20quote%22%20%231%3F.svg" />"#
     ]);
 
-    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
-        .expect("encoded strict image path imports");
+    let imported =
+        import_approved(&deck_json.to_string()).expect("encoded strict image path imports");
     let note = imported.notes.get(&sid("note.finland")).unwrap();
     assert!(note.fields[&sid("field.flag")].as_images().is_some());
     assert_eq!(imported.media.values().next().unwrap().path, original);
@@ -166,8 +171,8 @@ fn import_decodes_safe_rendered_image_url_back_to_original_media_filename() {
 fn import_and_export_reject_unsafe_media_filenames() {
     let mut deck_json = expected_crowdanki_json_value();
     deck_json["media_files"] = serde_json::json!(["line\nfeed.png"]);
-    let import_error = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
-        .expect_err("unsafe CrowdAnki filename must fail");
+    let import_error =
+        import_approved(&deck_json.to_string()).expect_err("unsafe CrowdAnki filename must fail");
     assert!(import_error.to_string().contains("control character"));
 
     let mut deck = ug_style_deck();
@@ -206,7 +211,7 @@ fn import_keeps_non_strict_or_ambiguous_image_html_as_raw_fields() {
             .collect(),
     );
 
-    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+    let imported = import_approved(&deck_json.to_string())
         .expect("non-strict image fields import as raw HTML");
     let yaml = canonical_yaml::to_string(&imported).expect("imported deck emits YAML");
 
@@ -265,8 +270,7 @@ fn structured_image_fields_survive_crowdanki_export_import_round_trip() {
     );
 
     let export = crowdanki::export_deck(&original).expect("structured deck exports");
-    let imported = crowdanki::import_deck_accept_suggested_ids(&export.deck_json)
-        .expect("exported CrowdAnki re-imports");
+    let imported = import_approved(&export.deck_json).expect("exported CrowdAnki re-imports");
     let expected = crowdanki::project_deck_for_crowdanki_round_trip(&original)
         .expect("structured source projects");
     let actual = crowdanki::project_deck_for_crowdanki_round_trip(&imported)
@@ -282,8 +286,7 @@ fn structured_image_fields_survive_crowdanki_export_import_round_trip() {
 
 #[test]
 fn import_preserves_crowdanki_adapter_identities() {
-    let imported = crowdanki::import_deck_accept_suggested_ids(EXPECTED_CROWDANKI_JSON)
-        .expect("CrowdAnki imports");
+    let imported = import_approved(EXPECTED_CROWDANKI_JSON).expect("CrowdAnki imports");
 
     assert_eq!(
         imported.adapter_ids.get("crowdanki:uuid"),
@@ -437,8 +440,8 @@ fn importing_guid_identity_is_exact_and_opaque() {
     decomposed["fields"][0] = serde_json::json!("Unicode");
     deck_json["notes"] = serde_json::json!([deck_json["notes"][0].clone(), spaced, decomposed]);
 
-    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
-        .expect("opaque GUID lookalikes remain distinct");
+    let imported =
+        import_approved(&deck_json.to_string()).expect("opaque GUID lookalikes remain distinct");
     assert_eq!(imported.notes.len(), 3);
 }
 
@@ -473,7 +476,7 @@ fn importing_notes_with_repeated_first_fields_disambiguates_and_preserves_guids(
         }
     ]);
 
-    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+    let imported = import_approved(&deck_json.to_string())
         .expect("repeated and blank first fields are disambiguated");
     assert_eq!(imported.notes.len(), 3);
     assert!(
@@ -516,7 +519,7 @@ fn importing_notes_with_colliding_suggested_stable_ids_disambiguates() {
             "tags": ["duplicate"]
         }));
 
-    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+    let imported = import_approved(&deck_json.to_string())
         .expect("colliding readable note IDs are disambiguated");
     assert_eq!(imported.notes.len(), 2);
     assert!(
@@ -546,14 +549,12 @@ fn importing_note_models_with_colliding_suggested_stable_ids_fails_closed() {
         .unwrap()
         .push(duplicate_model);
 
-    let error = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+    let error = import_approved(&deck_json.to_string())
         .expect_err("colliding note model stable IDs fail closed");
     let message = error.to_string();
 
-    assert!(message.contains("note-type.country"), "{message}");
-    assert!(message.contains("Country"), "{message}");
-    assert!(message.contains("Country!"), "{message}");
-    assert!(message.contains("automatic disambiguation"), "{message}");
+    assert!(message.contains("unresolved collision"), "{message}");
+    assert!(message.contains("$.note_models[0]"), "{message}");
 }
 
 #[test]
@@ -566,18 +567,21 @@ fn importing_note_models_with_duplicate_crowdanki_uuid_fails_closed() {
         .unwrap()
         .push(duplicate_model);
 
-    let error = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+    let error = import_approved(&deck_json.to_string())
         .expect_err("duplicate note model UUIDs fail closed");
     let message = error.to_string();
 
-    assert!(message.contains("crowdanki_uuid"), "{message}");
+    assert!(message.contains("share crowdanki_uuid"), "{message}");
     assert!(
         message.contains("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
         "{message}"
     );
     assert!(message.contains("Country"), "{message}");
     assert!(message.contains("Country Duplicate UUID"), "{message}");
-    assert!(message.contains("automatic disambiguation"), "{message}");
+    assert!(
+        message.contains("generate a CrowdAnki import plan"),
+        "{message}"
+    );
 }
 
 #[test]
@@ -587,10 +591,8 @@ fn importing_media_files_with_colliding_suggested_stable_ids_fails_closed() {
 
     let message = import_error_message(&deck_json, "colliding media stable IDs fail closed");
 
-    assert!(message.contains("media.foo-bar-png"), "{message}");
-    assert!(message.contains("foo/bar.png"), "{message}");
-    assert!(message.contains("foo_bar.png"), "{message}");
-    assert!(message.contains("automatic disambiguation"), "{message}");
+    assert!(message.contains("unresolved collision"), "{message}");
+    assert!(message.contains("$.media_files[0]"), "{message}");
 }
 
 #[test]
@@ -598,7 +600,7 @@ fn importing_exact_duplicate_media_files_is_tolerated() {
     let mut deck_json = expected_crowdanki_json_value();
     deck_json["media_files"] = serde_json::json!(["flags/fi.png", "flags/fi.png"]);
 
-    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+    let imported = import_approved(&deck_json.to_string())
         .expect("exact duplicate media entries are deduplicated");
 
     assert_eq!(imported.media.len(), 1);
@@ -835,7 +837,7 @@ fn importing_unknown_fields_fails_closed_with_json_error() {
     let mut deck_json = expected_crowdanki_json_value();
     deck_json["unexpected"] = serde_json::json!(true);
 
-    let message = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+    let message = import_approved(&deck_json.to_string())
         .expect_err("unknown fields fail closed")
         .to_string();
 
@@ -849,7 +851,7 @@ fn importing_nested_json_schema_errors_report_the_machine_path() {
     let mut deck_json = expected_crowdanki_json_value();
     deck_json["notes"][0]["unexpected"] = serde_json::json!(true);
 
-    let message = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+    let message = import_approved(&deck_json.to_string())
         .expect_err("unknown nested fields fail closed")
         .to_string();
 
@@ -871,7 +873,7 @@ fn importing_non_default_deck_configurations_fails_closed() {
 
 #[test]
 fn importing_malformed_json_returns_crowdanki_error() {
-    let message = crowdanki::import_deck_accept_suggested_ids("{ not json")
+    let message = import_approved("{ not json")
         .expect_err("malformed JSON fails cleanly")
         .to_string();
 
@@ -947,8 +949,8 @@ fn import_export_preserves_valid_template_array_order_and_ordinals() {
     deck_json["note_models"][0]["tmpls"] =
         serde_json::json!([deck_json["note_models"][0]["tmpls"][0].clone(), second,]);
 
-    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
-        .expect("valid template ordering imports");
+    let imported =
+        import_approved(&deck_json.to_string()).expect("valid template ordering imports");
     let exported: serde_json::Value = serde_json::from_str(
         &crowdanki::export_deck(&imported)
             .expect("valid template ordering exports")
@@ -1456,7 +1458,7 @@ fn expected_crowdanki_json_value() -> serde_json::Value {
 }
 
 fn import_error_message(deck_json: &serde_json::Value, label: &str) -> String {
-    crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+    import_approved(&deck_json.to_string())
         .expect_err(label)
         .to_string()
 }

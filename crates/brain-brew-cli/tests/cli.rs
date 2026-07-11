@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::ffi::OsString;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -6656,10 +6657,10 @@ fn import_crowdanki_cli_reports_all_duplicate_guid_locations() {
     let imported = run([
         "import",
         "crowdanki",
+        "plan",
         export_dir.to_str().unwrap(),
-        "--accept-suggested-ids",
         "--out",
-        dir.join("imported.yaml").to_str().unwrap(),
+        dir.join("import-plan.json").to_str().unwrap(),
     ]);
     assert!(!imported.status.success());
     let diagnostic = stderr(&imported);
@@ -6717,6 +6718,7 @@ fn export_and_import_crowdanki_deck_folder() {
 }
 
 fn run<const N: usize>(args: [&str; N]) -> std::process::Output {
+    let args = modernize_legacy_import(args.into_iter().map(OsString::from).collect());
     Command::new(env!("CARGO_BIN_EXE_brainbrew"))
         .args(args)
         .output()
@@ -6732,12 +6734,55 @@ fn run_in_dir<const N: usize>(args: [&str; N], cwd: &Path) -> std::process::Outp
 }
 
 fn run_with_env<const N: usize>(args: [&str; N], envs: &[(&str, &str)]) -> std::process::Output {
+    let args = modernize_legacy_import(args.into_iter().map(OsString::from).collect());
     let mut command = Command::new(env!("CARGO_BIN_EXE_brainbrew"));
     command.args(args);
     for (name, value) in envs {
         command.env(name, value);
     }
     command.output().expect("command runs")
+}
+
+fn modernize_legacy_import(args: Vec<OsString>) -> Vec<OsString> {
+    let legacy = args.first().and_then(|value| value.to_str()) == Some("import")
+        && args.get(1).and_then(|value| value.to_str()) == Some("crowdanki")
+        && args.iter().any(|value| value == "--accept-suggested-ids");
+    if !legacy {
+        return args;
+    }
+    let deck_dir = PathBuf::from(args[2].clone());
+    let plan = deck_dir
+        .parent()
+        .expect("test deck folder has parent")
+        .join("import-plan.json");
+    let generated = Command::new(env!("CARGO_BIN_EXE_brainbrew"))
+        .args(["import", "crowdanki", "plan"])
+        .arg(&deck_dir)
+        .arg("--out")
+        .arg(&plan)
+        .arg("--force")
+        .output()
+        .expect("plan command runs");
+    assert!(
+        generated.status.success(),
+        "plan stderr: {}",
+        stderr(&generated)
+    );
+    let mut modern = vec![
+        OsString::from("import"),
+        OsString::from("crowdanki"),
+        OsString::from("apply"),
+        deck_dir.into_os_string(),
+        OsString::from("--plan"),
+        plan.into_os_string(),
+        OsString::from("--approve-plan"),
+    ];
+    modern.extend(
+        args.into_iter()
+            .skip(3)
+            .filter(|value| value != "--accept-suggested-ids"),
+    );
+    modern
 }
 
 fn run_with_stdin<const N: usize>(args: [&str; N], stdin: &str) -> std::process::Output {

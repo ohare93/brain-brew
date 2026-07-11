@@ -117,11 +117,13 @@ Computes SHA-256 values for declared media files and writes missing/stale hashes
 ## `import crowdanki`
 
 ```bash
-brainbrew import crowdanki build/crowdanki/en-standard --accept-suggested-ids --out deck.yaml
-brainbrew import crowdanki build/crowdanki/en-standard --accept-suggested-ids --force --out deck.yaml
+brainbrew import crowdanki plan build/crowdanki/en-standard --out import-plan.json
+brainbrew import crowdanki review --plan import-plan.json
+brainbrew import crowdanki apply build/crowdanki/en-standard --plan import-plan.json --approve-plan --out deck.yaml
+brainbrew import crowdanki apply build/crowdanki/en-standard --plan import-plan.json --approve-plan --force --out deck.yaml --json
 ```
 
-Imports a CrowdAnki folder into typed, canonical Deck YAML. `--accept-suggested-ids` accepts the current deterministic automatic suggestions; no suggested-ID override file or selective override argument exists. Imported note suggestions NFC-normalize the first field, keep a unique ASCII-readable `note.<slug>`, and otherwise use a GUID-assisted SHA-256 suffix for repeated, blank, or non-Latin first fields. The original CrowdAnki GUID remains independently stored as `crowdanki:guid`. GUID identity itself is opaque exact non-empty text (no whitespace or Unicode normalization), and duplicate diagnostics name every `$.notes[index].guid` source location. Standard-model template ordinals must be zero-based contiguous array positions (`tmpls[index].ord == index`); malformed order is rejected rather than sorted or renumbered. Import has no JSON route, so these typed codec diagnostics are rendered to stderr with the input `deck.json` path. See [Import CrowdAnki](../authoring/importing-crowdanki.md) for the exact suffix, normalization, and identity contract. By default import creates a new output and refuses an existing file, directory, or symlink. `--force` may replace an existing regular file; Brain Brew fingerprints and backs up that file and commits the replacement through one recoverable workspace transaction. Import writes a complete deck file and re-inlines the `media:` block; it does not preserve a previously hoisted `media: !include ...` source layout.
+Imports are plan-first and fail closed. `plan` reads `deck.json` and writes only a versioned canonical JSON/YAML review artifact; it records byte provenance, import options, source GUID/model/template evidence, proposed typed IDs, statuses, and decisions. `review` reports exact source locations and a diff-like suggestion summary. `apply` verifies unchanged source bytes and the complete plan inventory before its recoverable source-output transaction. `--approve-plan` explicitly acknowledges deterministic automatic suggestions; collisions require selected, legal, globally unique override IDs in the plan. `--json` success responses use `schema_version: 1` with `action` (`plan`, `review`, or `apply`); failures retain the standard versioned error envelope. The removed `--accept-suggested-ids` flag always fails with migration guidance. By default plan and source outputs refuse existing files; `--force` replaces only regular files through a recovery journal. See [Import CrowdAnki](../authoring/importing-crowdanki.md) for the schema, override validation, determinism, and recovery procedure.
 
 ## `diff`
 

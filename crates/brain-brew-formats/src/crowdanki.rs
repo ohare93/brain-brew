@@ -110,15 +110,39 @@ pub fn export_deck(deck: &CanonicalDeck) -> Result<CrowdAnkiExport, CrowdAnkiErr
     })
 }
 
-/// Import normalized CrowdAnki `deck.json`, accepting generated stable IDs.
-pub fn import_deck_accept_suggested_ids(input: &str) -> Result<CanonicalDeck, CrowdAnkiError> {
-    let mut deserializer = serde_json::Deserializer::from_str(input);
-    let deck_json: CrowdAnkiDeckJson = serde_path_to_error::deserialize(&mut deserializer)
-        .map_err(|error| CrowdAnkiError::JsonPath {
-            path: json_path(error.path()),
-            message: error.inner().to_string(),
-        })?;
-    deck_json.into_deck()
+/// Plan a CrowdAnki import without creating Canonical Deck source.
+///
+/// The returned versioned artifact contains source-byte provenance and every generated identity.
+/// It is intentionally separate from application: callers must validate the same source and
+/// explicitly approve automatic decisions before any canonical deck is produced.
+pub fn plan_import(input: &[u8]) -> Result<CrowdAnkiImportPlan, CrowdAnkiError> {
+    let deck = parse_import_source(input)?;
+    deck.import_plan(input)
+}
+
+/// Apply a reviewed import plan to exactly the CrowdAnki source bytes it describes.
+///
+/// `approve_automatic` is the explicit review acknowledgement for deterministic automatic
+/// suggestions. Entries requiring an override remain fail-closed until the plan selects one.
+pub fn apply_import_plan(
+    input: &[u8],
+    plan: &CrowdAnkiImportPlan,
+    approve_automatic: bool,
+) -> Result<CanonicalDeck, CrowdAnkiError> {
+    let deck = parse_import_source(input)?;
+    let expected = deck.import_plan(input)?;
+    let selections = plan.validate_against(&expected, approve_automatic)?;
+    deck.into_deck_with_ids(&selections)
+}
+
+fn parse_import_source(input: &[u8]) -> Result<CrowdAnkiDeckJson, CrowdAnkiError> {
+    let text = std::str::from_utf8(input)
+        .map_err(|error| CrowdAnkiError::Plan(format!("CrowdAnki source is not UTF-8: {error}")))?;
+    let mut deserializer = serde_json::Deserializer::from_str(text);
+    serde_path_to_error::deserialize(&mut deserializer).map_err(|error| CrowdAnkiError::JsonPath {
+        path: json_path(error.path()),
+        message: error.inner().to_string(),
+    })
 }
 
 /// Named canonical equivalence profile for a CrowdAnki export/import round trip.
@@ -1251,6 +1275,7 @@ pub enum CrowdAnkiError {
     Json(serde_json::Error),
     JsonPath { path: String, message: String },
     Identity(CrowdAnkiIdentityReport),
+    Plan(String),
     StableId(String),
     Unsupported(String),
     Validation(ValidationReport),
@@ -1266,6 +1291,7 @@ impl fmt::Display for CrowdAnkiError {
                 write!(f, "CrowdAnki JSON error at schema path {path}: {message}")
             }
             Self::Identity(report) => report.fmt(f),
+            Self::Plan(message) => write!(f, "CrowdAnki import plan failed: {message}"),
             Self::StableId(id) => write!(f, "generated invalid stable id {id:?}"),
             Self::Unsupported(message) => write!(f, "unsupported CrowdAnki data: {message}"),
             Self::Validation(report) => write!(f, "imported deck failed validation: {report}"),
@@ -1276,6 +1302,240 @@ impl fmt::Display for CrowdAnkiError {
 }
 
 impl std::error::Error for CrowdAnkiError {}
+
+/// Versioned, reviewable CrowdAnki stable-ID import plan.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CrowdAnkiImportPlan {
+    pub format: String,
+    pub version: u32,
+    pub provenance: CrowdAnkiImportProvenance,
+    pub entries: Vec<CrowdAnkiImportPlanEntry>,
+}
+
+/// Byte-level source and import-policy binding for a plan.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CrowdAnkiImportProvenance {
+    pub source_sha256: String,
+    pub source_bytes: u64,
+    pub import_options_sha256: String,
+}
+
+/// One source identity proposed for a Canonical Deck stable ID.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CrowdAnkiImportPlanEntry {
+    pub kind: CrowdAnkiImportPlanEntryKind,
+    pub source_path: String,
+    pub suggested_id: String,
+    pub status: CrowdAnkiImportPlanStatus,
+    pub decision: CrowdAnkiImportPlanDecision,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_guid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_uuid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template_name: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CrowdAnkiImportPlanEntryKind {
+    Deck,
+    NoteType,
+    Field,
+    Template,
+    Note,
+    Media,
+}
+
+impl CrowdAnkiImportPlanEntryKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Deck => "deck",
+            Self::NoteType => "note_type",
+            Self::Field => "field",
+            Self::Template => "template",
+            Self::Note => "note",
+            Self::Media => "media",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CrowdAnkiImportPlanStatus {
+    Automatic,
+    RequiresOverride,
+    Rejected,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CrowdAnkiImportPlanDecision {
+    Automatic,
+    Override { stable_id: String },
+    Reject,
+}
+
+impl CrowdAnkiImportPlan {
+    /// Deterministic canonical JSON form (pretty, sorted plan entries, and trailing newline).
+    pub fn to_canonical_json(&self) -> Result<String, CrowdAnkiError> {
+        let mut plan = self.clone();
+        plan.entries.sort_by(|left, right| {
+            (&left.source_path, left.kind, &left.suggested_id).cmp(&(
+                &right.source_path,
+                right.kind,
+                &right.suggested_id,
+            ))
+        });
+        let mut json = serde_json::to_string_pretty(&plan).map_err(CrowdAnkiError::Json)?;
+        json.push('\n');
+        Ok(json)
+    }
+
+    /// Deterministic YAML representation for human review.
+    pub fn to_canonical_yaml(&self) -> Result<String, CrowdAnkiError> {
+        let mut plan = self.clone();
+        plan.entries.sort_by(|left, right| {
+            (&left.source_path, left.kind, &left.suggested_id).cmp(&(
+                &right.source_path,
+                right.kind,
+                &right.suggested_id,
+            ))
+        });
+        serde_yaml::to_string(&plan).map_err(|error| {
+            CrowdAnkiError::Plan(format!("cannot serialize import plan YAML: {error}"))
+        })
+    }
+
+    /// Parse either the canonical JSON form or a review-friendly YAML representation.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, CrowdAnkiError> {
+        serde_json::from_slice(bytes)
+            .or_else(|json_error| {
+                serde_yaml::from_slice(bytes).map_err(|yaml_error| {
+                    CrowdAnkiError::Plan(format!(
+                        "invalid import plan (JSON: {json_error}; YAML: {yaml_error})"
+                    ))
+                })
+            })
+            .map_err(|error| match error {
+                CrowdAnkiError::Plan(_) => error,
+                other => CrowdAnkiError::Plan(other.to_string()),
+            })
+    }
+
+    fn validate_against(
+        &self,
+        expected: &Self,
+        approve_automatic: bool,
+    ) -> Result<BTreeMap<String, StableId>, CrowdAnkiError> {
+        if self.format != IMPORT_PLAN_FORMAT || self.version != IMPORT_PLAN_VERSION {
+            return Err(CrowdAnkiError::Plan(format!(
+                "unsupported import plan format/version {}/{}; expected {}/{}",
+                self.format, self.version, IMPORT_PLAN_FORMAT, IMPORT_PLAN_VERSION
+            )));
+        }
+        if self.provenance != expected.provenance {
+            return Err(CrowdAnkiError::Plan(
+                "stale or mutated import plan: source bytes or import options fingerprint do not match"
+                    .to_owned(),
+            ));
+        }
+        if self.entries.len() != expected.entries.len() {
+            return Err(CrowdAnkiError::Plan(
+                "mutated import plan does not contain the complete source identity inventory"
+                    .to_owned(),
+            ));
+        }
+        let expected_by_path = expected
+            .entries
+            .iter()
+            .map(|entry| (entry.source_path.as_str(), entry))
+            .collect::<BTreeMap<_, _>>();
+        let mut selections = BTreeMap::new();
+        let mut selected = BTreeMap::<String, String>::new();
+        for entry in &self.entries {
+            let Some(source) = expected_by_path.get(entry.source_path.as_str()) else {
+                return Err(CrowdAnkiError::Plan(format!(
+                    "plan entry {} is not present in the source identity inventory",
+                    entry.source_path
+                )));
+            };
+            if entry.kind != source.kind
+                || entry.suggested_id != source.suggested_id
+                || entry.status != source.status
+                || entry.source_guid != source.source_guid
+                || entry.model_uuid != source.model_uuid
+                || entry.model_name != source.model_name
+                || entry.template_name != source.template_name
+            {
+                return Err(CrowdAnkiError::Plan(format!(
+                    "plan entry {} changed generated identity evidence or status",
+                    entry.source_path
+                )));
+            }
+            let selected_id = match (&source.status, &entry.decision) {
+                (CrowdAnkiImportPlanStatus::Automatic, CrowdAnkiImportPlanDecision::Automatic) => {
+                    if !approve_automatic {
+                        return Err(CrowdAnkiError::Plan(
+                            "automatic suggestions are unreviewed; rerun apply with --approve-plan"
+                                .to_owned(),
+                        ));
+                    }
+                    entry.suggested_id.clone()
+                }
+                (
+                    CrowdAnkiImportPlanStatus::RequiresOverride,
+                    CrowdAnkiImportPlanDecision::Override { stable_id },
+                ) => stable_id.clone(),
+                (_, CrowdAnkiImportPlanDecision::Reject)
+                | (CrowdAnkiImportPlanStatus::Rejected, _) => {
+                    return Err(CrowdAnkiError::Plan(format!(
+                        "plan entry {} is rejected and cannot be applied",
+                        entry.source_path
+                    )));
+                }
+                (CrowdAnkiImportPlanStatus::RequiresOverride, _) => {
+                    return Err(CrowdAnkiError::Plan(format!(
+                        "plan entry {} has an unresolved collision; select an override stable_id",
+                        entry.source_path
+                    )));
+                }
+                (
+                    CrowdAnkiImportPlanStatus::Automatic,
+                    CrowdAnkiImportPlanDecision::Override { stable_id },
+                ) => stable_id.clone(),
+            };
+            let stable_id = StableId::new(selected_id.clone()).map_err(|error| {
+                CrowdAnkiError::Plan(format!(
+                    "plan entry {} has invalid override stable ID {:?}: {error}",
+                    entry.source_path, selected_id
+                ))
+            })?;
+            if let Some(other_path) =
+                selected.insert(selected_id.clone(), entry.source_path.clone())
+            {
+                return Err(CrowdAnkiError::Plan(format!(
+                    "plan stable ID {:?} is selected by both {} and {}",
+                    selected_id, other_path, entry.source_path
+                )));
+            }
+            selections.insert(entry.source_path.clone(), stable_id);
+        }
+        if selections.len() != expected.entries.len() {
+            return Err(CrowdAnkiError::Plan(
+                "plan contains duplicate source locations".to_owned(),
+            ));
+        }
+        Ok(selections)
+    }
+}
+
+const IMPORT_PLAN_FORMAT: &str = "brain-brew.crowdanki-import-plan";
+const IMPORT_PLAN_VERSION: u32 = 1;
+const IMPORT_OPTIONS_FINGERPRINT_INPUT: &[u8] =
+    b"brain-brew/crowdanki-import/options/v1;strict-image-reverse-map=true";
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1422,7 +1682,149 @@ impl CrowdAnkiDeckJson {
         Ok(diagnostics)
     }
 
-    fn into_deck(self) -> Result<CanonicalDeck, CrowdAnkiError> {
+    fn import_plan(&self, source_bytes: &[u8]) -> Result<CrowdAnkiImportPlan, CrowdAnkiError> {
+        // Keep plan generation fail-closed on adapter identities whose evidence is ambiguous.
+        validate_crowdanki_identity(CrowdAnkiIdentityInput::Import(self))?;
+        let mut model_by_uuid = BTreeMap::<&str, &str>::new();
+        for model in &self.note_models {
+            if let Some(existing_name) = model_by_uuid.insert(&model.crowdanki_uuid, &model.name) {
+                return Err(CrowdAnkiError::Unsupported(format!(
+                    "CrowdAnki note models {:?} and {:?} share crowdanki_uuid {:?}; {}",
+                    existing_name,
+                    model.name,
+                    model.crowdanki_uuid,
+                    suggested_id_collision_resolution()
+                )));
+            }
+        }
+        let mut entries = vec![CrowdAnkiImportPlanEntry {
+            kind: CrowdAnkiImportPlanEntryKind::Deck,
+            source_path: "$.name".to_owned(),
+            suggested_id: prefixed_stable_id("deck", &self.name)?.to_string(),
+            status: CrowdAnkiImportPlanStatus::Automatic,
+            decision: CrowdAnkiImportPlanDecision::Automatic,
+            source_guid: None,
+            model_uuid: None,
+            model_name: None,
+            template_name: None,
+        }];
+        for (model_index, model) in self.note_models.iter().enumerate() {
+            let model_path = format!("$.note_models[{model_index}]");
+            let model_id = prefixed_stable_id("note-type", &model.name)?.to_string();
+            entries.push(CrowdAnkiImportPlanEntry {
+                kind: CrowdAnkiImportPlanEntryKind::NoteType,
+                source_path: format!("{model_path}.name"),
+                suggested_id: model_id,
+                status: CrowdAnkiImportPlanStatus::Automatic,
+                decision: CrowdAnkiImportPlanDecision::Automatic,
+                source_guid: None,
+                model_uuid: Some(model.crowdanki_uuid.clone()),
+                model_name: Some(model.name.clone()),
+                template_name: None,
+            });
+            for (field_index, field) in model.flds.iter().enumerate() {
+                entries.push(CrowdAnkiImportPlanEntry {
+                    kind: CrowdAnkiImportPlanEntryKind::Field,
+                    source_path: format!("{model_path}.flds[{field_index}].name"),
+                    suggested_id: prefixed_stable_id("field", &field.name)?.to_string(),
+                    status: CrowdAnkiImportPlanStatus::Automatic,
+                    decision: CrowdAnkiImportPlanDecision::Automatic,
+                    source_guid: None,
+                    model_uuid: Some(model.crowdanki_uuid.clone()),
+                    model_name: Some(model.name.clone()),
+                    template_name: None,
+                });
+            }
+            for (template_index, template) in model.tmpls.iter().enumerate() {
+                entries.push(CrowdAnkiImportPlanEntry {
+                    kind: CrowdAnkiImportPlanEntryKind::Template,
+                    source_path: format!("{model_path}.tmpls[{template_index}].name"),
+                    suggested_id: prefixed_stable_id("template", &template.name)?.to_string(),
+                    status: CrowdAnkiImportPlanStatus::Automatic,
+                    decision: CrowdAnkiImportPlanDecision::Automatic,
+                    source_guid: None,
+                    model_uuid: Some(model.crowdanki_uuid.clone()),
+                    model_name: Some(model.name.clone()),
+                    template_name: Some(template.name.clone()),
+                });
+            }
+        }
+        let note_identities = self
+            .notes
+            .iter()
+            .map(CrowdAnkiNoteSource::from_note_json)
+            .map(CrowdAnkiNoteSource::identity)
+            .collect::<Vec<_>>();
+        for (index, (note, id)) in self
+            .notes
+            .iter()
+            .zip(suggest_imported_note_stable_ids(&note_identities)?)
+            .enumerate()
+        {
+            let model = self
+                .note_models
+                .iter()
+                .find(|model| model.crowdanki_uuid == note.note_model_uuid);
+            entries.push(CrowdAnkiImportPlanEntry {
+                kind: CrowdAnkiImportPlanEntryKind::Note,
+                source_path: format!("$.notes[{index}].guid"),
+                suggested_id: id.to_string(),
+                status: CrowdAnkiImportPlanStatus::Automatic,
+                decision: CrowdAnkiImportPlanDecision::Automatic,
+                source_guid: Some(note.guid.clone()),
+                model_uuid: Some(note.note_model_uuid.clone()),
+                model_name: model.map(|model| model.name.clone()),
+                template_name: None,
+            });
+        }
+        let mut planned_media_paths = BTreeSet::new();
+        for (index, path) in self.media_files.iter().enumerate() {
+            // Exact duplicate filenames already have explicit adapter semantics: import folds them
+            // into one media reference. They are not competing suggested identities.
+            if !planned_media_paths.insert(path.clone()) {
+                continue;
+            }
+            entries.push(CrowdAnkiImportPlanEntry {
+                kind: CrowdAnkiImportPlanEntryKind::Media,
+                source_path: format!("$.media_files[{index}]"),
+                suggested_id: prefixed_stable_id("media", path)?.to_string(),
+                status: CrowdAnkiImportPlanStatus::Automatic,
+                decision: CrowdAnkiImportPlanDecision::Automatic,
+                source_guid: None,
+                model_uuid: None,
+                model_name: None,
+                template_name: None,
+            });
+        }
+        let mut collisions = BTreeMap::<String, usize>::new();
+        for entry in &entries {
+            *collisions.entry(entry.suggested_id.clone()).or_default() += 1;
+        }
+        for entry in &mut entries {
+            if collisions[&entry.suggested_id] > 1 {
+                entry.status = CrowdAnkiImportPlanStatus::RequiresOverride;
+            }
+        }
+        entries.sort_by(|left, right| left.source_path.cmp(&right.source_path));
+        Ok(CrowdAnkiImportPlan {
+            format: IMPORT_PLAN_FORMAT.to_owned(),
+            version: IMPORT_PLAN_VERSION,
+            provenance: CrowdAnkiImportProvenance {
+                source_sha256: format!("{:x}", Sha256::digest(source_bytes)),
+                source_bytes: source_bytes.len() as u64,
+                import_options_sha256: format!(
+                    "{:x}",
+                    Sha256::digest(IMPORT_OPTIONS_FINGERPRINT_INPUT)
+                ),
+            },
+            entries,
+        })
+    }
+
+    fn into_deck_with_ids(
+        self,
+        selected_ids: &BTreeMap<String, StableId>,
+    ) -> Result<CanonicalDeck, CrowdAnkiError> {
         if self.type_ != "Deck" {
             return Err(CrowdAnkiError::Unsupported(format!(
                 "expected __type__ Deck, found {}",
@@ -1447,7 +1849,11 @@ impl CrowdAnkiDeckJson {
             &self.deck_configurations,
         )?;
 
-        let deck_id = prefixed_stable_id("deck", &self.name)?;
+        let deck_id = selected_id(
+            selected_ids,
+            "$.name",
+            prefixed_stable_id("deck", &self.name)?,
+        )?;
         let mut deck_adapter_ids = AdapterIds::new();
         deck_adapter_ids.insert("crowdanki:uuid", self.crowdanki_uuid);
         deck_adapter_ids.insert("crowdanki:deck_config_uuid", self.deck_config_uuid);
@@ -1455,8 +1861,38 @@ impl CrowdAnkiDeckJson {
 
         let mut note_type_by_uuid: BTreeMap<String, StableId> = BTreeMap::new();
         let mut note_types: BTreeMap<StableId, NoteType> = BTreeMap::new();
-        for note_model in self.note_models {
-            let (uuid, id, note_type) = note_model.into_note_type()?;
+        for (model_index, note_model) in self.note_models.into_iter().enumerate() {
+            let model_path = format!("$.note_models[{model_index}]");
+            let id = selected_id(
+                selected_ids,
+                &format!("{model_path}.name"),
+                prefixed_stable_id("note-type", &note_model.name)?,
+            )?;
+            let field_ids = note_model
+                .flds
+                .iter()
+                .enumerate()
+                .map(|(index, field)| {
+                    selected_id(
+                        selected_ids,
+                        &format!("{model_path}.flds[{index}].name"),
+                        prefixed_stable_id("field", &field.name)?,
+                    )
+                })
+                .collect::<Result<Vec<_>, CrowdAnkiError>>()?;
+            let template_ids = note_model
+                .tmpls
+                .iter()
+                .enumerate()
+                .map(|(index, template)| {
+                    selected_id(
+                        selected_ids,
+                        &format!("{model_path}.tmpls[{index}].name"),
+                        prefixed_stable_id("template", &template.name)?,
+                    )
+                })
+                .collect::<Result<Vec<_>, CrowdAnkiError>>()?;
+            let (uuid, id, note_type) = note_model.into_note_type(id, field_ids, template_ids)?;
             if let Some(existing) = note_types.get(&id) {
                 return Err(CrowdAnkiError::Unsupported(format!(
                     "CrowdAnki note models {:?} and {:?} both derive suggested stable ID {}; {}",
@@ -1490,7 +1926,14 @@ impl CrowdAnkiDeckJson {
             .collect::<Vec<_>>();
         let suggested_note_ids = suggest_imported_note_stable_ids(&note_identities)?;
         let mut notes: BTreeMap<StableId, Note> = BTreeMap::new();
-        for (note_json, id) in self.notes.into_iter().zip(suggested_note_ids) {
+        for (index, (note_json, suggested_id)) in
+            self.notes.into_iter().zip(suggested_note_ids).enumerate()
+        {
+            let id = selected_id(
+                selected_ids,
+                &format!("$.notes[{index}].guid"),
+                suggested_id,
+            )?;
             let note = note_json.into_note(&note_types, &note_type_by_uuid, id.clone())?;
             if notes.insert(id.clone(), note).is_some() {
                 return Err(CrowdAnkiError::Unsupported(format!(
@@ -1502,8 +1945,12 @@ impl CrowdAnkiDeckJson {
         let ambiguous_media_file_paths = duplicate_paths(&self.media_files);
         let mut media_sources: BTreeMap<StableId, String> = BTreeMap::new();
         let mut media = BTreeMap::new();
-        for path in self.media_files {
-            let id = prefixed_stable_id("media", &path)?;
+        for (index, path) in self.media_files.into_iter().enumerate() {
+            let id = selected_id(
+                selected_ids,
+                &format!("$.media_files[{index}]"),
+                prefixed_stable_id("media", &path)?,
+            )?;
             if let Some(existing_path) = media_sources.get(&id) {
                 if existing_path != &path {
                     return Err(CrowdAnkiError::Unsupported(format!(
@@ -1591,7 +2038,12 @@ impl CrowdAnkiNoteModelJson {
         Ok(())
     }
 
-    fn into_note_type(self) -> Result<(String, StableId, NoteType), CrowdAnkiError> {
+    fn into_note_type(
+        self,
+        id: StableId,
+        field_ids: Vec<StableId>,
+        template_ids: Vec<StableId>,
+    ) -> Result<(String, StableId, NoteType), CrowdAnkiError> {
         if self.kind != "NoteModel" {
             return Err(CrowdAnkiError::Unsupported(format!(
                 "expected note model __type__ NoteModel, found {}",
@@ -1606,18 +2058,18 @@ impl CrowdAnkiNoteModelJson {
         }
         self.validate_supported_defaults()?;
 
-        let id = prefixed_stable_id("note-type", &self.name)?;
         let mut adapter_ids = AdapterIds::new();
         adapter_ids.insert("crowdanki:uuid", self.crowdanki_uuid.clone());
 
         let fields = self
             .flds
             .into_iter()
+            .zip(field_ids)
             .enumerate()
-            .map(|(index, field)| {
+            .map(|(index, (field, id))| {
                 field.validate_supported_defaults(index)?;
                 Ok(FieldDefinition {
-                    id: prefixed_stable_id("field", &field.name)?,
+                    id,
                     name: field.name,
                 })
             })
@@ -1626,10 +2078,11 @@ impl CrowdAnkiNoteModelJson {
         let card_templates = self
             .tmpls
             .into_iter()
-            .map(|template| {
+            .zip(template_ids)
+            .map(|(template, id)| {
                 template.validate_supported_defaults()?;
                 Ok(CardTemplate {
-                    id: prefixed_stable_id("template", &template.name)?,
+                    id,
                     name: template.name,
                     variables: BTreeMap::new(),
                     question_format: template.qfmt,
@@ -1918,8 +2371,16 @@ impl CrowdAnkiNoteJson {
     }
 }
 
+fn selected_id(
+    selected_ids: &BTreeMap<String, StableId>,
+    source_path: &str,
+    suggested: StableId,
+) -> Result<StableId, CrowdAnkiError> {
+    Ok(selected_ids.get(source_path).cloned().unwrap_or(suggested))
+}
+
 fn suggested_id_collision_resolution() -> &'static str {
-    "automatic disambiguation applies only to imported notes; this import API has no suggested-ID override input"
+    "generate a CrowdAnki import plan and select distinct reviewed overrides before applying it"
 }
 
 fn reverse_map_strict_image_fields(
