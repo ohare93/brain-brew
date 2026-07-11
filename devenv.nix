@@ -96,6 +96,10 @@ in
     dist manifest --tag "v$version" --artifacts=all --no-local-paths --output-format=json
   '';
   scripts."release:version-check".exec = "scripts/check_release_version.py";
+  scripts."release:security-check".exec = ''
+    python3 scripts/check_release_security.py
+    python3 -m unittest scripts.tests.test_release_security_policy
+  '';
   scripts."crates:metadata-check".exec = ''
     set -euo pipefail
     scripts/check_release_version.py
@@ -132,6 +136,7 @@ in
     cargo clippy --workspace --exclude brain-brew-workbench-e2e --all-targets -- -D warnings
     cargo clippy -p brainbrew --features workbench-write-dev --all-targets -- -D warnings
     workbench-ui-embed-check
+    release:security-check
   '';
 
   enterTest = ''

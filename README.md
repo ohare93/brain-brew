@@ -50,14 +50,10 @@ cargo install brainbrew --version 1.0.0-alpha.2 --locked
 brainbrew --version
 ```
 
-The easiest no-Rust install path is the GitHub Release installer:
-
-```bash
-curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/jeprecated/brain-brew/releases/download/v1.0.0-alpha.2/brainbrew-installer.sh \
-  | sh
-brainbrew --version
-```
+For a no-Rust GitHub Release install, download the versioned installer and its
+release checksum before executing it; never pipe a downloaded installer into a
+shell. See the [installation guide](documentation/docs/getting-started/install.md)
+for the checksum-verified commands.
 
 To test the exact GitHub tag instead of the crates.io package, install directly from the pinned release tag:
 

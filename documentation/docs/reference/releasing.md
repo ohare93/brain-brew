@@ -46,7 +46,12 @@ The separate **indexed** mode uses no staged source replacement: it builds the e
 
 CI and tagged releases both call `.github/workflows/reusable-quality.yml` with a full 40-character commit SHA. The workflow rejects refs, checks out only that SHA, and returns that verified SHA plus a SHA-256-bound evidence bundle. It runs format/tests/lint/embedded assets, documentation, extracted crates, archive-only package smoke, a produced cargo-dist archive smoke, the Nix check and produced Nix binary smoke, and prepared browser E2E. Tagged releases verify that the tag resolves to this same SHA; every cargo-dist build artifact upload and the only `dist host`/`gh release create` path depends on the reusable gate. A failed, cancelled, or skipped dependency leaves hosting skipped by normal GitHub Actions semantics—there is no `always()` publication bypass.
 
-Pull requests run this exact gate at their immutable head SHA with read-only permissions and no publication credentials. They record a `blocked` representative-consumer result rather than treating the checked-in Ultimate Geography fixture as equivalent evidence.
+Pull requests run this exact gate at their immutable head SHA with read-only permissions and no publication credentials. They record a `blocked` representative-consumer result rather than treating the checked-in Ultimate Geography fixture as equivalent evidence. See [Release supply-chain security](./release-security.md) for the exact action pins, checksum-verified cargo-dist bootstrap, locked Nix installation, host-only credential boundary, and mandatory pin-update review process. Run its checker before release changes:
+
+```bash
+python3 scripts/check_release_security.py
+python3 -m unittest scripts.tests.test_release_security_policy
+```
 
 ### Live representative-consumer blocker and recovery
 
@@ -95,12 +100,12 @@ The same commands are backed by `scripts/publish_crates.sh`. Every `publish` inv
 
 ## Reviewer install commands
 
-After alpha.2 is released, reviewers can install pinned artifacts:
+After alpha.2 is released, reviewers can install the locked Cargo package or
+Nix target. For a GitHub installer, use the checksum-verified download procedure
+in [Install the CLI](../getting-started/install.md#github-release-installer);
+do not pipe a remote installer into a shell.
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/jeprecated/brain-brew/releases/download/v1.0.0-alpha.2/brainbrew-installer.sh \
-  | sh
 cargo install brainbrew --version 1.0.0-alpha.2 --locked
 nix run github:jeprecated/brain-brew/v1.0.0-alpha.2 -- --version
 ```

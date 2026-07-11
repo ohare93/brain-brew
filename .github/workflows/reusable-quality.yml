@@ -42,7 +42,7 @@ jobs:
     outputs:
       target-sha: ${{ steps.sha.outputs.target-sha }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6; documentation/docs/reference/release-security.md
         with:
           ref: ${{ inputs.target_sha }}
           persist-credentials: false
@@ -70,16 +70,16 @@ jobs:
       evidence-sha256: ${{ steps.evidence.outputs.evidence-sha256 }}
       representative-consumer-status: ${{ steps.consumer.outputs.status }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6; documentation/docs/reference/release-security.md
         with:
           ref: ${{ inputs.target_sha }}
           persist-credentials: false
           submodules: recursive
       # Do not pass a token or cache credential: this same gate executes for
       # untrusted pull requests and has no publication side effects.
-      - uses: cachix/install-nix-action@v31
-      - name: Install devenv
-        run: nix profile add nixpkgs#devenv
+      - uses: cachix/install-nix-action@a49548c11d9846ad46ecc0115273879b045f001c # v31; documentation/docs/reference/release-security.md
+      - name: Install devenv from this repository's locked nixpkgs input
+        run: nix profile add --inputs-from . nixpkgs#devenv
       - name: Run format, tests, lint, and embedded-asset gate
         run: devenv shell ci
       - name: Build documentation
@@ -148,7 +148,7 @@ jobs:
           evidence_sha256="$(sha256sum target/release-evidence/evidence.json | cut -d ' ' -f 1)"
           echo "evidence-sha256=$evidence_sha256" >> "$GITHUB_OUTPUT"
       - name: Upload cryptographically bound evidence bundle
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6; documentation/docs/reference/release-security.md
         with:
           name: quality-evidence-${{ needs.validate-input.outputs.target-sha }}
           path: target/release-evidence

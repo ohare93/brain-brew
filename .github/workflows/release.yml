@@ -1,6 +1,6 @@
-# This workflow is generated from cargo-dist and then constrained by the
-# repository's reusable release gates. Regenerate only with the gate wiring
-# preserved; no cargo-dist hosting command may run before quality-gates.
+# cargo-dist generated the original release graph. This checked-in graph keeps its
+# artifact matrix but replaces generated mutable installers with reviewed local
+# tooling; no cargo-dist hosting command may run before quality-gates.
 name: Release
 
 on:
@@ -32,7 +32,7 @@ jobs:
       tag: ${{ github.ref_name }}
       tag-flag: ${{ format('--tag={0}', github.ref_name) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6; documentation/docs/reference/release-security.md
         with:
           ref: ${{ needs.quality-gates.outputs.target-sha }}
           persist-credentials: false
@@ -44,14 +44,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse "refs/tags/$TAG^{}")" = "$TARGET_SHA"
-      - name: Install dist
-        shell: bash
-        run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.30.4/cargo-dist-installer.sh | sh"
-      - name: Cache dist
-        uses: actions/upload-artifact@v6
-        with:
-          name: cargo-dist-cache
-          path: ~/.cargo/bin/dist
+      - name: Install checksum-verified cargo-dist
+        run: scripts/install_cargo_dist.sh "$HOME/.cargo/bin"
       - id: plan
         run: |
           # The release workflow is intentionally post-generated to add
@@ -59,7 +53,7 @@ jobs:
           dist plan --allow-dirty --output-format=json > plan-dist-manifest.json
           echo "manifest=$(jq -c '.' plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
       - name: Upload dist plan
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6; documentation/docs/reference/release-security.md
         with:
           name: artifacts-plan-dist-manifest
           path: plan-dist-manifest.json
@@ -73,32 +67,22 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.plan.outputs.manifest).ci.github.artifacts_matrix }}
     runs-on: ${{ matrix.runner }}
-    container: ${{ matrix.container && matrix.container.image || null }}
     env:
       BUILD_MANIFEST_NAME: target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6; documentation/docs/reference/release-security.md
         with:
           ref: ${{ needs.quality-gates.outputs.target-sha }}
           persist-credentials: false
           submodules: recursive
-      - name: Install Rust non-interactively if not already installed
-        if: ${{ matrix.container }}
-        run: |
-          if ! command -v cargo > /dev/null 2>&1; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-            echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          fi
-      - name: Install dist
-        run: ${{ matrix.install_dist.run }}
-      - name: Fetch plan and cached dist
-        uses: actions/download-artifact@v7
+      - name: Install checksum-verified cargo-dist
+        run: scripts/install_cargo_dist.sh "$HOME/.cargo/bin"
+      - name: Fetch plan
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7; documentation/docs/reference/release-security.md
         with:
           pattern: artifacts-*
           path: target/distrib/
           merge-multiple: true
-      - name: Install dependencies
-        run: ${{ matrix.packages_install }}
       - id: cargo-dist
         name: Build artifacts
         shell: bash
@@ -109,7 +93,7 @@ jobs:
           echo EOF >> "$GITHUB_OUTPUT"
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
       - name: Upload built artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6; documentation/docs/reference/release-security.md
         with:
           name: artifacts-build-local-${{ join(matrix.targets, '_') }}
           path: |
@@ -125,19 +109,15 @@ jobs:
     env:
       BUILD_MANIFEST_NAME: target/distrib/global-dist-manifest.json
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6; documentation/docs/reference/release-security.md
         with:
           ref: ${{ needs.quality-gates.outputs.target-sha }}
           persist-credentials: false
           submodules: recursive
-      - name: Install cached dist
-        uses: actions/download-artifact@v7
-        with:
-          name: cargo-dist-cache
-          path: ~/.cargo/bin/
-      - run: chmod +x ~/.cargo/bin/dist
+      - name: Install checksum-verified cargo-dist
+        run: scripts/install_cargo_dist.sh "$HOME/.cargo/bin"
       - name: Fetch local artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7; documentation/docs/reference/release-security.md
         with:
           pattern: artifacts-*
           path: target/distrib/
@@ -151,7 +131,7 @@ jobs:
           echo EOF >> "$GITHUB_OUTPUT"
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
       - name: Upload built artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6; documentation/docs/reference/release-security.md
         with:
           name: artifacts-build-global
           path: |
@@ -169,10 +149,8 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6; documentation/docs/reference/release-security.md
         with:
           ref: ${{ needs.quality-gates.outputs.target-sha }}
           persist-credentials: false
@@ -185,25 +163,25 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$TARGET_SHA"
           test "$EVIDENCE_SHA256" != ''
-      - name: Install cached dist
-        uses: actions/download-artifact@v7
-        with:
-          name: cargo-dist-cache
-          path: ~/.cargo/bin/
-      - run: chmod +x ~/.cargo/bin/dist
+      - name: Install checksum-verified cargo-dist
+        run: scripts/install_cargo_dist.sh "$HOME/.cargo/bin"
       - name: Fetch produced artifacts only
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7; documentation/docs/reference/release-security.md
         with:
           pattern: artifacts-*
           path: target/distrib/
           merge-multiple: true
       - id: host
+        name: Upload release artifacts
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           dist host --allow-dirty ${{ needs.plan.outputs.tag-flag }} --steps=upload --steps=release --output-format=json > dist-manifest.json
           echo "manifest=$(jq -c '.' dist-manifest.json)" >> "$GITHUB_OUTPUT"
       - name: Create GitHub Release from verified produced artifacts
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PRERELEASE_FLAG: "${{ fromJson(steps.host.outputs.manifest).announcement_is_prerelease && '--prerelease' || '' }}"
           ANNOUNCEMENT_TITLE: "${{ fromJson(steps.host.outputs.manifest).announcement_title }}"
           ANNOUNCEMENT_BODY: "${{ fromJson(steps.host.outputs.manifest).announcement_github_body }}"
