@@ -10,7 +10,7 @@ A note-only hub is not enough for shared Anki-compatible decks. Maintainers must
 
 ## Decision
 
-Use `CanonicalDeck` as Brain Brew's central federation and round-trip format.
+Use `CanonicalDeck` as Brain Brew's central federation and adapter-interchange format.
 
 A Canonical Deck represents the deck entities Brain Brew understands: notes, note types, card templates, styling, metadata, tags, media references, source variables, and adapter IDs. External formats import into Canonical Decks and export from Canonical Decks.
 
@@ -38,6 +38,6 @@ A Canonical Deck represents the deck entities Brain Brew understands: notes, not
 ## Implications
 
 - Every format codec converts to or from Canonical Deck, not only note rows.
-- Round-trip tests must cover note types, templates, metadata, media references, and notes together.
+- Adapter-equivalence tests must cover note types, templates, metadata, media references, and notes together.
 - Overlay and diff behavior should be expressed in deck-entity terms.
 - The glossary and user docs should use “Canonical Deck” as the top-level source concept.

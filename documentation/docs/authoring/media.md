@@ -65,7 +65,7 @@ Relative directories are resolved from the root manifest workspace. A qualified 
 
 Media mutation is intentionally narrower: `media hash` and `media images-to-refs` may write only root-workspace Canonical Deck/Overlay sources. Explicit includes, package-root dependencies, and locked/cache packages are read-only. If a requested operation would change one, the entire operation fails before the transaction writes anything; locked package tree hashes are checked around mutation and caches are never repaired silently.
 
-A CrowdAnki import that rewrites a deck emits an ordinary deck file and re-inlines the `media:` block; it does not preserve a previously hoisted media include.
+A CrowdAnki bootstrap import emits an ordinary new deck file and re-inlines the `media:` block; it does not preserve a previously hoisted media include or modify the source that was exported.
 
 ## Single and multi-image fields
 

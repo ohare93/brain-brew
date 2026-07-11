@@ -6,13 +6,13 @@
 
 ## Context
 
-Deck maintainers need source files that are easy to review, version, canonicalize, and round trip through adapter formats. Brain Brew should preserve intentional deck information, but it should not promise to preserve arbitrary input bytes, hand formatting, or unsupported adapter payloads.
+Deck maintainers need source files that are easy to review, version, canonicalize, and export through adapter formats. Brain Brew should preserve intentional deck information, but it should not promise to preserve arbitrary input bytes, hand formatting, unsupported adapter payloads, or source ownership recovery from an adapter export.
 
 ## Decision
 
 Store maintainer-owned Canonical Deck source as strict canonical YAML.
 
-Canonical YAML is schema-driven and deterministic. Brain Brew round trips to byte-stable canonicalized source, not to arbitrary original source bytes. A federated package may contain multiple source files such as a base deck, overlays, a manifest, and a lockfile, but each Canonical Deck source file has one canonical representation.
+Canonical YAML is schema-driven and deterministic. Formatting produces byte-stable canonicalized source, not arbitrary original source bytes. A federated package may contain multiple source files such as a base deck, overlays, a manifest, and a lockfile, but each Canonical Deck source file has one canonical representation.
 
 ## Rationale
 
@@ -21,7 +21,7 @@ Canonical YAML is schema-driven and deterministic. Brain Brew round trips to byt
 - YAML is readable and reviewable for deck maintainers.
 - Deterministic serialization keeps diffs meaningful.
 - Strict decoding catches mistakes before export.
-- Canonicalization gives round-trip guarantees without preserving irrelevant formatting.
+- Canonicalization gives deterministic source stability without preserving irrelevant formatting.
 
 **Cons:**
 
@@ -40,5 +40,5 @@ Canonical YAML is schema-driven and deterministic. Brain Brew round trips to byt
 
 - YAML codecs live in `brain-brew-formats`, not `brain-brew-core`.
 - Format commands should normalize source deterministically.
-- Tests should assert canonicalized byte stability where source round trips are promised.
+- Tests should assert canonicalized byte stability for formatter output and explicit adapter-equivalence boundaries.
 - Documentation should distinguish Canonical Deck source from generated adapter artifacts.

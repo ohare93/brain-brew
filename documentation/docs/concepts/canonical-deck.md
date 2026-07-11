@@ -71,6 +71,6 @@ Run the formatter before review:
 brainbrew fmt deck.yaml
 ```
 
-## Round trips
+## CrowdAnki adapter boundary
 
-CrowdAnki import/export is an adapter around this model. The adapter preserves Anki-compatible deck semantics and external IDs, but the Canonical Deck stays the source of truth.
+CrowdAnki import/export is an adapter around this model. Export preserves supported Anki-compatible deck semantics and external IDs; import creates a separate full-deck bootstrap output. The Canonical Deck source remains the source of truth, and import does not merge edits into an existing source or overlay stack. See [CrowdAnki bootstrap boundary](../authoring/crowdanki-bootstrap-boundary.md).

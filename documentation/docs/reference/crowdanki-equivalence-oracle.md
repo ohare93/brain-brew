@@ -4,11 +4,11 @@ title: CrowdAnki equivalence oracle
 
 # CrowdAnki equivalence oracle
 
-`canonical_crowdanki_equivalence` is the fail-closed comparison between a
+`canonical_crowdanki_equivalence` is the fail-closed adapter-equivalence comparison between a
 `CanonicalDeck` and a CrowdAnki `deck.json`. It parses and imports the JSON with
 the normal strict schema, projects both sides through
 `crowdanki-export-import-v1`, then uses the complete core semantic diff. It is
-not a JSON subset comparison.
+not a JSON subset comparison or a workflow for merging into existing source.
 
 An error is one of:
 

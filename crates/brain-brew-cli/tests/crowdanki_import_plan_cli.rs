@@ -21,6 +21,136 @@ fn run(args: &[&str]) -> std::process::Output {
 }
 
 #[test]
+fn import_crowdanki_is_bootstrap_only_and_refuses_existing_destination() {
+    let dir = temp_dir();
+    let source =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/ug-style/deck.yaml");
+    let export = dir.join("crowdanki");
+    let plan = dir.join("import-plan.json");
+    let destination = dir.join("existing-workspace");
+
+    let general_help = run(&["--help"]);
+    assert!(general_help.status.success());
+    let general_help = String::from_utf8_lossy(&general_help.stdout).to_lowercase();
+    for unsupported in ["round-trip", "round trip", "pull", "reconcil"] {
+        assert!(
+            !general_help.contains(unsupported),
+            "general help advertised unsupported {unsupported:?}: {general_help}"
+        );
+    }
+
+    let import_help = run(&["import", "crowdanki", "--help"]);
+    assert!(import_help.status.success());
+    let import_help = String::from_utf8_lossy(&import_help.stdout).to_lowercase();
+    for unsupported in ["round-trip", "round trip", "pull", "reconcil"] {
+        assert!(
+            !import_help.contains(unsupported),
+            "import help advertised unsupported {unsupported:?}: {import_help}"
+        );
+    }
+    assert!(import_help.contains("never merges into a federated source or overlay stack"));
+    assert!(import_help.contains("no base-versus-overlay ownership inference"));
+    for unsupported_flag in ["--pull", "--reconcile", "--existing-source"] {
+        let rejected = run(&[
+            "import",
+            "crowdanki",
+            "plan",
+            "not-a-deck",
+            "--out",
+            "not-a-plan.json",
+            unsupported_flag,
+        ]);
+        assert!(!rejected.status.success());
+        assert!(
+            String::from_utf8_lossy(&rejected.stderr).contains("unexpected import argument"),
+            "{}",
+            String::from_utf8_lossy(&rejected.stderr)
+        );
+    }
+
+    let exported = run(&[
+        "export",
+        "crowdanki",
+        source.to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
+        "--out",
+        export.to_str().unwrap(),
+    ]);
+    assert!(
+        exported.status.success(),
+        "{}",
+        String::from_utf8_lossy(&exported.stderr)
+    );
+    let planned = run(&[
+        "import",
+        "crowdanki",
+        "plan",
+        export.to_str().unwrap(),
+        "--out",
+        plan.to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
+    ]);
+    assert!(
+        planned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&planned.stderr)
+    );
+
+    fs::create_dir(&destination).expect("existing destination");
+    fs::write(destination.join("deck.yaml"), "preserved source\n").expect("preserved source");
+    let refused = run(&[
+        "import",
+        "crowdanki",
+        "apply",
+        export.to_str().unwrap(),
+        "--plan",
+        plan.to_str().unwrap(),
+        "--approve-plan",
+        "--media-mode",
+        "reference-only",
+        "--out",
+        destination.to_str().unwrap(),
+    ]);
+    assert!(!refused.status.success());
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("refusing to overwrite existing"),
+        "{}",
+        String::from_utf8_lossy(&refused.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(destination.join("deck.yaml")).unwrap(),
+        "preserved source\n"
+    );
+
+    let forced = run(&[
+        "import",
+        "crowdanki",
+        "apply",
+        export.to_str().unwrap(),
+        "--plan",
+        plan.to_str().unwrap(),
+        "--approve-plan",
+        "--media-mode",
+        "reference-only",
+        "--force",
+        "--out",
+        destination.to_str().unwrap(),
+    ]);
+    assert!(
+        forced.status.success(),
+        "{}",
+        String::from_utf8_lossy(&forced.stderr)
+    );
+    assert!(
+        fs::read_to_string(destination.join("deck.yaml"))
+            .unwrap()
+            .contains("id: deck.ultimate-geography")
+    );
+}
+
+#[test]
 fn import_plan_review_apply_and_legacy_migration_are_machine_safe() {
     let dir = temp_dir();
     let source =

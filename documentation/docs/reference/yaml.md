@@ -274,7 +274,7 @@ media.flag.france:
   sha256: 7b2b...
 ```
 
-This whitelist applies only to top-level `media:` in deck files. It is not supported in overlay files or any other mapping position. Formatting a deck that uses the structural include preserves `media: !include media.yaml`; format the included file itself with `brainbrew fmt media.yaml`. `brainbrew media hash` follows the include and writes hashes into the media-map file. A CrowdAnki import that rewrites the deck re-inlines `media:` instead of preserving the include.
+This whitelist applies only to top-level `media:` in deck files. It is not supported in overlay files or any other mapping position. Formatting a deck that uses the structural include preserves `media: !include media.yaml`; format the included file itself with `brainbrew fmt media.yaml`. `brainbrew media hash` follows the include and writes hashes into the media-map file. A CrowdAnki bootstrap import emits a new deck and re-inlines `media:` instead of preserving the include.
 
 Include paths use one portable safe-relative syntax and are authorized beneath a selected canonical root. Under a manifest workflow, the package root is selected first; optional `include_roots` may name additional existing directories inside that package. Empty, absolute/rooted, Windows drive/UNC, backslash-separated, repeated-separator, `.` component, and `..` component forms are rejected before target I/O. Existing targets and the deepest existing ancestor of new targets must resolve canonically beneath the selected root, so escaping symlinks fail.
 

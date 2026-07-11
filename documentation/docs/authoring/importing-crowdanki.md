@@ -4,7 +4,7 @@ title: Import CrowdAnki
 
 # Import CrowdAnki
 
-Import is a review-first three-step workflow. It never turns generated IDs into source just because an import command was run:
+Import is a review-first three-step **full-deck bootstrap** workflow. It creates a new output workspace; it never turns generated IDs into source just because an import command was run, and it never merges into an existing Federated Deck:
 
 ```bash
 # 1. This reads deck.json and writes only the review artifact.
@@ -34,7 +34,7 @@ In normal strict mode, `plan` inventories every `media_files` declaration, rejec
 
 `apply` validates the complete generated inventory and evidence, legal Stable ID syntax, unique selected IDs globally and in each identity domain, selected-ID conflicts, the source fingerprint, media byte evidence, and source locations before it opens an output transaction. Missing approval, unresolved/rejected decisions, duplicate or invalid overrides, edited evidence, stale plans, and changed `deck.json` all fail closed before `deck.yaml` is written. The old `--accept-suggested-ids` bypass is removed.
 
-`apply --out` names a destination workspace directory, not a source file. It must not exist by default. The complete source-plus-media tree is privately staged and recoverably published; `--force` cleanly replaces an existing directory, never retains stale media, and refuses symlink or special-file destinations. If a process interruption leaves a transaction journal, rerun the same command; recovery reports a conflict rather than overwriting changed output.
+`apply --out` names a new bootstrap destination workspace directory, not a source file. It must not exist by default. The complete source-plus-media tree is privately staged and recoverably published; `--force` cleanly replaces that output directory, never retains stale media, and refuses symlink or special-file destinations. It never makes an existing source workspace a merge target. See [CrowdAnki bootstrap boundary](crowdanki-bootstrap-boundary.md) before comparing imported output with an established Federated Deck. If a process interruption leaves a transaction journal, rerun the same command; recovery reports a conflict rather than overwriting changed output.
 
 ## Imported note IDs
 
@@ -51,7 +51,7 @@ CrowdAnki does not store Brain Brew stable IDs. For every imported note, Brain B
 
 A source GUID must be non-empty and unique within the imported deck. GUIDs are opaque UTF-8 adapter IDs: Brain Brew does **not** trim whitespace, normalize Unicode, case-fold, or otherwise rewrite them. Thus `guid`, ` guid `, and Unicode lookalikes are distinct; only byte-for-byte equal non-empty text collides. Duplicate-GUID diagnostics list every affected `$.notes[index].guid` location. An import without a `guid` is rejected by the strict JSON schema; an empty `guid` is rejected by identity validation.
 
-For canonical decks exported to CrowdAnki, a missing `crowdanki:guid` adapter ID has the explicit effective-GUID fallback of that note's canonical stable ID. An explicitly present empty value and any duplicate effective GUID fail closed before export or round-trip projection. The source order's active note indices and canonical note paths are included in that diagnostic.
+For canonical decks exported to CrowdAnki, a missing `crowdanki:guid` adapter ID has the explicit effective-GUID fallback of that note's canonical stable ID. An explicitly present empty value and any duplicate effective GUID fail closed before export or import/export projection. The source order's active note indices and canonical note paths are included in that diagnostic.
 
 CrowdAnki standard-model template ordinal identity is zero-based array position: for each note model, `tmpls[index].ord` must equal `index`. This simultaneously requires valid non-negative representable ordinals, uniqueness, contiguity, and input array ordering. Brain Brew rejects duplicate, gapped, negative, overflowed, or reordered ordinals before conversion; it never sorts, renumbers, or repairs templates. Valid template order and ordinals are preserved through import and export.
 

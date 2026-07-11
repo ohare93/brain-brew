@@ -100,7 +100,7 @@ fn publish_in_existing_parent(
         Ok(metadata) if metadata.file_type().is_dir() => {
             if !force {
                 return Err(format!(
-                    "refusing to overwrite existing export output {}; pass --force to cleanly replace it",
+                    "refusing to overwrite existing generated output {}; pass --force to cleanly replace it",
                     target.display()
                 ));
             }
@@ -108,7 +108,7 @@ fn publish_in_existing_parent(
         }
         Ok(metadata) => {
             return Err(format!(
-                "refusing to replace export output {} with unsupported type {:?}",
+                "refusing to replace generated output {} with unsupported type {:?}",
                 target.display(),
                 metadata.file_type()
             ));
@@ -154,7 +154,7 @@ fn publish_in_existing_parent(
         if journal.original_fingerprint.is_some() {
             fs::rename(&target, &backup).map_err(|error| {
                 format!(
-                    "could not move existing export {} to recovery backup {}: {error}",
+                    "could not move existing generated output {} to recovery backup {}: {error}",
                     target.display(),
                     backup.display()
                 )
@@ -164,7 +164,7 @@ fn publish_in_existing_parent(
         injected_failure("before-publish")?;
         fs::rename(&stage, &target).map_err(|error| {
             format!(
-                "could not publish staged export {} as {}: {error}",
+                "could not publish staged output {} as {}: {error}",
                 stage.display(),
                 target.display()
             )
@@ -202,14 +202,14 @@ fn stage_artifacts(stage: &Path, artifacts: Vec<OutputArtifact>) -> Result<(), S
     for artifact in artifacts {
         let raw = artifact.path.to_str().ok_or_else(|| {
             format!(
-                "export artifact path {:?} is not valid UTF-8",
+                "generated artifact path {:?} is not valid UTF-8",
                 artifact.path
             )
         })?;
         let safe = SafeRelativePath::new(raw)
-            .map_err(|error| format!("invalid export artifact path {raw:?}: {error}"))?;
+            .map_err(|error| format!("invalid generated artifact path {raw:?}: {error}"))?;
         if !seen.insert(safe.as_str().to_owned()) {
-            return Err(format!("duplicate export artifact path {raw:?}"));
+            return Err(format!("duplicate generated artifact path {raw:?}"));
         }
         let destination = stage.join(safe.as_path());
         if let Some(parent) = destination.parent() {
@@ -449,14 +449,14 @@ fn hash_directory(root: &Path, relative: &Path, hasher: &mut Sha256) -> Result<(
     for entry in entries {
         let name = entry.file_name().into_string().map_err(|_| {
             format!(
-                "export output contains a non-UTF-8 entry under {}",
+                "generated output contains a non-UTF-8 entry under {}",
                 directory.display()
             )
         })?;
         let child = relative.join(name);
         let child_text = child
             .to_str()
-            .ok_or_else(|| format!("export output path {:?} is not UTF-8", child))?;
+            .ok_or_else(|| format!("generated output path {:?} is not UTF-8", child))?;
         let metadata = fs::symlink_metadata(entry.path())
             .map_err(|error| format!("{}: {error}", entry.path().display()))?;
         if metadata.file_type().is_dir() {
@@ -474,7 +474,7 @@ fn hash_directory(root: &Path, relative: &Path, hasher: &mut Sha256) -> Result<(
             hasher.update(&bytes);
         } else {
             return Err(format!(
-                "refusing export output tree {}: entry {} has unsupported type {:?}",
+                "refusing generated output tree {}: entry {} has unsupported type {:?}",
                 root.display(),
                 entry.path().display(),
                 metadata.file_type()

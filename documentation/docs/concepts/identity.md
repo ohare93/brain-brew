@@ -49,7 +49,7 @@ translations:
 
 ## Why keep both?
 
-Stable IDs make source review pleasant. Adapter IDs keep round trips compatible with existing exported decks.
+Stable IDs make source review pleasant. Adapter IDs preserve compatibility with existing exported decks; they do not identify where imported changes belong in a federated source.
 
 A semantic diff therefore reports stable paths:
 

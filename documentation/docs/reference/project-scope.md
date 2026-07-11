@@ -4,7 +4,7 @@ title: Project scope and architecture
 
 # Project scope and architecture
 
-Brain Brew is a Rust-based, local-first deck federation and round-trip engine for shared Anki-compatible decks.
+Brain Brew is a Rust-based, local-first deck federation tool for shared Anki-compatible decks.
 
 ## Current focus
 
@@ -13,7 +13,7 @@ The maintained product surface is:
 - Canonical Deck source;
 - overlays and deterministic composition;
 - manifest targets;
-- CrowdAnki import/export;
+- CrowdAnki export and plan/review/apply full-deck bootstrap import;
 - media references;
 - federated package locks;
 - CLI verification suitable for CI.
@@ -27,7 +27,10 @@ The maintained product surface is:
 - storing review/scheduling state;
 - a web app as the source of truth;
 - legacy Python Brain Brew recipe compatibility as a public API;
-- arbitrary unsupported adapter-data passthrough.
+- arbitrary unsupported adapter-data passthrough;
+- reconciling Anki or CrowdAnki edits into an existing Canonical Deck, include tree, or overlay stack.
+
+CrowdAnki import creates only a separate full-deck bootstrap output. The product has no automatic base-versus-overlay ownership inference and no current Anki-to-source workflow. `diff --as-overlay` can draft a review artifact from two canonical decks, but maintainers must manually route accepted include, structured-field, translation, overlay, media declaration, and media-asset changes. See [CrowdAnki bootstrap boundary](../authoring/crowdanki-bootstrap-boundary.md).
 
 ## Crate boundaries
 

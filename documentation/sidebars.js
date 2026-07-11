@@ -32,6 +32,7 @@ const sidebars = {
         'authoring/field-fills',
         'authoring/media',
         'authoring/importing-crowdanki',
+        'authoring/crowdanki-bootstrap-boundary',
         'authoring/packages-locking',
         'authoring/verify-export',
         'authoring/diff-explain',

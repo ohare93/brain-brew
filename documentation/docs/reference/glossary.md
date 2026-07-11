@@ -6,7 +6,7 @@ title: Glossary
 
 ## Brain Brew
 
-A local-first deck federation and round-trip system for flashcard decks.
+A local-first deck federation tool for flashcard decks.
 
 ## Deck
 

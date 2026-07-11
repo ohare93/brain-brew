@@ -52,9 +52,9 @@ The default diff is the exact canonical equivalence oracle. An empty diff means 
 
 Changes are sorted by canonical path and kind, so repeated runs are deterministic. Reversing operands swaps added/removed direction and before/after values; modifications keep their kind. Comparison uses typed domain values, never YAML, JSON, `Debug`, or another presentation serialization.
 
-### Lossy CrowdAnki equivalence
+### Lossy CrowdAnki adapter equivalence
 
-CrowdAnki round trips use the explicit `crowdanki-export-import-v1` projection before applying this exact oracle. The projection documents and applies only adapter losses: source variables are rendered, structured fields are lowered, media hashes and typed tombstones are not stored, unsupported adapter IDs are discarded, and stable IDs are regenerated from adapter-visible content. Suggested-ID collisions are reported as an unrepresentable adapter loss rather than treated as exact equality. The unprojected semantic diff is never weakened.
+CrowdAnki export/import equivalence uses the explicit `crowdanki-export-import-v1` projection before applying this exact oracle. The projection documents and applies only adapter losses: source variables are rendered, structured fields are lowered, media hashes and typed tombstones are not stored, unsupported adapter IDs are discarded, and stable IDs are regenerated from adapter-visible content. Suggested-ID collisions are reported as an unrepresentable adapter loss rather than treated as exact equality. This is an adapter test oracle, not a workflow for merging edits into an existing source. The unprojected semantic diff is never weakened.
 
 ## JSON diff
 

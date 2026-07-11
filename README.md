@@ -1,10 +1,10 @@
 # Brain Brew
 
-Brain Brew is a Rust-based, local-first deck federation and round-trip engine for shared Anki-compatible decks.
+Brain Brew is a Rust-based, local-first deck federation tool for shared Anki-compatible decks.
 
 It continues the established Brain Brew project name while replacing the legacy Python recipe pipeline with canonical deck source, overlays, manifests, and reproducible verification.
 
-It aims to help deck maintainers compose a base deck with translations, extensions, patches, and personal overlays while preserving stable identity for Anki/CrowdAnki round trips.
+It helps deck maintainers compose a base deck with translations, extensions, patches, and personal overlays while preserving stable identity through CrowdAnki export and full-deck bootstrap import.
 
 ## Current Status
 
@@ -34,6 +34,8 @@ brainbrew compose --manifest brainbrew.yaml --target de-extended --out build/de-
 brainbrew export crowdanki --manifest brainbrew.yaml --target de-extended --media-root media/
 brainbrew diff deck.yaml edited.yaml --as-overlay --id overlay.patch.capitals --kind patch
 ```
+
+CrowdAnki import bootstraps a new full-deck workspace after plan/review/apply; it never merges Anki edits into an existing source or overlay stack. Preserve the source, compare deliberately, and treat `diff --as-overlay` output as a review artifact before manually routing accepted changes. See [CrowdAnki bootstrap boundary](documentation/docs/authoring/crowdanki-bootstrap-boundary.md).
 
 See the dedicated documentation site in [`documentation/`](documentation/) for manifest, source variable, translation dictionary, overlay, locking, and example workflows. Lock update/verify uses Rust-native fetching and NAR hashing; Nix is only an optional install/build path.
 

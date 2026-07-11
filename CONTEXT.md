@@ -5,7 +5,7 @@ Brain Brew exists to help flashcard deck maintainers compose, evolve, and redist
 ## Language
 
 **Brain Brew**:
-A local-first deck federation and round-trip system for flashcard decks.
+A local-first deck federation tool for flashcard decks.
 _Avoid_: universal note sync service, SaaS sync platform
 
 **Deck**:
@@ -196,9 +196,9 @@ _Avoid_: fork, duplicate deck, one-off conversion
 A source representation after Brain Brew has applied its deterministic formatting rules.
 _Avoid_: arbitrary original bytes, hand-formatted source
 
-**Round Trip**:
-A workflow where deck data can move from source files to a distributable deck format and back without losing intentional information.
-_Avoid_: import only, export only, one-way conversion
+**Adapter Equivalence**:
+A test projection that compares the supported data shared by Canonical Deck and a distributable adapter format.
+_Avoid_: promise of an Anki-to-source merge or source ownership recovery
 
 ## Relationships
 
@@ -218,7 +218,7 @@ _Avoid_: import only, export only, one-way conversion
 - A **Card** is produced from one **Note** and one **Card Template**.
 - **Review History** is preserved by stable identity, not stored as **Deck** content.
 - A **Media Reference** points to one **Media Asset**.
-- A **Stable ID** identifies a **Deck Entity** across a **Round Trip**.
+- A **Stable ID** identifies a **Deck Entity** across source, overlays, exports, and bootstrap imports.
 - An **Adapter ID** preserves identity in a specific external format or tool.
 - A **Suggested Stable ID** becomes a **Stable ID** only after maintainer review.
 - A **Content Hash** describes current content for change detection.
@@ -241,8 +241,7 @@ _Avoid_: import only, export only, one-way conversion
 - A **Semantic Diff** compares **Decks** through **Deck Entities** and **Stable IDs**.
 - A **Federation Conflict** must be resolved explicitly.
 - **Translation Overlays**, **Extension Overlays**, **Patch Overlays**, and **Personal Overlays** are kinds of **Overlay**.
-- A **Round Trip** preserves a **Deck** across source and distributable forms.
-- A **Round Trip** reproduces **Canonicalized Source**, not arbitrary original source bytes.
+- **Adapter Equivalence** compares only the data shared by Canonical Deck and a distributable form; it does not recover maintainer source structure.
 
 ## Example dialogue
 
@@ -251,7 +250,7 @@ _Avoid_: import only, export only, one-way conversion
 
 ## Flagged ambiguities
 
-- "sync tool" previously meant live bidirectional note-system synchronization; resolved: **Brain Brew** is first a local-first **Deck Federation** and **Round Trip** system.
+- "sync tool" previously meant live bidirectional note-system synchronization; resolved: **Brain Brew** is first a local-first **Deck Federation** tool, not an Anki-to-source merge system.
 - "canonical note" previously meant the central federation object; resolved: the central object is the **Canonical Deck**, because a **Deck** includes more than notes.
 - "content hash" previously meant identity; resolved: a **Content Hash** detects change, while a **Stable ID** defines sameness.
 - "Anki GUID" could mean canonical identity; resolved: Anki/CrowdAnki GUIDs are **Adapter IDs**, while human-readable **Stable IDs** identify canonical deck entities.
@@ -259,7 +258,7 @@ _Avoid_: import only, export only, one-way conversion
 - "preserve Anki history" could mean storing review data; resolved: **Review History** remains outside **Canonical Deck** content and is preserved through stable identity.
 - "media in the deck file" could mean embedded bytes; resolved: **Canonical Deck** stores **Media References**, while **Media Assets** remain external files.
 - "overlay order" could imply last-write-wins; resolved: an **Overlay Stack** is ordered, but conflicting changes fail unless explicitly resolved.
-- "byte-for-byte round trip" could mean preserving arbitrary input formatting; resolved: byte stability applies to **Canonicalized Source**.
+- "byte-for-byte adapter equivalence" could mean preserving arbitrary input formatting; resolved: byte stability applies to **Canonicalized Source**.
 - "CSV source" previously implied the maintainer source of truth; resolved: the **Canonical Deck File** is the source of truth, while CSV is an adapter format.
 - "subdeck" could mean Anki deck hierarchy; resolved: composable source packages in a deck federation are **Federated Decks**, not Anki subdecks.
 - "translated deck identity" could mean a separate stable identity per language; resolved: translations use language-neutral **Stable IDs** for the same conceptual **Deck Entities** and language-specific external identities remain **Adapter IDs**.

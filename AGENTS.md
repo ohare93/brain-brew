@@ -2,7 +2,7 @@
 
 ## Project Aim
 
-Brain Brew is a Rust-based, local-first deck federation and round-trip engine for shared Anki-compatible decks. The first milestone is not a web app, SaaS, live sync tool, legacy Python recipe compatibility, or full Ultimate Geography clone.
+Brain Brew is a Rust-based, local-first deck federation tool for shared Anki-compatible decks. The first milestone is not a web app, SaaS, live sync tool, legacy Python recipe compatibility, or full Ultimate Geography clone.
 
 Read these before making design changes:
 

@@ -6,13 +6,13 @@
 
 ## Context
 
-Brain Brew has had several possible directions: legacy Python recipe builds, a broader Note Nexus-style note sync system, a web-first application, and Dropbox-style bidirectional sync. The clearest proven need is narrower: shared Anki-compatible deck maintainers need to compose base decks with translations, extensions, patches, and personal changes without copying the whole deck or losing round-trip fidelity.
+Brain Brew has had several possible directions: legacy Python recipe builds, a broader Note Nexus-style note sync system, a web-first application, and Dropbox-style bidirectional sync. The clearest proven need is narrower: shared Anki-compatible deck maintainers need to compose base decks with translations, extensions, patches, and personal changes without copying the whole deck. CrowdAnki export and full-deck bootstrap import remain adapter operations, not existing-source merge workflows.
 
 Ultimate Geography is the motivating case study. It needs repeatable local builds, version-controlled source, language variants, extension variants, media handling, and CI-friendly verification more than it needs SaaS, live sync, or a web app as the source of truth.
 
 ## Decision
 
-Brain Brew is a Rust-based, local-first deck federation and round-trip engine for shared Anki-compatible decks.
+Brain Brew is a Rust-based, local-first deck federation tool for shared Anki-compatible decks.
 
 The current product surface is a CLI/library workflow for deck maintainers. The current milestone excludes SaaS sync, live Anki sync, review-state storage, a web app as source of truth, and public compatibility with legacy Python Brain Brew recipes.
 
@@ -39,7 +39,7 @@ The current product surface is a CLI/library workflow for deck maintainers. The 
 
 ## Implications
 
-- Architectural work is judged against local deck federation and round-trip behavior.
+- Architectural work is judged against local deck federation, supported adapter equivalence, and explicit source ownership boundaries.
 - Documentation should describe Brain Brew as a maintainer tool, not a universal note sync service.
 - CLI verification and reproducible local builds are part of the core product, not secondary tooling.
 - Deferred product ideas can return only after the federation model is stable.

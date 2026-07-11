@@ -4,7 +4,7 @@ title: Workspace transaction contract
 
 # Workspace transaction contract
 
-`brainbrew` owns a journaled filesystem transaction module for source mutations and generated files. `fmt`, `translations --apply`/`--resolve`, `media hash`, `media images-to-refs`, CrowdAnki import, compose output, and development-only Workbench Apply/new-language writes use it today. Lock migration remains separate. No multi-file sequence is described as an atomic rename; these operations are fingerprint-checked and recoverable.
+`brainbrew` owns a journaled filesystem transaction module for source mutations and generated files. `fmt`, `translations --apply`/`--resolve`, `media hash`, `media images-to-refs`, CrowdAnki bootstrap import output, compose output, and development-only Workbench Apply/new-language writes use it today. Lock migration remains separate. No multi-file sequence is described as an atomic rename; these operations are fingerprint-checked and recoverable.
 
 CrowdAnki export uses the related clean-tree publisher documented below because its transaction unit is a directory tree rather than individual source files.
 

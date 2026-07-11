@@ -95,3 +95,7 @@ translations:
 ```
 
 That keeps the Extended card-template HTML shared instead of copied for every language.
+
+## Workflow policy boundary
+
+This fixture documents Brain Brew behavior only; Ultimate Geography maintainer workflow policy is owned externally. CrowdAnki import can bootstrap a separate full-deck workspace for inspection, but it does not restore the legacy Anki-to-source workflow or merge into UG base, include, translation, extension, or media sources. Preserve the upstream source and manually route reviewed changes; see [CrowdAnki bootstrap boundary](../authoring/crowdanki-bootstrap-boundary.md).

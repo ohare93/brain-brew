@@ -18,7 +18,7 @@ base deck
 
 ## Why not copy the deck?
 
-Copies are hard to update. When upstream fixes a note, every copied deck must reconcile the change manually.
+Copies are hard to update. When upstream fixes a note, every copied deck must incorporate the change manually.
 
 Federation keeps the relationship explicit:
 
