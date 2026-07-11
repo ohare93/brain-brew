@@ -210,14 +210,14 @@ dependencies = [
 
 [[package]]
 name = "brain-brew-core"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 dependencies = [
  "sha2",
 ]
 
 [[package]]
 name = "brain-brew-formats"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 dependencies = [
  "base64",
  "brain-brew-core",
@@ -232,7 +232,7 @@ dependencies = [
 
 [[package]]
 name = "brain-brew-workbench-e2e"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 dependencies = [
  "anyhow",
  "tempfile",
@@ -242,7 +242,7 @@ dependencies = [
 
 [[package]]
 name = "brain-brew-workbench-ui"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 dependencies = [
  "console_error_panic_hook",
  "gloo-net",
@@ -254,7 +254,7 @@ dependencies = [
 
 [[package]]
 name = "brainbrew"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 dependencies = [
  "axum",
  "base64",

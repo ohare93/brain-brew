@@ -119,9 +119,15 @@ in
 
   scripts."dist:generate".exec = "dist generate";
   scripts."dist:plan".exec = ''
-    dist manifest --tag v1.0.0-alpha.1 --artifacts=all --no-local-paths --output-format=json
+    version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"
+    dist manifest --tag "v$version" --artifacts=all --no-local-paths --output-format=json
   '';
-  scripts."crates:metadata-check".exec = "scripts/check_cratesio_metadata.py";
+  scripts."release:version-check".exec = "scripts/check_release_version.py";
+  scripts."crates:metadata-check".exec = ''
+    set -euo pipefail
+    scripts/check_release_version.py
+    scripts/check_cratesio_metadata.py
+  '';
   scripts."crates:publish-dry-run".exec = ''
     scripts/publish_crates.sh dry-run "''${1:-all}"
   '';

@@ -4,27 +4,17 @@ title: Releasing Brain Brew
 
 # Releasing Brain Brew
 
-Brain Brew releases are built with [`cargo-dist`](https://opensource.axo.dev/cargo-dist/). The release workflow produces:
+Brain Brew releases are built with [`cargo-dist`](https://opensource.axo.dev/cargo-dist/). The release workflow produces platform archives for macOS, Linux, and Windows; shell and PowerShell installers; checksums; and a source archive.
 
-- platform archives for macOS, Linux, and Windows;
-- `brainbrew-installer.sh` for macOS/Linux;
-- `brainbrew-installer.ps1` for Windows PowerShell;
-- `brainbrew.rb` for Homebrew;
-- checksums and a source archive.
+## Versioning, channels, and pinning
 
-## One-time GitHub setup
+`workspace.package.version` in `Cargo.toml` is the authoritative release-version source. Publishable crates inherit it, and their packaged internal dependencies use the exact workspace requirement. The current preview is `1.0.0-alpha.2`; its tag is `v1.0.0-alpha.2`.
 
-The generated workflow can publish the Homebrew formula to `jeprecated/homebrew-tap`. Add a repository secret named `HOMEBREW_TAP_TOKEN` to `jeprecated/brain-brew` with permission to push to `jeprecated/homebrew-tap`.
-
-## Versioning and pinning
-
-Brain Brew uses the Cargo workspace version as the release version. Release tags are `v<version>`, for example `v1.0.0-alpha.1`, and the Cargo workspace version must match the tag version before the tag is pushed.
-
-Deck projects that depend on Brain Brew should pin or recommend a release tag in their contributor docs. For example, Ultimate Geography can link to the install page and say that contributors should install Brain Brew `v1.0.0-alpha.1` until the project intentionally moves to a newer Brain Brew release. CI workflows that prefer Nix can instead pin a flake revision, but that should be documented as the reproducible CI path rather than the normal user install path.
+The supported channels are manual crates.io publication after the release gates, pinned GitHub release artifacts, and a pinned Nix flake/tag channel. Deck projects should recommend the release tag; Nix consumers should use `github:jeprecated/brain-brew/v1.0.0-alpha.2` or lock its resolved revision. The `brain-brew-core` and `brain-brew-formats` crates are published implementation packages, not supported public Rust APIs; the CLI install surface has the preview compatibility commitment.
 
 ## Preview compatibility promise
 
-For the next crates.io preview release, the compatibility promise covers Canonical Deck YAML, overlay YAML, manifest targets for a single package, deck and overlay composition semantics, and the core CLI verbs: `fmt`, `validate`, `compose`, `export crowdanki`, `import crowdanki`, `diff`, `explain`, `targets`, `translations`, `media`, and `verify`.
+For this crates.io preview, the compatibility promise covers Canonical Deck YAML, overlay YAML, manifest targets for a single package, deck and overlay composition semantics, and the core CLI verbs: `fmt`, `validate`, `compose`, `export crowdanki`, `import crowdanki`, `diff`, `explain`, `targets`, `translations`, `media`, and `verify`.
 
 The lock/package federation surface is explicitly outside that promise.
 
@@ -32,7 +22,7 @@ The lock/package federation surface is explicitly outside that promise.
 
 ## Local release checks
 
-Before creating a tag:
+Before creating the tag, run:
 
 ```bash
 devenv shell ci
@@ -40,13 +30,11 @@ devenv shell crates:metadata-check
 devenv shell dist:plan > /tmp/brainbrew-dist-manifest.json
 devenv shell release:smoke
 devenv shell release:crates
-# or, if you use the sd task dispatcher:
-sd release crates all
 ```
 
-`crates:metadata-check` verifies that the workspace packages are publishable and that internal dependencies carry exact version requirements for crates.io. `dist:plan` verifies that `cargo-dist` can see the release package and expected artifacts for `v1.0.0-alpha.1`. `release:smoke` installs the CLI with `cargo install --path crates/brain-brew-cli --locked` into a temporary root and runs the installed binary through `validate`, `compose`, `export crowdanki`, and `verify` against the fast UG-style fixture. That fixture has no media bytes and the script explicitly selects `--media-mode reference-only`; the smoke proves packaging/structural CLI behavior and prominently reports that it is **not** release media-integrity evidence. Product/deck release gates must separately run default strict verify/export with all owner roots and real hashed bytes. `release:crates` and `sd release crates all` default to dry-run mode.
+`crates:metadata-check` verifies version references across Cargo metadata/lock data, dist planning, flake derivation, and current release docs, then verifies crates.io metadata and exact internal requirements. `dist:plan` derives its tag from `Cargo.toml`. `release:smoke` installs the CLI from the workspace into a temporary root and checks `validate`, `compose`, `export crowdanki`, and `verify` against the fast UG-style fixture. That fixture uses `--media-mode reference-only`; it is not release media-integrity evidence.
 
-Only `brain-brew-core` can be fully dry-run before anything is published because the dependent crates resolve their exact internal dependencies from crates.io during `cargo publish --dry-run`. The all-crates dry-run reports dependent crates as skipped until earlier crates are visible in the crates.io index. After `brain-brew-core` is published and visible, dry-run and publish `brain-brew-formats`; after that is visible, dry-run and publish `brainbrew`.
+Only `brain-brew-core` can fully dry-run before publication because dependents resolve exact internal dependencies from crates.io. After each earlier crate is visible in the index, dry-run and then publish the next crate in dependency order.
 
 If you change `dist-workspace.toml`, regenerate the workflow:
 
@@ -56,85 +44,41 @@ devenv shell dist:generate
 
 ## Cut the preview release
 
-The current preview version is `v1.0.0-alpha.1`. The Cargo workspace version must match the tag version.
-
-Using Jujutsu to create the tag locally:
+The workspace version must match the tag before it is pushed:
 
 ```bash
-jj tag set v1.0.0-alpha.1 -r rust-brainbrew
+jj tag set v1.0.0-alpha.2 -r rust-brainbrew
 ```
 
-Push the tag with your Git/Jujutsu setup. The GitHub release workflow runs when the tag reaches GitHub and creates the release assets. The separate Package Smoke workflow also runs on pushes and pull requests to verify that the non-Nix Cargo install path produces a working `brainbrew` binary for `validate`, `compose`, `export`, and `verify`.
+Push the tag with your Git/Jujutsu setup only after the gates pass. The GitHub workflow creates pinned release artifacts; manual crates.io publication remains a separate later step.
 
 ## Publish crates.io packages
 
-Log in to crates.io once with `cargo login`, then publish in dependency order. Crates.io versions are immutable, so double-check the workspace version, README install snippets, and changelog first.
-
-With Devenv scripts:
+Log in once with `cargo login`, then publish in dependency order. Crates.io versions are immutable, so double-check the workspace version, README snippets, and changelog first.
 
 ```bash
 devenv shell crates:publish-dry-run core
 devenv shell crates:publish core
-# wait for the crates.io index to show brain-brew-core v1.0.0-alpha.1
+# wait for brain-brew-core v1.0.0-alpha.2 in the crates.io index
 
 devenv shell crates:publish-dry-run formats
 devenv shell crates:publish formats
-# wait for the crates.io index to show brain-brew-formats v1.0.0-alpha.1
+# wait for brain-brew-formats v1.0.0-alpha.2 in the crates.io index
 
 devenv shell crates:publish-dry-run cli
 devenv shell crates:publish cli
 ```
 
-With the `sd` task dispatcher, dry-run is the default and publish mode requires `--yes`:
-
-```bash
-sd release crates core
-sd release crates core --mode publish --yes
-# wait for the crates.io index to show brain-brew-core v1.0.0-alpha.1
-
-sd release crates formats
-sd release crates formats --mode publish --yes
-# wait for the crates.io index to show brain-brew-formats v1.0.0-alpha.1
-
-sd release crates cli
-sd release crates cli --mode publish --yes
-```
-
-The same commands are backed by `scripts/publish_crates.sh`; use it directly if neither Devenv nor `sd` is available.
-
-The current preview crate is published, so Rust users can install without Nix and without a Git checkout:
-
-```bash
-cargo install brainbrew --version 1.0.0-alpha.1 --locked
-```
+The same commands are backed by `scripts/publish_crates.sh`; `release:crates` is dry-run only. No command in this repository should publish without the explicit manual release decision.
 
 ## Reviewer install commands
 
-After the workflow completes, reviewers can install without Rust or Nix:
+After alpha.2 is released, reviewers can install pinned artifacts:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/jeprecated/brain-brew/releases/download/v1.0.0-alpha.1/brainbrew-installer.sh \
+  https://github.com/jeprecated/brain-brew/releases/download/v1.0.0-alpha.2/brainbrew-installer.sh \
   | sh
-brainbrew --version
-```
-
-Rust users can run:
-
-```bash
-cargo install brainbrew --version 1.0.0-alpha.1 --locked
-brainbrew --version
-```
-
-Homebrew users can run:
-
-```bash
-brew install jeprecated/tap/brainbrew
-```
-
-Windows users can run:
-
-```powershell
-irm https://github.com/jeprecated/brain-brew/releases/download/v1.0.0-alpha.1/brainbrew-installer.ps1 | iex
-brainbrew --version
+cargo install brainbrew --version 1.0.0-alpha.2 --locked
+nix run github:jeprecated/brain-brew/v1.0.0-alpha.2 -- --version
 ```

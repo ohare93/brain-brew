@@ -443,7 +443,7 @@ fn base_compatibility_ranges_use_or_and_semver_prerelease_rules() {
         &extension_manifest,
         fs::read_to_string(&extension_manifest)
             .unwrap()
-            .replace("    - '>=1, <2'\n", "    - '>=1.0.0-alpha.1, <1.0.0'\n"),
+            .replace("    - '>=1, <2'\n", "    - '>=1.0.0-alpha.2, <1.0.0'\n"),
     )
     .unwrap();
     let incompatible = run(&[

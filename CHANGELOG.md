@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+The next preview is `1.0.0-alpha.2`; it is pending the documented release gates and manual crates.io publication.
+
 - Recursive package-root discovery is now deterministic, no-follow, and registry-owned, with exact built-in VCS/build/output/cache pruning, authorized component-glob ignores, explicit depth/entry/manifest budgets, structured actionable errors, and JSON visit/prune statistics shared by every package-root command.
 - Media-bearing `verify` and manifest/ad-hoc CrowdAnki export are now release-strict by default: every final package owner needs an explicit media root, hashes must be canonical lowercase SHA-256, and bytes must exist and match before clean-tree publication. Hashless/source-only fixtures must migrate to explicit `--media-mode reference-only`, whose human/JSON status is always marked not release-ready when media is present.
 - Structured `!image` rendering percent-encodes hostile filenames and HTML-attribute escapes output without changing declaration/CrowdAnki filenames; media paths now reject control, URL/platform, bidi/format-control, and reserved-name ambiguity, while scanners decode normalized HTML/URL references before comparison.
@@ -23,4 +25,4 @@ Initial Rust-based Brain Brew preview release.
 - Adds media reference validation and release-oracle comparison support for parity reviews.
 - Includes Ultimate Geography-style fixtures used to validate translations, variants, and Hardcore Geography extension overlays.
 - Ships prebuilt release archives, shell and PowerShell installers, and a Homebrew formula via `cargo-dist`.
-- Publishes `brain-brew-core`, `brain-brew-formats`, and `brainbrew` to crates.io so Rust users can install with `cargo install brainbrew --version 1.0.0-alpha.1 --locked`.
+- `1.0.0-alpha.1` was published with interfaces incompatible with `1.0.0-alpha.2`; use the current preview rather than treating alpha.1 as compatible with this source.

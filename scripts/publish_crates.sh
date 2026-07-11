@@ -91,7 +91,7 @@ try_dependent_dry_run() {
     rm -f "$log"
     return 0
   fi
-  if grep -q "no matching package named" "$log"; then
+  if grep -Eq "no matching package named|failed to select a version for the requirement" "$log"; then
     echo "Skipping ${package} dry-run for now: exact internal dependency is not visible in crates.io yet."
     echo "After publishing earlier crates and waiting for the index, run:"
     echo "  sd release crates ${target_name}"

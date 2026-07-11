@@ -9,7 +9,7 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 edition = "2024"
 rust-version = "1.94"
 license = "Unlicense"
@@ -17,8 +17,8 @@ authors = ["Brain Brew contributors"]
 repository = "https://github.com/jeprecated/brain-brew"
 
 [workspace.dependencies]
-brain-brew-core = { path = "crates/brain-brew-core", version = "=1.0.0-alpha.1" }
-brain-brew-formats = { path = "crates/brain-brew-formats", version = "=1.0.0-alpha.1" }
+brain-brew-core = { path = "crates/brain-brew-core", version = "=1.0.0-alpha.2" }
+brain-brew-formats = { path = "crates/brain-brew-formats", version = "=1.0.0-alpha.2" }
 semver = "1"
 sha2 = "0.10"
 unicode-normalization = "0.1"

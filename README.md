@@ -43,10 +43,10 @@ See the dedicated documentation site in [`documentation/`](documentation/) for m
 
 For normal deck users and contributors, install the released `brainbrew` CLI from crates.io or a GitHub Release. You do not need Nix to edit or verify a Federated Deck workspace, and downstream projects such as Ultimate Geography can link to the release version they recommend.
 
-Rust users can install the published crate:
+After the alpha.2 release gates pass and the maintainer manually publishes it to crates.io, Rust users can install the current preview crate:
 
 ```bash
-cargo install brainbrew --version 1.0.0-alpha.1 --locked
+cargo install brainbrew --version 1.0.0-alpha.2 --locked
 brainbrew --version
 ```
 
@@ -54,28 +54,23 @@ The easiest no-Rust install path is the GitHub Release installer:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/jeprecated/brain-brew/releases/download/v1.0.0-alpha.1/brainbrew-installer.sh \
+  https://github.com/jeprecated/brain-brew/releases/download/v1.0.0-alpha.2/brainbrew-installer.sh \
   | sh
 brainbrew --version
-```
-
-Homebrew users can install from the tap once the preview release is published:
-
-```bash
-brew install jeprecated/tap/brainbrew
 ```
 
 To test the exact GitHub tag instead of the crates.io package, install directly from the pinned release tag:
 
 ```bash
-cargo install --git https://github.com/jeprecated/brain-brew --tag v1.0.0-alpha.1 brainbrew --locked
+cargo install --git https://github.com/jeprecated/brain-brew --tag v1.0.0-alpha.2 brainbrew --locked
 ```
 
-Nix remains available as an optional reproducible build/install path for contributors and CI:
+Nix remains available as an optional reproducible build/install path for contributors and CI. Pin the same release tag for a reproducible external Nix channel:
 
 ```bash
 nix run . -- --help
 nix build .#brainbrew
+nix run github:jeprecated/brain-brew/v1.0.0-alpha.2 -- --help
 ```
 
 See [`documentation/docs/getting-started/install.md`](documentation/docs/getting-started/install.md) for all install options and an edit/export loop for trying changes against a Federated Deck workspace.
