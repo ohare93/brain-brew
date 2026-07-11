@@ -28,6 +28,7 @@ pub fn export_deck(deck: &CanonicalDeck) -> Result<CrowdAnkiExport, CrowdAnkiErr
     rendered_deck
         .validate()
         .map_err(CrowdAnkiError::Validation)?;
+    validate_crowdanki_identity(CrowdAnkiIdentityInput::Export(&rendered_deck))?;
     let deck = &rendered_deck;
 
     let note_models = deck
@@ -217,6 +218,7 @@ pub fn project_deck_for_crowdanki_round_trip(
             })
             .is_none()
     });
+    validate_crowdanki_identity(CrowdAnkiIdentityInput::Export(&projected))?;
 
     // Materialize adapter-visible fallback identities before canonical stable IDs are
     // normalized to the IDs import will suggest.
@@ -809,21 +811,6 @@ fn array_identity(path: &str) -> Option<ArrayIdentity> {
             name: "name",
             value: |value| value.get("name")?.as_str().map(str::to_owned),
         }),
-        path if path.ends_with(".tmpls") => Some(ArrayIdentity {
-            name: "template",
-            value: |value| {
-                value
-                    .get("ord")
-                    .and_then(serde_json::Value::as_i64)
-                    .map(|ord| ord.to_string())
-                    .or_else(|| {
-                        value
-                            .get("name")
-                            .and_then(serde_json::Value::as_str)
-                            .map(str::to_owned)
-                    })
-            },
-        }),
         _ => None,
     }
 }
@@ -928,19 +915,26 @@ fn export_note_model(
                     .is_none()
             })
             .enumerate()
-            .map(|(ord, template)| CrowdAnkiTemplateJson {
-                afmt: template.answer_format.clone(),
-                bafmt: String::new(),
-                bfont: Some(String::new()),
-                bqfmt: String::new(),
-                bsize: Some(0),
-                did: None,
-                name: template.name.clone(),
-                ord,
-                qfmt: template.question_format.clone(),
-                scratch_pad: Some(0),
+            .map(|(ord, template)| {
+                Ok(CrowdAnkiTemplateJson {
+                    afmt: template.answer_format.clone(),
+                    bafmt: String::new(),
+                    bfont: Some(String::new()),
+                    bqfmt: String::new(),
+                    bsize: Some(0),
+                    did: None,
+                    name: template.name.clone(),
+                    ord: i64::try_from(ord).map_err(|_| {
+                        CrowdAnkiError::Unsupported(
+                            "template array index is not representable as a CrowdAnki ordinal"
+                                .to_owned(),
+                        )
+                    })?,
+                    qfmt: template.question_format.clone(),
+                    scratch_pad: Some(0),
+                })
             })
-            .collect(),
+            .collect::<Result<_, CrowdAnkiError>>()?,
         model_type: 0,
         vers: Vec::new(),
     })
@@ -1039,6 +1033,69 @@ fn crowdanki_note_guid(note: &Note) -> String {
         .unwrap_or_else(|| note.id.to_string())
 }
 
+/// Validate the effective GUIDs that an export or round-trip projection would emit.
+///
+/// An absent `crowdanki:guid` deliberately falls back to the unique canonical stable ID;
+/// an explicitly present empty GUID is invalid. As with raw imports, GUIDs are opaque and
+/// collide only when their exact UTF-8 strings are equal.
+fn export_identity_diagnostics(deck: &CanonicalDeck) -> Vec<CrowdAnkiIdentityDiagnostic> {
+    let mut diagnostics = Vec::new();
+    let active_notes = deck
+        .notes
+        .iter()
+        .filter(|(id, _)| {
+            deck.tombstones
+                .blocking(&TombstoneAddress::Note {
+                    note_id: (*id).clone(),
+                })
+                .is_none()
+        })
+        .collect::<Vec<_>>();
+    let mut guid_notes = BTreeMap::<String, Vec<(usize, StableId)>>::new();
+    for (note_index, (id, note)) in active_notes.into_iter().enumerate() {
+        let guid = crowdanki_note_guid(note);
+        let path = format!("notes.{id}.adapter_ids.crowdanki:guid");
+        if guid.is_empty() {
+            diagnostics.push(CrowdAnkiIdentityDiagnostic {
+                kind: CrowdAnkiIdentityDiagnosticKind::EmptyGuid,
+                source_paths: vec![path],
+                note_indices: vec![note_index],
+                note_ids: vec![id.clone()],
+                note_model_index: None,
+                template_indices: Vec::new(),
+                guid: Some(guid),
+                found_ordinal: None,
+                expected_ordinal: None,
+            });
+        } else {
+            guid_notes
+                .entry(guid)
+                .or_default()
+                .push((note_index, id.clone()));
+        }
+    }
+    for (guid, occurrences) in guid_notes {
+        if occurrences.len() > 1 {
+            let (note_indices, note_ids): (Vec<_>, Vec<_>) = occurrences.into_iter().unzip();
+            diagnostics.push(CrowdAnkiIdentityDiagnostic {
+                kind: CrowdAnkiIdentityDiagnosticKind::DuplicateGuid,
+                source_paths: note_ids
+                    .iter()
+                    .map(|id| format!("notes.{id}.adapter_ids.crowdanki:guid"))
+                    .collect(),
+                note_indices,
+                note_ids,
+                note_model_index: None,
+                template_indices: Vec::new(),
+                guid: Some(guid),
+                found_ordinal: None,
+                expected_ordinal: None,
+            });
+        }
+    }
+    diagnostics
+}
+
 fn default_latex_pre() -> String {
     "\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n"
         .to_owned()
@@ -1109,10 +1166,91 @@ fn validate_supported_deck_configurations(
     Ok(name.to_owned())
 }
 
+/// One machine-readable CrowdAnki identity defect. `source_paths` are JSON schema
+/// locations on import or canonical deck paths on export/project; array indices retain
+/// every source occurrence needed to fix an identity collision without guessing.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CrowdAnkiIdentityDiagnostic {
+    pub kind: CrowdAnkiIdentityDiagnosticKind,
+    pub source_paths: Vec<String>,
+    pub note_indices: Vec<usize>,
+    pub note_ids: Vec<StableId>,
+    pub note_model_index: Option<usize>,
+    pub template_indices: Vec<usize>,
+    pub guid: Option<String>,
+    pub found_ordinal: Option<i64>,
+    pub expected_ordinal: Option<usize>,
+}
+
+/// Stable classification for a CrowdAnki identity defect.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CrowdAnkiIdentityDiagnosticKind {
+    EmptyGuid,
+    DuplicateGuid,
+    DuplicateTemplateOrdinal,
+    TemplateOrdinalMismatch,
+}
+
+/// Aggregated identity diagnostics produced before a CrowdAnki conversion boundary.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CrowdAnkiIdentityReport {
+    pub diagnostics: Vec<CrowdAnkiIdentityDiagnostic>,
+}
+
+impl fmt::Display for CrowdAnkiIdentityReport {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "CrowdAnki identity validation failed:")?;
+        for diagnostic in &self.diagnostics {
+            let paths = diagnostic.source_paths.join(", ");
+            match diagnostic.kind {
+                CrowdAnkiIdentityDiagnosticKind::EmptyGuid => writeln!(
+                    f,
+                    "- empty GUID at {paths}: CrowdAnki GUID must not be empty"
+                )?,
+                CrowdAnkiIdentityDiagnosticKind::DuplicateGuid => writeln!(
+                    f,
+                    "- duplicate GUID at {paths}: CrowdAnki GUID {:?} is duplicated at note indices {:?} (canonical notes {:?})",
+                    diagnostic.guid.as_deref().unwrap_or_default(),
+                    diagnostic.note_indices,
+                    diagnostic.note_ids,
+                )?,
+                CrowdAnkiIdentityDiagnosticKind::DuplicateTemplateOrdinal => writeln!(
+                    f,
+                    "- duplicate template ordinal at {paths}: note model index {} has duplicate template ordinal {} at template indices {:?}",
+                    diagnostic.note_model_index.unwrap_or_default(),
+                    diagnostic.found_ordinal.unwrap_or_default(),
+                    diagnostic.template_indices,
+                )?,
+                CrowdAnkiIdentityDiagnosticKind::TemplateOrdinalMismatch => {
+                    let non_negative = diagnostic
+                        .found_ordinal
+                        .filter(|ordinal| *ordinal < 0)
+                        .map(|_| "; template ordinal must be non-negative")
+                        .unwrap_or_default();
+                    writeln!(
+                        f,
+                        "- template ordinal at {paths}: note model index {}, template index {} found {}, expected {}; template ordinals must be zero-based, contiguous, and match array order{non_negative}",
+                        diagnostic.note_model_index.unwrap_or_default(),
+                        diagnostic
+                            .template_indices
+                            .first()
+                            .copied()
+                            .unwrap_or_default(),
+                        diagnostic.found_ordinal.unwrap_or_default(),
+                        diagnostic.expected_ordinal.unwrap_or_default(),
+                    )?
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub enum CrowdAnkiError {
     Json(serde_json::Error),
     JsonPath { path: String, message: String },
+    Identity(CrowdAnkiIdentityReport),
     StableId(String),
     Unsupported(String),
     Validation(ValidationReport),
@@ -1127,6 +1265,7 @@ impl fmt::Display for CrowdAnkiError {
             Self::JsonPath { path, message } => {
                 write!(f, "CrowdAnki JSON error at schema path {path}: {message}")
             }
+            Self::Identity(report) => report.fmt(f),
             Self::StableId(id) => write!(f, "generated invalid stable id {id:?}"),
             Self::Unsupported(message) => write!(f, "unsupported CrowdAnki data: {message}"),
             Self::Validation(report) => write!(f, "imported deck failed validation: {report}"),
@@ -1160,7 +1299,129 @@ struct CrowdAnkiDeckJson {
     notes: Vec<CrowdAnkiNoteJson>,
 }
 
+enum CrowdAnkiIdentityInput<'a> {
+    Import(&'a CrowdAnkiDeckJson),
+    Export(&'a CanonicalDeck),
+}
+
+/// The single identity-validation gateway for import, export, and round-trip projection.
+fn validate_crowdanki_identity(input: CrowdAnkiIdentityInput<'_>) -> Result<(), CrowdAnkiError> {
+    let diagnostics = match input {
+        CrowdAnkiIdentityInput::Import(deck) => deck.identity_diagnostics()?,
+        CrowdAnkiIdentityInput::Export(deck) => export_identity_diagnostics(deck),
+    };
+    if diagnostics.is_empty() {
+        Ok(())
+    } else {
+        Err(CrowdAnkiError::Identity(CrowdAnkiIdentityReport {
+            diagnostics,
+        }))
+    }
+}
+
 impl CrowdAnkiDeckJson {
+    /// Collect raw CrowdAnki identity defects before any data is sorted, indexed, or converted.
+    ///
+    /// CrowdAnki GUIDs are opaque strings: Brain Brew performs no trimming, Unicode
+    /// normalization, case folding, or other lossy canonicalization. Only exact non-empty
+    /// text is an effective GUID identity. Template ordinals are zero-based positions, so a
+    /// supported model has `tmpls[index].ord == index` for every template.
+    fn identity_diagnostics(&self) -> Result<Vec<CrowdAnkiIdentityDiagnostic>, CrowdAnkiError> {
+        let mut diagnostics = Vec::new();
+        let mut guid_indices = BTreeMap::<&str, Vec<usize>>::new();
+        for (note_index, note) in self.notes.iter().enumerate() {
+            let path = format!("$.notes[{note_index}].guid");
+            if note.guid.is_empty() {
+                diagnostics.push(CrowdAnkiIdentityDiagnostic {
+                    kind: CrowdAnkiIdentityDiagnosticKind::EmptyGuid,
+                    source_paths: vec![path],
+                    note_indices: vec![note_index],
+                    note_ids: Vec::new(),
+                    note_model_index: None,
+                    template_indices: Vec::new(),
+                    guid: Some(note.guid.clone()),
+                    found_ordinal: None,
+                    expected_ordinal: None,
+                });
+            } else {
+                guid_indices.entry(&note.guid).or_default().push(note_index);
+            }
+        }
+        for (guid, note_indices) in guid_indices {
+            if note_indices.len() > 1 {
+                diagnostics.push(CrowdAnkiIdentityDiagnostic {
+                    kind: CrowdAnkiIdentityDiagnosticKind::DuplicateGuid,
+                    source_paths: note_indices
+                        .iter()
+                        .map(|index| format!("$.notes[{index}].guid"))
+                        .collect(),
+                    note_indices,
+                    note_ids: Vec::new(),
+                    note_model_index: None,
+                    template_indices: Vec::new(),
+                    guid: Some(guid.to_owned()),
+                    found_ordinal: None,
+                    expected_ordinal: None,
+                });
+            }
+        }
+
+        for (note_model_index, model) in self.note_models.iter().enumerate() {
+            let mut ordinal_indices = BTreeMap::<i64, Vec<usize>>::new();
+            for (template_index, template) in model.tmpls.iter().enumerate() {
+                ordinal_indices
+                    .entry(template.ord)
+                    .or_default()
+                    .push(template_index);
+            }
+            for (ordinal, template_indices) in ordinal_indices {
+                if template_indices.len() > 1 {
+                    diagnostics.push(CrowdAnkiIdentityDiagnostic {
+                        kind: CrowdAnkiIdentityDiagnosticKind::DuplicateTemplateOrdinal,
+                        source_paths: template_indices
+                            .iter()
+                            .map(|index| {
+                                format!("$.note_models[{note_model_index}].tmpls[{index}].ord")
+                            })
+                            .collect(),
+                        note_indices: Vec::new(),
+                        note_ids: Vec::new(),
+                        note_model_index: Some(note_model_index),
+                        template_indices,
+                        guid: None,
+                        found_ordinal: Some(ordinal),
+                        expected_ordinal: None,
+                    });
+                }
+            }
+            for (template_index, template) in model.tmpls.iter().enumerate() {
+                let expected = i64::try_from(template_index).map_err(|_| {
+                    CrowdAnkiError::Unsupported(
+                        "CrowdAnki template array index is not representable as an ordinal"
+                            .to_owned(),
+                    )
+                })?;
+                if template.ord != expected {
+                    diagnostics.push(CrowdAnkiIdentityDiagnostic {
+                        kind: CrowdAnkiIdentityDiagnosticKind::TemplateOrdinalMismatch,
+                        source_paths: vec![format!(
+                            "$.note_models[{note_model_index}].tmpls[{template_index}].ord"
+                        )],
+                        note_indices: Vec::new(),
+                        note_ids: Vec::new(),
+                        note_model_index: Some(note_model_index),
+                        template_indices: vec![template_index],
+                        guid: None,
+                        found_ordinal: Some(template.ord),
+                        expected_ordinal: Some(template_index),
+                    });
+                }
+            }
+        }
+
+        Ok(diagnostics)
+    }
+
     fn into_deck(self) -> Result<CanonicalDeck, CrowdAnkiError> {
         if self.type_ != "Deck" {
             return Err(CrowdAnkiError::Unsupported(format!(
@@ -1179,6 +1440,8 @@ impl CrowdAnkiDeckJson {
                 self.dyn_, self.extend_new, self.extend_rev
             )));
         }
+        validate_crowdanki_identity(CrowdAnkiIdentityInput::Import(&self))?;
+
         let deck_config_name = validate_supported_deck_configurations(
             &self.deck_config_uuid,
             &self.deck_configurations,
@@ -1360,9 +1623,8 @@ impl CrowdAnkiNoteModelJson {
             })
             .collect::<Result<Vec<_>, CrowdAnkiError>>()?;
 
-        let mut templates = self.tmpls;
-        templates.sort_by_key(|template| template.ord);
-        let card_templates = templates
+        let card_templates = self
+            .tmpls
             .into_iter()
             .map(|template| {
                 template.validate_supported_defaults()?;
@@ -1431,7 +1693,7 @@ struct CrowdAnkiTemplateJson {
     bsize: Option<i64>,
     did: Option<i64>,
     name: String,
-    ord: usize,
+    ord: i64,
     qfmt: String,
     #[serde(rename = "scratchPad")]
     scratch_pad: Option<i64>,

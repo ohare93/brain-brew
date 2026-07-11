@@ -24,7 +24,13 @@ CrowdAnki does not store Brain Brew stable IDs. For every imported note, Brain B
 
 `<digest>` starts as the first 12 lowercase hexadecimal characters (48 bits) of SHA-256 over a versioned domain string and length-delimited UTF-8 NFC first field plus the unchanged source GUID. It is not a replacement for the GUID. If two suggestions in one collision group share that prefix, Brain Brew extends every digest in that group by four hexadecimal characters at a time through all 64 characters (256 bits). A full-digest collision receives a final `-2`, `-3`, … suffix ordered by normalized first field then source GUID. Thus collision resolution is independent of CrowdAnki note-array order, platform, locale, hash-map iteration, and import timing.
 
-A source GUID must be non-empty and unique within the imported deck. Duplicate GUIDs fail closed because retaining two notes with the same CrowdAnki identity would make a future export unsafe.
+## CrowdAnki identity validation
+
+A source GUID must be non-empty and unique within the imported deck. GUIDs are opaque UTF-8 adapter IDs: Brain Brew does **not** trim whitespace, normalize Unicode, case-fold, or otherwise rewrite them. Thus `guid`, ` guid `, and Unicode lookalikes are distinct; only byte-for-byte equal non-empty text collides. Duplicate-GUID diagnostics list every affected `$.notes[index].guid` location. An import without a `guid` is rejected by the strict JSON schema; an empty `guid` is rejected by identity validation.
+
+For canonical decks exported to CrowdAnki, a missing `crowdanki:guid` adapter ID has the explicit effective-GUID fallback of that note's canonical stable ID. An explicitly present empty value and any duplicate effective GUID fail closed before export or round-trip projection. The source order's active note indices and canonical note paths are included in that diagnostic.
+
+CrowdAnki standard-model template ordinal identity is zero-based array position: for each note model, `tmpls[index].ord` must equal `index`. This simultaneously requires valid non-negative representable ordinals, uniqueness, contiguity, and input array ordering. Brain Brew rejects duplicate, gapped, negative, overflowed, or reordered ordinals before conversion; it never sorts, renumbers, or repairs templates. Valid template order and ordinals are preserved through import and export.
 
 Adding a note that collides with a previously unique readable slug changes that group from `note.<slug>` to digest-suffixed IDs on a fresh import. This is intentional and deterministic; keep the generated canonical source as the reviewed identity record. Non-Latin and blank values never use the shared `note.unnamed` ID.
 

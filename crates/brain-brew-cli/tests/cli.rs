@@ -6627,6 +6627,47 @@ fn import_crowdanki_cli_accepts_unicode_first_fields_without_losing_source_guid(
 }
 
 #[test]
+fn import_crowdanki_cli_reports_all_duplicate_guid_locations() {
+    let dir = temp_dir("crowdanki-duplicate-guid-import");
+    let export_dir = dir.join("crowdanki");
+    fs::write(dir.join("deck.yaml"), SAMPLE_CANONICAL_YAML).unwrap();
+    let export = run([
+        "export",
+        "crowdanki",
+        dir.join("deck.yaml").to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
+        "--out",
+        export_dir.to_str().unwrap(),
+    ]);
+    assert!(export.status.success(), "stderr: {}", stderr(&export));
+
+    let deck_json_path = export_dir.join("deck.json");
+    let mut deck_json: serde_json::Value =
+        serde_json::from_slice(&fs::read(&deck_json_path).unwrap()).unwrap();
+    let duplicate = deck_json["notes"][0].clone();
+    deck_json["notes"] = serde_json::json!([duplicate.clone(), duplicate]);
+    fs::write(
+        &deck_json_path,
+        serde_json::to_vec_pretty(&deck_json).unwrap(),
+    )
+    .unwrap();
+
+    let imported = run([
+        "import",
+        "crowdanki",
+        export_dir.to_str().unwrap(),
+        "--accept-suggested-ids",
+        "--out",
+        dir.join("imported.yaml").to_str().unwrap(),
+    ]);
+    assert!(!imported.status.success());
+    let diagnostic = stderr(&imported);
+    assert!(diagnostic.contains("$.notes[0].guid"), "{diagnostic}");
+    assert!(diagnostic.contains("$.notes[1].guid"), "{diagnostic}");
+}
+
+#[test]
 fn export_and_import_crowdanki_deck_folder() {
     let dir = temp_dir("crowdanki-roundtrip");
     let deck_path = dir.join("deck.yaml");

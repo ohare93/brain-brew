@@ -403,6 +403,56 @@ fn imported_note_id_suggestions_are_unicode_safe_normalized_and_order_independen
 }
 
 #[test]
+fn importing_duplicate_guids_reports_every_affected_note_index() {
+    let mut deck_json = expected_crowdanki_json_value();
+    let duplicate = deck_json["notes"][0].clone();
+    deck_json["notes"] = serde_json::json!([
+        duplicate.clone(),
+        {"__type__": "Note", "data": "", "fields": ["Distinct", "Capital", ""], "flags": 0, "guid": "distinct-guid", "note_model_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "tags": []},
+        duplicate.clone(),
+        duplicate
+    ]);
+
+    let message = import_error_message(&deck_json, "duplicate GUIDs fail closed");
+    assert!(
+        message.contains("CrowdAnki GUID \"ug-finland-guid\" is duplicated"),
+        "{message}"
+    );
+    for index in [0, 2, 3] {
+        assert!(
+            message.contains(&format!("$.notes[{index}].guid")),
+            "{message}"
+        );
+    }
+}
+
+#[test]
+fn importing_guid_identity_is_exact_and_opaque() {
+    let mut deck_json = expected_crowdanki_json_value();
+    let mut spaced = deck_json["notes"][0].clone();
+    spaced["guid"] = serde_json::json!(" ug-finland-guid ");
+    spaced["fields"][0] = serde_json::json!("Spaced");
+    let mut decomposed = deck_json["notes"][0].clone();
+    decomposed["guid"] = serde_json::json!("ug-finland-gui\u{301}d");
+    decomposed["fields"][0] = serde_json::json!("Unicode");
+    deck_json["notes"] = serde_json::json!([deck_json["notes"][0].clone(), spaced, decomposed]);
+
+    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect("opaque GUID lookalikes remain distinct");
+    assert_eq!(imported.notes.len(), 3);
+}
+
+#[test]
+fn importing_empty_guid_fails_closed_at_its_source_location() {
+    let mut deck_json = expected_crowdanki_json_value();
+    deck_json["notes"][0]["guid"] = serde_json::json!("");
+
+    let message = import_error_message(&deck_json, "empty GUID fails closed");
+    assert!(message.contains("$.notes[0].guid"), "{message}");
+    assert!(message.contains("must not be empty"), "{message}");
+}
+
+#[test]
 fn importing_notes_with_repeated_first_fields_disambiguates_and_preserves_guids() {
     let mut deck_json = expected_crowdanki_json_value();
     deck_json["notes"] = serde_json::json!([
@@ -829,6 +879,134 @@ fn importing_malformed_json_returns_crowdanki_error() {
 }
 
 #[test]
+fn importing_template_ordinals_must_be_zero_based_contiguous_and_in_array_order() {
+    let mut deck_json = expected_crowdanki_json_value();
+    let template = deck_json["note_models"][0]["tmpls"][0].clone();
+    deck_json["note_models"][0]["tmpls"] = serde_json::Value::Array(
+        [99, 1, 2, 3]
+            .into_iter()
+            .enumerate()
+            .map(|(index, ord)| {
+                let mut template = template.clone();
+                template["name"] = serde_json::json!(format!("Template {index}"));
+                template["ord"] = serde_json::json!(ord);
+                template
+            })
+            .collect(),
+    );
+
+    let message = import_error_message(&deck_json, "out-of-order template ordinals fail closed");
+    assert!(
+        message.contains("$.note_models[0].tmpls[0].ord"),
+        "{message}"
+    );
+    assert!(message.contains("found 99, expected 0"), "{message}");
+}
+
+#[test]
+fn importing_template_ordinal_duplicate_gap_negative_and_overflow_fail_closed() {
+    for (label, ordinals, needle) in [
+        ("duplicate", vec![0, 0], "duplicate template ordinal 0"),
+        ("gap", vec![0, 2], "found 2, expected 1"),
+        ("negative", vec![-1], "must be non-negative"),
+    ] {
+        let mut deck_json = expected_crowdanki_json_value();
+        let template = deck_json["note_models"][0]["tmpls"][0].clone();
+        deck_json["note_models"][0]["tmpls"] = serde_json::Value::Array(
+            ordinals
+                .into_iter()
+                .enumerate()
+                .map(|(index, ord)| {
+                    let mut template = template.clone();
+                    template["name"] = serde_json::json!(format!("{label} {index}"));
+                    template["ord"] = serde_json::json!(ord);
+                    template
+                })
+                .collect(),
+        );
+        let message = import_error_message(&deck_json, &format!("{label} ordinal fails closed"));
+        assert!(message.contains("$.note_models[0].tmpls"), "{message}");
+        assert!(message.contains(needle), "{message}");
+    }
+
+    let mut overflow = expected_crowdanki_json_value();
+    overflow["note_models"][0]["tmpls"][0]["ord"] = serde_json::json!(u64::MAX);
+    let message = import_error_message(&overflow, "overflow ordinal fails closed");
+    assert!(
+        message.contains("schema path $.note_models[0].tmpls[0].ord"),
+        "{message}"
+    );
+}
+
+#[test]
+fn import_export_preserves_valid_template_array_order_and_ordinals() {
+    let mut deck_json = expected_crowdanki_json_value();
+    let mut second = deck_json["note_models"][0]["tmpls"][0].clone();
+    second["name"] = serde_json::json!("Second");
+    second["ord"] = serde_json::json!(1);
+    deck_json["note_models"][0]["tmpls"] =
+        serde_json::json!([deck_json["note_models"][0]["tmpls"][0].clone(), second,]);
+
+    let imported = crowdanki::import_deck_accept_suggested_ids(&deck_json.to_string())
+        .expect("valid template ordering imports");
+    let exported: serde_json::Value = serde_json::from_str(
+        &crowdanki::export_deck(&imported)
+            .expect("valid template ordering exports")
+            .deck_json,
+    )
+    .unwrap();
+    assert_eq!(
+        exported["note_models"][0]["tmpls"][0]["name"],
+        "Country - Capital"
+    );
+    assert_eq!(exported["note_models"][0]["tmpls"][0]["ord"], 0);
+    assert_eq!(exported["note_models"][0]["tmpls"][1]["name"], "Second");
+    assert_eq!(exported["note_models"][0]["tmpls"][1]["ord"], 1);
+}
+
+#[test]
+fn exporting_duplicate_or_empty_effective_guids_fails_closed() {
+    let mut duplicate = ug_style_deck();
+    let mut note = duplicate.notes[&sid("note.finland")].clone();
+    note.id = sid("note.sweden");
+    duplicate.notes.insert(note.id.clone(), note);
+    let duplicate_error = crowdanki::export_deck(&duplicate)
+        .expect_err("duplicate effective GUIDs must not export")
+        .to_string();
+    assert!(
+        duplicate_error.contains("notes.note.finland"),
+        "{duplicate_error}"
+    );
+    assert!(
+        duplicate_error.contains("notes.note.sweden"),
+        "{duplicate_error}"
+    );
+    let projection_error = crowdanki::project_deck_for_crowdanki_round_trip(&duplicate)
+        .expect_err("duplicate effective GUIDs must not round-trip")
+        .to_string();
+    assert!(
+        projection_error.contains("notes.note.finland"),
+        "{projection_error}"
+    );
+    assert!(
+        projection_error.contains("notes.note.sweden"),
+        "{projection_error}"
+    );
+
+    let mut empty = ug_style_deck();
+    empty
+        .notes
+        .get_mut(&sid("note.finland"))
+        .unwrap()
+        .adapter_ids
+        .insert("crowdanki:guid", "");
+    let empty_error = crowdanki::export_deck(&empty)
+        .expect_err("empty explicit GUID must not export")
+        .to_string();
+    assert!(empty_error.contains("must not be empty"), "{empty_error}");
+}
+
+#[test]
 fn importing_template_bafmt_fails_closed() {
     let mut deck_json = expected_crowdanki_json_value();
     deck_json["note_models"][0]["tmpls"][0]["bafmt"] = serde_json::json!("browser answer");
@@ -971,7 +1149,7 @@ fn crowdanki_parity_comparator_accepts_allowlisted_paths() {
 }
 
 #[test]
-fn crowdanki_parity_comparator_matches_reordered_identity_arrays() {
+fn crowdanki_parity_comparator_rejects_reordered_template_ordinals() {
     let expected: serde_json::Value = serde_json::json!({
         "notes": [
             {"guid": "a", "fields": ["A"]},
@@ -995,12 +1173,18 @@ fn crowdanki_parity_comparator_matches_reordered_identity_arrays() {
         ]
     });
 
-    crowdanki::compare_deck_json_values(
+    let report = crowdanki::compare_deck_json_values(
         &expected,
         &actual,
         &crowdanki::CrowdAnkiParityOptions::default(),
     )
-    .expect("identity-keyed arrays may reorder without a parity difference");
+    .expect_err("template ordinal array order is identity and must not be normalized");
+    assert!(
+        report
+            .differences
+            .iter()
+            .any(|difference| difference.path.ends_with(".tmpls[0].ord"))
+    );
 }
 
 #[test]
