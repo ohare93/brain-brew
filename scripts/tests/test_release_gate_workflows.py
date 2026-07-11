@@ -43,7 +43,7 @@ class ReleaseGateWorkflowTests(unittest.TestCase):
     def test_quality_gate_covers_required_independent_evidence(self) -> None:
         for command in (
             "devenv shell ci",
-            "npm --prefix documentation ci",
+            "supply-chain:check",
             "devenv shell e2e",
             "verify_extracted_crates.py pre-publish",
             "package_artifact_smoke.py",
@@ -52,6 +52,16 @@ class ReleaseGateWorkflowTests(unittest.TestCase):
             "representative-consumer",
         ):
             self.assertIn(command, self.quality)
+
+    def test_supply_chain_and_artifact_metadata_are_required_before_host(self) -> None:
+        for command in ("supply-chain:check", "generate_release_metadata.py"):
+            self.assertIn(command, self.quality)
+        self.assertIn("actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a", self.release)
+        self.assertIn("id-token: write", self.release)
+        self.assertIn("attestations: write", self.release)
+        host = self.release.split("  host:\n", 1)[1]
+        self.assertIn("Verify produced checksums, SBOMs, and workflow-bound provenance offline", host)
+        self.assertIn("gh release upload", host)
 
     def test_artifact_smoke_never_installs_from_a_workspace_path(self) -> None:
         package_smoke = (ROOT / "scripts" / "package_artifact_smoke.py").read_text(encoding="utf-8")

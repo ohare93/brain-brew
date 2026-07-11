@@ -8,12 +8,18 @@ import hashlib
 import json
 import shutil
 import subprocess
+import importlib.util
 import tarfile
 import tempfile
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+METADATA = ROOT / "scripts" / "generate_release_metadata.py"
+metadata_spec = importlib.util.spec_from_file_location("generate_release_metadata", METADATA)
+assert metadata_spec and metadata_spec.loader
+release_metadata = importlib.util.module_from_spec(metadata_spec)
+metadata_spec.loader.exec_module(release_metadata)
 
 
 def digest(path: Path) -> str:
@@ -41,6 +47,7 @@ def main() -> int:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--target-sha", required=True)
+    parser.add_argument("--workflow-run", default="local")
     parser.add_argument("--evidence-dir", type=Path, required=True)
     args = parser.parse_args()
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
@@ -63,6 +70,11 @@ def main() -> int:
             raise RuntimeError(f"archive binary version {version!r} does not match {args.version!r}")
         subprocess.run([str(ROOT / "scripts" / "release_smoke.sh"), str(binaries[0])], cwd=ROOT, check=True)
     args.evidence_dir.mkdir(parents=True, exist_ok=True)
+    metadata_dir = args.evidence_dir / "dist-archive-metadata"
+    release_metadata.generate([archive], metadata_dir, source_sha=args.target_sha, workflow_run=args.workflow_run)
+    metadata_issues = release_metadata.verify([archive], metadata_dir, source_sha=args.target_sha, workflow_run=args.workflow_run)
+    if metadata_issues:
+        raise RuntimeError("; ".join(metadata_issues))
     (args.evidence_dir / "dist-archive.json").write_text(json.dumps({"target_sha": args.target_sha, "archive": archive.name, "archive_sha256": digest(archive), "status": "passed"}, indent=2) + "\n", encoding="utf-8")
     return 0
 

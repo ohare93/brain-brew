@@ -23,6 +23,11 @@ spec = importlib.util.spec_from_file_location("verify_extracted_crates", VERIFY)
 assert spec and spec.loader
 verify = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(verify)
+METADATA = ROOT / "scripts" / "generate_release_metadata.py"
+metadata_spec = importlib.util.spec_from_file_location("generate_release_metadata", METADATA)
+assert metadata_spec and metadata_spec.loader
+release_metadata = importlib.util.module_from_spec(metadata_spec)
+metadata_spec.loader.exec_module(release_metadata)
 
 
 def checksum(path: Path) -> str:
@@ -37,6 +42,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--evidence-dir", type=Path, default=ROOT / "target" / "release-evidence" / "package-smoke")
     parser.add_argument("--target-sha", required=True, help="immutable commit SHA checked out before this command")
+    parser.add_argument("--workflow-run", default="local", help="GitHub workflow run ID, or local for offline smoke")
     args = parser.parse_args()
     if len(args.target_sha) != 40 or any(character not in "0123456789abcdef" for character in args.target_sha):
         parser.error("--target-sha must be a lowercase 40-character commit SHA")
@@ -53,6 +59,11 @@ def main() -> int:
             for label, package in verify.PACKAGES:
                 verify.unpack_archive(archives[label], extracted, package, version)
                 report["archives"][archives[label].name] = checksum(archives[label])  # type: ignore[index]
+            artifact_metadata = evidence / "metadata"
+            release_metadata.generate(list(archives.values()), artifact_metadata, source_sha=args.target_sha, workflow_run=args.workflow_run)
+            metadata_issues = release_metadata.verify(list(archives.values()), artifact_metadata, source_sha=args.target_sha, workflow_run=args.workflow_run)
+            if metadata_issues:
+                raise verify.VerificationError("; ".join(metadata_issues))
             source = verify.staged_directory_source(work, archives, version)
             for label, package in verify.PACKAGES:
                 package_root = extracted / f"{package}-{version}"

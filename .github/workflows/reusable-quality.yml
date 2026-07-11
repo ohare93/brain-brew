@@ -82,14 +82,16 @@ jobs:
         run: nix profile add --inputs-from . nixpkgs#devenv
       - name: Run format, tests, lint, and embedded-asset gate
         run: devenv shell ci
-      - name: Build documentation
-        run: |
-          npm --prefix documentation ci
-          npm --prefix documentation run build
+      - name: Enforce Cargo and production npm advisory and license policy
+        # This has no credentials and records raw audit reports plus the exact
+        # installed package-license inventory in the evidence bundle.
+        run: devenv shell supply-chain:check
+      - name: Build documentation from the audited lockfile
+        run: npm --prefix documentation run build
       - name: Verify extracted publication archives
         run: python3 scripts/verify_extracted_crates.py pre-publish --evidence-dir target/release-evidence/extracted
       - name: Install and smoke only a produced crate archive
-        run: python3 scripts/package_artifact_smoke.py --target-sha '${{ needs.validate-input.outputs.target-sha }}' --evidence-dir target/release-evidence/package-smoke
+        run: python3 scripts/package_artifact_smoke.py --target-sha '${{ needs.validate-input.outputs.target-sha }}' --workflow-run '${{ github.run_id }}' --evidence-dir target/release-evidence/package-smoke
       - name: Build and smoke the Nix output
         run: |
           set -euo pipefail
@@ -98,6 +100,17 @@ jobs:
           test -x "$nix_output/bin/brainbrew"
           scripts/release_smoke.sh "$nix_output/bin/brainbrew"
           printf '%s\n' "$nix_output" > target/release-evidence/nix-output-path.txt
+          python3 scripts/generate_release_metadata.py \
+            --artifact "$nix_output/bin/brainbrew" \
+            --output target/release-evidence/nix-sbom \
+            --source-sha '${{ needs.validate-input.outputs.target-sha }}' \
+            --workflow-run '${{ github.run_id }}'
+          python3 scripts/generate_release_metadata.py \
+            --artifact "$nix_output/bin/brainbrew" \
+            --output target/release-evidence/nix-sbom \
+            --source-sha '${{ needs.validate-input.outputs.target-sha }}' \
+            --workflow-run '${{ github.run_id }}' \
+            --verify
       - name: Run prepared Chromium Workbench E2E
         run: devenv shell e2e
       - name: Build and smoke a produced cargo-dist archive
@@ -111,6 +124,7 @@ jobs:
             --manifest target/release-evidence/dist-manifest.json \
             --version "$version" \
             --target-sha '${{ needs.validate-input.outputs.target-sha }}' \
+            --workflow-run '${{ github.run_id }}' \
             --evidence-dir target/release-evidence
       - id: consumer
         name: representative-consumer contract

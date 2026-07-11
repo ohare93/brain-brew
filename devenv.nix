@@ -14,6 +14,7 @@ in
 {
   packages = [
     pkgs.cargo
+    pkgs.cargo-audit
     pkgs.binaryen
     pkgs.chromedriver
     pkgs.chromium
@@ -86,7 +87,7 @@ in
   # workspace test partition. CI and release invoke this prepared runner.
   scripts.e2e.exec = "bash scripts/run_workbench_e2e.sh";
 
-  scripts."docs:install".exec = "npm --prefix documentation install";
+  scripts."docs:install".exec = "npm --prefix documentation ci";
   scripts."docs:start".exec = "npm --prefix documentation run start";
   scripts."docs:build".exec = "npm --prefix documentation run build";
 
@@ -100,6 +101,18 @@ in
     python3 scripts/check_release_security.py
     python3 -m unittest scripts.tests.test_release_security_policy
   '';
+  scripts."supply-chain:check".exec = ''
+    set -euo pipefail
+    mkdir -p target/release-evidence/dependency-policy
+    cargo audit --json > target/release-evidence/dependency-policy/cargo-audit.json || true
+    npm --prefix documentation ci
+    npm --prefix documentation audit --omit=dev --json > target/release-evidence/dependency-policy/npm-audit.json || true
+    python3 scripts/check_dependency_policy.py \
+      --cargo-audit target/release-evidence/dependency-policy/cargo-audit.json \
+      --npm-audit target/release-evidence/dependency-policy/npm-audit.json \
+      --write-license-inventory target/release-evidence/dependency-policy/licenses.json
+    python3 -m unittest scripts.tests.test_supply_chain_gates
+  ''; 
   scripts."crates:metadata-check".exec = ''
     set -euo pipefail
     scripts/check_release_version.py
@@ -137,6 +150,7 @@ in
     cargo clippy -p brainbrew --features workbench-write-dev --all-targets -- -D warnings
     workbench-ui-embed-check
     release:security-check
+    supply-chain:check
   '';
 
   enterTest = ''

@@ -30,7 +30,9 @@ NAR hash.
 | `cachix/install-nix-action` | v31 | `a49548c11d9846ad46ecc0115273879b045f001c` | [upstream v31 ref](https://github.com/cachix/install-nix-action/tree/v31) |
 | cargo-dist | v0.30.4 | platform-specific SHA-256 values in `scripts/install_cargo_dist.sh` | [upstream v0.30.4 release](https://github.com/axodotdev/cargo-dist/releases/tag/v0.30.4) |
 | Nix inputs | locked | full revisions plus NAR hashes in `flake.lock` and `devenv.lock` | checked-in locks |
-| documentation npm dependencies | lockfile | `documentation/package-lock.json`; CI uses `npm ci` | checked-in lock |
+| documentation npm dependencies | lockfile | `documentation/package-lock.json`; CI uses `npm ci`, audits production dependencies, and records installed license metadata | checked-in lock |
+| GitHub artifact attestation | v3 | `977bb373ede98d70efdf65b84cb5f73e068dcc2a` | [upstream v3 ref](https://github.com/actions/attest-build-provenance/tree/v3) |
+| cosign installer | v3.10.0 | `d7543c93d881b35a8faa02e8e3605f69b7a1ce62`; installs cosign v2.5.3 | [upstream v3.10.0 ref](https://github.com/sigstore/cosign-installer/tree/v3.10.0) |
 
 `cachix/install-nix-action` is an annotated tag; its documented v31 tag was
 resolved through GitHub's tag object to the commit above. The action pins and
@@ -62,6 +64,52 @@ package-installer expressions are deliberately not executed.
   local `publish ... --yes`; it is never called from GitHub Actions. Cargo's
   workspace dependency graph is in `Cargo.lock`; registry publication remains a
   human credential boundary.
+
+## Dependency policy, SBOM, and provenance
+
+`supply-chain-policy.toml` is the single Cargo and production npm advisory/license
+policy. `devenv shell supply-chain:check` runs `cargo audit --json`, `npm ci`,
+`npm audit --omit=dev --json`, and a checked installed-package license inventory.
+It fails closed for a missing report, an unknown production advisory/license, or
+an exception without an exact ID, owner, expiry, and rationale. Development-only
+findings are reported separately and cannot suppress production findings.
+
+The current npm audit contains the explicitly listed Docusaurus/Webpack advisory
+exceptions in that policy. They are not suppressed: each is a `release-maintainers`
+owned, 2026-08-15 review item, because the locked documentation build graph needs
+an upstream-compatible update. The high `GHSA-5c6j-r48x-rmvq` remains blocked by
+that same dated exception and must not be renewed without reviewing a lockfile
+upgrade. Legacy npm license metadata exceptions are equally exact and time-bound.
+Cargo currently has no listed advisory or license exception.
+
+Release smoke creates CycloneDX 1.5 SBOMs from the produced `.crate`, cargo-dist,
+and Nix binary bytes. Every record carries the observed SHA-256. Release builders
+create `SHA256SUMS` and in-toto/SLSA provenance records binding each uploaded
+artifact SHA to the immutable source SHA and GitHub workflow run, verify those
+records before upload, then use the pinned keyless GitHub attestation action to
+sign the provenance. The pinned cosign client additionally keylessly signs each
+`SHA256SUMS` as a Sigstore bundle sidecar and verifies it offline before upload.
+The host re-verifies checksum/SBOM/provenance and Sigstore bundle bytes offline
+before it can publish, and uploads all checksum, SBOM, provenance, and signature sidecars.
+There are no repository signing keys or long-lived signing secrets.
+
+### Operator update and recovery
+
+1. Run `devenv shell supply-chain:check`. Fix an advisory or license first; do
+   not delete an audit finding or add a broad ignore. For an unavoidable finding,
+   add only its exact advisory/package ID with an accountable owner, short expiry,
+   and a concrete upgrade/review rationale to `supply-chain-policy.toml`.
+2. Regenerate the lock with the package manager, rerun the check, and inspect the
+   evidence under `target/release-evidence/dependency-policy/`. An expired entry
+   intentionally blocks recovery until it is reviewed or removed.
+3. If a release build fails after metadata generation, discard its artifacts and
+   rerun the release workflow from the same immutable tag. Never copy sidecars
+   between runs: provenance binds `github.run_id`. If host verification reports a
+   checksum, SBOM, source SHA, or workflow mismatch, treat the artifacts as
+   unpublishable and rebuild; do not override the gate.
+4. Consumers can validate published bytes offline with `sha256sum -c SHA256SUMS`;
+   GitHub's keyless provenance is additionally verifiable with `gh attestation
+   verify` against the release repository identity.
 
 ## Credential and trigger boundary
 

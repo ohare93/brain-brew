@@ -20,6 +20,8 @@ ACTION_PINS = {
     "actions/upload-artifact": "b7c566a772e6b6bfb58ed0dc250532a479d7789f",
     "actions/download-artifact": "37930b1c2abaa49bbe596cd826c3c89aef350131",
     "cachix/install-nix-action": "a49548c11d9846ad46ecc0115273879b045f001c",
+    "actions/attest-build-provenance": "977bb373ede98d70efdf65b84cb5f73e068dcc2a",
+    "sigstore/cosign-installer": "d7543c93d881b35a8faa02e8e3605f69b7a1ce62",
 }
 ACTION_RE = re.compile(r"^\s*(?:-\s*)?uses:\s+([^\s#]+)(?:\s+(#.*))?$", re.MULTILINE)
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -127,7 +129,9 @@ def issues(root: Path = ROOT) -> list[str]:
     if "http://127.0.0.1:" not in e2e_source:
         found.append("scripts/run_workbench_e2e.sh: curl must remain a localhost readiness probe")
 
-    if "homebrew" in release.lower() or re.search(r"\b(?:brew|tap|pat)\b", release.lower()):
+    # The repository's own ``brain-brew`` identity is valid provenance text;
+    # standalone package-manager/token paths remain forbidden.
+    if "homebrew" in release.lower() or re.search(r"(?<!brain-)\b(?:brew|tap|pat)\b", release.lower()):
         found.append("release.yml: Homebrew/tap/PAT publication path is forbidden")
     return found
 
