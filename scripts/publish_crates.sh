@@ -7,8 +7,10 @@ Usage:
   scripts/publish_crates.sh dry-run <all|core|formats|cli>
   scripts/publish_crates.sh publish <all|core|formats|cli> --yes
 
-Dry-run mode is safe and is the default used by the sd release task.
-Publish mode uploads immutable crates.io versions and requires --yes.
+Every mode first verifies Cargo-produced, extracted .crate artifacts in a staged
+local Cargo source. Dependent dry-runs/publishes additionally require their
+predecessor to resolve from the real crates.io index. A blocked dependent is a
+failure, never a successful skipped dry-run.
 USAGE
 }
 
@@ -17,16 +19,8 @@ target="${2:-}"
 shift $(( $# >= 2 ? 2 : $# ))
 confirm="${1:-}"
 
-case "$mode" in
-  dry-run|publish) ;;
-  *) usage; exit 2 ;;
-esac
-
-case "$target" in
-  all|core|formats|cli) ;;
-  *) usage; exit 2 ;;
-esac
-
+case "$mode" in dry-run|publish) ;; *) usage; exit 2 ;; esac
+case "$target" in all|core|formats|cli) ;; *) usage; exit 2 ;; esac
 if [[ "$mode" == "publish" && "$confirm" != "--yes" ]]; then
   echo "Refusing to publish without explicit --yes." >&2
   usage
@@ -35,7 +29,6 @@ fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
-
 version="$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json, sys; print(json.load(sys.stdin)["packages"][0]["version"])')"
 
 declare -A package_by_target=(
@@ -43,12 +36,23 @@ declare -A package_by_target=(
   [formats]="brain-brew-formats"
   [cli]="brainbrew"
 )
-
 declare -A crate_by_target=(
   [core]="brain-brew-core"
   [formats]="brain-brew-formats"
   [cli]="brainbrew"
 )
+
+pre_publish_gate() {
+  scripts/check_cratesio_metadata.py
+  python3 scripts/verify_extracted_crates.py pre-publish
+}
+
+indexed_gate() {
+  local target_name="$1"
+  # This deliberately has no staged source replacement: it proves the exact
+  # predecessor version is visible through real crates.io resolution.
+  python3 scripts/verify_extracted_crates.py indexed --through "$target_name"
+}
 
 publish_one() {
   local target_name="$1"
@@ -77,48 +81,41 @@ wait_for_crate() {
     sleep 10
   done
   echo "Timed out waiting for ${crate} ${version} in the crates.io index." >&2
-  echo "Wait a little longer, then continue with the next package manually." >&2
+  echo "Do not continue: rerun the indexed gate only after the exact version appears." >&2
   return 1
 }
 
-try_dependent_dry_run() {
-  local target_name="$1"
-  local package="${package_by_target[$target_name]}"
-  local log
-  log="$(mktemp)"
-  if cargo publish -p "$package" --dry-run >"$log" 2>&1; then
-    cat "$log"
-    rm -f "$log"
-    return 0
-  fi
-  if grep -Eq "no matching package named|failed to select a version for the requirement" "$log"; then
-    echo "Skipping ${package} dry-run for now: exact internal dependency is not visible in crates.io yet."
-    echo "After publishing earlier crates and waiting for the index, run:"
-    echo "  sd release crates ${target_name}"
-    rm -f "$log"
-    return 0
-  fi
-  cat "$log" >&2
-  rm -f "$log"
-  return 1
-}
+# This packaging/build gate is required before every upload. It validates core,
+# formats, and CLI in publication order against exact staged archive sources.
+pre_publish_gate
 
 case "$target" in
-  core|formats|cli)
-    publish_one "$target"
+  core)
+    publish_one core
+    ;;
+  formats)
+    indexed_gate formats
+    publish_one formats
+    ;;
+  cli)
+    indexed_gate cli
+    publish_one cli
     ;;
   all)
-    scripts/check_cratesio_metadata.py
-    if [[ "$mode" == "dry-run" ]]; then
-      publish_one core
-      try_dependent_dry_run formats
-      try_dependent_dry_run cli
-    else
-      publish_one core
+    publish_one core
+    if [[ "$mode" == "publish" ]]; then
       wait_for_crate core
+      indexed_gate formats
       publish_one formats
       wait_for_crate formats
+      indexed_gate cli
       publish_one cli
+    else
+      echo "BLOCKED: formats and CLI dry-runs require real indexed alpha.2 predecessors." >&2
+      echo "Run the individual dependent dry-runs after manually publishing and indexing core, then formats." >&2
+      # A dry-run cannot create the prerequisite index entries; returning failure
+      # is intentional so release automation never records this as success.
+      exit 1
     fi
     ;;
 esac

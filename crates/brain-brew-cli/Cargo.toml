@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+readme = "README.md"
 authors.workspace = true
 repository.workspace = true
 description = "Rust-based Brain Brew CLI for local-first Anki-compatible deck federation"

@@ -128,13 +128,21 @@ in
     scripts/check_release_version.py
     scripts/check_cratesio_metadata.py
   '';
+  scripts."crates:verify-extracted".exec = ''
+    python3 scripts/verify_extracted_crates.py pre-publish
+  '';
+  scripts."crates:verify-indexed".exec = ''
+    python3 scripts/verify_extracted_crates.py indexed --through "''${1:-cli}"
+  '';
   scripts."crates:publish-dry-run".exec = ''
     scripts/publish_crates.sh dry-run "''${1:-all}"
   '';
   scripts."crates:publish".exec = ''
     scripts/publish_crates.sh publish "''${1:-all}" --yes
   '';
-  scripts."release:crates".exec = "scripts/publish_crates.sh dry-run all";
+  # This is the pre-upload release gate. `crates:publish-dry-run all` is
+  # deliberately blocked until its real crates.io predecessors are indexed.
+  scripts."release:crates".exec = "python3 scripts/verify_extracted_crates.py pre-publish";
   scripts."release:smoke".exec = ''
     set -euo pipefail
     install_root="$(mktemp -d)"

@@ -36,7 +36,7 @@ def main() -> int:
         package = workspace_packages[name]
         if package.get("publish") is not None:
             errors.append(f"{name}: package.publish must allow crates.io publishing")
-        for field in ["description", "license", "repository"]:
+        for field in ["description", "license", "repository", "readme"]:
             if not package.get(field):
                 errors.append(f"{name}: missing package.{field}")
         if package["version"] != workspace_version:

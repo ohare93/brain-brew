@@ -32,9 +32,17 @@ devenv shell release:smoke
 devenv shell release:crates
 ```
 
-`crates:metadata-check` verifies version references across Cargo metadata/lock data, dist planning, flake derivation, and current release docs, then verifies crates.io metadata and exact internal requirements. `dist:plan` derives its tag from `Cargo.toml`. `release:smoke` installs the CLI from the workspace into a temporary root and checks `validate`, `compose`, `export crowdanki`, and `verify` against the fast UG-style fixture. That fixture uses `--media-mode reference-only`; it is not release media-integrity evidence.
+`crates:metadata-check` verifies version references across Cargo metadata/lock data, dist planning, flake derivation, and current release docs, then verifies crates.io metadata and exact internal requirements. `release:crates` runs the required pre-publish artifact gate: Cargo creates fresh `.crate` files, the gate enumerates each archive's README, license, generated files, and symlinks, safely extracts its exact bytes into a clean temporary tree, and builds core → formats → CLI. Formats and CLI resolve exact alpha.2 internal dependencies from a checksum-verified staged Cargo directory source made only from those extracted archives; no workspace path is evidence. Evidence JSON is retained under `target/release-evidence/`.
 
-Only `brain-brew-core` can fully dry-run before publication because dependents resolve exact internal dependencies from crates.io. After each earlier crate is visible in the index, dry-run and then publish the next crate in dependency order.
+This is the **pre-publish coherence** mode and is the only complete dependency-chain check available before manual upload. `dist:plan` derives its tag from `Cargo.toml`. `release:smoke` installs the CLI from the workspace into a temporary root and checks `validate`, `compose`, `export crowdanki`, and `verify` against the fast UG-style fixture. That fixture uses `--media-mode reference-only`; it is not release media-integrity evidence.
+
+The separate **indexed** mode uses no staged source replacement: it builds the extracted dependents while resolving predecessors from real crates.io. Run it after each earlier package appears in the index. It is intentionally blocked (and exits nonzero) when alpha.2 is absent; the immutable `brain-brew-core` alpha.1 is incompatible and must never be accepted as a substitute. `crates:publish-dry-run all` likewise reports this blocked state instead of silently skipping dependent verification.
+
+### Artifact-gate recovery and cleanup
+
+The verifier never uploads and removes its temporary archives, extracted trees, and staged source registry on exit. Keep the JSON evidence under `target/release-evidence/` with the release review; remove that ignored directory after the review if it is no longer needed. If pre-publish coherence fails, fix the packaged manifest/interface/archive material and rerun `devenv shell release:crates` before any upload. If indexed verification is blocked, do **not** republish an immutable predecessor: wait for its exact alpha.2 index entry, run `devenv shell crates:verify-indexed formats` (or `cli`), then continue in order.
+
+GitHub Release/Nix artifacts are independent of crates.io indexing. A green cargo-dist build or Nix build does not satisfy this crate registry gate, and this manual crates.io sequence does not create a GitHub Release.
 
 If you change `dist-workspace.toml`, regenerate the workflow:
 
@@ -69,7 +77,7 @@ devenv shell crates:publish-dry-run cli
 devenv shell crates:publish cli
 ```
 
-The same commands are backed by `scripts/publish_crates.sh`; `release:crates` is dry-run only. No command in this repository should publish without the explicit manual release decision.
+The same commands are backed by `scripts/publish_crates.sh`. Every `publish` invocation reruns pre-publish artifact verification before upload; formats and CLI also require the indexed check. `release:crates` is the pre-upload extracted-artifact gate, while `crates:publish-dry-run all` is deliberately blocked until the real predecessor versions exist. No command in this repository should publish without the explicit manual release decision.
 
 ## Reviewer install commands
 
