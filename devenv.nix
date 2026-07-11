@@ -116,12 +116,11 @@ in
   # This is the pre-upload release gate. `crates:publish-dry-run all` is
   # deliberately blocked until its real crates.io predecessors are indexed.
   scripts."release:crates".exec = "python3 scripts/verify_extracted_crates.py pre-publish";
+  # Build, install, and run only the Cargo-produced archive. This never treats
+  # a workspace path build as package or release-artifact evidence.
   scripts."release:smoke".exec = ''
-    set -euo pipefail
-    install_root="$(mktemp -d)"
-    trap 'rm -rf "$install_root"' EXIT
-    cargo install --path crates/brain-brew-cli --locked --root "$install_root"
-    "$PWD/scripts/release_smoke.sh" "$install_root/bin/brainbrew"
+    target_sha="$(jj log -r @ -T commit_id --no-graph | tr -d '\n')"
+    python3 scripts/package_artifact_smoke.py --target-sha "$target_sha"
   '';
 
   scripts.ci.exec = ''

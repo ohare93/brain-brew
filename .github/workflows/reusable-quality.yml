@@ -1,0 +1,155 @@
+name: Reusable quality and artifact gates
+
+on:
+  workflow_call:
+    inputs:
+      target_sha:
+        description: Full immutable commit SHA to verify.
+        required: true
+        type: string
+      require_representative_consumer:
+        description: Require live Ultimate Geography consumer evidence (release only).
+        required: true
+        type: boolean
+      representative_consumer_evidence_url:
+        description: HTTPS URL for independently generated ultimate-geography-live evidence.
+        required: false
+        default: ''
+        type: string
+      representative_consumer_evidence_sha256:
+        description: SHA-256 binding the downloaded live-consumer evidence bytes.
+        required: false
+        default: ''
+        type: string
+    outputs:
+      target-sha:
+        description: Verified immutable SHA used by every gate.
+        value: ${{ jobs.validate-input.outputs.target-sha }}
+      evidence-sha256:
+        description: SHA-256 of the evidence bundle bound to target-sha.
+        value: ${{ jobs.quality.outputs.evidence-sha256 }}
+      representative-consumer-status:
+        description: passed or blocked; releases require passed.
+        value: ${{ jobs.quality.outputs.representative-consumer-status }}
+
+permissions:
+  contents: read
+
+jobs:
+  validate-input:
+    name: validate immutable target
+    runs-on: ubuntu-22.04
+    outputs:
+      target-sha: ${{ steps.sha.outputs.target-sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.target_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - id: sha
+        name: Refuse mutable refs and absent commits
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "target_sha must be a full immutable commit SHA" >&2
+            exit 1
+          fi
+          resolved="$(git rev-parse --verify "${TARGET_SHA}^{commit}")"
+          test "$resolved" = "$TARGET_SHA"
+          echo "target-sha=$resolved" >> "$GITHUB_OUTPUT"
+
+  quality:
+    name: quality, artifacts, and consumer contract
+    needs: validate-input
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    outputs:
+      evidence-sha256: ${{ steps.evidence.outputs.evidence-sha256 }}
+      representative-consumer-status: ${{ steps.consumer.outputs.status }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.target_sha }}
+          persist-credentials: false
+          submodules: recursive
+      # Do not pass a token or cache credential: this same gate executes for
+      # untrusted pull requests and has no publication side effects.
+      - uses: cachix/install-nix-action@v31
+      - name: Install devenv
+        run: nix profile add nixpkgs#devenv
+      - name: Run format, tests, lint, and embedded-asset gate
+        run: devenv shell ci
+      - name: Build documentation
+        run: |
+          npm --prefix documentation ci
+          npm --prefix documentation run build
+      - name: Verify extracted publication archives
+        run: python3 scripts/verify_extracted_crates.py pre-publish --evidence-dir target/release-evidence/extracted
+      - name: Install and smoke only a produced crate archive
+        run: python3 scripts/package_artifact_smoke.py --target-sha '${{ needs.validate-input.outputs.target-sha }}' --evidence-dir target/release-evidence/package-smoke
+      - name: Build and smoke the Nix output
+        run: |
+          set -euo pipefail
+          nix build .#checks.x86_64-linux.brainbrew -L --no-link
+          nix_output="$(nix build .#brainbrew --print-out-paths --no-link)"
+          test -x "$nix_output/bin/brainbrew"
+          scripts/release_smoke.sh "$nix_output/bin/brainbrew"
+          printf '%s\n' "$nix_output" > target/release-evidence/nix-output-path.txt
+      - name: Run prepared Chromium Workbench E2E
+        run: devenv shell e2e
+      - name: Build and smoke a produced cargo-dist archive
+        run: |
+          set -euo pipefail
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"
+          # The host archive is sufficient artifact evidence here; the release
+          # matrix builds each configured platform after this gate passes.
+          devenv shell -- bash -c "dist build --allow-dirty --tag v$version --artifacts=local --target x86_64-unknown-linux-gnu --output-format=json > target/release-evidence/dist-manifest.json"
+          python3 scripts/smoke_release_archive.py \
+            --manifest target/release-evidence/dist-manifest.json \
+            --version "$version" \
+            --target-sha '${{ needs.validate-input.outputs.target-sha }}' \
+            --evidence-dir target/release-evidence
+      - id: consumer
+        name: representative-consumer contract
+        env:
+          REQUIRED: ${{ inputs.require_representative_consumer }}
+          EVIDENCE_URL: ${{ inputs.representative_consumer_evidence_url }}
+          EVIDENCE_SHA256: ${{ inputs.representative_consumer_evidence_sha256 }}
+          TARGET_SHA: ${{ needs.validate-input.outputs.target-sha }}
+        run: |
+          set -euo pipefail
+          required_flag=''
+          if test "$REQUIRED" = true; then required_flag=--required; fi
+          python3 scripts/verify_representative_consumer.py \
+            --target-sha "$TARGET_SHA" \
+            --url "$EVIDENCE_URL" \
+            --sha256 "$EVIDENCE_SHA256" \
+            $required_flag \
+            --output target/release-evidence/representative-consumer.json
+          echo "status=$(jq -r .status target/release-evidence/representative-consumer.json)" >> "$GITHUB_OUTPUT"
+      - id: evidence
+        name: Bind evidence bundle to the immutable SHA
+        env:
+          TARGET_SHA: ${{ needs.validate-input.outputs.target-sha }}
+        run: |
+          set -euo pipefail
+          python3 - "$TARGET_SHA" <<'PY'
+          import hashlib, json, pathlib, sys
+          root = pathlib.Path("target/release-evidence")
+          files = {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(root.rglob("*")) if path.is_file()}
+          bundle = {"schema_version": 1, "target_sha": sys.argv[1], "files": files}
+          encoded = (json.dumps(bundle, sort_keys=True, indent=2) + "\n").encode()
+          (root / "evidence.json").write_bytes(encoded)
+          print(hashlib.sha256(encoded).hexdigest())
+          PY
+          evidence_sha256="$(sha256sum target/release-evidence/evidence.json | cut -d ' ' -f 1)"
+          echo "evidence-sha256=$evidence_sha256" >> "$GITHUB_OUTPUT"
+      - name: Upload cryptographically bound evidence bundle
+        uses: actions/upload-artifact@v6
+        with:
+          name: quality-evidence-${{ needs.validate-input.outputs.target-sha }}
+          path: target/release-evidence
+          if-no-files-found: error

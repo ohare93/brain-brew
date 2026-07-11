@@ -8,59 +8,12 @@ permissions:
   contents: read
 
 jobs:
-  devenv-ci:
-    name: deterministic development checks
-    runs-on: ubuntu-22.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v16
-        with:
-          name: devenv
-      - name: Install devenv
-        run: nix profile add nixpkgs#devenv
-      - name: Run documented deterministic CI gate
-        run: devenv shell ci
-      - name: Assert Nix and browser E2E ownership
-        run: devenv shell -- python3 -m unittest scripts.tests.test_nix_e2e_partition -v
-
-  nix-package:
-    name: Nix package build and non-browser tests
-    runs-on: ubuntu-22.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build the distributable CLI package gate
-        run: nix build .#checks.x86_64-linux.brainbrew -L --no-link
-      - name: Smoke the Nix-built CLI
-        run: nix run .#brainbrew -- --version
-
-  browser-e2e:
-    name: prepared Chromium Workbench E2E
-    runs-on: ubuntu-22.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v16
-        with:
-          name: devenv
-      - name: Install devenv
-        run: nix profile add nixpkgs#devenv
-      - name: Build UI, write-enabled test CLI, Chromium and matching driver, then run all browser scenarios
-        run: devenv shell e2e
-      - name: Upload Workbench E2E diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: workbench-e2e-artifacts
-          path: target/workbench-e2e-artifacts
-          if-no-files-found: ignore
+  quality-gates:
+    name: reusable quality and artifact gates
+    uses: ./.github/workflows/reusable-quality.yml
+    with:
+      # A PR's merge ref is mutable; test the immutable reviewed head instead.
+      target_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      # The interface is exercised on PRs without asking an untrusted fork for
+      # credentials or pretending that the checked-in UG fixture is a consumer.
+      require_representative_consumer: false
