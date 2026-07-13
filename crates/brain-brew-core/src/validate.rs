@@ -89,6 +89,38 @@ impl CanonicalDeck {
                 },
                 &mut errors,
             );
+
+            let field_names = note_type
+                .fields
+                .iter()
+                .filter(|field| {
+                    self.tombstones
+                        .blocking(&TombstoneAddress::FieldDefinition {
+                            note_type_id: id.clone(),
+                            field_id: field.id.clone(),
+                        })
+                        .is_none()
+                })
+                .map(|field| field.name.clone())
+                .collect::<BTreeSet<_>>();
+            for template in &note_type.card_templates {
+                if self
+                    .tombstones
+                    .blocking(&TombstoneAddress::CardTemplate {
+                        note_type_id: id.clone(),
+                        template_id: template.id.clone(),
+                    })
+                    .is_none()
+                {
+                    errors.extend(
+                        crate::template_validation::validate_template_field_references(
+                            id,
+                            template,
+                            &field_names,
+                        ),
+                    );
+                }
+            }
         }
 
         for (id, media) in &self.media {

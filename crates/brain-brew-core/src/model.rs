@@ -1309,6 +1309,7 @@ impl TranslationCoverageReport {
                     | TranslationCoverageCategory::StaleVariableKey
                     | TranslationCoverageCategory::StaleAdapterIdKey
                     | TranslationCoverageCategory::InvalidTargetAdaptation
+                    | TranslationCoverageCategory::StructuralFieldNameTranslation
             )
         })
     }
@@ -1430,6 +1431,7 @@ pub enum TranslationCoverageCategory {
     StaleVariableKey,
     StaleAdapterIdKey,
     InvalidTargetAdaptation,
+    StructuralFieldNameTranslation,
 }
 
 impl TranslationCoverageCategory {
@@ -1451,6 +1453,7 @@ impl TranslationCoverageCategory {
             Self::StaleVariableKey => "stale_variable_key",
             Self::StaleAdapterIdKey => "stale_adapter_id_key",
             Self::InvalidTargetAdaptation => "invalid_target_adaptation",
+            Self::StructuralFieldNameTranslation => "structural_field_name_translation",
         }
     }
 
@@ -1466,6 +1469,7 @@ impl TranslationCoverageCategory {
                 | Self::StaleVariableKey
                 | Self::StaleAdapterIdKey
                 | Self::InvalidTargetAdaptation
+                | Self::StructuralFieldNameTranslation
         )
     }
 }
@@ -2560,6 +2564,8 @@ pub enum ValidationErrorKind {
     InvalidStableId,
     ConflictingFieldRepresentation,
     UnknownMediaReference,
+    UnknownTemplateField,
+    MalformedTemplateReference,
 }
 
 impl ValidationErrorKind {
@@ -2577,6 +2583,8 @@ impl ValidationErrorKind {
             Self::InvalidStableId => "invalid_stable_id",
             Self::ConflictingFieldRepresentation => "conflicting_field_representation",
             Self::UnknownMediaReference => "unknown_media_reference",
+            Self::UnknownTemplateField => "unknown_template_field",
+            Self::MalformedTemplateReference => "malformed_template_reference",
         }
     }
 

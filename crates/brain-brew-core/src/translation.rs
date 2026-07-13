@@ -52,6 +52,7 @@ fn translation_coverage_report(
         seen_variables: BTreeSet::new(),
         seen_adapter_ids: BTreeSet::new(),
         source_paths: BTreeMap::new(),
+        structural_field_paths: structural_field_paths(deck),
     };
 
     if deck
@@ -211,6 +212,47 @@ fn translation_coverage_report(
     Ok(builder.finish(overlay.id.clone()))
 }
 
+fn structural_field_paths(deck: &CanonicalDeck) -> BTreeMap<String, BTreeSet<String>> {
+    let mut paths = BTreeMap::new();
+    for (note_type_id, note_type) in &deck.note_types {
+        if deck
+            .tombstones
+            .blocking(&TombstoneAddress::NoteType {
+                note_type_id: note_type_id.clone(),
+            })
+            .is_some()
+        {
+            continue;
+        }
+        for field in &note_type.fields {
+            if deck
+                .tombstones
+                .blocking(&TombstoneAddress::FieldDefinition {
+                    note_type_id: note_type_id.clone(),
+                    field_id: field.id.clone(),
+                })
+                .is_none()
+            {
+                paths
+                    .entry(field.name.clone())
+                    .or_insert_with(BTreeSet::new)
+                    .insert(
+                        DeckPath::NoteTypeFieldName {
+                            note_type_id: note_type_id.clone(),
+                            field_id: field.id.clone(),
+                        }
+                        .to_string(),
+                    );
+            }
+        }
+    }
+    paths
+}
+
+fn is_structural_field_name_path(path: &str) -> bool {
+    matches!(path.parse(), Ok(DeckPath::NoteTypeFieldName { .. }))
+}
+
 struct TranslationCoverageBuilder<'a> {
     resolved: &'a ResolvedFieldGraph,
     translations: &'a TranslationDictionary,
@@ -224,6 +266,7 @@ struct TranslationCoverageBuilder<'a> {
     seen_variables: BTreeSet<(String, String)>,
     seen_adapter_ids: BTreeSet<(String, String)>,
     source_paths: BTreeMap<String, BTreeSet<String>>,
+    structural_field_paths: BTreeMap<String, BTreeSet<String>>,
 }
 
 #[derive(Clone, Copy)]
@@ -696,7 +739,14 @@ impl TranslationCoverageBuilder<'_> {
 
     fn finish(mut self, overlay_id: StableId) -> TranslationCoverageReport {
         for (source, translated) in &self.translations.direct {
-            if !self.seen_direct.contains(source) {
+            if let Some(paths) = self.structural_field_paths.get(source) {
+                self.entries.push(structural_field_name_translation_entry(
+                    format!("translations.direct.{source}"),
+                    source,
+                    translated,
+                    paths.iter().cloned().collect(),
+                ));
+            } else if !self.seen_direct.contains(source) {
                 self.entries.push(TranslationCoverageEntry {
                     category: TranslationCoverageCategory::StaleDirectKey,
                     path: format!("translations.direct.{source}"),
@@ -709,7 +759,14 @@ impl TranslationCoverageBuilder<'_> {
         }
         for (context_path, replacements) in &self.translations.contextual {
             for (source, translated) in replacements {
-                if !self
+                if is_structural_field_name_path(context_path) {
+                    self.entries.push(structural_field_name_translation_entry(
+                        format!("translations.contextual.{context_path}.{source}"),
+                        source,
+                        translated,
+                        vec![context_path.clone()],
+                    ));
+                } else if !self
                     .seen_contextual
                     .contains(&(context_path.clone(), source.clone()))
                 {
@@ -725,7 +782,14 @@ impl TranslationCoverageBuilder<'_> {
             }
         }
         for source in &self.translations.no_change {
-            if !self.seen_sources.contains(source) {
+            if let Some(paths) = self.structural_field_paths.get(source) {
+                self.entries.push(structural_field_name_translation_entry(
+                    format!("translations.no_change.{source}"),
+                    source,
+                    source,
+                    paths.iter().cloned().collect(),
+                ));
+            } else if !self.seen_sources.contains(source) {
                 self.entries.push(TranslationCoverageEntry {
                     category: TranslationCoverageCategory::StaleNoChangeKey,
                     path: format!("translations.no_change.{source}"),
@@ -737,7 +801,14 @@ impl TranslationCoverageBuilder<'_> {
             }
         }
         for (path, adaptation) in &self.translations.target_adaptations {
-            if !self.seen_target_adaptations.contains(path) {
+            if is_structural_field_name_path(path) {
+                self.entries.push(structural_field_name_translation_entry(
+                    format!("target_adaptations.{path}"),
+                    &adaptation.expected_source,
+                    &adaptation.target,
+                    vec![path.clone()],
+                ));
+            } else if !self.seen_target_adaptations.contains(path) {
                 self.entries.push(TranslationCoverageEntry {
                     category: TranslationCoverageCategory::StaleTargetAdaptation,
                     path: format!("target_adaptations.{path}"),
@@ -809,6 +880,22 @@ impl TranslationCoverageBuilder<'_> {
             overlay_id,
             entries: self.entries,
         }
+    }
+}
+
+fn structural_field_name_translation_entry(
+    path: String,
+    source: &str,
+    translated: &str,
+    affected_paths: Vec<String>,
+) -> TranslationCoverageEntry {
+    TranslationCoverageEntry {
+        category: TranslationCoverageCategory::StructuralFieldNameTranslation,
+        path,
+        source: source.to_owned(),
+        old_source: None,
+        translated: Some(translated.to_owned()),
+        context: Some(affected_paths.join(", ")),
     }
 }
 

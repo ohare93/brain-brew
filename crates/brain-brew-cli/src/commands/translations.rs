@@ -1906,6 +1906,7 @@ fn is_stale_or_invalid(category: TranslationCoverageCategory) -> bool {
             | TranslationCoverageCategory::StaleAdapterIdKey
             | TranslationCoverageCategory::StaleTranslation
             | TranslationCoverageCategory::InvalidTargetAdaptation
+            | TranslationCoverageCategory::StructuralFieldNameTranslation
     )
 }
 
@@ -1952,6 +1953,7 @@ fn status_filter_is_known(status: &str) -> bool {
             | "stale_adapter_id_key"
             | "stale_translation"
             | "invalid_target_adaptation"
+            | "structural_field_name_translation"
     )
 }
 
@@ -3037,7 +3039,8 @@ fn color_category(category: TranslationCoverageCategory, text: &str) -> String {
         | TranslationCoverageCategory::StaleTargetAdaptation
         | TranslationCoverageCategory::StaleVariableKey
         | TranslationCoverageCategory::StaleAdapterIdKey
-        | TranslationCoverageCategory::InvalidTargetAdaptation => color_stdout(text, "33"),
+        | TranslationCoverageCategory::InvalidTargetAdaptation
+        | TranslationCoverageCategory::StructuralFieldNameTranslation => color_stdout(text, "33"),
     }
 }
 

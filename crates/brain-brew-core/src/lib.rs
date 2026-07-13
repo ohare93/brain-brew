@@ -10,6 +10,7 @@ mod fingerprint;
 mod messages;
 mod model;
 mod semantic_diff;
+mod template_validation;
 mod translation;
 mod translation_mutation;
 mod validate;

@@ -822,29 +822,27 @@ fn ug_regression_note_type_changes_flow_to_crowdanki_for_every_target() {
 
 #[test]
 fn ug_regression_field_definition_changes_flow_to_crowdanki_for_every_target() {
-    assert_all_targets_export_exact_diffs("field definition name", |target, deck, _json| {
-        let note_type = ug_note_type(deck);
+    let root = fixture_root();
+    let manifest = read_manifest(&root);
+    for target in manifest.targets.keys() {
+        let deck = compose_target(&root, &manifest, target);
+        let note_type = ug_note_type(&deck);
         let field_id = sid("field.capital");
-        assert!(
-            note_type.fields.iter().any(|field| field.id == field_id),
-            "UG note type has capital field"
-        );
-        let new_name = format!("Regression Capital Field {target}");
         let mut note_type_change = empty_note_type_change();
         note_type_change.fields.insert(
             field_id.clone(),
             FieldDefinitionChange {
                 intent: ChangeIntent::Override,
                 field: Some(FieldDefinition {
-                    id: field_id,
-                    name: new_name.clone(),
+                    id: field_id.clone(),
+                    name: format!("Regression Capital Field {target}"),
                 }),
                 expected_base: Some(ExpectedBase::EntityFingerprint(
                     fingerprint_field_definition(
                         note_type
                             .fields
                             .iter()
-                            .find(|field| field.id == sid("field.capital"))
+                            .find(|field| field.id == field_id)
                             .unwrap(),
                     ),
                 )),
@@ -854,17 +852,21 @@ fn ug_regression_field_definition_changes_flow_to_crowdanki_for_every_target() {
         overlay
             .note_type_changes
             .insert(note_type.id.clone(), note_type_change);
-        MutationExpectation::new(
-            overlay,
-            vec![expected_json(
-                &format!(
-                    "/note_models/0/flds/{}/name",
-                    field_index(deck, "field.capital")
-                ),
-                new_name,
-            )],
-        )
-    });
+        let report = deck
+            .compose(&[overlay])
+            .expect_err("renaming an Anki field without its template references fails safely");
+        assert!(
+            report
+                .errors
+                .iter()
+                .flat_map(|error| &error.validation_errors)
+                .any(|error| {
+                    error.kind
+                        == brain_brew_formats::core::ValidationErrorKind::UnknownTemplateField
+                }),
+            "{target} reports its stale Anki field reference: {report}"
+        );
+    }
 
     assert_all_targets_export_exact_diffs("field addition", |target, deck, baseline_json| {
         let note_type = ug_note_type(deck);

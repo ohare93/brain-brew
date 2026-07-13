@@ -107,6 +107,45 @@ fn shadowed_stale_record_reports_rendered_translation_instead_of_dead_target() {
     );
 }
 
+#[test]
+fn reports_existing_structural_field_name_dictionary_entries_for_migration() {
+    let deck = structured_message_deck();
+    let overlay = Overlay {
+        id: sid("overlay.translation.da"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::from([("Country".to_owned(), "Land".to_owned())]),
+            contextual: BTreeMap::new(),
+            no_change: BTreeSet::new(),
+            target_adaptations: BTreeMap::new(),
+            stale_translations: Vec::new(),
+            variables: BTreeMap::new(),
+            adapter_ids: BTreeMap::new(),
+            require_complete: false,
+            ignore_paths: BTreeSet::new(),
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let report = deck.translation_coverage(&overlay).unwrap();
+    let entry = report
+        .entries
+        .iter()
+        .find(|entry| entry.category == TranslationCoverageCategory::StructuralFieldNameTranslation)
+        .expect("field-name dictionary entry is retained as migration debt");
+    assert_eq!(entry.path, "translations.direct.Country");
+    assert_eq!(entry.source, "Country");
+    assert_eq!(entry.translated.as_deref(), Some("Land"));
+    assert_eq!(
+        entry.context.as_deref(),
+        Some("note_types.note-type.country.fields.field.country.name")
+    );
+    assert!(report.has_stale_or_invalid_entries());
+}
+
 fn structured_message_deck() -> CanonicalDeck {
     let note_type = NoteType {
         id: sid("note-type.country"),

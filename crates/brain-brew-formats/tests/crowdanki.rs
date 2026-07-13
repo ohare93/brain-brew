@@ -31,6 +31,26 @@ fn exports_deterministic_crowdanki_json_preserving_adapter_identities() {
 }
 
 #[test]
+fn export_rejects_a_field_reference_introduced_by_variable_rendering() {
+    let mut deck = ug_style_deck();
+    let template = &mut deck
+        .note_types
+        .get_mut(&sid("note-type.country"))
+        .unwrap()
+        .card_templates[0];
+    template.question_format = "${stale-reference}".to_owned();
+    template
+        .variables
+        .insert("stale-reference".to_owned(), "{{Hauptstadt}}".to_owned());
+
+    let error = crowdanki::export_deck(&deck)
+        .expect_err("export revalidates the final rendered schema")
+        .to_string();
+    assert!(error.contains("unknown Anki field reference"), "{error}");
+    assert!(error.contains("Hauptstadt"), "{error}");
+}
+
+#[test]
 fn import_export_round_trip_is_semantically_equal_when_suggested_ids_match_source() {
     let original = ug_style_deck();
     let export = crowdanki::export_deck(&original).expect("deck exports");
@@ -184,15 +204,13 @@ fn normalized_equivalence_oracle_mutation_matrix_observes_every_supported_json_p
             _ => unreachable!("the table is exhaustive"),
         }
         assert!(
-            matches!(
-                crowdanki::canonical_crowdanki_equivalence(
-                    &ug_style_deck(),
-                    changed.to_string().as_bytes(),
-                    None,
-                ),
-                Err(crowdanki::CrowdAnkiEquivalenceError::Differences(_))
-            ),
-            "{property} mutation must be observed"
+            crowdanki::canonical_crowdanki_equivalence(
+                &ug_style_deck(),
+                changed.to_string().as_bytes(),
+                None,
+            )
+            .is_err(),
+            "{property} mutation must be observed or rejected as invalid adapter input"
         );
     }
 

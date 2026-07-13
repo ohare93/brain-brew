@@ -641,6 +641,34 @@ notes:
       tags: []
 "#;
 
+#[test]
+fn export_rejects_capital_to_hauptstadt_schema_drift_before_creating_output() {
+    let dir = temp_dir("export-structural-field");
+    let deck = dir.join("deck.yaml");
+    let output = dir.join("crowdanki");
+    fs::write(
+        &deck,
+        SAMPLE_CANONICAL_YAML.replacen("name: Capital", "name: Hauptstadt", 1),
+    )
+    .unwrap();
+
+    let result = run([
+        "export",
+        "crowdanki",
+        deck.to_str().unwrap(),
+        "--media-mode",
+        "reference-only",
+        "--out",
+        output.to_str().unwrap(),
+    ]);
+
+    assert_human_error(&result, "unknown Anki field reference \"Capital\"");
+    assert!(
+        !output.exists(),
+        "failed validation must not publish an artifact"
+    );
+}
+
 const SAMPLE_CANONICAL_YAML: &str = r#"deck:
   id: deck.ultimate-geography
   name: Ultimate Geography
