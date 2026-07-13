@@ -11,12 +11,14 @@ mod messages;
 mod model;
 mod semantic_diff;
 mod translation;
+mod translation_mutation;
 mod validate;
 
 pub use content_validation::*;
 pub use fingerprint::*;
 pub use model::*;
 pub use translation::glob_matches;
+pub use translation_mutation::*;
 
 #[cfg(test)]
 mod tests;

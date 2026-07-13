@@ -16,14 +16,9 @@ translations:
     Algeria: Argelia
     Algiers: Argel
     Also known as Burma.: 'También conocida como Myanmar.'
-    Also known as Cabo Verde.: ''
     Also known as Czechia.: 'También conocida como Chequia.'
-    Also known as East Timor.: ''
-    Also known as Kiev.: ''
-    'Also known as Türkiye': ''
     Also known as the Gulf of Siam.: 'También conocido como golfo de Siam.'
     Also known as the Sea of Cortez.: 'También conocido como mar de Cortés.'
-    'Also spelled as Sana''a.': ''
     American Samoa: Samoa Americana
     Amman: 'Amán'
     Amsterdam: 'Ámsterdam'
@@ -253,7 +248,6 @@ translations:
     Official capital was moved from Bujumbura to Gitega in 2019.: 'La capital oficial se cambió de Buyumbura a Guitega en 2019.'
     Official capital was moved from Malabo to Ciudad de la Paz in 2026.: 'La capital oficial se cambió de Malabo a Ciudad de la Paz en 2026.'
     'Officially Côte d''Ivoire.': 'Oficialmente Côte d''Ivoire.'
-    Officially Luxembourg.: ''
     Oman: 'Omán'
     Ouagadougou: 'Uagadugú'
     Overseas department of France.: Departamento de ultramar de Francia.
@@ -992,6 +986,25 @@ translations:
     crowdanki:uuid:
       43c5ba66-9a65-11e8-90c9-a0481cc15658: cb4d32ee-12ed-9960-1841-28c09449ded0
       43e2586a-9a65-11e8-a777-a0481cc15658: 0bacddfd-1e81-4e62-9152-bdff33db0374
+target_adaptations:
+  notes.note.cape-verde.fields.field.country-info:
+    expected_source: Also known as Cabo Verde.
+    target: ''
+  notes.note.luxembourg.fields.field.capital-info:
+    expected_source: Officially Luxembourg.
+    target: ''
+  notes.note.timor-leste.fields.field.country-info:
+    expected_source: Also known as East Timor.
+    target: ''
+  notes.note.turkey.fields.field.country-info:
+    expected_source: 'Also known as Türkiye'
+    target: ''
+  notes.note.ukraine.fields.field.capital-info:
+    expected_source: Also known as Kiev.
+    target: ''
+  notes.note.yemen.fields.field.capital-info:
+    expected_source: 'Also spelled as Sana''a.'
+    target: ''
 deck:
   name:
     intent: replace

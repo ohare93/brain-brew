@@ -626,6 +626,24 @@ translations:
 }
 
 #[test]
+fn rejects_blank_direct_translation_in_favor_of_explicit_target_adaptation() {
+    let error = canonical_yaml::overlay_from_str(
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  direct:
+    Source sentence: ''
+"#,
+    )
+    .expect_err("blank direct translations are implicit global deletions");
+
+    assert_eq!(
+        error.to_string(),
+        "invalid translation dictionary: translations.direct.Source sentence: faithful translation target must not be blank; use no_change for reviewed unchanged text or a path-scoped target adaptation for an intentional deletion"
+    );
+}
+
+#[test]
 fn parses_upstream_ug_target_additions_as_blank_source_adaptations() {
     let overlay = canonical_yaml::overlay_from_str(
         r#"id: overlay.translation.cs

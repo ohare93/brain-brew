@@ -16,15 +16,7 @@ translations:
     Albania: 'Albânia'
     Algeria: 'Argélia'
     Algiers: Argel
-    Also known as Burma.: ''
-    Also known as Cabo Verde.: ''
-    Also known as Czechia.: ''
-    Also known as East Timor.: ''
-    Also known as Kiev.: ''
-    'Also known as Türkiye': ''
-    Also known as the Gulf of Siam.: ''
     Also known as the Sea of Cortez.: 'Também conhecido como Mar de Cortez.'
-    'Also spelled as Sana''a.': ''
     American Samoa: Samoa Americana
     Amman: 'Amã'
     Amsterdam: 'Amsterdã (BR), Amsterdão (PT)'
@@ -158,7 +150,6 @@ translations:
     Faroe Islands: 'Ilhas Faroé'
     Federated States of Micronesia: 'Estados Federados da Micronésia'
     Finland: 'Finlândia'
-    Formerly Zaire.: ''
     Formerly known as Macedonia.: 'Anteriormente conhecida como Macedônia.'
     France: 'França'
     French Guiana: Guiana Francesa
@@ -305,7 +296,6 @@ translations:
     Official capital was moved from Bujumbura to Gitega in 2019.: A capital oficial foi transferida de Bujumbura para Guitega em 2019.
     Official capital was moved from Malabo to Ciudad de la Paz in 2026.: A capital oficial foi transferida de Malabo para Cidade da Paz em 2026.
     'Officially Côte d''Ivoire.': 'Oficialmente Côte d''Ivoire.'
-    Officially Luxembourg.: ''
     Oman: 'Omã (BR), Omão (PT)'
     Oranjestad: Oranjestade
     Ottawa: Otava
@@ -466,7 +456,6 @@ translations:
     While Yamoussoukro is the official capital, Abidjan is the de facto seat of government.: 'Embora Iamussucro seja a capital oficial, Abidjã é a sede do governo.'
     White Sea: Mar Branco
     Windhoek: Vinduque
-    World region covering the Australian continent and most of the islands in the Pacific Ocean.: ''
     Yamoussoukro: Iamussucro
     'Yaoundé': 'Iaundé'
     Yaren: 'Iarém'
@@ -1043,3 +1032,37 @@ translations:
       'zSc]-^U=0=': 'A#xTVpn3Ks'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: 3da2a851-258c-447f-9d16-91a663663675
+target_adaptations:
+  notes.note.cape-verde.fields.field.country-info:
+    expected_source: Also known as Cabo Verde.
+    target: ''
+  notes.note.czech-republic.fields.field.country-info:
+    expected_source: Also known as Czechia.
+    target: ''
+  notes.note.democratic-republic-of-the-congo.fields.field.country-info:
+    expected_source: Formerly Zaire.
+    target: ''
+  notes.note.gulf-of-thailand.fields.field.country-info:
+    expected_source: Also known as the Gulf of Siam.
+    target: ''
+  notes.note.luxembourg.fields.field.capital-info:
+    expected_source: Officially Luxembourg.
+    target: ''
+  notes.note.myanmar.fields.field.country-info:
+    expected_source: Also known as Burma.
+    target: ''
+  notes.note.oceania.fields.field.country-info:
+    expected_source: World region covering the Australian continent and most of the islands in the Pacific Ocean.
+    target: ''
+  notes.note.timor-leste.fields.field.country-info:
+    expected_source: Also known as East Timor.
+    target: ''
+  notes.note.turkey.fields.field.country-info:
+    expected_source: 'Also known as Türkiye'
+    target: ''
+  notes.note.ukraine.fields.field.capital-info:
+    expected_source: Also known as Kiev.
+    target: ''
+  notes.note.yemen.fields.field.capital-info:
+    expected_source: 'Also spelled as Sana''a.'
+    target: ''

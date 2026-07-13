@@ -16,14 +16,8 @@ translations:
     Algeria: Algieria
     Algiers: Algier
     Also known as Burma.: 'Znana także jako Birma.'
-    Also known as Cabo Verde.: ''
-    Also known as Czechia.: ''
-    Also known as East Timor.: ''
-    Also known as Kiev.: ''
-    'Also known as Türkiye': ''
     Also known as the Gulf of Siam.: 'Znana także jako Zatoka Syjamska.'
     Also known as the Sea of Cortez.: 'Znana także jako Morze Cortéza.'
-    'Also spelled as Sana''a.': ''
     American Samoa: 'Samoa Amerykańskie'
     Andorra: Andora
     Andorra la Vella: Andora
@@ -269,7 +263,6 @@ translations:
     Official capital was moved from Bujumbura to Gitega in 2019.: 'Oficjalna stolica została przeniesiona z Bużumbury z powrotem do Gitegi w 2019 roku.'
     Official capital was moved from Malabo to Ciudad de la Paz in 2026.: 'Oficjalna stolica została przeniesiona z Malabo do Ciudad de la Paz w 2026 roku.'
     'Officially Côte d''Ivoire.': 'Oficjalnie Côte d’Ivoire.'
-    Officially Luxembourg.: ''
     Ouagadougou: Wagadugu
     Overseas department of France.: Departament zamorski Francji.
     Overseas territory of France.: Terytorium zamorskie Francji.
@@ -999,3 +992,25 @@ translations:
       'zSc]-^U=0=': 'O?:STIyrxP'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: 84786477-e28a-490e-958d-7b35946d7b11
+target_adaptations:
+  notes.note.cape-verde.fields.field.country-info:
+    expected_source: Also known as Cabo Verde.
+    target: ''
+  notes.note.czech-republic.fields.field.country-info:
+    expected_source: Also known as Czechia.
+    target: ''
+  notes.note.luxembourg.fields.field.capital-info:
+    expected_source: Officially Luxembourg.
+    target: ''
+  notes.note.timor-leste.fields.field.country-info:
+    expected_source: Also known as East Timor.
+    target: ''
+  notes.note.turkey.fields.field.country-info:
+    expected_source: 'Also known as Türkiye'
+    target: ''
+  notes.note.ukraine.fields.field.capital-info:
+    expected_source: Also known as Kiev.
+    target: ''
+  notes.note.yemen.fields.field.capital-info:
+    expected_source: 'Also spelled as Sana''a.'
+    target: ''

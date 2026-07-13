@@ -1112,16 +1112,18 @@ fn workbench_optional_metadata_progress_and_apply_are_separate_from_main_fields(
         .iter()
         .find_map(|(category, index)| (*category == "note-type-name").then_some(*index))
         .unwrap();
-    let field_label_position = category_positions
-        .iter()
-        .find_map(|(category, index)| (*category == "field-label").then_some(*index))
-        .unwrap();
     let template_position = category_positions
         .iter()
         .find_map(|(category, index)| (*category == "card-template-name").then_some(*index))
         .unwrap();
     assert!(
-        note_type_position < field_label_position && field_label_position < template_position,
+        category_positions
+            .iter()
+            .all(|(category, _)| *category != "field-label"),
+        "Anki field names are structural identifiers, not translation metadata: {category_positions:?}"
+    );
+    assert!(
+        note_type_position < template_position,
         "metadata should be grouped in maintainer-friendly category order: {category_positions:?}"
     );
     let deck_name = optional_items

@@ -13,14 +13,9 @@ translations:
     Algeria: Algeriet
     Algiers: Algier
     Also known as Burma.: 'Også kendt som Burma.'
-    Also known as Cabo Verde.: ''
-    Also known as Czechia.: ''
     Also known as East Timor.: 'Også kendt som Timor-Leste.'
     Also known as Kiev.: 'Også kendt som Kiev.'
-    'Also known as Türkiye': ''
     Also known as the Gulf of Siam.: 'Også kendt som Siambugten.'
-    Also known as the Sea of Cortez.: ''
-    'Also spelled as Sana''a.': ''
     American Samoa: Amerikansk Samoa
     Antarctica: Antarktis
     Antigua and Barbuda: Antigua og Barbuda
@@ -192,7 +187,6 @@ translations:
     Official capital was moved from Bujumbura to Gitega in 2019.: Den officielle hovedstad blev flyttet fra Bujumbura til Gitega i 2019.
     Official capital was moved from Malabo to Ciudad de la Paz in 2026.: Den officielle hovedstad blev flyttet fra Malabo til Ciudad de la Paz i 2026.
     'Officially Côte d''Ivoire.': 'Officielt Cote d’Ivoire.'
-    Officially Luxembourg.: ''
     Overseas department of France.: 'Fransk oversøisk departement.'
     Pacific Ocean: Stillehavet
     Palestine: 'Palæstina'
@@ -1026,3 +1020,22 @@ translations:
       'zSc]-^U=0=': 'kQ{}[-(!z,'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: 15daaec7-4097-4d97-ba94-9db44f8b8f51
+target_adaptations:
+  notes.note.cape-verde.fields.field.country-info:
+    expected_source: Also known as Cabo Verde.
+    target: ''
+  notes.note.czech-republic.fields.field.country-info:
+    expected_source: Also known as Czechia.
+    target: ''
+  notes.note.gulf-of-california.fields.field.country-info:
+    expected_source: Also known as the Sea of Cortez.
+    target: ''
+  notes.note.luxembourg.fields.field.capital-info:
+    expected_source: Officially Luxembourg.
+    target: ''
+  notes.note.turkey.fields.field.country-info:
+    expected_source: 'Also known as Türkiye'
+    target: ''
+  notes.note.yemen.fields.field.capital-info:
+    expected_source: 'Also spelled as Sana''a.'
+    target: ''

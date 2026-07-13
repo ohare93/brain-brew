@@ -2,7 +2,6 @@ id: overlay.translation.zh-tw
 kind: translation
 translations:
   direct:
-    'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.': ''
     Abkhazia: '阿布哈茲共和國 (Abkhazia)'
     Abu Dhabi: '阿布達比 (Abu Dhabi)'
     Abuja: '阿布加 (Abuja)'
@@ -18,15 +17,8 @@ translations:
     Algeria: '阿爾巴尼亞 (Algeria)'
     Algiers: '阿爾及爾 (Algiers)'
     Alofi: '阿洛非 (Alofi)'
-    Also known as Burma.: ''
-    Also known as Cabo Verde.: ''
-    Also known as Czechia.: ''
-    Also known as East Timor.: ''
     Also known as Kiev.: '又稱為基輔。'
-    'Also known as Türkiye': ''
-    Also known as the Gulf of Siam.: ''
     Also known as the Sea of Cortez.: '又稱科爾特斯海。'
-    'Also spelled as Sana''a.': ''
     American Samoa: '美屬薩摩亞 (American Samoa)'
     Amman: '安曼 (Amman)'
     Amsterdam: '阿姆斯特丹 (Amsterdam)'
@@ -280,7 +272,6 @@ translations:
     Kinshasa: '金夏沙 (Kinshasa)'
     Kiribati: '吉里巴斯 (Kiribati)'
     Known as Nur-Sultan between 2019 and 2022: '2019年至2022年間稱為Nur-Sultan'
-    Known as Swaziland until 2018.: ''
     Kosovo: '科索沃 (Kosovo)'
     Kuala Lumpur: '吉隆坡 (Kuala Lumpur)'
     Kuwait: '科威特 (Kuwait)'
@@ -389,7 +380,6 @@ translations:
     Official capital was moved from Bujumbura to Gitega in 2019.: '2019年正式從布瓊布拉遷都到基特加。'
     Official capital was moved from Malabo to Ciudad de la Paz in 2026.: '2026年官方首都从马拉博迁至拉巴斯城。'
     'Officially Côte d''Ivoire.': '正式名: cote d''ivoire。'
-    Officially Luxembourg.: ''
     Oman: '阿曼王國 (Oman)'
     Oranjestad: '奧拉涅斯塔德 (Oranjestad)'
     Oslo: '奧斯陸 (Oslo)'
@@ -1113,6 +1103,37 @@ translations:
     crowdanki:uuid:
       43c5ba66-9a65-11e8-90c9-a0481cc15658: 3d365148-83a7-4b53-8dbc-e3b183524025
       43e2586a-9a65-11e8-a777-a0481cc15658: d75ad494-71f3-4909-beda-b80ec04c7a0d
+target_adaptations:
+  notes.note.cape-verde.fields.field.country-info:
+    expected_source: Also known as Cabo Verde.
+    target: ''
+  notes.note.czech-republic.fields.field.country-info:
+    expected_source: Also known as Czechia.
+    target: ''
+  notes.note.eswatini.fields.field.country-info:
+    expected_source: Known as Swaziland until 2018.
+    target: ''
+  notes.note.gulf-of-thailand.fields.field.country-info:
+    expected_source: Also known as the Gulf of Siam.
+    target: ''
+  notes.note.luxembourg.fields.field.capital-info:
+    expected_source: Officially Luxembourg.
+    target: ''
+  notes.note.myanmar.fields.field.country-info:
+    expected_source: Also known as Burma.
+    target: ''
+  notes.note.sea-of-japan.fields.field.country-info:
+    expected_source: 'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.'
+    target: ''
+  notes.note.timor-leste.fields.field.country-info:
+    expected_source: Also known as East Timor.
+    target: ''
+  notes.note.turkey.fields.field.country-info:
+    expected_source: 'Also known as Türkiye'
+    target: ''
+  notes.note.yemen.fields.field.capital-info:
+    expected_source: 'Also spelled as Sana''a.'
+    target: ''
 deck:
   name:
     intent: replace

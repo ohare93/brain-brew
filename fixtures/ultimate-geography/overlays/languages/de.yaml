@@ -14,13 +14,9 @@ translations:
     Algiers: Algier
     Also known as Burma.: Auch Birma oder Burma.
     Also known as Cabo Verde.: Auch Cabo Verde.
-    Also known as Czechia.: ''
     Also known as East Timor.: Auch Timor-Leste.
-    Also known as Kiev.: ''
-    'Also known as Türkiye': ''
     Also known as the Gulf of Siam.: Auch Golf von Siam.
     Also known as the Sea of Cortez.: 'Auch Cortés-See.'
-    'Also spelled as Sana''a.': ''
     American Samoa: Amerikanisch-Samoa
     Antarctica: Antarktis
     Antigua and Barbuda: Antigua und Barbuda
@@ -215,7 +211,6 @@ translations:
     Official capital was moved from Bujumbura to Gitega in 2019.: Die offizielle Hauptstadt wurde 2019 von Bujumbura nach Gitega verlegt.
     Official capital was moved from Malabo to Ciudad de la Paz in 2026.: Die offizielle Hauptstadt wurde 2026 von Malabo nach Ciudad de la Paz verlegt.
     'Officially Côte d''Ivoire.': 'Offiziell Côte d''Ivoire.'
-    Officially Luxembourg.: ''
     Overseas department of France.: 'Übersee-Département Frankreichs.'
     Overseas territory of France.: 'Französisches Überseegebiet.'
     Pacific Ocean: Pazifischer Ozean
@@ -1033,3 +1028,19 @@ translations:
       'zSc]-^U=0=': '?[OEt<^,~Q'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: cb3de16f-7c9c-4944-994a-e17ec2018c28
+target_adaptations:
+  notes.note.czech-republic.fields.field.country-info:
+    expected_source: Also known as Czechia.
+    target: ''
+  notes.note.luxembourg.fields.field.capital-info:
+    expected_source: Officially Luxembourg.
+    target: ''
+  notes.note.turkey.fields.field.country-info:
+    expected_source: 'Also known as Türkiye'
+    target: ''
+  notes.note.ukraine.fields.field.capital-info:
+    expected_source: Also known as Kiev.
+    target: ''
+  notes.note.yemen.fields.field.capital-info:
+    expected_source: 'Also spelled as Sana''a.'
+    target: ''

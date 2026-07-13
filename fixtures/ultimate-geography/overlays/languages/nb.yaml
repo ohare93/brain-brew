@@ -2,7 +2,6 @@ id: overlay.translation.nb
 kind: translation
 translations:
   direct:
-    'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.': ''
     Abkhazia: Abkhasia
     Addis Ababa: Addis Abeba
     Adriatic Sea: Adriaterhavet
@@ -13,13 +12,8 @@ translations:
     Algiers: Alger
     Also known as Burma.: 'Også kalt Burma.'
     Also known as Cabo Verde.: Offisielt Republikken Cabo Verde.
-    Also known as Czechia.: ''
-    Also known as East Timor.: ''
     Also known as Kiev.: 'Også kjent som Kyiv.'
-    'Also known as Türkiye': ''
     Also known as the Gulf of Siam.: 'Også kalt Siambukta.'
-    Also known as the Sea of Cortez.: ''
-    'Also spelled as Sana''a.': ''
     American Samoa: Amerikansk Samoa
     Antarctica: Antarktis
     Antigua and Barbuda: Antigua og Barbuda
@@ -181,8 +175,6 @@ translations:
     Oceania: Oseania
     Official capital was moved from Bujumbura to Gitega in 2019.: 'Hovedstad flyttet i februar 2019. Bujumbura er fortsatt regjeringssete og økonomisk hovedstad.'
     Official capital was moved from Malabo to Ciudad de la Paz in 2026.: Hovedstad flyttet til Ciudad de la Paz fra Malabo i 2026.
-    'Officially Côte d''Ivoire.': ''
-    Officially Luxembourg.: ''
     Pacific Ocean: Stillehavet
     Palestine: Palestina
     Panama City: Panama by
@@ -265,7 +257,6 @@ translations:
     Warsaw: Warszawa
     While Amsterdam is the official capital, The Hague is the seat of the executive and legislative branches.: Nasjonalforsamling og regjering i Haag.
     While Dodoma is the official capital, Dar es Salaam is the de facto seat of government.: Dodoma er offisiell hovedstad, mens Dar es Salaam er regjeringssete.
-    'While Laayoune, also known as El Aaiún, is the declared capital, Tifariti is the de facto seat of government.': ''
     While Mbabane is the official, executive capital, Lobamba is the traditional, spiritual and legislative capital.: 'Mbabane offisiell, utøvende hovedstad, mens Lobamba er tradisjonell, åndelig og lovgivende hovedstad.'
     While Porto-Novo is the official capital, Cotonou is the de facto seat of government.: Porto-Novo er offisiell hovedstad, mens Cotonou er de facto regjeringssete.
     While Sucre is the constitutional capital, La Paz is the seat of government.: Sucre er offisiell hovedstat, mens La Paz er regjeringssete.
@@ -1064,3 +1055,31 @@ translations:
       'zSc]-^U=0=': 'td+]W)8y3S'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: 8ccdc1f6-b042-4d55-8fcd-9e08b5b71dc7
+target_adaptations:
+  notes.note.czech-republic.fields.field.country-info:
+    expected_source: Also known as Czechia.
+    target: ''
+  notes.note.gulf-of-california.fields.field.country-info:
+    expected_source: Also known as the Sea of Cortez.
+    target: ''
+  notes.note.ivory-coast.fields.field.country-info:
+    expected_source: 'Officially Côte d''Ivoire.'
+    target: ''
+  notes.note.luxembourg.fields.field.capital-info:
+    expected_source: Officially Luxembourg.
+    target: ''
+  notes.note.sahrawi-arab-democratic-republic.fields.field.capital-info:
+    expected_source: 'While Laayoune, also known as El Aaiún, is the declared capital, Tifariti is the de facto seat of government.'
+    target: ''
+  notes.note.sea-of-japan.fields.field.country-info:
+    expected_source: 'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.'
+    target: ''
+  notes.note.timor-leste.fields.field.country-info:
+    expected_source: Also known as East Timor.
+    target: ''
+  notes.note.turkey.fields.field.country-info:
+    expected_source: 'Also known as Türkiye'
+    target: ''
+  notes.note.yemen.fields.field.capital-info:
+    expected_source: 'Also spelled as Sana''a.'
+    target: ''

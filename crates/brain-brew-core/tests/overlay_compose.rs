@@ -555,6 +555,55 @@ fn translation_dictionary_can_translate_tags() {
 }
 
 #[test]
+fn translation_dictionary_keeps_field_identifiers_structural_and_translates_display_variables() {
+    let mut base = ug_style_deck();
+    base.note_types
+        .get_mut(&sid("note-type.country"))
+        .unwrap()
+        .variables
+        .insert("label.capital".to_owned(), "Capital".to_owned());
+    let overlay = Overlay {
+        id: sid("overlay.translation.da"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            variables: BTreeMap::from([(
+                "label.capital".to_owned(),
+                BTreeMap::from([("Capital".to_owned(), "Hovedstad".to_owned())]),
+            )]),
+            ..TranslationDictionary::default()
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let resolved = base
+        .compose(std::slice::from_ref(&overlay))
+        .expect("translation composes");
+    let note_type = &resolved.note_types[&sid("note-type.country")];
+    assert_eq!(
+        note_type
+            .fields
+            .iter()
+            .find(|field| field.id == sid("field.capital"))
+            .unwrap()
+            .name,
+        "Capital"
+    );
+    assert_eq!(note_type.variables["label.capital"], "Hovedstad");
+
+    let coverage = base
+        .translation_coverage(&overlay)
+        .expect("coverage reports");
+    assert!(
+        coverage.entries.iter().all(|entry| {
+            entry.path != "note_types.note-type.country.fields.field.capital.name"
+        })
+    );
+}
+
+#[test]
 fn translation_dictionary_no_change_counts_as_reviewed_without_modifying_output() {
     let base = ug_style_deck();
     let overlay = Overlay {

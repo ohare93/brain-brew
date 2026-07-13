@@ -769,21 +769,3 @@ pub(crate) fn ensure_non_empty(value: &str, name: &str) -> Result<(), String> {
         Ok(())
     }
 }
-
-pub(crate) fn matching_contexts(
-    contexts: &BTreeMap<String, BTreeMap<String, String>>,
-    path: &str,
-    source: &str,
-) -> BTreeSet<String> {
-    contexts
-        .iter()
-        .filter(|(context, replacements)| {
-            replacements.contains_key(source)
-                && (context.as_str() == path
-                    || path
-                        .strip_prefix(context.as_str())
-                        .is_some_and(|suffix| suffix.starts_with('.')))
-        })
-        .map(|(context, _)| context.clone())
-        .collect()
-}

@@ -45,6 +45,7 @@ pub fn overlay_from_str(input: &str) -> Result<Overlay, CanonicalYamlError> {
         .map_err(CanonicalYamlError::Parse)?;
     let overlay = file.into_overlay()?;
     validate_overlay_yaml_keys(&overlay)?;
+    validate_translation_dictionary_invariants(&overlay)?;
     Ok(overlay)
 }
 
@@ -216,6 +217,7 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
 
 /// Emit a sparse overlay as deterministic YAML.
 pub fn overlay_to_string(overlay: &Overlay) -> Result<String, CanonicalYamlError> {
+    validate_translation_dictionary_invariants(overlay)?;
     validate_overlay_yaml_keys(overlay)?;
     validate_overlay_representations(overlay)?;
     let mut out = String::new();
@@ -665,6 +667,15 @@ fn write_field_value_for_format(
             write_image_field_value(out, indent, field_id, images);
         }
     }
+}
+
+fn validate_translation_dictionary_invariants(overlay: &Overlay) -> Result<(), CanonicalYamlError> {
+    if let Some(translations) = &overlay.translations {
+        translations
+            .validate_mutation_invariants()
+            .map_err(|error| CanonicalYamlError::InvalidTranslationDictionary(error.to_string()))?;
+    }
+    Ok(())
 }
 
 fn write_translation_dictionary(

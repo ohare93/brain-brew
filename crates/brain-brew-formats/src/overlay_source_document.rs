@@ -3,7 +3,7 @@
 //! Translation precedence cleanup, sparse field edits, media hashes, and image
 //! conversion are centralized here so callers never mutate YAML maps directly.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use brain_brew_core::{FieldValue, Overlay, StableId, TranslationDictionary};
 
@@ -11,39 +11,10 @@ use crate::canonical_yaml;
 use crate::source_document::{
     EditLocation, ImageConversionReport, IncludeRequest, IncludeState, IncludedSource,
     SourceDocumentEmission, SourceDocumentError, SourceFile, SourceProvenance,
-    convert_text_to_images, ensure_non_empty, matching_contexts, prepare_source,
+    convert_text_to_images, ensure_non_empty, prepare_source,
 };
 
-/// One validated translator decision. The selected source and occurrence path
-/// are separate method arguments so cross-map cleanup is unavoidable.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum TranslationDecision {
-    Direct(String),
-    Contextual { context: String, target: String },
-    NoChange,
-}
-
-/// Translation-dictionary consequence of editing source text.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum SourceTranslationImpact {
-    MarkStale {
-        target: String,
-        context: Option<String>,
-    },
-    MigrateKey {
-        target: String,
-        context: Option<String>,
-    },
-}
-
-/// Typed batch inserted by translation-report workflows.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TranslationStubs {
-    pub direct: BTreeSet<String>,
-    pub contextual: BTreeMap<String, BTreeSet<String>>,
-    pub no_change: BTreeSet<String>,
-    pub ignore_paths: BTreeSet<String>,
-}
+pub use brain_brew_core::{SourceTranslationImpact, TranslationDecision, TranslationStubs};
 
 /// Deep source module for one sparse overlay and its scalar includes.
 #[derive(Clone)]
@@ -176,15 +147,13 @@ impl OverlaySourceDocument {
                 .edit_scalar(&path, &expected, target, &next.provenance)?
                 .is_some()
         {
-            let translations = next
-                .overlay
+            next.overlay
                 .translations
-                .get_or_insert_with(TranslationDictionary::default);
-            remove_stale_for_path_source(translations, occurrence_path, source);
-            translations.no_change.remove(source);
-            if matches!(&decision, TranslationDecision::Direct(_)) {
-                remove_contextual_for_path(translations, occurrence_path, source);
-            }
+                .get_or_insert_with(TranslationDictionary::default)
+                .clear_superseded_translation_decisions(occurrence_path, source, &decision)
+                .map_err(|error| {
+                    SourceDocumentError::at(&next.provenance, &error.path, error.message)
+                })?;
             apply_translation_decision(
                 &mut next.resolved_overlay,
                 occurrence_path,
@@ -292,31 +261,9 @@ impl OverlaySourceDocument {
             .overlay
             .translations
             .get_or_insert_with(TranslationDictionary::default);
-        for source in stubs.direct {
-            ensure_non_empty(&source, "direct translation source").map_err(|message| {
-                SourceDocumentError::at(&next.provenance, "translations.direct", message)
-            })?;
-            translations.direct.entry(source.clone()).or_insert(source);
-        }
-        for (context, sources) in stubs.contextual {
-            ensure_non_empty(&context, "translation context").map_err(|message| {
-                SourceDocumentError::at(&next.provenance, "translations.contextual", message)
-            })?;
-            let replacements = translations.contextual.entry(context).or_default();
-            for source in sources {
-                ensure_non_empty(&source, "contextual translation source").map_err(|message| {
-                    SourceDocumentError::at(&next.provenance, "translations.contextual", message)
-                })?;
-                replacements.entry(source.clone()).or_insert(source);
-            }
-        }
-        for source in stubs.no_change {
-            ensure_non_empty(&source, "no-change source").map_err(|message| {
-                SourceDocumentError::at(&next.provenance, "translations.no_change", message)
-            })?;
-            translations.no_change.insert(source);
-        }
-        translations.ignore_paths.extend(stubs.ignore_paths);
+        translations.add_translation_stubs(stubs).map_err(|error| {
+            SourceDocumentError::at(&next.provenance, &error.path, error.message)
+        })?;
         next.validate()?;
         *self = next;
         Ok(())
@@ -338,37 +285,11 @@ impl OverlaySourceDocument {
                 "overlay has no translation dictionary",
             )
         })?;
-        let position = translations
-            .stale_translations
-            .iter()
-            .position(|record| {
-                record.old_source == old_source
-                    && record.new_source == new_source
-                    && record.context.as_deref() == context
-            })
-            .ok_or_else(|| {
-                SourceDocumentError::at(
-                    &next.provenance,
-                    "translations.stale_translations",
-                    "matching stale translation was not found",
-                )
+        translations
+            .resolve_stale_translation_decision(old_source, new_source, context, replacement)
+            .map_err(|error| {
+                SourceDocumentError::at(&next.provenance, &error.path, error.message)
             })?;
-        let shadowed = stale_record_is_shadowed(translations, position);
-        let mut record = translations.stale_translations.remove(position);
-        if !shadowed {
-            if let Some(replacement) = replacement {
-                record.target = replacement.to_owned();
-            }
-            if let Some(context) = record.context {
-                translations
-                    .contextual
-                    .entry(context)
-                    .or_default()
-                    .insert(record.new_source, record.target);
-            } else {
-                translations.direct.insert(record.new_source, record.target);
-            }
-        }
         next.validate()?;
         *self = next;
         Ok(())
@@ -527,44 +448,11 @@ fn apply_translation_decision(
     decision: TranslationDecision,
     provenance: &SourceProvenance,
 ) -> Result<(), SourceDocumentError> {
-    let translations = overlay
+    overlay
         .translations
-        .get_or_insert_with(TranslationDictionary::default);
-    remove_stale_for_path_source(translations, occurrence_path, source);
-    match decision {
-        TranslationDecision::Direct(target) => {
-            translations.no_change.remove(source);
-            remove_contextual_for_path(translations, occurrence_path, source);
-            translations.direct.insert(source.to_owned(), target);
-        }
-        TranslationDecision::Contextual { context, target } => {
-            if context != occurrence_path
-                && !occurrence_path
-                    .strip_prefix(&context)
-                    .is_some_and(|suffix| suffix.starts_with('.'))
-            {
-                return Err(SourceDocumentError::at(
-                    provenance,
-                    "translations.contextual",
-                    format!(
-                        "context {context:?} is not an ancestor of occurrence {occurrence_path:?}"
-                    ),
-                ));
-            }
-            translations.no_change.remove(source);
-            translations
-                .contextual
-                .entry(context)
-                .or_default()
-                .insert(source.to_owned(), target);
-        }
-        TranslationDecision::NoChange => {
-            translations.direct.remove(source);
-            remove_contextual_for_path(translations, occurrence_path, source);
-            translations.no_change.insert(source.to_owned());
-        }
-    }
-    Ok(())
+        .get_or_insert_with(TranslationDictionary::default)
+        .set_translation_decision(occurrence_path, source, decision)
+        .map_err(|error| SourceDocumentError::at(provenance, &error.path, error.message))
 }
 
 fn apply_source_impact(
@@ -575,120 +463,9 @@ fn apply_source_impact(
     impact: SourceTranslationImpact,
     provenance: &SourceProvenance,
 ) -> Result<(), SourceDocumentError> {
-    let translations = overlay
+    overlay
         .translations
-        .get_or_insert_with(TranslationDictionary::default);
-    let (target, context, mark_stale) = match impact {
-        SourceTranslationImpact::MarkStale { target, context } => (target, context, true),
-        SourceTranslationImpact::MigrateKey { target, context } => (target, context, false),
-    };
-    if let Some(context) = &context
-        && context != occurrence_path
-        && !occurrence_path
-            .strip_prefix(context)
-            .is_some_and(|suffix| suffix.starts_with('.'))
-    {
-        return Err(SourceDocumentError::at(
-            provenance,
-            "translations",
-            format!("context {context:?} is not an ancestor of occurrence {occurrence_path:?}"),
-        ));
-    }
-    if context.is_some() {
-        remove_contextual_for_path(translations, occurrence_path, old_source);
-    } else {
-        translations.direct.remove(old_source);
-        translations.no_change.remove(old_source);
-        remove_contextual_everywhere(translations, old_source);
-    }
-    remove_stale_for_path_source(translations, occurrence_path, new_source);
-    if mark_stale {
-        translations.stale_translations.retain(|record| {
-            !(record.old_source == old_source
-                && record.new_source == new_source
-                && record.context == context)
-        });
-        translations
-            .stale_translations
-            .push(brain_brew_core::StaleTranslation {
-                old_source: old_source.to_owned(),
-                new_source: new_source.to_owned(),
-                target,
-                context,
-            });
-    } else if let Some(context) = context {
-        translations
-            .contextual
-            .entry(context)
-            .or_default()
-            .insert(new_source.to_owned(), target);
-    } else {
-        translations.direct.insert(new_source.to_owned(), target);
-    }
-    Ok(())
-}
-
-fn remove_contextual_for_path(translations: &mut TranslationDictionary, path: &str, source: &str) {
-    for context in matching_contexts(&translations.contextual, path, source) {
-        if let Some(replacements) = translations.contextual.get_mut(&context) {
-            replacements.remove(source);
-            if replacements.is_empty() {
-                translations.contextual.remove(&context);
-            }
-        }
-    }
-}
-
-fn remove_contextual_everywhere(translations: &mut TranslationDictionary, source: &str) {
-    let contexts = translations
-        .contextual
-        .iter()
-        .filter(|(_, replacements)| replacements.contains_key(source))
-        .map(|(context, _)| context.clone())
-        .collect::<Vec<_>>();
-    for context in contexts {
-        if let Some(replacements) = translations.contextual.get_mut(&context) {
-            replacements.remove(source);
-            if replacements.is_empty() {
-                translations.contextual.remove(&context);
-            }
-        }
-    }
-}
-
-fn stale_record_is_shadowed(translations: &TranslationDictionary, index: usize) -> bool {
-    let record = &translations.stale_translations[index];
-    translations.direct.contains_key(&record.new_source)
-        || translations.no_change.contains(&record.new_source)
-        || translations
-            .contextual
-            .iter()
-            .any(|(context, replacements)| {
-                replacements.contains_key(&record.new_source)
-                    && record.context.as_deref().is_none_or(|stale_context| {
-                        context == stale_context
-                            || context
-                                .strip_prefix(stale_context)
-                                .is_some_and(|suffix| suffix.starts_with('.'))
-                            || stale_context
-                                .strip_prefix(context)
-                                .is_some_and(|suffix| suffix.starts_with('.'))
-                    })
-            })
-}
-
-fn remove_stale_for_path_source(
-    translations: &mut TranslationDictionary,
-    path: &str,
-    source: &str,
-) {
-    translations.stale_translations.retain(|record| {
-        !(record.new_source == source
-            && record.context.as_deref().is_none_or(|context| {
-                context == path
-                    || path
-                        .strip_prefix(context)
-                        .is_some_and(|suffix| suffix.starts_with('.'))
-            }))
-    });
+        .get_or_insert_with(TranslationDictionary::default)
+        .apply_source_translation_impact(occurrence_path, old_source, new_source, impact)
+        .map_err(|error| SourceDocumentError::at(provenance, &error.path, error.message))
 }

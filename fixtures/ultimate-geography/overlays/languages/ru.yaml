@@ -22,11 +22,8 @@ translations:
     Also known as Cabo Verde.: 'Ранее известна как Острова Зелëного Мыса.'
     Also known as Czechia.: 'Известна также как Чехия.'
     Also known as East Timor.: 'Также известен как Тимор-Лешти.'
-    Also known as Kiev.: ''
-    'Also known as Türkiye': ''
     Also known as the Gulf of Siam.: 'Также известен как Тайландский залив.'
     Also known as the Sea of Cortez.: 'Также известное как Кортезское море.'
-    'Also spelled as Sana''a.': ''
     American Samoa: 'Американское Самоа'
     Amman: 'Амман'
     Amsterdam: 'Амстердам'
@@ -587,7 +584,6 @@ translations:
     White Sea: 'Белое море'
     Willemstad: 'Виллемстад'
     Windhoek: 'Виндхук'
-    World region covering the Australian continent and most of the islands in the Pacific Ocean.: ''
     Yamoussoukro: 'Ямусукро'
     'Yaoundé': 'Яунде'
     Yaren: 'Ярен'
@@ -1027,3 +1023,16 @@ translations:
       'zSc]-^U=0=': 'hpvj)-!USf'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: 2aa62e36-601e-4e4c-a124-5a79b14f8697
+target_adaptations:
+  notes.note.oceania.fields.field.country-info:
+    expected_source: World region covering the Australian continent and most of the islands in the Pacific Ocean.
+    target: ''
+  notes.note.turkey.fields.field.country-info:
+    expected_source: 'Also known as Türkiye'
+    target: ''
+  notes.note.ukraine.fields.field.capital-info:
+    expected_source: Also known as Kiev.
+    target: ''
+  notes.note.yemen.fields.field.capital-info:
+    expected_source: 'Also spelled as Sana''a.'
+    target: ''

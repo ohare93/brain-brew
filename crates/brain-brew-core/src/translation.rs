@@ -100,27 +100,8 @@ fn translation_coverage_report(
             }
             .to_string(),
         );
-        for field in &note_type.fields {
-            if deck
-                .tombstones
-                .blocking(&TombstoneAddress::FieldDefinition {
-                    note_type_id: note_type_id.clone(),
-                    field_id: field.id.clone(),
-                })
-                .is_some()
-            {
-                continue;
-            }
-            builder.record_string(
-                &field.name,
-                DeckPath::NoteTypeFieldName {
-                    note_type_id: note_type_id.clone(),
-                    field_id: field.id.clone(),
-                }
-                .to_string(),
-                None,
-            );
-        }
+        // Anki field-definition names are structural identifiers. Localized
+        // display labels belong in source variables, not translation dictionaries.
         for template in &note_type.card_templates {
             if deck
                 .tombstones
@@ -1205,6 +1186,14 @@ pub(crate) fn apply_translation_dictionary(
     changed_paths: &mut BTreeMap<String, StableId>,
     errors: &mut Vec<ComposeError>,
 ) {
+    if let Err(error) = translations.validate_mutation_invariants() {
+        errors.push(ComposeError::new(
+            ComposeErrorKind::ValidationFailed,
+            error.path,
+            error.message,
+        ));
+        return;
+    }
     let source_deck = resolved.clone();
     let source_graph = match source_deck.resolve_field_graph(|note_id, field_id, images| {
         lower_images_from_deck(&source_deck, note_id, field_id, images)
@@ -1291,26 +1280,9 @@ pub(crate) fn apply_translation_dictionary(
                 }
                 .to_string(),
             );
-            for field in &mut note_type.fields {
-                if tombstones
-                    .blocking(&TombstoneAddress::FieldDefinition {
-                        note_type_id: note_type_id.clone(),
-                        field_id: field.id.clone(),
-                    })
-                    .is_some()
-                {
-                    continue;
-                }
-                context.translate_string(
-                    &mut field.name,
-                    DeckPath::NoteTypeFieldName {
-                        note_type_id: note_type_id.clone(),
-                        field_id: field.id.clone(),
-                    }
-                    .to_string(),
-                    None,
-                );
-            }
+            // Field-definition names remain structural so Mustache and other
+            // adapter references stay valid across target languages. Translate
+            // display labels through source variables instead.
             for template in &mut note_type.card_templates {
                 if tombstones
                     .blocking(&TombstoneAddress::CardTemplate {

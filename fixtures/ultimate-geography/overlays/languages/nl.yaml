@@ -12,14 +12,8 @@ translations:
     Albania: 'Albanië'
     Algeria: Algerije
     Also known as Burma.: Ook bekend als Birma.
-    Also known as Cabo Verde.: ''
-    Also known as Czechia.: ''
     Also known as East Timor.: Ook bekend als Timor-Leste.
-    Also known as Kiev.: ''
-    'Also known as Türkiye': ''
-    Also known as the Gulf of Siam.: ''
     Also known as the Sea of Cortez.: 'Ook wel de Zee van Cortés genoemd.'
-    'Also spelled as Sana''a.': ''
     American Samoa: Amerikaans Samoa
     Antigua and Barbuda: Antigua en Barbuda
     Arabian Sea: Arabische Zee
@@ -213,8 +207,6 @@ translations:
     Oceania: 'Oceanië'
     Official capital was moved from Bujumbura to Gitega in 2019.: Bujumbura was tot 2019 de hoofdstad.
     Official capital was moved from Malabo to Ciudad de la Paz in 2026.: Malabo was tot 2026 de hoofdstad.
-    'Officially Côte d''Ivoire.': ''
-    Officially Luxembourg.: ''
     Overseas department of France.: Overzees departement van Frankrijk.
     Overseas territory of France.: Overzees land van Frankrijk.
     Overseas territory of the United Kingdom.: Overzees land van het Verenigd Koninkrijk.
@@ -999,3 +991,28 @@ translations:
       'zSc]-^U=0=': 'eY!@E#<EI8'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: 8263244e-6f5e-457a-bb65-a836a6c058a3
+target_adaptations:
+  notes.note.cape-verde.fields.field.country-info:
+    expected_source: Also known as Cabo Verde.
+    target: ''
+  notes.note.czech-republic.fields.field.country-info:
+    expected_source: Also known as Czechia.
+    target: ''
+  notes.note.gulf-of-thailand.fields.field.country-info:
+    expected_source: Also known as the Gulf of Siam.
+    target: ''
+  notes.note.ivory-coast.fields.field.country-info:
+    expected_source: 'Officially Côte d''Ivoire.'
+    target: ''
+  notes.note.luxembourg.fields.field.capital-info:
+    expected_source: Officially Luxembourg.
+    target: ''
+  notes.note.turkey.fields.field.country-info:
+    expected_source: 'Also known as Türkiye'
+    target: ''
+  notes.note.ukraine.fields.field.capital-info:
+    expected_source: Also known as Kiev.
+    target: ''
+  notes.note.yemen.fields.field.capital-info:
+    expected_source: 'Also spelled as Sana''a.'
+    target: ''

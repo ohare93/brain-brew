@@ -14,14 +14,10 @@ translations:
     Algeria: 'Algérie'
     Algiers: Alger
     Also known as Burma.: Aussi connue comme le Myanmar.
-    Also known as Cabo Verde.: ''
     Also known as Czechia.: 'Aussi connue comme la  République tchèque.'
     Also known as East Timor.: Aussi connu comme le Timor-Leste.
-    Also known as Kiev.: ''
-    'Also known as Türkiye': ''
     Also known as the Gulf of Siam.: Aussi connu comme le golfe du Siam.
     Also known as the Sea of Cortez.: 'Aussi connu comme la mer de Cortés.'
-    'Also spelled as Sana''a.': ''
     American Samoa: 'Samoa américaines'
     Andorra: Andorre
     Andorra la Vella: Andorre-la-Vieille
@@ -245,8 +241,6 @@ translations:
     Oceania: 'Océanie'
     Official capital was moved from Bujumbura to Gitega in 2019.: 'La capitale officielle a été déplacée de Bujumbura à Gitega en février 2019.'
     Official capital was moved from Malabo to Ciudad de la Paz in 2026.: 'La capitale officielle a été déplacée de Malabo à Ciudad de la Paz en 2026.'
-    'Officially Côte d''Ivoire.': ''
-    Officially Luxembourg.: ''
     Overseas department of France.: 'Département français d''outre-mer.'
     Overseas territory of the United Kingdom.: 'Territoire britannique d''outre-mer.'
     Pacific Ocean: 'Océan Pacifique'
@@ -1007,3 +1001,22 @@ translations:
       'zSc]-^U=0=': 'f^0aH]F%!V'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: fd72d808-58d4-43ea-97db-24196747f24c
+target_adaptations:
+  notes.note.cape-verde.fields.field.country-info:
+    expected_source: Also known as Cabo Verde.
+    target: ''
+  notes.note.ivory-coast.fields.field.country-info:
+    expected_source: 'Officially Côte d''Ivoire.'
+    target: ''
+  notes.note.luxembourg.fields.field.capital-info:
+    expected_source: Officially Luxembourg.
+    target: ''
+  notes.note.turkey.fields.field.country-info:
+    expected_source: 'Also known as Türkiye'
+    target: ''
+  notes.note.ukraine.fields.field.capital-info:
+    expected_source: Also known as Kiev.
+    target: ''
+  notes.note.yemen.fields.field.capital-info:
+    expected_source: 'Also spelled as Sana''a.'
+    target: ''

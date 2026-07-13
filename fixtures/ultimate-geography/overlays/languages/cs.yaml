@@ -19,8 +19,6 @@ translations:
     Also known as Cabo Verde.: 'Známé též jako Cabo Verde.'
     Also known as Czechia.: 'Používané časteji Česká republika.'
     Also known as East Timor.: 'Známý též jako Timor Leste.'
-    Also known as Kiev.: ''
-    'Also known as Türkiye': ''
     Also known as the Gulf of Siam.: 'Známý též jako Záliv Siam.'
     Also known as the Sea of Cortez.: 'Známý též jako Cortézovo moře.'
     'Also spelled as Sana''a.': 'Také psáno jako San''á.'
@@ -188,7 +186,6 @@ translations:
     Kenya: 'Keňa'
     Khartoum: 'Chartúm'
     Known as Nur-Sultan between 2019 and 2022: 'Známá jako Nur-Sultan mezi lety 2019 a 2022'
-    Known as Swaziland until 2018.: ''
     Kuwait: Kuvajt
     Kuwait City: Kuvajt
     Kyiv: Kyjev
@@ -255,7 +252,6 @@ translations:
     Official capital was moved from Bujumbura to Gitega in 2019.: 'Oficiální hlavní město bylo přesunuto z Bujumbury zpět do Gitegy v roce 2019.'
     Official capital was moved from Malabo to Ciudad de la Paz in 2026.: 'Oficiální hlavní město bylo přesunuto z Malabo do Ciudad de la Paz v roce 2026.'
     'Officially Côte d''Ivoire.': 'Oficiálně Côte d''Ivoire.'
-    Officially Luxembourg.: ''
     Oman: 'Omán'
     Overseas department of France.: 'Zámořský department Francie.'
     Pacific Ocean: 'Tichý oceán'
@@ -1045,3 +1041,16 @@ translations:
       'zSc]-^U=0=': 'l1uc5E8j;X'
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: 47d13c81-b471-4471-8e87-ebad53fa7307
+target_adaptations:
+  notes.note.eswatini.fields.field.country-info:
+    expected_source: Known as Swaziland until 2018.
+    target: ''
+  notes.note.luxembourg.fields.field.capital-info:
+    expected_source: Officially Luxembourg.
+    target: ''
+  notes.note.turkey.fields.field.country-info:
+    expected_source: 'Also known as Türkiye'
+    target: ''
+  notes.note.ukraine.fields.field.capital-info:
+    expected_source: Also known as Kiev.
+    target: ''

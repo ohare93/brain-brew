@@ -23,10 +23,8 @@ translations:
     Also known as Czechia.: '也被称为捷克(Czechia)。'
     Also known as East Timor.: '也称为东帝汶(Timor-Leste)。'
     Also known as Kiev.: '基辅在国际上公认有2种名字(Kyiv, Kiev)。'
-    'Also known as Türkiye': ''
     Also known as the Gulf of Siam.: '也被称为暹罗湾(Gulf of Siam)。'
     Also known as the Sea of Cortez.: '也被称为科尔特斯海(Sea of Cortez)。'
-    'Also spelled as Sana''a.': ''
     American Samoa: '美属萨摩亚(American Samoa)'
     Amman: '安曼(Amman)'
     Amsterdam: '阿姆斯特丹(Amsterdam)'
@@ -1122,6 +1120,13 @@ translations:
     crowdanki:uuid:
       43c5ba66-9a65-11e8-90c9-a0481cc15658: 6c995ee1-4b62-4019-a033-de0ef8651c83
       43e2586a-9a65-11e8-a777-a0481cc15658: 30c7ff39-56b5-4693-8e16-aa862eb7a619
+target_adaptations:
+  notes.note.turkey.fields.field.country-info:
+    expected_source: 'Also known as Türkiye'
+    target: ''
+  notes.note.yemen.fields.field.capital-info:
+    expected_source: 'Also spelled as Sana''a.'
+    target: ''
 deck:
   name:
     intent: replace
