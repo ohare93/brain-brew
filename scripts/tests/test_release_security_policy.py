@@ -51,6 +51,16 @@ class ReleaseSecurityPolicyTests(unittest.TestCase):
             installer.write_text(installer.read_text().replace("f7bd986e758d0d47c6995aaf92f26d093635c7cd69581ed9e2451b618ea98098", "0" * 64), encoding="utf-8")
             self.assertTrue(any("version/checksum provenance" in issue for issue in policy.issues(root)))
 
+    def test_rejects_loose_cosign_identity_and_id_token_outside_signing_jobs(self) -> None:
+        with copied_policy_tree() as root:
+            release = root / ".github" / "workflows" / "release.yml"
+            release.write_text(release.read_text().replace("--certificate-identity-regexp \"$SIGSTORE_CERTIFICATE_IDENTITY_REGEX\"", "--certificate-identity-regexp '^https://github.com/jeprecated/brain-brew/'"), encoding="utf-8")
+            self.assertTrue(any("exact release workflow tag identity" in issue for issue in policy.issues(root)))
+        with copied_policy_tree() as root:
+            ci = root / ".github" / "workflows" / "ci.yml"
+            ci.write_text(ci.read_text().replace("permissions:\n  contents: read", "permissions:\n  contents: read\n  id-token: write"), encoding="utf-8")
+            self.assertTrue(any("id-token: write" in issue for issue in policy.issues(root)))
+
 
 class copied_policy_tree:
     def __enter__(self) -> Path:

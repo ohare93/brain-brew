@@ -25,6 +25,8 @@ ACTION_PINS = {
 }
 ACTION_RE = re.compile(r"^\s*(?:-\s*)?uses:\s+([^\s#]+)(?:\s+(#.*))?$", re.MULTILINE)
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+SIGSTORE_IDENTITY_REGEX = r"^https://github\.com/jeprecated/brain-brew/\.github/workflows/release\.yml@refs/tags/"
+ATTEST_ACTION = "actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a"
 
 
 def issues(root: Path = ROOT) -> list[str]:
@@ -86,7 +88,43 @@ def issues(root: Path = ROOT) -> list[str]:
     if "secrets.GITHUB_TOKEN" not in host:
         found.append("release.yml: host must explicitly scope its GitHub token")
 
-    for lock_name in ("flake.lock", "devenv.lock"):
+    # Keyless signing is deliberately limited to the two release artifact
+    # builders. A repository-wide OIDC token would let an unrelated job mint a
+    # trusted signature under this repository identity.
+    for path, source in workflow_sources.items():
+        relative = path.relative_to(root)
+        if "id-token: write" in source and path != root / ".github" / "workflows" / "release.yml":
+            found.append(f"{relative}: id-token: write is restricted to release signing jobs")
+    signing_jobs = ("build-local-artifacts", "build-global-artifacts")
+    if release.count("id-token: write") != len(signing_jobs):
+        found.append("release.yml: id-token: write must appear only in the two release signing jobs")
+    for job in signing_jobs:
+        match = re.search(rf"^  {re.escape(job)}:\n(?P<body>.*?)(?=^  [a-z][a-z-]+:\n|\Z)", release, re.MULTILINE | re.DOTALL)
+        if match is None or match.group("body").count("id-token: write") != 1:
+            found.append(f"release.yml: {job} must be the sole scoped OIDC signing job")
+
+    expected_env = f"SIGSTORE_CERTIFICATE_IDENTITY_REGEX: '{SIGSTORE_IDENTITY_REGEX}'"
+    if expected_env not in release:
+        found.append("release.yml: missing exact release workflow tag identity regex")
+    for line in release.splitlines():
+        if "cosign verify-blob" in line and '--certificate-identity-regexp "$SIGSTORE_CERTIFICATE_IDENTITY_REGEX"' not in line:
+            found.append("release.yml: cosign verification must require exact release workflow tag identity")
+    if release.count("cosign verify-blob") != 3:
+        found.append("release.yml: every generated checksum bundle and host verification must use cosign verification")
+
+    attestation_blocks = re.findall(
+        rf"uses: {re.escape(ATTEST_ACTION)}(?P<body>.*?)(?=^      - |\Z)", release, re.MULTILINE | re.DOTALL
+    )
+    if len(attestation_blocks) != len(signing_jobs):
+        found.append("release.yml: every release artifact phase must keylessly attest shipped artifacts")
+    for block in attestation_blocks:
+        if "subject-path: ${{ steps.cargo-dist.outputs.artifact-subjects }}" not in block or "METADATA_DIR" in block:
+            found.append("release.yml: attest-build-provenance must subject actual produced shipped artifacts, not metadata sidecars")
+    for required in ("artifact-subjects<<EOF", "refusing non-distribution artifact subject", "*.sha256|*.sha256sum", "test \"$subject_count\" -gt 0"): 
+        if release.count(required) != len(signing_jobs):
+            found.append(f"release.yml: artifact attestation subject selection lacks required guard {required!r}")
+
+    for lock_name in ("flake.lock", "devenv.lock"): 
         lock_path = root / lock_name
         try:
             nodes = json.loads(lock_path.read_text(encoding="utf-8"))["nodes"]

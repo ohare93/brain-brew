@@ -48,7 +48,7 @@ package-installer expressions are deliberately not executed.
 
 ## External execution inventory
 
-- Workflows execute only the four action repositories in the table, the
+- Workflows execute only the six action repositories in the table, the
   repository's local reusable workflow, checked-out repository scripts, locked
   Nix/devenv packages, locked Cargo dependencies, and `npm ci` from the
   documentation lockfile. There are no Docker/container actions.
@@ -86,11 +86,21 @@ Release smoke creates CycloneDX 1.5 SBOMs from the produced `.crate`, cargo-dist
 and Nix binary bytes. Every record carries the observed SHA-256. Release builders
 create `SHA256SUMS` and in-toto/SLSA provenance records binding each uploaded
 artifact SHA to the immutable source SHA and GitHub workflow run, verify those
-records before upload, then use the pinned keyless GitHub attestation action to
-sign the provenance. The pinned cosign client additionally keylessly signs each
-`SHA256SUMS` as a Sigstore bundle sidecar and verifies it offline before upload.
-The host re-verifies checksum/SBOM/provenance and Sigstore bundle bytes offline
-before it can publish, and uploads all checksum, SBOM, provenance, and signature sidecars.
+records before upload, then use the pinned keyless GitHub attestation action on
+the actual cargo-dist archive, binary, and installer upload paths. SBOMs,
+checksums, provenance JSON, and Sigstore bundles are deliberately not attestation
+subjects. Subject paths are required to be existing `target/distrib/` files and
+sidecar patterns are excluded before the action receives them.
+
+The pinned cosign client additionally keylessly signs each `SHA256SUMS` as a
+Sigstore bundle sidecar and verifies it offline before upload. The certificate
+identity must exactly match
+`https://github.com/jeprecated/brain-brew/.github/workflows/release.yml@refs/tags/<tag>`;
+other workflows, branches, and repositories cannot satisfy the tag-scoped
+regular expression. Only the two artifact-building release jobs receive OIDC
+`id-token: write`. The host re-verifies checksum/SBOM/provenance and Sigstore
+bundle bytes offline before it can publish, and uploads all checksum, SBOM,
+provenance, and signature sidecars.
 There are no repository signing keys or long-lived signing secrets.
 
 ### Operator update and recovery
@@ -107,9 +117,17 @@ There are no repository signing keys or long-lived signing secrets.
    between runs: provenance binds `github.run_id`. If host verification reports a
    checksum, SBOM, source SHA, or workflow mismatch, treat the artifacts as
    unpublishable and rebuild; do not override the gate.
-4. Consumers can validate published bytes offline with `sha256sum -c SHA256SUMS`;
-   GitHub's keyless provenance is additionally verifiable with `gh attestation
-   verify` against the release repository identity.
+4. Consumers can validate published bytes offline with `sha256sum -c SHA256SUMS`.
+   GitHub's keyless provenance attests the shipped artifact itself (not its
+   sidecar); after downloading a release archive or binary, verify it with:
+
+   ```bash
+   gh attestation verify ./brainbrew-<archive-or-binary> --repo jeprecated/brain-brew
+   ```
+
+   GitHub verifies the artifact digest and repository identity; the release
+   workflow's tag-scoped OIDC identity is independently enforced for the
+   accompanying offline Sigstore checksum bundle.
 
 ## Credential and trigger boundary
 

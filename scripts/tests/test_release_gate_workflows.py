@@ -57,7 +57,13 @@ class ReleaseGateWorkflowTests(unittest.TestCase):
         for command in ("supply-chain:check", "generate_release_metadata.py"):
             self.assertIn(command, self.quality)
         self.assertIn("actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a", self.release)
-        self.assertIn("id-token: write", self.release)
+        self.assertEqual(self.release.count("subject-path: ${{ steps.cargo-dist.outputs.artifact-subjects }}"), 2)
+        self.assertNotIn("subject-path: ${{ env.METADATA_DIR }}", self.release)
+        self.assertEqual(self.release.count("id-token: write"), 2)
+        self.assertIn("SIGSTORE_CERTIFICATE_IDENTITY_REGEX: '^https://github\\.com/jeprecated/brain-brew/\\.github/workflows/release\\.yml@refs/tags/'", self.release)
+        self.assertEqual(self.release.count('--certificate-identity-regexp "$SIGSTORE_CERTIFICATE_IDENTITY_REGEX"'), 3)
+        self.assertIn("artifact-subjects<<EOF", self.release)
+        self.assertIn("refusing non-distribution artifact subject", self.release)
         self.assertIn("attestations: write", self.release)
         host = self.release.split("  host:\n", 1)[1]
         self.assertIn("Verify produced checksums, SBOMs, and workflow-bound provenance offline", host)
