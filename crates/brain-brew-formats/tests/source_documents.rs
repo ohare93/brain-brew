@@ -486,3 +486,49 @@ fn canonical_document_converts_images_and_canonicalizes_root_but_not_untouched_i
             .contains("new source: new source\n")
     );
 }
+
+#[test]
+fn dictionary_mutations_keep_source_and_resolved_views_synchronized_or_unchanged() {
+    let mut document = OverlaySourceDocument::parse(source(
+        "overlays/da.yaml",
+        "id: overlay.translation.da\nkind: translation\ntranslations:\n  direct:\n    Before: Før\nstale_translations:\n  - old_source: Old source\n    new_source: New source\n    target: Retained target\n",
+    ))
+    .unwrap();
+
+    document
+        .add_translation_stubs(TranslationStubs {
+            direct: BTreeSet::from(["Missing source".to_owned()]),
+            ..Default::default()
+        })
+        .expect("stub insertion succeeds in both views");
+    for overlay in [document.overlay(), document.resolved_overlay()] {
+        let translations = overlay.translations.as_ref().unwrap();
+        assert_eq!(translations.direct["Missing source"], "Missing source");
+    }
+
+    document
+        .resolve_stale_translation("Old source", "New source", None, None)
+        .expect("stale resolution succeeds in both views");
+    for overlay in [document.overlay(), document.resolved_overlay()] {
+        let translations = overlay.translations.as_ref().unwrap();
+        assert_eq!(translations.direct["New source"], "Retained target");
+        assert!(translations.stale_translations.is_empty());
+    }
+
+    let source_before = document.overlay().clone();
+    let resolved_before = document.resolved_overlay().clone();
+    document
+        .resolve_stale_translation("Missing old", "Missing new", None, None)
+        .expect_err("missing stale records fail atomically");
+    assert_eq!(document.overlay(), &source_before);
+    assert_eq!(document.resolved_overlay(), &resolved_before);
+
+    document
+        .add_translation_stubs(TranslationStubs {
+            direct: BTreeSet::from([String::new()]),
+            ..Default::default()
+        })
+        .expect_err("invalid stubs fail atomically");
+    assert_eq!(document.overlay(), &source_before);
+    assert_eq!(document.resolved_overlay(), &resolved_before);
+}

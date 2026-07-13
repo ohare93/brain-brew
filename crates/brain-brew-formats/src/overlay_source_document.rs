@@ -257,13 +257,20 @@ impl OverlaySourceDocument {
         stubs: TranslationStubs,
     ) -> Result<(), SourceDocumentError> {
         let mut next = self.clone();
-        let translations = next
-            .overlay
+        next.overlay
             .translations
-            .get_or_insert_with(TranslationDictionary::default);
-        translations.add_translation_stubs(stubs).map_err(|error| {
-            SourceDocumentError::at(&next.provenance, &error.path, error.message)
-        })?;
+            .get_or_insert_with(TranslationDictionary::default)
+            .add_translation_stubs(stubs.clone())
+            .map_err(|error| {
+                SourceDocumentError::at(&next.provenance, &error.path, error.message)
+            })?;
+        next.resolved_overlay
+            .translations
+            .get_or_insert_with(TranslationDictionary::default)
+            .add_translation_stubs(stubs)
+            .map_err(|error| {
+                SourceDocumentError::at(&next.provenance, &error.path, error.message)
+            })?;
         next.validate()?;
         *self = next;
         Ok(())
@@ -278,14 +285,30 @@ impl OverlaySourceDocument {
         replacement: Option<&str>,
     ) -> Result<(), SourceDocumentError> {
         let mut next = self.clone();
-        let translations = next.overlay.translations.as_mut().ok_or_else(|| {
-            SourceDocumentError::at(
-                &next.provenance,
-                "translations.stale_translations",
-                "overlay has no translation dictionary",
-            )
-        })?;
-        translations
+        next.overlay
+            .translations
+            .as_mut()
+            .ok_or_else(|| {
+                SourceDocumentError::at(
+                    &next.provenance,
+                    "translations.stale_translations",
+                    "overlay has no translation dictionary",
+                )
+            })?
+            .resolve_stale_translation_decision(old_source, new_source, context, replacement)
+            .map_err(|error| {
+                SourceDocumentError::at(&next.provenance, &error.path, error.message)
+            })?;
+        next.resolved_overlay
+            .translations
+            .as_mut()
+            .ok_or_else(|| {
+                SourceDocumentError::at(
+                    &next.provenance,
+                    "translations.stale_translations",
+                    "overlay has no translation dictionary",
+                )
+            })?
             .resolve_stale_translation_decision(old_source, new_source, context, replacement)
             .map_err(|error| {
                 SourceDocumentError::at(&next.provenance, &error.path, error.message)

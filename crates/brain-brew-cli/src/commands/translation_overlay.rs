@@ -1,4 +1,7 @@
-use brain_brew_core::{CanonicalDeck, FieldGraphReport, Overlay, TranslationCoverageCategory};
+use brain_brew_core::{
+    CanonicalDeck, FieldGraphReport, Overlay, TranslationCoverageCategory,
+    TranslationDictionaryRepair,
+};
 
 pub(crate) fn compose_lenient_translation_overlay(
     current: &CanonicalDeck,
@@ -20,54 +23,56 @@ pub(crate) fn sanitize_lenient_translation_overlay(
 ) -> Result<Overlay, FieldGraphReport> {
     let mut sanitized = overlay.clone();
     if let Some(translations) = &mut sanitized.translations {
-        translations.require_complete = false;
         let report = current.translation_coverage(overlay)?;
+        let mut repairs = vec![TranslationDictionaryRepair::SetRequireComplete(false)];
         for entry in report.entries {
             match entry.category {
                 TranslationCoverageCategory::StaleDirectKey => {
-                    translations.direct.remove(&entry.source);
+                    repairs.push(TranslationDictionaryRepair::RemoveDirect {
+                        source: entry.source,
+                    });
                 }
                 TranslationCoverageCategory::StaleContextualKey => {
-                    if let Some(context) = &entry.context
-                        && let Some(replacements) = translations.contextual.get_mut(context)
-                    {
-                        replacements.remove(&entry.source);
-                        if replacements.is_empty() {
-                            translations.contextual.remove(context);
-                        }
+                    if let Some(context) = entry.context {
+                        repairs.push(TranslationDictionaryRepair::RemoveContextual {
+                            context,
+                            source: entry.source,
+                        });
                     }
                 }
                 TranslationCoverageCategory::StaleNoChangeKey => {
-                    translations.no_change.remove(&entry.source);
+                    repairs.push(TranslationDictionaryRepair::RemoveNoChange {
+                        source: entry.source,
+                    });
                 }
                 TranslationCoverageCategory::StaleTargetAdaptation
                 | TranslationCoverageCategory::InvalidTargetAdaptation => {
-                    let path = entry.context.as_deref().unwrap_or(&entry.path);
-                    translations.target_adaptations.remove(path);
+                    repairs.push(TranslationDictionaryRepair::RemoveTargetAdaptation {
+                        path: entry.context.unwrap_or(entry.path),
+                    });
                 }
                 TranslationCoverageCategory::StaleVariableKey => {
-                    if let Some(variable_key) = &entry.context
-                        && let Some(replacements) = translations.variables.get_mut(variable_key)
-                    {
-                        replacements.remove(&entry.source);
-                        if replacements.is_empty() {
-                            translations.variables.remove(variable_key);
-                        }
+                    if let Some(key) = entry.context {
+                        repairs.push(TranslationDictionaryRepair::RemoveVariable {
+                            key,
+                            source: entry.source,
+                        });
                     }
                 }
                 TranslationCoverageCategory::StaleAdapterIdKey => {
-                    if let Some(adapter_key) = &entry.context
-                        && let Some(replacements) = translations.adapter_ids.get_mut(adapter_key)
-                    {
-                        replacements.remove(&entry.source);
-                        if replacements.is_empty() {
-                            translations.adapter_ids.remove(adapter_key);
-                        }
+                    if let Some(key) = entry.context {
+                        repairs.push(TranslationDictionaryRepair::RemoveAdapterId {
+                            key,
+                            source: entry.source,
+                        });
                     }
                 }
                 _ => {}
             }
         }
+        translations
+            .apply_repairs(&repairs)
+            .expect("coverage report repairs refer to entries in this dictionary");
     }
     Ok(sanitized)
 }

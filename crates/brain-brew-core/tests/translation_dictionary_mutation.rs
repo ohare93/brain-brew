@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
-    StaleTranslation, TargetAdaptation, TranslationDictionary, TranslationMutation,
-    TranslationMutationErrorKind,
+    StaleTranslation, TargetAdaptation, TranslationDictionary, TranslationDictionaryRepair,
+    TranslationMutation, TranslationMutationErrorKind,
 };
 
 fn dictionary() -> TranslationDictionary {
@@ -101,6 +101,74 @@ fn direct_blanks_require_an_explicit_path_scoped_adaptation_or_no_change() {
             reason: Some("intentional target deletion".to_owned()),
         }
     );
+}
+
+#[test]
+fn repairs_and_stale_resolution_are_atomic_and_preserve_shadowing() {
+    let mut translations = dictionary();
+    translations.no_change.insert("Covered".to_owned());
+    translations.stale_translations.push(StaleTranslation {
+        old_source: "Old".to_owned(),
+        new_source: "Covered".to_owned(),
+        target: "Old target".to_owned(),
+        context: None,
+    });
+    let resolved = translations
+        .resolve_stale_translation_decision("Old", "Covered", None, Some("Replacement"))
+        .expect("shadowed stale entry resolves by removal only");
+    assert_eq!(resolved.target, "Old target");
+    assert!(translations.stale_translations.is_empty());
+    assert!(translations.no_change.contains("Covered"));
+    assert!(!translations.direct.contains_key("Covered"));
+
+    let before = translations.clone();
+    let error = translations
+        .apply_repairs(&[
+            TranslationDictionaryRepair::RemoveDirect {
+                source: "Before".to_owned(),
+            },
+            TranslationDictionaryRepair::RemoveNoChange {
+                source: "Missing".to_owned(),
+            },
+        ])
+        .expect_err("a missing repair target rejects the complete repair transaction");
+    assert_eq!(error.kind, TranslationMutationErrorKind::MissingKey);
+    assert_eq!(translations, before);
+
+    translations
+        .apply_repairs(&[
+            TranslationDictionaryRepair::SetRequireComplete(false),
+            TranslationDictionaryRepair::RemoveDirect {
+                source: "Before".to_owned(),
+            },
+        ])
+        .expect("independent repairs apply deterministically");
+    assert!(!translations.require_complete);
+    assert!(!translations.direct.contains_key("Before"));
+}
+
+#[test]
+fn independent_command_sequences_have_the_same_canonical_result() {
+    let direct = TranslationMutation::SetContextual {
+        occurrence_path: "notes.note.one.fields.field.front".to_owned(),
+        context: "notes.note.one".to_owned(),
+        source: "Before".to_owned(),
+        target: "Efter".to_owned(),
+    };
+    let adaptation = TranslationMutation::SetTargetAdaptation {
+        path: "notes.note.two.fields.field.front".to_owned(),
+        expected_source: "Other source".to_owned(),
+        target: String::new(),
+        reason: Some("intentional deletion".to_owned()),
+    };
+    let mut left = dictionary();
+    let mut right = dictionary();
+    left.apply_mutations(&[direct.clone(), adaptation.clone()])
+        .expect("independent commands apply");
+    right
+        .apply_mutations(&[adaptation, direct])
+        .expect("independent commands apply in reverse order");
+    assert_eq!(left, right);
 }
 
 #[test]

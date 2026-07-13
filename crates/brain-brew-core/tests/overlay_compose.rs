@@ -504,13 +504,18 @@ fn resolving_stale_translations_migrates_to_normal_dictionary_entries() {
     };
 
     let direct = translations
-        .resolve_stale_translation("Helsinki", "Helsinki City", None)
+        .resolve_stale_translation_decision("Helsinki", "Helsinki City", None, None)
         .expect("direct stale translation resolves");
     assert_eq!(direct.target, "Helsingfors");
     assert_eq!(translations.direct["Helsinki City"], "Helsingfors");
 
     translations
-        .resolve_stale_translation("Capital", "Capital city", Some("notes.note.finland"))
+        .resolve_stale_translation_decision(
+            "Capital",
+            "Capital city",
+            Some("notes.note.finland"),
+            None,
+        )
         .expect("contextual stale translation resolves");
     assert_eq!(
         translations.contextual["notes.note.finland"]["Capital city"],

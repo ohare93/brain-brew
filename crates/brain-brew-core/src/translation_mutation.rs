@@ -35,6 +35,19 @@ pub enum TranslationMutation {
     },
 }
 
+/// A canonical repair chosen from translation coverage. Repairs remove only an
+/// identified stale/invalid entry and are atomic as a batch.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TranslationDictionaryRepair {
+    SetRequireComplete(bool),
+    RemoveDirect { source: String },
+    RemoveContextual { context: String, source: String },
+    RemoveNoChange { source: String },
+    RemoveTargetAdaptation { path: String },
+    RemoveVariable { key: String, source: String },
+    RemoveAdapterId { key: String, source: String },
+}
+
 /// A translator decision at one extracted source occurrence.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TranslationDecision {
@@ -174,6 +187,22 @@ impl TranslationDictionary {
         for mutation in mutations {
             next.apply_mutation_in_place(mutation)?;
         }
+        next.canonicalize_stale_translations();
+        *self = next;
+        Ok(())
+    }
+
+    /// Apply coverage-derived cleanup without exposing raw map mutation to
+    /// callers. Any invalid repair leaves this dictionary unchanged.
+    pub fn apply_repairs(
+        &mut self,
+        repairs: &[TranslationDictionaryRepair],
+    ) -> Result<(), TranslationMutationError> {
+        let mut next = self.clone();
+        for repair in repairs {
+            next.apply_repair_in_place(repair)?;
+        }
+        next.validate_mutation_invariants()?;
         next.canonicalize_stale_translations();
         *self = next;
         Ok(())
@@ -408,6 +437,74 @@ impl TranslationDictionary {
         next.canonicalize_stale_translations();
         *self = next;
         Ok(record)
+    }
+
+    fn apply_repair_in_place(
+        &mut self,
+        repair: &TranslationDictionaryRepair,
+    ) -> Result<(), TranslationMutationError> {
+        let missing = |path: String| {
+            TranslationMutationError::new(
+                TranslationMutationErrorKind::MissingKey,
+                path,
+                "coverage repair target is missing",
+            )
+        };
+        match repair {
+            TranslationDictionaryRepair::SetRequireComplete(value) => {
+                self.require_complete = *value;
+            }
+            TranslationDictionaryRepair::RemoveDirect { source } => {
+                self.direct
+                    .remove(source)
+                    .ok_or_else(|| missing(direct_path(source)))?;
+            }
+            TranslationDictionaryRepair::RemoveContextual { context, source } => {
+                let path = contextual_path(context, source);
+                let replacements = self
+                    .contextual
+                    .get_mut(context)
+                    .ok_or_else(|| missing(path.clone()))?;
+                replacements.remove(source).ok_or_else(|| missing(path))?;
+                if replacements.is_empty() {
+                    self.contextual.remove(context);
+                }
+            }
+            TranslationDictionaryRepair::RemoveNoChange { source } => {
+                self.no_change
+                    .remove(source)
+                    .then_some(())
+                    .ok_or_else(|| missing(format!("translations.no_change.{source}")))?;
+            }
+            TranslationDictionaryRepair::RemoveTargetAdaptation { path } => {
+                self.target_adaptations
+                    .remove(path)
+                    .ok_or_else(|| missing(format!("target_adaptations.{path}")))?;
+            }
+            TranslationDictionaryRepair::RemoveVariable { key, source } => {
+                let path = format!("translations.variables.{key}.{source}");
+                let replacements = self
+                    .variables
+                    .get_mut(key)
+                    .ok_or_else(|| missing(path.clone()))?;
+                replacements.remove(source).ok_or_else(|| missing(path))?;
+                if replacements.is_empty() {
+                    self.variables.remove(key);
+                }
+            }
+            TranslationDictionaryRepair::RemoveAdapterId { key, source } => {
+                let path = format!("translations.adapter_ids.{key}.{source}");
+                let replacements = self
+                    .adapter_ids
+                    .get_mut(key)
+                    .ok_or_else(|| missing(path.clone()))?;
+                replacements.remove(source).ok_or_else(|| missing(path))?;
+                if replacements.is_empty() {
+                    self.adapter_ids.remove(key);
+                }
+            }
+        }
+        Ok(())
     }
 
     fn apply_mutation_in_place(

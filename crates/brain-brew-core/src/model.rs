@@ -1230,6 +1230,11 @@ pub struct Overlay {
 }
 
 /// Translation dictionary applied by a translation overlay.
+///
+/// The fields remain public for compatibility with the canonical domain model.
+/// New mutations must use the validated transactional methods on this type;
+/// core composition and every format decode/emit boundary call
+/// `validate_mutation_invariants` before accepting these compatibility fields.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TranslationDictionary {
     /// Direct reusable replacements keyed by exact non-empty source text.
@@ -1250,33 +1255,6 @@ pub struct TranslationDictionary {
     pub require_complete: bool,
     /// Glob-style paths ignored by complete-coverage checks.
     pub ignore_paths: BTreeSet<String>,
-}
-
-impl TranslationDictionary {
-    /// Resolve one stale translation into a normal direct or contextual translation entry.
-    pub fn resolve_stale_translation(
-        &mut self,
-        old_source: &str,
-        new_source: &str,
-        context: Option<&str>,
-    ) -> Option<StaleTranslation> {
-        let position = self.stale_translations.iter().position(|record| {
-            record.old_source == old_source
-                && record.new_source == new_source
-                && record.context.as_deref() == context
-        })?;
-        let record = self.stale_translations.remove(position);
-        if let Some(context) = &record.context {
-            self.contextual
-                .entry(context.clone())
-                .or_default()
-                .insert(record.new_source.clone(), record.target.clone());
-        } else {
-            self.direct
-                .insert(record.new_source.clone(), record.target.clone());
-        }
-        Some(record)
-    }
 }
 
 /// Intentional path-scoped target-language wording that may diverge from the source.
