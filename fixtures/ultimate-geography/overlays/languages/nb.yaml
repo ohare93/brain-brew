@@ -702,25 +702,6 @@ translations:
     - Zambia
     - Zanzibar
     - Zimbabwe
-  target_additions:
-    notes.note.arabian-sea.fields.field.country-info: 'Også kalt Arabiahavet.'
-    notes.note.balkan-peninsula.fields.field.country-info: 'Også kalt Balkanhalvøya.'
-    notes.note.baltic-sea.fields.field.country-info: 'Også kalt Det baltiske hav.'
-    notes.note.belarus.fields.field.country-info: 'Tidligere kjent som Hviterussland. Utenriksdepartementet begynte å bruke navnet Belarus 29. mai 2022.'
-    notes.note.china.fields.field.country-info: Offisielt Folkerepublikken Kina.
-    notes.note.finland.fields.field.capital-info: 'Det finske navnet er Helsinki, men Utenriksdepartementet i Norge anbefaler å bruke byens svenske navn.'
-    notes.note.greenland.fields.field.capital-info: 'På dansk Godthåb.'
-    notes.note.indian-ocean.fields.field.country-info: 'Også kalt Indiahavet.'
-    notes.note.kiribati.fields.field.capital-info: 'Mange regner Bairiki som Kiribatis hovedstad (også Utenriksdepartementet i Norge) fordi både parlamentet og presidenten en gang hadde sete der. Siden år 2000 har parlamentet og departementer blitt spredd utover Syd-Tarawa.'
-    notes.note.mongolia.fields.field.capital-info: 'Også kjent som Ulan Bator.'
-    notes.note.myanmar.fields.field.capital-info: 'Hovedstad flyttet til Naypyidaw (Nay Pyi Taw) fra Yangon (tidl. Rangoon) i 2005.'
-    notes.note.persian-gulf.fields.field.country-info: 'Også kalt Den persiske bukt, Persiagolfen, Den persiske gulf og Den arabiske bukt.'
-    notes.note.republic-of-the-congo.fields.field.country-info: Offisielt Republikken Kongo.
-    notes.note.sea-of-galilee.fields.field.country-info: 'Også kalt Galileasjøen, Tiberiassjøen eller Ginossarsjøen.'
-    notes.note.turkmenistan.fields.field.capital-info: 'Også kjent som Asjgabat.'
-    notes.note.united-kingdom.fields.field.country-info: 'Også kalt Det forente kongeriket Storbritannia og Nord-Irland.'
-    notes.note.united-states-of-america.fields.field.country-info: 'Også kjent som De forente stater eller Sambandsstatene.'
-    notes.note.white-sea.fields.field.country-info: 'Også kalt Hvitehavet.'
   variables:
     label.capital:
       Capital: Hovedstad
@@ -1056,30 +1037,156 @@ translations:
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: 8ccdc1f6-b042-4d55-8fcd-9e08b5b71dc7
 target_adaptations:
+  notes.note.arabian-sea.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Også kalt Arabiahavet.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.balkan-peninsula.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Også kalt Balkanhalvøya.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.baltic-sea.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Også kalt Det baltiske hav.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.belarus.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Tidligere kjent som Hviterussland. Utenriksdepartementet begynte å bruke navnet Belarus 29. mai 2022.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.china.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: Offisielt Folkerepublikken Kina.
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.czech-republic.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as Czechia.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
+  notes.note.finland.fields.field.capital-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Det finske navnet er Helsinki, men Utenriksdepartementet i Norge anbefaler å bruke byens svenske navn.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.greenland.fields.field.capital-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'På dansk Godthåb.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.gulf-of-california.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as the Sea of Cortez.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
+  notes.note.indian-ocean.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Også kalt Indiahavet.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.ivory-coast.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Officially Côte d''Ivoire.'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
+  notes.note.kiribati.fields.field.capital-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Mange regner Bairiki som Kiribatis hovedstad (også Utenriksdepartementet i Norge) fordi både parlamentet og presidenten en gang hadde sete der. Siden år 2000 har parlamentet og departementer blitt spredd utover Syd-Tarawa.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.luxembourg.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: Officially Luxembourg.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
+  notes.note.mongolia.fields.field.capital-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Også kjent som Ulan Bator.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.myanmar.fields.field.capital-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Hovedstad flyttet til Naypyidaw (Nay Pyi Taw) fra Yangon (tidl. Rangoon) i 2005.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.persian-gulf.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Også kalt Den persiske bukt, Persiagolfen, Den persiske gulf og Den arabiske bukt.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.republic-of-the-congo.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: Offisielt Republikken Kongo.
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.sahrawi-arab-democratic-republic.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: 'While Laayoune, also known as El Aaiún, is the declared capital, Tifariti is the de facto seat of government.'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
+  notes.note.sea-of-galilee.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Også kalt Galileasjøen, Tiberiassjøen eller Ginossarsjøen.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.sea-of-japan.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: 'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.timor-leste.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as East Timor.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.turkey.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Also known as Türkiye'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
+  notes.note.turkmenistan.fields.field.capital-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Også kjent som Asjgabat.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.united-kingdom.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Også kalt Det forente kongeriket Storbritannia og Nord-Irland.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.united-states-of-america.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Også kjent som De forente stater eller Sambandsstatene.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.white-sea.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Også kalt Hvitehavet.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.yemen.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Also spelled as Sana''a.'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'

@@ -644,22 +644,82 @@ translations:
 }
 
 #[test]
-fn parses_upstream_ug_target_additions_as_blank_source_adaptations() {
-    let overlay = canonical_yaml::overlay_from_str(
-        r#"id: overlay.translation.cs
+fn migrates_legacy_target_additions_to_typed_canonical_adaptations() {
+    let legacy = r#"id: overlay.translation.cs
 kind: translation
 translations:
   target_additions:
     notes.note.pacific-ocean.fields.field.country-info: 'Známý též jako Pacifik.'
-"#,
-    )
-    .expect("overlay parses");
+"#;
+    let overlay = canonical_yaml::overlay_from_str(legacy).expect("compatibility reader parses");
 
     let translations = overlay.translations.expect("translation dictionary");
     let adaptation =
         &translations.target_adaptations["notes.note.pacific-ocean.fields.field.country-info"];
+    assert_eq!(
+        adaptation.intent,
+        brain_brew_core::TargetAdaptationIntent::Adapt
+    );
+    assert_eq!(
+        adaptation.ownership,
+        brain_brew_core::TargetAdaptationOwnership::Translation
+    );
     assert_eq!(adaptation.expected_source, "");
     assert_eq!(adaptation.target, "Známý též jako Pacifik.");
+    assert!(adaptation.reason.starts_with("migrated from legacy"));
+
+    let diagnostics = canonical_yaml::overlay_migration_diagnostics(legacy)
+        .expect("legacy migration is diagnosed");
+    assert_eq!(diagnostics.len(), 1);
+    assert!(diagnostics[0].message.contains("brainbrew fmt"));
+
+    let canonical =
+        canonical_yaml::overlay_format_str(legacy).expect("canonical writer emits typed form");
+    assert!(!canonical.contains("target_additions:"));
+    assert!(canonical.contains("target_adaptations:"));
+    assert!(canonical.contains("intent: adapt"));
+    assert!(canonical.contains("ownership: translation"));
+    assert!(canonical.contains("reason:"));
+    assert!(canonical.contains("migrated from legacy"));
+    assert_eq!(
+        canonical_yaml::overlay_format_str(&canonical).expect("canonical form round-trips"),
+        canonical
+    );
+}
+
+#[test]
+fn rejects_untyped_blank_adaptation_and_extension_owned_content() {
+    for (yaml, expected) in [
+        (
+            r#"id: overlay.translation.da
+kind: translation
+target_adaptations:
+  notes.note.finland.fields.field.capital:
+    intent: adapt
+    ownership: translation
+    expected_source: Helsinki
+    target: ''
+    reason: omission
+"#,
+            "adapt intent requires a non-blank target",
+        ),
+        (
+            r#"id: overlay.translation.da
+kind: translation
+target_adaptations:
+  notes.note.finland.fields.field.capital:
+    intent: adapt
+    ownership: extension
+    expected_source: ''
+    target: Helsingfors
+    reason: extension-owned content
+"#,
+            "extension-owned content must use field_fills",
+        ),
+    ] {
+        let error = canonical_yaml::overlay_from_str(yaml).expect_err("invalid typed adaptation");
+        assert!(error.to_string().contains(expected), "{error}");
+    }
 }
 
 #[test]

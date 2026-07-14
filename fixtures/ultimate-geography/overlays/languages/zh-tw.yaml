@@ -764,8 +764,6 @@ translations:
         Egypt: '埃及'
       yemen.fields.field.flag-similarity.message.variables.country_2:
         Iraq: '伊拉克'
-  target_additions:
-    notes.note.kiribati.fields.field.capital-info: '拉巴斯正在建造來取代馬拉波成為首都。'
   variables:
     label.capital:
       Capital: '首都'
@@ -1105,35 +1103,61 @@ translations:
       43e2586a-9a65-11e8-a777-a0481cc15658: d75ad494-71f3-4909-beda-b80ec04c7a0d
 target_adaptations:
   notes.note.cape-verde.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as Cabo Verde.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.czech-republic.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as Czechia.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.eswatini.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Known as Swaziland until 2018.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.gulf-of-thailand.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as the Gulf of Siam.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
+  notes.note.kiribati.fields.field.capital-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: '拉巴斯正在建造來取代馬拉波成為首都。'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.luxembourg.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: Officially Luxembourg.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.myanmar.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as Burma.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.sea-of-japan.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: 'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.timor-leste.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as East Timor.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.turkey.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Also known as Türkiye'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.yemen.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Also spelled as Sana''a.'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
 deck:
   name:
     intent: replace

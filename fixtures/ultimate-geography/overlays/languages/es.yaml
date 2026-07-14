@@ -649,8 +649,6 @@ translations:
     - Yemen
     - Zagreb
     - Zambia
-  target_additions:
-    notes.note.celebes-sea.fields.field.country-info: 'También conocido como mar de Sulawesi.'
   variables:
     label.capital-hint.answer:
       'Hint: {{Capital hint}}': 'Pista: {{Capital hint}}'
@@ -988,23 +986,41 @@ translations:
       43e2586a-9a65-11e8-a777-a0481cc15658: 0bacddfd-1e81-4e62-9152-bdff33db0374
 target_adaptations:
   notes.note.cape-verde.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as Cabo Verde.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
+  notes.note.celebes-sea.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'También conocido como mar de Sulawesi.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.luxembourg.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: Officially Luxembourg.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.timor-leste.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as East Timor.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.turkey.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Also known as Türkiye'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.ukraine.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as Kiev.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.yemen.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Also spelled as Sana''a.'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
 deck:
   name:
     intent: replace

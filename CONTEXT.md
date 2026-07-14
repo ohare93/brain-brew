@@ -129,8 +129,8 @@ A translation overlay section for faithful target-language text: direct source t
 _Avoid_: CSV importer, global localization database, target adaptation storage
 
 **Target Adaptation**:
-A path-scoped target-language value that intentionally diverges from, explains, or supplements the source while declaring the expected source value it adapts.
-_Avoid_: faithful translation, extension field fill
+A typed path-scoped target-language adaptation or deletion that declares its intent, translation ownership, expected source value, and review reason.
+_Avoid_: faithful translation, extension field fill, implicit global deletion
 
 **Stale Translation**:
 A translation review item that applies a prior target text to changed source text while warning that the translation needs review.

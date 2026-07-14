@@ -2540,6 +2540,27 @@ fn fmt_rewrites_overlay_yaml_in_place() {
 }
 
 #[test]
+fn fmt_migrates_legacy_target_additions_with_an_actionable_warning() {
+    let dir = temp_dir("fmt-legacy-target-additions");
+    let overlay_path = dir.join("overlay.yaml");
+    fs::write(
+        &overlay_path,
+        "id: overlay.translation.da\nkind: translation\ntranslations:\n  target_additions:\n    notes.note.finland.fields.field.capital: Helsingfors\n",
+    )
+    .unwrap();
+
+    let output = run(["fmt", overlay_path.to_str().unwrap()]);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(stderr(&output).contains("legacy target_additions"));
+    assert!(stderr(&output).contains("brainbrew fmt"));
+    let formatted = fs::read_to_string(overlay_path).unwrap();
+    assert!(formatted.contains("target_adaptations:"));
+    assert!(formatted.contains("intent: adapt"));
+    assert!(!formatted.contains("target_additions:"));
+}
+
+#[test]
 fn fmt_rewrites_manifest_yaml_in_place() {
     let dir = temp_dir("fmt-manifest");
     let manifest_path = dir.join("brainbrew.yaml");
@@ -4378,8 +4399,11 @@ translations:
         Helsinki: Helsingfors
 target_adaptations:
   notes.note.finland.fields.field.flag:
+    intent: adapt
+    ownership: translation
     expected_source: ''
     target: '<img src="fi-da.png">'
+    reason: localized flag markup
 "#,
     )
     .unwrap();
@@ -4435,8 +4459,11 @@ translations:
     - Sweden
 target_adaptations:
   notes.note.finland.fields.field.flag:
+    intent: adapt
+    ownership: translation
     expected_source: ''
     target: '<img src="fi-da.png">'
+    reason: localized flag markup
 "#,
     )
     .unwrap();
@@ -4482,8 +4509,11 @@ translations:
     - Sweden
 target_adaptations:
   notes.note.finland.fields.field.flag:
+    intent: adapt
+    ownership: translation
     expected_source: ''
     target: '<img src="fi-da.png">'
+    reason: localized flag markup
 stale_translations:
   - old_source: Old Stockholm
     new_source: Stockholm
@@ -7661,8 +7691,11 @@ translations:
       Helsinki: Helsingfors
 target_adaptations:
   notes.note.finland.fields.field.flag:
+    intent: adapt
+    ownership: translation
     expected_source: ''
     target: '<img src="fi-da.png">'
+    reason: localized flag markup
 "#,
     )
     .unwrap();

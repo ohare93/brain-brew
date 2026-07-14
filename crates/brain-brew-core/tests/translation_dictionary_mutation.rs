@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
-    StaleTranslation, TargetAdaptation, TranslationDictionary, TranslationDictionaryRepair,
-    TranslationMutation, TranslationMutationErrorKind,
+    StaleTranslation, TargetAdaptation, TargetAdaptationIntent, TargetAdaptationOwnership,
+    TranslationDictionary, TranslationDictionaryRepair, TranslationMutation,
+    TranslationMutationErrorKind,
 };
 
 fn dictionary() -> TranslationDictionary {
@@ -84,9 +85,11 @@ fn direct_blanks_require_an_explicit_path_scoped_adaptation_or_no_change() {
             },
             TranslationMutation::SetTargetAdaptation {
                 path: "notes.note.one.fields.field.front".to_owned(),
+                intent: TargetAdaptationIntent::Delete,
+                ownership: TargetAdaptationOwnership::Translation,
                 expected_source: "Deleted sentence".to_owned(),
                 target: String::new(),
-                reason: Some("intentional target deletion".to_owned()),
+                reason: "intentional target deletion".to_owned(),
             },
         ])
         .expect("no-change and explicit path-scoped deletion are distinct valid decisions");
@@ -96,10 +99,49 @@ fn direct_blanks_require_an_explicit_path_scoped_adaptation_or_no_change() {
     assert_eq!(
         translations.target_adaptations["notes.note.one.fields.field.front"],
         TargetAdaptation {
+            intent: TargetAdaptationIntent::Delete,
+            ownership: TargetAdaptationOwnership::Translation,
             expected_source: "Deleted sentence".to_owned(),
             target: String::new(),
-            reason: Some("intentional target deletion".to_owned()),
+            reason: "intentional target deletion".to_owned(),
         }
+    );
+}
+
+#[test]
+fn typed_target_decision_errors_are_atomic() {
+    let mut translations = dictionary();
+    let before = translations.clone();
+
+    let error = translations
+        .apply_mutations(&[
+            TranslationMutation::SetTargetAdaptation {
+                path: "notes.note.one.fields.field.front".to_owned(),
+                intent: TargetAdaptationIntent::Delete,
+                ownership: TargetAdaptationOwnership::Translation,
+                expected_source: "Source-only sentence".to_owned(),
+                target: String::new(),
+                reason: "not suitable for this target edition".to_owned(),
+            },
+            TranslationMutation::SetTargetAdaptation {
+                path: "notes.note.two.fields.field.front".to_owned(),
+                intent: TargetAdaptationIntent::Adapt,
+                ownership: TargetAdaptationOwnership::Extension,
+                expected_source: String::new(),
+                target: "extension content".to_owned(),
+                reason: "wrong owner".to_owned(),
+            },
+        ])
+        .expect_err("extension-owned content is not a translation adaptation");
+
+    assert_eq!(error.kind, TranslationMutationErrorKind::InvalidContext);
+    assert_eq!(
+        error.path,
+        "target_adaptations.notes.note.two.fields.field.front.ownership"
+    );
+    assert_eq!(
+        translations, before,
+        "the rejected batch must not add the deletion"
     );
 }
 
@@ -157,9 +199,11 @@ fn independent_command_sequences_have_the_same_canonical_result() {
     };
     let adaptation = TranslationMutation::SetTargetAdaptation {
         path: "notes.note.two.fields.field.front".to_owned(),
+        intent: TargetAdaptationIntent::Delete,
+        ownership: TargetAdaptationOwnership::Translation,
         expected_source: "Other source".to_owned(),
         target: String::new(),
-        reason: Some("intentional deletion".to_owned()),
+        reason: "intentional deletion".to_owned(),
     };
     let mut left = dictionary();
     let mut right = dictionary();

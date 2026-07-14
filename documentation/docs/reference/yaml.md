@@ -184,8 +184,16 @@ Top-level target adaptations and stale translations are emitted after `translati
 ```yaml
 target_adaptations:
   notes.note.example.fields.field.country-info:
+    intent: adapt
+    ownership: translation
     expected_source: ''
     target: Localized blank text.
+    reason: target-language explanatory addition
+  notes.note.example.fields.field.private-note:
+    intent: delete
+    ownership: translation
+    expected_source: Source-only text.
+    reason: not appropriate in the target edition
 stale_translations:
   - old_source: Old source text.
     new_source: New source text.
@@ -193,7 +201,7 @@ stale_translations:
     context: notes.note.example.fields.field.country-info
 ```
 
-A target-adaptation path may be present in either the top-level `target_adaptations` map or the legacy `translations.target_adaptations` map, but not both. Duplicating the same path in both places is rejected as an invalid translation dictionary.
+A target-adaptation path may be present in either the top-level `target_adaptations` map or the legacy `translations.target_adaptations` map, but not both. Duplicating the same path in both places is rejected as an invalid translation dictionary. Canonical records require `intent`, `ownership`, `expected_source`, and a non-blank `reason`; `adapt` also requires non-blank `target`, while `delete` omits it and requires a non-blank expected source. The legacy `translations.target_additions` reader is migration-only: `brainbrew fmt` emits the typed top-level form.
 
 ## Expected bases and complete entity fingerprints
 

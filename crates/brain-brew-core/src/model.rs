@@ -1257,12 +1257,40 @@ pub struct TranslationDictionary {
     pub ignore_paths: BTreeSet<String>,
 }
 
-/// Intentional path-scoped target-language wording that may diverge from the source.
+/// The deliberate operation performed at one exact target-language path.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TargetAdaptationIntent {
+    /// Replace a source value with a non-empty target-language adaptation.
+    Adapt,
+    /// Remove a non-empty source value only at the declared target path.
+    Delete,
+}
+
+/// The overlay concern that owns a path-scoped target-language decision.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TargetAdaptationOwnership {
+    /// Localized wording owned by a translation overlay.
+    Translation,
+    /// Extension-owned content; use `field_fills` rather than a translation adaptation.
+    Extension,
+}
+
+/// Intentional path-scoped target-language change with an explicit expected source.
+///
+/// `Delete` records an empty target deliberately; it is never a dictionary fallback.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TargetAdaptation {
+    pub intent: TargetAdaptationIntent,
+    pub ownership: TargetAdaptationOwnership,
     pub expected_source: String,
     pub target: String,
-    pub reason: Option<String>,
+    pub reason: String,
+}
+
+impl TargetAdaptation {
+    pub fn is_deletion(&self) -> bool {
+        self.intent == TargetAdaptationIntent::Delete
+    }
 }
 
 /// Persisted translation review debt created when source text changes.
@@ -1485,6 +1513,7 @@ pub enum TranslationCoverageCategory {
     ContextualTranslation,
     NoChange,
     TargetAdaptation,
+    TargetDeletion,
     VariableTranslation,
     AdapterIdTranslation,
     IgnoredSource,
@@ -1507,6 +1536,7 @@ impl TranslationCoverageCategory {
             Self::ContextualTranslation => "contextual_translation",
             Self::NoChange => "no_change",
             Self::TargetAdaptation => "target_adaptation",
+            Self::TargetDeletion => "target_deletion",
             Self::VariableTranslation => "variable_translation",
             Self::AdapterIdTranslation => "adapter_id_translation",
             Self::IgnoredSource => "ignored_source",

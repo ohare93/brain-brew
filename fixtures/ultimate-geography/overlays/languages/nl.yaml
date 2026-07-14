@@ -647,14 +647,6 @@ translations:
     - Zambia
     - Zanzibar
     - Zimbabwe
-  target_additions:
-    notes.note.baltic-sea.fields.field.country-info: Ook wel Baltische Zee.
-    notes.note.belarus.fields.field.country-info: Ook bekend als Belarus.
-    notes.note.china.fields.field.capital-info: Ook als Beijing bekend.
-    notes.note.federated-states-of-micronesia.fields.field.country-info: 'Ook wel Micronesië of Micronesia genoemd.'
-    notes.note.maldives.fields.field.country-info: Ook wel Maldiven genoemd.
-    notes.note.pacific-ocean.fields.field.country-info: Ook wel Grote Oceaan of Pacifische Oceaan genoemd.
-    notes.note.sea-of-galilee.fields.field.country-info: Ook wel Meer van Kinneret, Meer van Galilea of Meer van Genezareth genoemd.
   variables:
     label.capital:
       Capital: Hoofdstad
@@ -992,27 +984,85 @@ translations:
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: 8263244e-6f5e-457a-bb65-a836a6c058a3
 target_adaptations:
+  notes.note.baltic-sea.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: Ook wel Baltische Zee.
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.belarus.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: Ook bekend als Belarus.
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.cape-verde.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as Cabo Verde.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
+  notes.note.china.fields.field.capital-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: Ook als Beijing bekend.
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.czech-republic.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as Czechia.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
+  notes.note.federated-states-of-micronesia.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Ook wel Micronesië of Micronesia genoemd.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.gulf-of-thailand.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as the Gulf of Siam.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.ivory-coast.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Officially Côte d''Ivoire.'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.luxembourg.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: Officially Luxembourg.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
+  notes.note.maldives.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: Ook wel Maldiven genoemd.
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.pacific-ocean.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: Ook wel Grote Oceaan of Pacifische Oceaan genoemd.
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.sea-of-galilee.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: Ook wel Meer van Kinneret, Meer van Galilea of Meer van Genezareth genoemd.
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.turkey.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Also known as Türkiye'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.ukraine.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as Kiev.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.yemen.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Also spelled as Sana''a.'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'

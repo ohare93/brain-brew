@@ -663,8 +663,6 @@ translations:
     - Zagreb
     - Zanzibar
     - Zimbabwe
-  target_additions:
-    notes.note.celebes-sea.fields.field.country-info: Aussi connu comme la mer de Sulawesi.
   variables:
     label.capital:
       Capital: Capitale
@@ -1003,20 +1001,38 @@ translations:
       43e2586a-9a65-11e8-a777-a0481cc15658: fd72d808-58d4-43ea-97db-24196747f24c
 target_adaptations:
   notes.note.cape-verde.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as Cabo Verde.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
+  notes.note.celebes-sea.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: Aussi connu comme la mer de Sulawesi.
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.ivory-coast.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Officially Côte d''Ivoire.'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.luxembourg.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: Officially Luxembourg.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.turkey.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Also known as Türkiye'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.ukraine.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as Kiev.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.yemen.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Also spelled as Sana''a.'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'

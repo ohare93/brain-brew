@@ -648,14 +648,6 @@ translations:
     - Zambia
     - Zanzibar
     - Zimbabwe
-  target_additions:
-    notes.note.arctic-ocean.fields.field.country-info: 'Znany także jako Ocean Północny lub Morze Arktyczne.'
-    notes.note.netherlands.fields.field.country-info: 'Znana także jako Niderlandy.'
-    notes.note.pacific-ocean.fields.field.country-info: 'Znany także jako Pacyfik.'
-    notes.note.sea-of-galilee.fields.field.country-info: 'Znane także jako Jezioro Galilejskie lub Genezaret.'
-    notes.note.south-africa.fields.field.country-info: 'Znana także jako RPA (Republika Południowej Afryki).'
-    notes.note.united-kingdom.fields.field.country-info: 'Znana także jako Zjednoczone Królestwo.'
-    notes.note.united-states-of-america.fields.field.country-info: 'Znane także jako USA.'
   variables:
     label.capital:
       Capital: Stolica
@@ -993,24 +985,80 @@ translations:
     crowdanki:uuid:
       43e2586a-9a65-11e8-a777-a0481cc15658: 84786477-e28a-490e-958d-7b35946d7b11
 target_adaptations:
+  notes.note.arctic-ocean.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Znany także jako Ocean Północny lub Morze Arktyczne.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.cape-verde.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as Cabo Verde.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.czech-republic.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as Czechia.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.luxembourg.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: Officially Luxembourg.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
+  notes.note.netherlands.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Znana także jako Niderlandy.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.pacific-ocean.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Znany także jako Pacyfik.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.sea-of-galilee.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Znane także jako Jezioro Galilejskie lub Genezaret.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.south-africa.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Znana także jako RPA (Republika Południowej Afryki).'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.timor-leste.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as East Timor.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.turkey.fields.field.country-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Also known as Türkiye'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
   notes.note.ukraine.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: Also known as Kiev.
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'
+  notes.note.united-kingdom.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Znana także jako Zjednoczone Królestwo.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.united-states-of-america.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'Znane także jako USA.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
   notes.note.yemen.fields.field.capital-info:
+    intent: delete
+    ownership: translation
     expected_source: 'Also spelled as Sana''a.'
-    target: ''
+    reason: 'migrated legacy target adaptation; review and describe its target-language purpose'

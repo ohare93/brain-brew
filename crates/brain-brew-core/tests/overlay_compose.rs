@@ -6,20 +6,28 @@ use brain_brew_core::{
     FieldDefinitionChange, FieldImageReference, FieldValue, MediaChange, MediaReference,
     MessageComponent, Note, NoteChange, NoteType, NoteTypeChange, Overlay, OverlayKind,
     PropertyChange, StableId, StaleTranslation, StructuredMessage, TagChange, TargetAdaptation,
-    TombstoneAddress, Tombstones, TranslationCoverageCategory, TranslationDictionary,
-    TranslationStackCoverageStatus, TranslationUnitOwner, ValidationErrorKind,
-    fingerprint_card_template, fingerprint_field_definition, fingerprint_media_reference,
-    fingerprint_note, fingerprint_note_type,
+    TargetAdaptationIntent, TargetAdaptationOwnership, TombstoneAddress, Tombstones,
+    TranslationCoverageCategory, TranslationDictionary, TranslationStackCoverageStatus,
+    TranslationUnitOwner, ValidationErrorKind, fingerprint_card_template,
+    fingerprint_field_definition, fingerprint_media_reference, fingerprint_note,
+    fingerprint_note_type,
 };
 
 fn target_adaptation(
     expected_source: impl Into<String>,
     target: impl Into<String>,
 ) -> TargetAdaptation {
+    let target = target.into();
     TargetAdaptation {
+        intent: if target.is_empty() {
+            TargetAdaptationIntent::Delete
+        } else {
+            TargetAdaptationIntent::Adapt
+        },
+        ownership: TargetAdaptationOwnership::Translation,
         expected_source: expected_source.into(),
-        target: target.into(),
-        reason: None,
+        target,
+        reason: "test target-language decision".to_owned(),
     }
 }
 
@@ -973,6 +981,51 @@ fn translation_dictionary_target_adaptation_fails_when_expected_source_mismatche
         error.path == "notes.note.finland.fields.field.capital"
             && error.message.contains("target adaptation expected source")
     }));
+}
+
+#[test]
+fn target_deletion_is_path_scoped_and_has_explicit_coverage_state() {
+    let base = ug_style_deck();
+    let path = "notes.note.finland.fields.field.capital";
+    let overlay = Overlay {
+        id: sid("overlay.translation.da"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            target_adaptations: BTreeMap::from([(
+                path.to_owned(),
+                target_adaptation("Helsinki", ""),
+            )]),
+            ..TranslationDictionary::default()
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let coverage = base
+        .translation_coverage(&overlay)
+        .expect("coverage reports deletion");
+    let entry = coverage
+        .entries
+        .iter()
+        .find(|entry| entry.path == path)
+        .unwrap();
+    assert_eq!(entry.category, TranslationCoverageCategory::TargetDeletion);
+    assert_eq!(entry.translated, None);
+
+    let stack = base
+        .translation_stack_coverage(&[overlay])
+        .expect("deletion composes only at its declared path");
+    assert_eq!(
+        stack
+            .entries
+            .iter()
+            .find(|entry| entry.source_path == path)
+            .unwrap()
+            .status,
+        TranslationStackCoverageStatus::Deleted
+    );
 }
 
 #[test]

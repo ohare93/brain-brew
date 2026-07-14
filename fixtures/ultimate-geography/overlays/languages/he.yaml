@@ -654,11 +654,6 @@ translations:
     with star and crescent: 'עם כוכב וסהר'
     with text: 'עם כיתוב'
     'Åland Islands': 'איי אולנד'
-  target_additions:
-    notes.note.arctic-ocean.fields.field.country-info: 'ידוע גם בשם האוקיינוס הארקטי.'
-    notes.note.finland.fields.field.capital-info: 'שמה בפינית הוא הלסינקי, ושמה בשוודית הלסינגפורס.'
-    notes.note.greenland.fields.field.capital-info: 'נקראה בעבר גותהוב.'
-    notes.note.red-sea.fields.field.country-info: 'ידוע גם בשם הים האדום.'
   variables:
     label.capital:
       Capital: 'בירה'
@@ -998,6 +993,31 @@ translations:
     crowdanki:uuid:
       43c5ba66-9a65-11e8-90c9-a0481cc15658: 35307c16-cdbf-4c06-b3e3-61a654abc1c6
       43e2586a-9a65-11e8-a777-a0481cc15658: f37b2a2a-e97a-4909-8b56-f84c9caa5348
+target_adaptations:
+  notes.note.arctic-ocean.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'ידוע גם בשם האוקיינוס הארקטי.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.finland.fields.field.capital-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'שמה בפינית הוא הלסינקי, ושמה בשוודית הלסינגפורס.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.greenland.fields.field.capital-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'נקראה בעבר גותהוב.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
+  notes.note.red-sea.fields.field.country-info:
+    intent: adapt
+    ownership: translation
+    expected_source: ''
+    target: 'ידוע גם בשם הים האדום.'
+    reason: 'migrated from legacy translations.target_additions; review and describe its target-language purpose'
 deck:
   name:
     intent: replace

@@ -1,6 +1,9 @@
 use std::fmt;
 
-use crate::{StaleTranslation, TargetAdaptation, TranslationDictionary};
+use crate::{
+    StaleTranslation, TargetAdaptation, TargetAdaptationIntent, TargetAdaptationOwnership,
+    TranslationDictionary,
+};
 
 /// An atomic, validated mutation of a translation dictionary.
 ///
@@ -29,9 +32,11 @@ pub enum TranslationMutation {
     },
     SetTargetAdaptation {
         path: String,
+        intent: TargetAdaptationIntent,
+        ownership: TargetAdaptationOwnership,
         expected_source: String,
         target: String,
-        reason: Option<String>,
+        reason: String,
     },
 }
 
@@ -142,14 +147,8 @@ impl TranslationDictionary {
         for source in &self.no_change {
             validate_source(source, &format!("translations.no_change.{source}"))?;
         }
-        for path in self.target_adaptations.keys() {
-            if path.is_empty() {
-                return Err(TranslationMutationError::new(
-                    TranslationMutationErrorKind::EmptyPath,
-                    "target_adaptations",
-                    "target adaptation path must not be empty",
-                ));
-            }
+        for (path, adaptation) in &self.target_adaptations {
+            validate_target_adaptation(path, adaptation)?;
         }
         for record in &self.stale_translations {
             validate_source(&record.old_source, "stale_translations")?;
@@ -575,25 +574,21 @@ impl TranslationDictionary {
             }
             TranslationMutation::SetTargetAdaptation {
                 path,
+                intent,
+                ownership,
                 expected_source,
                 target,
                 reason,
             } => {
-                if path.is_empty() {
-                    return Err(TranslationMutationError::new(
-                        TranslationMutationErrorKind::EmptyPath,
-                        "target_adaptations",
-                        "target adaptation path must not be empty",
-                    ));
-                }
-                self.target_adaptations.insert(
-                    path.clone(),
-                    TargetAdaptation {
-                        expected_source: expected_source.clone(),
-                        target: target.clone(),
-                        reason: reason.clone(),
-                    },
-                );
+                let adaptation = TargetAdaptation {
+                    intent: *intent,
+                    ownership: *ownership,
+                    expected_source: expected_source.clone(),
+                    target: target.clone(),
+                    reason: reason.clone(),
+                };
+                validate_target_adaptation(path, &adaptation)?;
+                self.target_adaptations.insert(path.clone(), adaptation);
             }
         }
         Ok(())
@@ -663,6 +658,57 @@ impl TranslationDictionary {
                             .is_some_and(|suffix| suffix.starts_with('.'))
                 }))
         });
+    }
+}
+
+fn validate_target_adaptation(
+    path: &str,
+    adaptation: &TargetAdaptation,
+) -> Result<(), TranslationMutationError> {
+    if path.is_empty() {
+        return Err(TranslationMutationError::new(
+            TranslationMutationErrorKind::EmptyPath,
+            "target_adaptations",
+            "target adaptation path must not be empty",
+        ));
+    }
+    if adaptation.ownership != TargetAdaptationOwnership::Translation {
+        return Err(TranslationMutationError::new(
+            TranslationMutationErrorKind::InvalidContext,
+            format!("target_adaptations.{path}.ownership"),
+            "extension-owned content must use field_fills, not target_adaptations",
+        ));
+    }
+    if adaptation.reason.is_empty() {
+        return Err(TranslationMutationError::new(
+            TranslationMutationErrorKind::MissingKey,
+            format!("target_adaptations.{path}.reason"),
+            "target adaptation reason must not be blank",
+        ));
+    }
+    match adaptation.intent {
+        TargetAdaptationIntent::Adapt if adaptation.target.is_empty() => {
+            Err(TranslationMutationError::new(
+                TranslationMutationErrorKind::BlankFaithfulTranslation,
+                format!("target_adaptations.{path}.target"),
+                "adapt intent requires a non-blank target; use delete intent for an intentional removal",
+            ))
+        }
+        TargetAdaptationIntent::Delete if adaptation.expected_source.is_empty() => {
+            Err(TranslationMutationError::new(
+                TranslationMutationErrorKind::EmptySource,
+                format!("target_adaptations.{path}.expected_source"),
+                "delete intent requires a non-blank expected source",
+            ))
+        }
+        TargetAdaptationIntent::Delete if !adaptation.target.is_empty() => {
+            Err(TranslationMutationError::new(
+                TranslationMutationErrorKind::InvalidContext,
+                format!("target_adaptations.{path}.target"),
+                "delete intent must not carry target text; use adapt intent to replace content",
+            ))
+        }
+        _ => Ok(()),
     }
 }
 

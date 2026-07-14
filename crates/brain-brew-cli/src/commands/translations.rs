@@ -1941,6 +1941,7 @@ fn status_filter_is_known(status: &str) -> bool {
             | "direct_translation"
             | "contextual_translation"
             | "target_adaptation"
+            | "target_deletion"
             | "variable_translation"
             | "adapter_id_translation"
             | "ignored_source"
@@ -1968,6 +1969,7 @@ fn status_matches_filter(category: TranslationCoverageCategory, status: &str) ->
                 | TranslationCoverageCategory::ContextualTranslation
                 | TranslationCoverageCategory::NoChange
                 | TranslationCoverageCategory::TargetAdaptation
+                | TranslationCoverageCategory::TargetDeletion
                 | TranslationCoverageCategory::VariableTranslation
                 | TranslationCoverageCategory::AdapterIdTranslation
         ),
@@ -1976,12 +1978,17 @@ fn status_matches_filter(category: TranslationCoverageCategory, status: &str) ->
             TranslationCoverageCategory::DirectTranslation
                 | TranslationCoverageCategory::ContextualTranslation
                 | TranslationCoverageCategory::TargetAdaptation
+                | TranslationCoverageCategory::TargetDeletion
                 | TranslationCoverageCategory::VariableTranslation
         ),
         "direct" => category == TranslationCoverageCategory::DirectTranslation,
         "contextual" => category == TranslationCoverageCategory::ContextualTranslation,
         "no_change" => category == TranslationCoverageCategory::NoChange,
-        "adaptation" => category == TranslationCoverageCategory::TargetAdaptation,
+        "adaptation" => matches!(
+            category,
+            TranslationCoverageCategory::TargetAdaptation
+                | TranslationCoverageCategory::TargetDeletion
+        ),
         "variable" => category == TranslationCoverageCategory::VariableTranslation,
         "adapter_id" => category == TranslationCoverageCategory::AdapterIdTranslation,
         "ignored" => category == TranslationCoverageCategory::IgnoredSource,
@@ -2327,6 +2334,7 @@ struct TranslationSummaryCounts {
     contextual_translation: usize,
     no_change: usize,
     target_adaptation: usize,
+    target_deletion: usize,
     variable_translation: usize,
     adapter_id_translation: usize,
     untranslated_fallback: usize,
@@ -2357,6 +2365,7 @@ fn print_json_summary(reports: &[ScopedTranslationReport]) {
                 "contextual_translation": row.counts.contextual_translation,
                 "no_change": row.counts.no_change,
                 "target_adaptation": row.counts.target_adaptation,
+                "target_deletion": row.counts.target_deletion,
                 "variable_translation": row.counts.variable_translation,
                 "adapter_id_translation": row.counts.adapter_id_translation,
                 "untranslated_fallback": row.counts.untranslated_fallback,
@@ -2394,6 +2403,7 @@ fn print_compact_human_summary_table(rows: Vec<TranslationSummaryRow>) {
         "ctxt".to_owned(),
         "same".to_owned(),
         "adapt".to_owned(),
+        "delete".to_owned(),
         "vars".to_owned(),
         "ids".to_owned(),
         "miss".to_owned(),
@@ -2420,7 +2430,7 @@ fn print_compact_human_summary_table(rows: Vec<TranslationSummaryRow>) {
         ]);
     }
     let right_aligned = [
-        false, true, true, true, true, true, true, true, true, true, true, true, true,
+        false, true, true, true, true, true, true, true, true, true, true, true, true, true,
     ];
     for line in aligned_table_lines(&table, &right_aligned) {
         println!("{line}");
@@ -2437,6 +2447,7 @@ fn print_full_human_summary_table(rows: Vec<TranslationSummaryRow>) {
         "contextual".to_owned(),
         "no-change".to_owned(),
         "adaptations".to_owned(),
+        "deletions".to_owned(),
         "variables".to_owned(),
         "adapter-ids".to_owned(),
         "missing-text".to_owned(),
@@ -2465,7 +2476,8 @@ fn print_full_human_summary_table(rows: Vec<TranslationSummaryRow>) {
         ]);
     }
     let right_aligned = [
-        false, true, false, false, true, true, true, true, true, true, true, true, true, true, true,
+        false, true, false, false, true, true, true, true, true, true, true, true, true, true,
+        true, true,
     ];
     for line in aligned_table_lines(&table, &right_aligned) {
         println!("{line}");
@@ -2547,6 +2559,7 @@ fn translation_summary_counts(entries: &[TranslationCoverageEntry]) -> Translati
         contextual_translation: counts.get("contextual_translation").copied().unwrap_or(0),
         no_change: counts.get("no_change").copied().unwrap_or(0),
         target_adaptation: counts.get("target_adaptation").copied().unwrap_or(0),
+        target_deletion: counts.get("target_deletion").copied().unwrap_or(0),
         variable_translation: counts.get("variable_translation").copied().unwrap_or(0),
         adapter_id_translation: counts.get("adapter_id_translation").copied().unwrap_or(0),
         untranslated_fallback,
@@ -3028,6 +3041,7 @@ fn color_category(category: TranslationCoverageCategory, text: &str) -> String {
         TranslationCoverageCategory::ContextualTranslation => color_stdout(text, "36"),
         TranslationCoverageCategory::NoChange => color_stdout(text, "34"),
         TranslationCoverageCategory::TargetAdaptation => color_stdout(text, "35"),
+        TranslationCoverageCategory::TargetDeletion => color_stdout(text, "31"),
         TranslationCoverageCategory::VariableTranslation
         | TranslationCoverageCategory::AdapterIdTranslation
         | TranslationCoverageCategory::IgnoredSource => color_stdout(text, "2"),

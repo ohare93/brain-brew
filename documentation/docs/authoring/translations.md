@@ -13,7 +13,7 @@ Translation overlays separate faithful translations from intentional target-lang
 | `translations.direct` | reusable faithful translations of exact non-empty source strings | `source text: target text` |
 | `translations.contextual` | faithful translations scoped to a stable deck context | `context path -> source text: target text` |
 | `translations.no_change` | translator-reviewed text whose faithful target is identical to source | `[source text]` |
-| `target_adaptations` | path-scoped target wording that intentionally diverges from or supplements the source | `stable deck path -> expected_source, target, optional reason` |
+| `target_adaptations` | explicit path-scoped target-language adaptation or deletion | `stable deck path -> intent, ownership, expected_source, reason, target (adapt only)` |
 | `stale_translations` | review debt for source text that changed while reusing the prior target text temporarily | list of `old_source`, `new_source`, `target`, optional `context` |
 
 Contextual translations win over direct translations. When multiple contextual scopes match, the longest matching context path wins. No-change entries cover missing translation checks but never modify composed output. Target adaptations apply only at their exact path and only when `expected_source` still matches. Stale translations apply their `target` text to `new_source` while reporting a stale-review warning until resolved.
@@ -166,24 +166,36 @@ A stale translation with no `context` acts like a direct translation for `new_so
 
 Resolving a stale translation usually moves it into a normal translation entry for `new_source` (`direct` when contextless, `contextual` when context is present) and removes the stale translation. If an existing direct, no-change, or matching contextual entry already shadows that stale record, resolving only deletes the superseded stale record; it does not create or update another translation entry.
 
-## Target adaptations
+## Path-scoped adaptations and deletions
 
-Use top-level `target_adaptations` when localized text intentionally diverges from, explains, or supplements the source. This includes blank-source target additions and target-language-specific wording that should not be described as a faithful translation.
+Use top-level `target_adaptations` only for a target-language decision that intentionally diverges from, supplements, or removes source wording at one exact stable deck path. Every record is typed and reviewable: `intent`, `ownership`, `expected_source`, and a non-blank `reason` are required. Translation overlays must declare `ownership: translation`; extension-owned blank content belongs in [`field_fills`](field-fills.md), not in this section.
 
 ```yaml
 target_adaptations:
   notes.note.taiwan.fields.field.country-info:
+    intent: adapt
+    ownership: translation
     expected_source: Partially recognised state claimed by China.
     target: 中国宣称对台湾拥有主权，但仅被部分国家承认
     reason: target-language geopolitical wording
   notes.note.united-kingdom.fields.field.country-info:
+    intent: adapt
+    ownership: translation
     expected_source: ''
     target: Offiziell das Vereinigte Königreich Großbritannien und Nordirland.
+    reason: target-language explanatory addition
+  notes.note.example.fields.field.private-note:
+    intent: delete
+    ownership: translation
+    expected_source: Source-only learner instruction.
+    reason: not appropriate in this target-language edition
 ```
 
-The current source value must equal `expected_source`. If it does not, composition rejects the adaptation so maintainers can review whether the target wording still applies.
+`adapt` requires non-blank `target` text and may deliberately add localized text when `expected_source` is blank. `delete` requires a non-blank `expected_source` and has no `target`; it cannot act as a global source-key fallback. Direct, contextual, and variable translations always reject blank targets, so a blank value can never silently erase every occurrence of a source string.
 
-If an extension fills blank fields with new content, use [`field_fills`](field-fills.md) instead.
+The current source value must equal `expected_source`. If it does not, composition rejects the record so maintainers can review whether the decision still applies. Coverage reports adaptations as `target_adaptation` and deletions as `target_deletion`; final stack coverage retains a deleted entry with its source owner and resolving overlay.
+
+Legacy `translations.target_additions` and untyped adaptation maps remain reader-compatible only. `brainbrew fmt <overlay.yaml>` writes the canonical typed form and the codec exposes a migration diagnostic telling maintainers to review the generated reason.
 
 ## Translate source variables
 

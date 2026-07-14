@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use brain_brew_formats::{lockfile, manifest, media_map};
+use brain_brew_formats::{canonical_yaml, lockfile, manifest, media_map};
 
 use crate::help;
 use crate::io::{
@@ -32,6 +32,8 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     recover_workspace(&workspace_root)?;
 
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let migration_diagnostics =
+        canonical_yaml::overlay_migration_diagnostics(&input).unwrap_or_default();
     let (kind, formatted) = format_typed_source(path, &input)?;
     if formatted != input {
         let replacement = formatted.into_bytes();
@@ -42,6 +44,9 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         commit_workspace_files(&workspace_root, vec![planned])?;
     }
     output::print_success("formatted source", &[("path", path.display().to_string())]);
+    for diagnostic in migration_diagnostics {
+        eprintln!("warning: {}: {}", diagnostic.path, diagnostic.message);
+    }
     Ok(())
 }
 

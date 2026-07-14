@@ -63,7 +63,20 @@ impl CanonicalDeck {
                     let Some(status) = stack_status(entry.category) else {
                         continue;
                     };
-                    if let Some(unit) = states.get_mut(&entry.path) {
+                    if status == TranslationStackCoverageStatus::Deleted {
+                        if let Some(unit) = states.remove(&entry.path) {
+                            deleted.push(TranslationStackCoverageEntry {
+                                status,
+                                owner: unit.owner,
+                                source_path: entry.path,
+                                source_text: unit.source_text,
+                                old_source_text: Some(entry.source),
+                                translated_text: None,
+                                resolved_by: Some(overlay.id.clone()),
+                                target_stack: target_stack.clone(),
+                            });
+                        }
+                    } else if let Some(unit) = states.get_mut(&entry.path) {
                         set_stack_resolution(unit, status, entry.old_source, &overlay.id);
                     } else if status == TranslationStackCoverageStatus::Stale {
                         // A shadowed stale record has a dictionary path rather than a
@@ -250,6 +263,9 @@ fn stack_status(category: TranslationCoverageCategory) -> Option<TranslationStac
         }
         TranslationCoverageCategory::TargetAdaptation => {
             Some(TranslationStackCoverageStatus::Adaptation)
+        }
+        TranslationCoverageCategory::TargetDeletion => {
+            Some(TranslationStackCoverageStatus::Deleted)
         }
         TranslationCoverageCategory::VariableTranslation => {
             Some(TranslationStackCoverageStatus::Variable)
@@ -782,7 +798,11 @@ impl TranslationCoverageBuilder<'_> {
             TranslationOutcome::TargetAdaptation { adaptation } => {
                 self.seen_target_adaptations.insert(path.clone());
                 let category = if value == adaptation.expected_source {
-                    TranslationCoverageCategory::TargetAdaptation
+                    if adaptation.is_deletion() {
+                        TranslationCoverageCategory::TargetDeletion
+                    } else {
+                        TranslationCoverageCategory::TargetAdaptation
+                    }
                 } else {
                     TranslationCoverageCategory::InvalidTargetAdaptation
                 };
@@ -791,7 +811,7 @@ impl TranslationCoverageBuilder<'_> {
                     path: path.clone(),
                     source: value.to_owned(),
                     old_source: Some(adaptation.expected_source.clone()),
-                    translated: Some(adaptation.target.clone()),
+                    translated: (!adaptation.is_deletion()).then(|| adaptation.target.clone()),
                     context: Some(path),
                 });
             }
@@ -1044,7 +1064,7 @@ impl TranslationCoverageBuilder<'_> {
                     path: format!("target_adaptations.{path}"),
                     source: adaptation.expected_source.clone(),
                     old_source: None,
-                    translated: Some(adaptation.target.clone()),
+                    translated: (!adaptation.is_deletion()).then(|| adaptation.target.clone()),
                     context: Some(path.clone()),
                 });
             }

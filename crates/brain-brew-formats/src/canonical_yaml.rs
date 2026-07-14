@@ -7,8 +7,8 @@ use brain_brew_core::{
     FieldDefinitionChange, FieldImageReference, FieldValue, InvalidStableId, MediaChange,
     MediaReference, MessageComponent, Note, NoteChange, NoteType, NoteTypeChange, Overlay,
     OverlayKind, PropertyChange, RemovalProvenance, StableId, StaleTranslation, StructuredMessage,
-    TagChange, TargetAdaptation, TombstoneAddress, TombstoneRecord, Tombstones,
-    TranslationDictionary, ValidationReport,
+    TagChange, TargetAdaptation, TargetAdaptationIntent, TargetAdaptationOwnership,
+    TombstoneAddress, TombstoneRecord, Tombstones, TranslationDictionary, ValidationReport,
 };
 use serde::{Deserialize, Deserializer};
 use serde_yaml::Value;
@@ -18,7 +18,79 @@ use crate::yaml_scalar::{
     write_multiline_or_scalar,
 };
 
-const UG_TARGET_ADDITION_REASON: &str = "target addition from upstream UG";
+/// An actionable notice emitted when a legacy overlay is read compatibly.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OverlayMigrationDiagnostic {
+    pub path: String,
+    pub message: String,
+}
+
+/// Identify legacy target-adaptation forms accepted by the compatibility reader.
+///
+/// Run `brainbrew fmt <overlay.yaml>` to emit the typed canonical form.
+pub fn overlay_migration_diagnostics(
+    input: &str,
+) -> Result<Vec<OverlayMigrationDiagnostic>, CanonicalYamlError> {
+    overlay_from_str(input)?;
+    let value: Value = serde_yaml::from_str(input).map_err(CanonicalYamlError::Parse)?;
+    let Some(root) = value.as_mapping() else {
+        return Ok(Vec::new());
+    };
+    let mut diagnostics = Vec::new();
+    let translations = yaml_mapping_value(root, "translations");
+    if let Some(translations) = translations.and_then(Value::as_mapping) {
+        if let Some(additions) =
+            yaml_mapping_value(translations, "target_additions").and_then(Value::as_mapping)
+        {
+            for path in additions.keys().filter_map(Value::as_str) {
+                diagnostics.push(OverlayMigrationDiagnostic {
+                    path: format!("translations.target_additions.{path}"),
+                    message: "legacy target_additions is accepted for migration; run brainbrew fmt to emit target_adaptations with intent, ownership, expected_source, and reason".to_owned(),
+                });
+            }
+        }
+        collect_legacy_target_adaptation_diagnostics(
+            &mut diagnostics,
+            translations,
+            "translations.target_adaptations",
+        );
+    }
+    collect_legacy_target_adaptation_diagnostics(&mut diagnostics, root, "target_adaptations");
+    Ok(diagnostics)
+}
+
+fn yaml_mapping_value<'a>(mapping: &'a serde_yaml::Mapping, key: &str) -> Option<&'a Value> {
+    mapping.get(Value::String(key.to_owned()))
+}
+
+fn collect_legacy_target_adaptation_diagnostics(
+    diagnostics: &mut Vec<OverlayMigrationDiagnostic>,
+    parent: &serde_yaml::Mapping,
+    section: &str,
+) {
+    let Some(adaptations) =
+        yaml_mapping_value(parent, section.rsplit('.').next().unwrap_or(section))
+            .and_then(Value::as_mapping)
+    else {
+        return;
+    };
+    for (path, value) in adaptations {
+        let Some(path) = path.as_str() else {
+            continue;
+        };
+        let Some(adaptation) = value.as_mapping() else {
+            continue;
+        };
+        if yaml_mapping_value(adaptation, "intent").is_none()
+            && yaml_mapping_value(adaptation, "ownership").is_none()
+        {
+            diagnostics.push(OverlayMigrationDiagnostic {
+                path: format!("{section}.{path}"),
+                message: "legacy target adaptation is accepted for migration; run brainbrew fmt to add typed intent, ownership, and a reviewable reason".to_owned(),
+            });
+        }
+    }
+}
 
 /// Parse a CanonicalDeck from strict canonical YAML.
 pub fn from_str(input: &str) -> Result<CanonicalDeck, CanonicalYamlError> {
@@ -234,17 +306,12 @@ pub fn overlay_to_string(overlay: &Overlay) -> Result<String, CanonicalYamlError
     };
 
     if let Some(translations) = &overlay.translations {
-        let (target_additions, target_adaptations) =
-            split_target_additions_for_format(&translations.target_adaptations);
-        let has_top_level_translation_data =
-            !target_adaptations.is_empty() || !translations.stale_translations.is_empty();
-        if !translation_dictionary_is_empty(translations)
-            || !target_additions.is_empty()
-            || !has_top_level_translation_data
-        {
-            write_translation_dictionary(&mut out, translations, &target_additions);
+        let has_top_level_translation_data = !translations.target_adaptations.is_empty()
+            || !translations.stale_translations.is_empty();
+        if !translation_dictionary_is_empty(translations) || !has_top_level_translation_data {
+            write_translation_dictionary(&mut out, translations);
         }
-        write_target_adaptations(&mut out, &target_adaptations);
+        write_target_adaptations(&mut out, &translations.target_adaptations);
         write_stale_translations(&mut out, &translations.stale_translations);
     }
 
@@ -678,12 +745,8 @@ fn validate_translation_dictionary_invariants(overlay: &Overlay) -> Result<(), C
     Ok(())
 }
 
-fn write_translation_dictionary(
-    out: &mut String,
-    translations: &TranslationDictionary,
-    target_additions: &BTreeMap<String, String>,
-) {
-    if translation_dictionary_is_empty(translations) && target_additions.is_empty() {
+fn write_translation_dictionary(out: &mut String, translations: &TranslationDictionary) {
+    if translation_dictionary_is_empty(translations) {
         writeln!(out, "translations: {{}}").expect("writing to a string cannot fail");
         return;
     }
@@ -717,13 +780,6 @@ fn write_translation_dictionary(
     }
     if !translations.no_change.is_empty() {
         write_no_change(out, &translations.no_change);
-    }
-    if !target_additions.is_empty() {
-        writeln!(out, "  target_additions:").expect("writing to a string cannot fail");
-        for (path, target) in target_additions {
-            writeln!(out, "    {}: {}", emitted_key(path), yaml_scalar(target))
-                .expect("writing to a string cannot fail");
-        }
     }
     if !translations.variables.is_empty() {
         writeln!(out, "  variables:").expect("writing to a string cannot fail");
@@ -759,23 +815,6 @@ fn write_translation_dictionary(
     }
 }
 
-fn split_target_additions_for_format(
-    target_adaptations: &BTreeMap<String, TargetAdaptation>,
-) -> (BTreeMap<String, String>, BTreeMap<String, TargetAdaptation>) {
-    let mut target_additions = BTreeMap::new();
-    let mut remaining_target_adaptations = BTreeMap::new();
-    for (path, adaptation) in target_adaptations {
-        if adaptation.expected_source.is_empty()
-            && adaptation.reason.as_deref() == Some(UG_TARGET_ADDITION_REASON)
-        {
-            target_additions.insert(path.clone(), adaptation.target.clone());
-        } else {
-            remaining_target_adaptations.insert(path.clone(), adaptation.clone());
-        }
-    }
-    (target_additions, remaining_target_adaptations)
-}
-
 fn write_target_adaptations(
     out: &mut String,
     target_adaptations: &BTreeMap<String, TargetAdaptation>,
@@ -788,16 +827,28 @@ fn write_target_adaptations(
         writeln!(out, "  {}:", emitted_key(path)).expect("writing to a string cannot fail");
         writeln!(
             out,
+            "    intent: {}",
+            target_adaptation_intent_name(adaptation.intent)
+        )
+        .expect("writing to a string cannot fail");
+        writeln!(
+            out,
+            "    ownership: {}",
+            target_adaptation_ownership_name(adaptation.ownership)
+        )
+        .expect("writing to a string cannot fail");
+        writeln!(
+            out,
             "    expected_source: {}",
             yaml_scalar(&adaptation.expected_source)
         )
         .expect("writing to a string cannot fail");
-        writeln!(out, "    target: {}", yaml_scalar(&adaptation.target))
-            .expect("writing to a string cannot fail");
-        if let Some(reason) = &adaptation.reason {
-            writeln!(out, "    reason: {}", yaml_scalar(reason))
+        if !adaptation.is_deletion() {
+            writeln!(out, "    target: {}", yaml_scalar(&adaptation.target))
                 .expect("writing to a string cannot fail");
         }
+        writeln!(out, "    reason: {}", yaml_scalar(&adaptation.reason))
+            .expect("writing to a string cannot fail");
     }
 }
 
@@ -1275,6 +1326,20 @@ fn overlay_kind_name(kind: OverlayKind) -> &'static str {
         OverlayKind::Extension => "extension",
         OverlayKind::Patch => "patch",
         OverlayKind::Personal => "personal",
+    }
+}
+
+fn target_adaptation_intent_name(intent: TargetAdaptationIntent) -> &'static str {
+    match intent {
+        TargetAdaptationIntent::Adapt => "adapt",
+        TargetAdaptationIntent::Delete => "delete",
+    }
+}
+
+fn target_adaptation_ownership_name(ownership: TargetAdaptationOwnership) -> &'static str {
+    match ownership {
+        TargetAdaptationOwnership::Translation => "translation",
+        TargetAdaptationOwnership::Extension => "extension",
     }
 }
 
@@ -1934,7 +1999,7 @@ impl OverlayYaml {
         for (path, adaptation) in self.target_adaptations {
             if translations
                 .target_adaptations
-                .insert(path.clone(), adaptation.into_target_adaptation())
+                .insert(path.clone(), adaptation.into_target_adaptation(&path)?)
                 .is_some()
             {
                 return Err(CanonicalYamlError::InvalidTranslationDictionary(format!(
@@ -2172,19 +2237,59 @@ struct TranslationDictionaryYaml {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct TargetAdaptationYaml {
+    #[serde(default)]
+    intent: Option<String>,
+    #[serde(default)]
+    ownership: Option<String>,
     expected_source: String,
-    target: String,
+    #[serde(default)]
+    target: Option<String>,
     #[serde(default)]
     reason: Option<String>,
 }
 
 impl TargetAdaptationYaml {
-    fn into_target_adaptation(self) -> TargetAdaptation {
-        TargetAdaptation {
-            expected_source: self.expected_source,
-            target: self.target,
-            reason: self.reason,
+    fn into_target_adaptation(self, path: &str) -> Result<TargetAdaptation, CanonicalYamlError> {
+        let typed_form = self.intent.is_some() || self.ownership.is_some();
+        if typed_form
+            && (self.intent.is_none() || self.ownership.is_none() || self.reason.is_none())
+        {
+            return Err(CanonicalYamlError::InvalidTranslationDictionary(format!(
+                "target_adaptations.{path}: typed target adaptations require intent, ownership, and a non-blank reason; run brainbrew fmt on a legacy overlay before editing it"
+            )));
         }
+        if !typed_form && self.target.is_none() {
+            return Err(CanonicalYamlError::InvalidTranslationDictionary(format!(
+                "target_adaptations.{path}.target: legacy target adaptations require target text; use typed intent: delete for an intentional deletion"
+            )));
+        }
+        let target = self.target.unwrap_or_default();
+        let intent = self
+            .intent
+            .as_deref()
+            .map(parse_target_adaptation_intent)
+            .transpose()?
+            .unwrap_or(if target.is_empty() {
+                TargetAdaptationIntent::Delete
+            } else {
+                TargetAdaptationIntent::Adapt
+            });
+        let ownership = self
+            .ownership
+            .as_deref()
+            .map(parse_target_adaptation_ownership)
+            .transpose()?
+            .unwrap_or(TargetAdaptationOwnership::Translation);
+        Ok(TargetAdaptation {
+            intent,
+            ownership,
+            expected_source: self.expected_source,
+            target,
+            reason: self.reason.unwrap_or_else(|| {
+                "migrated legacy target adaptation; review and describe its target-language purpose"
+                    .to_owned()
+            }),
+        })
     }
 }
 
@@ -2216,16 +2321,18 @@ impl TranslationDictionaryYaml {
         let mut target_adaptations = self
             .target_adaptations
             .into_iter()
-            .map(|(path, adaptation)| (path, adaptation.into_target_adaptation()))
-            .collect::<BTreeMap<_, _>>();
+            .map(|(path, adaptation)| Ok((path.clone(), adaptation.into_target_adaptation(&path)?)))
+            .collect::<Result<BTreeMap<_, _>, CanonicalYamlError>>()?;
         for (path, target) in self.target_additions {
             if target_adaptations
                 .insert(
                     path.clone(),
                     TargetAdaptation {
+                        intent: TargetAdaptationIntent::Adapt,
+                        ownership: TargetAdaptationOwnership::Translation,
                         expected_source: String::new(),
                         target,
-                        reason: Some(UG_TARGET_ADDITION_REASON.to_owned()),
+                        reason: "migrated from legacy translations.target_additions; review and describe its target-language purpose".to_owned(),
                     },
                 )
                 .is_some()
@@ -2797,6 +2904,30 @@ impl ExpectedBaseYaml {
             } => Ok(ExpectedBase::Value(value)),
             Self::Value { value } => Ok(ExpectedBase::FieldValue(value.into_field_value()?)),
         }
+    }
+}
+
+fn parse_target_adaptation_intent(
+    intent: &str,
+) -> Result<TargetAdaptationIntent, CanonicalYamlError> {
+    match intent {
+        "adapt" => Ok(TargetAdaptationIntent::Adapt),
+        "delete" => Ok(TargetAdaptationIntent::Delete),
+        _ => Err(CanonicalYamlError::InvalidTranslationDictionary(format!(
+            "target adaptation intent must be adapt or delete, found {intent:?}"
+        ))),
+    }
+}
+
+fn parse_target_adaptation_ownership(
+    ownership: &str,
+) -> Result<TargetAdaptationOwnership, CanonicalYamlError> {
+    match ownership {
+        "translation" => Ok(TargetAdaptationOwnership::Translation),
+        "extension" => Ok(TargetAdaptationOwnership::Extension),
+        _ => Err(CanonicalYamlError::InvalidTranslationDictionary(format!(
+            "target adaptation ownership must be translation or extension, found {ownership:?}"
+        ))),
     }
 }
 
