@@ -23,6 +23,8 @@ use crate::package_resolver::{DiscoveryPolicy, apply_discovery_option};
 use crate::planner::{ManifestRegistry, PlannedOverlay, plan_manifest_target};
 use crate::workspace_mutation::{PlannedWorkspaceFile, commit_workspace_files, recover_workspace};
 
+const TRANSLATION_JSON_SCHEMA_VERSION: u32 = 1;
+
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
         print!(
@@ -59,11 +61,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if args.resolve_action.is_some() {
         let applied = resolve_stale_translations(&args, &reports)?;
         if args.json_output {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&json!({ "resolved": applied }))
-                    .expect("stale resolution JSON serializes")
-            );
+            print_translation_json("stale_resolution", json!({ "resolved": applied }));
         } else {
             let total = applied.values().sum::<usize>();
             let noun = if total == 1 {
@@ -2000,6 +1998,26 @@ fn normalized_status_filter(status: &str) -> String {
     status.trim().to_ascii_lowercase().replace(['-', ' '], "_")
 }
 
+/// Versioned envelope shared by every successful `translations --json` mode.
+///
+/// Keep this intentionally small: mode-specific objects remain additive while
+/// scripts can validate the schema version and result kind before reading them.
+fn print_translation_json(kind: &str, payload: serde_json::Value) {
+    let mut value = payload;
+    let object = value
+        .as_object_mut()
+        .expect("translation JSON payload is always an object");
+    object.insert(
+        "schema_version".to_owned(),
+        json!(TRANSLATION_JSON_SCHEMA_VERSION),
+    );
+    object.insert("kind".to_owned(), json!(kind));
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&value).expect("translation JSON serializes")
+    );
+}
+
 fn print_json_reports(reports: &[ScopedTranslationReport], applied: &BTreeMap<String, usize>) {
     let reports_json = reports
         .iter()
@@ -2013,13 +2031,12 @@ fn print_json_reports(reports: &[ScopedTranslationReport], applied: &BTreeMap<St
             })
         })
         .collect::<Vec<_>>();
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&json!({
+    print_translation_json(
+        "translation_report",
+        json!({
             "reports": reports_json,
             "applied": applied,
-        }))
-        .expect("translation report JSON serializes")
+        }),
     );
 }
 
@@ -2036,11 +2053,7 @@ fn print_json_contexts(reports: &[ScopedTranslationReport]) {
             })
         })
         .collect::<Vec<_>>();
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&json!({ "contexts": contexts_json }))
-            .expect("translation context JSON serializes")
-    );
+    print_translation_json("translation_context", json!({ "contexts": contexts_json }));
 }
 
 fn context_unit_json(unit: &TranslationContextUnit) -> serde_json::Value {
@@ -2376,11 +2389,7 @@ fn print_json_summary(reports: &[ScopedTranslationReport]) {
             })
         })
         .collect::<Vec<_>>();
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&json!({ "summaries": summaries }))
-            .expect("translation summary JSON serializes")
-    );
+    print_translation_json("translation_summary", json!({ "summaries": summaries }));
 }
 
 fn print_human_summary(reports: &[ScopedTranslationReport], full: bool) {
@@ -3126,6 +3135,23 @@ mod tests {
         assert!(output.contains("Showing 8–10 of 10\r\n"));
         assert!(!output.contains("option-1\r\n"));
         assert!(output.contains("  › option-9\r\n"));
+    }
+
+    #[test]
+    fn translation_json_documentation_matches_the_versioned_envelope() {
+        let documentation =
+            include_str!("../../../../documentation/docs/authoring/translations.md");
+        assert!(documentation.contains(&format!(
+            "\"schema_version\": {TRANSLATION_JSON_SCHEMA_VERSION}"
+        )));
+        for kind in [
+            "translation_report",
+            "translation_context",
+            "translation_summary",
+            "stale_resolution",
+        ] {
+            assert!(documentation.contains(kind));
+        }
     }
 
     #[test]

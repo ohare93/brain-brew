@@ -44,9 +44,9 @@ impl CanonicalDeck {
                     path.clone(),
                     StackTranslationUnit {
                         owner: TranslationUnitOwner::Base,
-                        source_text: source.clone(),
+                        source_text: source.source_text.clone(),
                         old_source_text: None,
-                        status: TranslationStackCoverageStatus::UntranslatedFallback,
+                        status: source.status,
                         resolved_by: None,
                     },
                 )
@@ -108,14 +108,15 @@ impl CanonicalDeck {
             // other overlays own source units that they add or replace.
             if overlay.translations.is_none() {
                 for (path, source) in &next_snapshot {
-                    if snapshot.get(path) != Some(source) {
+                    if snapshot.get(path).map(|unit| &unit.source_text) != Some(&source.source_text)
+                    {
                         states.insert(
                             path.clone(),
                             StackTranslationUnit {
                                 owner: TranslationUnitOwner::Overlay(overlay.id.clone()),
-                                source_text: source.clone(),
+                                source_text: source.source_text.clone(),
                                 old_source_text: None,
-                                status: TranslationStackCoverageStatus::UntranslatedFallback,
+                                status: source.status,
                                 resolved_by: None,
                             },
                         );
@@ -153,7 +154,7 @@ impl CanonicalDeck {
                         source_path: path,
                         source_text: unit.source_text,
                         old_source_text: unit.old_source_text,
-                        translated_text: Some(target.clone()),
+                        translated_text: Some(target.source_text.clone()),
                         resolved_by: unit.resolved_by,
                         target_stack: target_stack.clone(),
                     })
@@ -205,9 +206,15 @@ fn set_stack_resolution(
     }
 }
 
+#[derive(Clone)]
+struct TranslationUnitSnapshot {
+    source_text: String,
+    status: TranslationStackCoverageStatus,
+}
+
 fn translation_unit_snapshot(
     deck: &CanonicalDeck,
-) -> Result<BTreeMap<String, String>, FieldGraphReport> {
+) -> Result<BTreeMap<String, TranslationUnitSnapshot>, FieldGraphReport> {
     let overlay = Overlay {
         id: StableId::new("overlay.translation.coverage-snapshot")
             .expect("static coverage overlay id is valid"),
@@ -218,19 +225,66 @@ fn translation_unit_snapshot(
         note_type_changes: BTreeMap::new(),
         media_changes: BTreeMap::new(),
     };
-    Ok(deck
+    let mut units = deck
         .translation_coverage(&overlay)?
         .entries
         .into_iter()
-        .filter(|entry| {
-            matches!(
-                entry.category,
-                TranslationCoverageCategory::UntranslatedFallback
-                    | TranslationCoverageCategory::IgnoredSource
-            )
+        .filter_map(|entry| match entry.category {
+            TranslationCoverageCategory::UntranslatedFallback => Some((
+                entry.path,
+                TranslationUnitSnapshot {
+                    source_text: entry.source,
+                    status: TranslationStackCoverageStatus::UntranslatedFallback,
+                },
+            )),
+            TranslationCoverageCategory::IgnoredSource => Some((
+                entry.path,
+                TranslationUnitSnapshot {
+                    source_text: entry.source,
+                    status: TranslationStackCoverageStatus::HiddenExcluded,
+                },
+            )),
+            _ => None,
         })
-        .map(|entry| (entry.path, entry.source))
-        .collect())
+        .collect::<BTreeMap<_, _>>();
+
+    // Field-definition names are deliberately not dictionary-translateable. Keep
+    // them in the final report so consumers can distinguish structural exclusions
+    // from missing target-language text without counting them as fallbacks.
+    for (note_type_id, note_type) in &deck.note_types {
+        if deck
+            .tombstones
+            .blocking(&TombstoneAddress::NoteType {
+                note_type_id: note_type_id.clone(),
+            })
+            .is_some()
+        {
+            continue;
+        }
+        for field in &note_type.fields {
+            if deck
+                .tombstones
+                .blocking(&TombstoneAddress::FieldDefinition {
+                    note_type_id: note_type_id.clone(),
+                    field_id: field.id.clone(),
+                })
+                .is_none()
+            {
+                units.insert(
+                    DeckPath::NoteTypeFieldName {
+                        note_type_id: note_type_id.clone(),
+                        field_id: field.id.clone(),
+                    }
+                    .to_string(),
+                    TranslationUnitSnapshot {
+                        source_text: field.name.clone(),
+                        status: TranslationStackCoverageStatus::StructuralExcluded,
+                    },
+                );
+            }
+        }
+    }
+    Ok(units)
 }
 
 fn stack_coverage_graph_error(report: FieldGraphReport) -> ComposeReport {

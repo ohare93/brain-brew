@@ -17,7 +17,7 @@ use brain_brew_core::{
     CanonicalDeck, CardTemplate, ContentKind, ContentValidationReport, DiagnosticCategory,
     DomainDiagnostic, FieldGraphReport, FieldValue, Note, NoteType, Overlay, OverlayKind, StableId,
     TranslationCoverageCategory, TranslationCoverageEntry, TranslationDictionary,
-    validate_deck_content,
+    TranslationStackCoverageReport, validate_deck_content,
 };
 use brain_brew_formats::canonical_source_document::CanonicalScalarTarget;
 use brain_brew_formats::manifest::{
@@ -1567,6 +1567,18 @@ impl WorkspaceMetadata {
                 report,
             )
         })?;
+        let final_report = plan
+            .base
+            .translation_stack_coverage(&diagnostic_overlays)
+            .map_err(|report| {
+                WorkbenchError::compose(
+                    format!(
+                        "failed to resolve final translation coverage for target {}",
+                        selection.target_id
+                    ),
+                    report,
+                )
+            })?;
 
         let Some(source_deck) = selected_source_deck else {
             return Err((format!(
@@ -1596,6 +1608,7 @@ impl WorkspaceMetadata {
             source_deck,
             target_deck: current,
             report,
+            final_report,
         })
     }
 
@@ -2106,6 +2119,8 @@ struct SelectedTranslationContext {
     source_deck: CanonicalDeck,
     target_deck: CanonicalDeck,
     report: brain_brew_core::TranslationCoverageReport,
+    /// Final-stack totals use the same pure-core resolver as verification.
+    final_report: TranslationStackCoverageReport,
 }
 
 #[derive(Clone, Debug)]
@@ -2800,9 +2815,28 @@ fn note_pivot_json_from_context(
         },
         "progress": progress,
         "metadata_progress": metadata_progress,
+        "final_coverage": final_translation_coverage_json(context),
         "tombstones": workbench_tombstones_json(context),
         "notes": notes,
         "stale_entries": stale_entries_json(&context.report.entries),
+    })
+}
+
+fn final_translation_coverage_json(context: &SelectedTranslationContext) -> Value {
+    let totals = context.final_report.totals();
+    json!({
+        "total": totals.total,
+        "by_status": totals
+            .by_status
+            .into_iter()
+            .map(|(status, count)| (status.as_str(), count))
+            .collect::<BTreeMap<_, _>>(),
+        "target_stack": context
+            .final_report
+            .target_stack
+            .iter()
+            .map(|id| id.as_str())
+            .collect::<Vec<_>>(),
     })
 }
 
@@ -5105,6 +5139,7 @@ fn context_with_modified_base_and_overlay(
     let mut current = modified_base.clone();
     let mut selected_source_deck = None;
     let mut selected_report = None;
+    let mut effective_overlays = Vec::new();
     for (planned, overlay) in &context.plan_overlays {
         let active_overlay = if planned.id == context.selection.overlay_id {
             modified_overlay
@@ -5137,7 +5172,19 @@ fn context_with_modified_base_and_overlay(
             .map_err(|report| {
                 WorkbenchError::compose(format!("failed to compose overlay {}", planned.id), report)
             })?;
+        effective_overlays.push(effective_overlay);
     }
+    let final_report = modified_base
+        .translation_stack_coverage(&effective_overlays)
+        .map_err(|report| {
+            WorkbenchError::compose(
+                format!(
+                    "failed to resolve final translation coverage for target {}",
+                    context.selection.target_id
+                ),
+                report,
+            )
+        })?;
     let Some(source_deck) = selected_source_deck else {
         return Err((format!(
             "target {} does not include translation overlay {}",
@@ -5162,6 +5209,7 @@ fn context_with_modified_base_and_overlay(
         source_deck,
         target_deck: current,
         report,
+        final_report,
     })
 }
 

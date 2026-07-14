@@ -1029,6 +1029,93 @@ fn target_deletion_is_path_scoped_and_has_explicit_coverage_state() {
 }
 
 #[test]
+fn final_stack_report_explicitly_classifies_structural_units() {
+    let report = ug_style_deck()
+        .translation_stack_coverage(&[])
+        .expect("an empty stack has deterministic coverage");
+
+    let structural = report
+        .entries
+        .iter()
+        .find(|entry| entry.source_path == "note_types.note-type.country.fields.field.country.name")
+        .expect("field-definition names remain visible as structural units");
+    assert_eq!(
+        structural.status,
+        TranslationStackCoverageStatus::StructuralExcluded
+    );
+    assert_eq!(structural.source_text, "Country");
+    assert_eq!(
+        report
+            .totals()
+            .count(TranslationStackCoverageStatus::StructuralExcluded),
+        3
+    );
+    assert_eq!(
+        report.totals().total,
+        report.totals().by_status.values().sum::<usize>()
+    );
+}
+
+#[test]
+fn final_stack_report_keeps_hidden_units_out_of_fallback_totals() {
+    let overlay = Overlay {
+        id: sid("overlay.translation.hidden"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            ignore_paths: BTreeSet::from(["notes.*.fields.field.flag".to_owned()]),
+            ..TranslationDictionary::default()
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+    let report = ug_style_deck()
+        .translation_stack_coverage(&[overlay])
+        .expect("ignored source composes");
+
+    assert_eq!(
+        report
+            .entries
+            .iter()
+            .find(|entry| entry.source_path == "notes.note.finland.fields.field.flag")
+            .expect("hidden field remains auditable")
+            .status,
+        TranslationStackCoverageStatus::HiddenExcluded
+    );
+    assert_eq!(
+        report
+            .totals()
+            .count(TranslationStackCoverageStatus::HiddenExcluded),
+        1
+    );
+}
+
+#[test]
+fn final_stack_report_is_deterministic_for_a_large_path_index() {
+    let mut deck = ug_style_deck();
+    let template = deck.notes[&sid("note.finland")].clone();
+    for index in 0..256 {
+        let id = sid(&format!("note.scale.{index}"));
+        let mut note = template.clone();
+        note.id = id.clone();
+        deck.notes.insert(id, note);
+    }
+
+    let first = deck
+        .translation_stack_coverage(&[])
+        .expect("large coverage resolves");
+    let second = deck
+        .translation_stack_coverage(&[])
+        .expect("large coverage resolves deterministically");
+    assert_eq!(first, second);
+    assert!(first.entries.windows(2).all(|pair| {
+        pair[0].source_path <= pair[1].source_path
+            && (pair[0].source_path != pair[1].source_path || pair[0].status <= pair[1].status)
+    }));
+}
+
+#[test]
 fn stack_coverage_attributes_final_missing_text_to_its_introducing_overlay() {
     let base = ug_style_deck();
     let base_translation = Overlay {

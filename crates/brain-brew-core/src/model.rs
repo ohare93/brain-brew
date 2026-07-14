@@ -1373,6 +1373,35 @@ impl TranslationStackCoverageReport {
             .iter()
             .filter(|entry| entry.status.is_problem())
     }
+
+    /// Deterministic, mutually exclusive totals for the final resolved target.
+    ///
+    /// Consumers should use these totals instead of reclassifying source strings:
+    /// structural and explicitly hidden units are represented separately from
+    /// untranslated fallbacks, and deletions/adaptations retain their intent.
+    pub fn totals(&self) -> TranslationStackCoverageTotals {
+        let mut by_status = BTreeMap::new();
+        for entry in &self.entries {
+            *by_status.entry(entry.status).or_insert(0) += 1;
+        }
+        TranslationStackCoverageTotals {
+            total: self.entries.len(),
+            by_status,
+        }
+    }
+}
+
+/// Accurate status totals for a [`TranslationStackCoverageReport`].
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranslationStackCoverageTotals {
+    pub total: usize,
+    pub by_status: BTreeMap<TranslationStackCoverageStatus, usize>,
+}
+
+impl TranslationStackCoverageTotals {
+    pub fn count(&self, status: TranslationStackCoverageStatus) -> usize {
+        self.by_status.get(&status).copied().unwrap_or(0)
+    }
 }
 
 /// One source unit resolved against the final target stack.
@@ -1415,6 +1444,22 @@ pub enum TranslationStackCoverageStatus {
 }
 
 impl TranslationStackCoverageStatus {
+    /// Stable machine-readable final-resolution state.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::UntranslatedFallback => "untranslated_fallback",
+            Self::Direct => "direct",
+            Self::Contextual => "contextual",
+            Self::NoChange => "no_change",
+            Self::Stale => "stale",
+            Self::Adaptation => "adaptation",
+            Self::Variable => "variable",
+            Self::Deleted => "deleted",
+            Self::StructuralExcluded => "structural_excluded",
+            Self::HiddenExcluded => "hidden_excluded",
+        }
+    }
+
     pub fn is_problem(self) -> bool {
         matches!(self, Self::UntranslatedFallback | Self::Stale)
     }

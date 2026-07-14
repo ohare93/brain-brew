@@ -6,6 +6,42 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use brain_brew_formats::{canonical_yaml, manifest};
 
 #[test]
+fn translations_json_has_a_versioned_success_envelope_and_valid_error_envelope() {
+    let dir = temp_dir("translations-json-envelope");
+    write_workspace(&dir, "Helsinki", STALE_ONLY_OVERLAY);
+    let success = run([
+        "translations",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-standard",
+        "--json",
+    ]);
+    assert!(success.status.success(), "stderr: {}", stderr(&success));
+    let success_json: serde_json::Value =
+        serde_json::from_slice(&success.stdout).expect("JSON-mode success is valid JSON");
+    assert_eq!(success_json["schema_version"], 1);
+    assert_eq!(success_json["kind"], "translation_report");
+    assert!(success_json["reports"].is_array());
+    assert!(success_json["applied"].is_object());
+
+    let malformed = dir.join("malformed.yaml");
+    fs::write(&malformed, "base: [not a manifest").unwrap();
+    let failure = run([
+        "translations",
+        "--manifest",
+        malformed.to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(!failure.status.success());
+    assert!(stderr(&failure).is_empty());
+    let error_json: serde_json::Value =
+        serde_json::from_slice(&failure.stdout).expect("JSON-mode error is valid JSON");
+    assert_eq!(error_json["error"]["schema_version"], 1);
+    assert_eq!(error_json["error"]["command"], "translations");
+}
+
+#[test]
 fn resolve_confirm_and_replace_promote_current_stale_records() {
     let confirm_dir = temp_dir("translations-confirm-promote");
     write_workspace(&confirm_dir, "Helsinki City", STALE_ONLY_OVERLAY);
