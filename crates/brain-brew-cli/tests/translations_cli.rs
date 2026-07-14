@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use brain_brew_formats::canonical_yaml;
+use brain_brew_formats::{canonical_yaml, manifest};
 
 #[test]
 fn resolve_confirm_and_replace_promote_current_stale_records() {
@@ -183,6 +183,84 @@ fn translations_argument_conflicts_are_reported_before_execution() {
             );
         }
     }
+}
+
+#[test]
+fn strict_verify_attributes_a_final_stack_fallback_to_the_introducing_extension() {
+    let dir = temp_dir("translations-stack-owner");
+    write_workspace(
+        &dir,
+        "Helsinki",
+        r#"id: overlay.translation.da
+kind: translation
+translations:
+  ignore_paths:
+    - 'deck.*'
+    - 'note_types.*'
+    - 'notes.*.fields.field.country'
+  direct:
+    Helsinki: Helsingfors
+"#,
+    );
+    fs::write(
+        dir.join("hardcore.yaml"),
+        r#"id: overlay.extension.hardcore
+kind: extension
+notes:
+  note.finland:
+    intent: merge
+    fields:
+      field.capital:
+        intent: replace
+        value: Capital City
+        expected_base:
+          value: Helsingfors
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.translation.da:
+    file: da.yaml
+    kind: translation
+  overlay.extension.hardcore:
+    file: hardcore.yaml
+    kind: extension
+    depends_on:
+      - overlay.translation.da
+targets:
+  da-release:
+    overlays:
+      - overlay.extension.hardcore
+    translation_coverage: strict
+"#,
+    )
+    .unwrap();
+    let manifest_path = dir.join("brainbrew.yaml");
+    let formatted_manifest = manifest::format_str(&fs::read_to_string(&manifest_path).unwrap())
+        .expect("test manifest formats");
+    fs::write(&manifest_path, formatted_manifest).unwrap();
+    let extension_path = dir.join("hardcore.yaml");
+    let formatted_extension =
+        canonical_yaml::overlay_format_str(&fs::read_to_string(&extension_path).unwrap())
+            .expect("test extension formats");
+    fs::write(&extension_path, formatted_extension).unwrap();
+
+    let output = run([
+        "verify",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--target",
+        "da-release",
+    ]);
+
+    assert!(!output.status.success());
+    let text = command_text(&output);
+    assert!(text.contains("Capital City"), "{text}");
+    assert!(text.contains("overlay.extension.hardcore"), "{text}");
+    assert!(!text.contains("overlay.translation.da ("), "{text}");
 }
 
 #[test]

@@ -1,7 +1,10 @@
 use std::fs;
 use std::path::Path;
 
-use brain_brew_core::{CanonicalDeck, Overlay, TranslationCoverageCategory, validate_deck_content};
+use brain_brew_core::{
+    CanonicalDeck, Overlay, TranslationCoverageCategory, TranslationStackCoverageStatus,
+    validate_deck_content,
+};
 use brain_brew_formats::{crowdanki, manifest, media_map, strict_yaml};
 
 use crate::args::parse_verify_args;
@@ -251,63 +254,97 @@ fn verify_translation_coverage_policy(
     policy: manifest::TranslationCoveragePolicy,
     warnings: &mut Vec<String>,
 ) -> Result<(), String> {
-    let mut current = plan.base.clone();
-    for (planned, overlay) in &plan.overlays {
-        let report = current.translation_coverage(overlay).map_err(|error| {
-            format!(
-                "failed to resolve translation source fields for target {}: {error}",
-                plan.target
+    let overlays = plan
+        .overlays
+        .iter()
+        .map(|(_, overlay)| overlay.clone())
+        .collect::<Vec<_>>();
+    if !overlays
+        .iter()
+        .any(|overlay| overlay.translations.is_some())
+    {
+        return Ok(());
+    }
+    let report = plan
+        .base
+        .translation_stack_coverage(&overlays)
+        .map_err(|report| {
+            output::compose_error(
+                "verify",
+                serde_json::json!({"target": plan.target}),
+                &report,
             )
         })?;
-        if overlay.translations.is_some() {
-            if policy == manifest::TranslationCoveragePolicy::Strict {
-                let missing = report
-                    .entries
-                    .iter()
-                    .filter(|entry| {
-                        entry.category == TranslationCoverageCategory::UntranslatedFallback
-                    })
-                    .take(10)
-                    .map(|entry| format!("{} source {:?}", entry.path, entry.source))
-                    .collect::<Vec<_>>();
-                if !missing.is_empty() {
-                    return Err(format!(
-                        "translation coverage strict policy failed for target {} overlay {} ({}): {} untranslated fallback(s): {}",
-                        plan.target,
-                        planned.id,
-                        planned.display_file,
-                        report
-                            .entries
-                            .iter()
-                            .filter(|entry| entry.category
-                                == TranslationCoverageCategory::UntranslatedFallback)
-                            .count(),
-                        missing.join(", ")
-                    ));
-                }
-            }
+    let missing = report
+        .entries
+        .iter()
+        .filter(|entry| entry.status == TranslationStackCoverageStatus::UntranslatedFallback)
+        .collect::<Vec<_>>();
+    let stale = report
+        .entries
+        .iter()
+        .filter(|entry| entry.status == TranslationStackCoverageStatus::Stale)
+        .collect::<Vec<_>>();
 
-            if let Some(message) = stale_translation_warning_message(
-                &plan.target,
-                &planned.id,
-                &planned.display_file,
-                &report.entries,
-            ) {
-                if policy == manifest::TranslationCoveragePolicy::Strict {
-                    return Err(format!("translation stale strict policy failed: {message}"));
-                }
-                warnings.push(message);
-            }
-        }
-        current = current
-            .compose(std::slice::from_ref(overlay))
-            .map_err(|report| {
-                output::compose_error(
-                    "verify",
-                    serde_json::json!({"target": plan.target, "overlay": planned.id}),
-                    &report,
+    if policy == manifest::TranslationCoveragePolicy::Strict && !missing.is_empty() {
+        let details = missing
+            .iter()
+            .take(10)
+            .map(|entry| {
+                format!(
+                    "{} source {:?} introduced by {:?}",
+                    entry.source_path, entry.source_text, entry.owner
                 )
-            })?;
+            })
+            .collect::<Vec<_>>();
+        return Err(format!(
+            "translation coverage strict policy failed for target {}: {} untranslated fallback(s): {}",
+            plan.target,
+            missing.len(),
+            details.join(", ")
+        ));
+    }
+    if policy == manifest::TranslationCoveragePolicy::Strict && !stale.is_empty() {
+        let details = stale
+            .iter()
+            .take(10)
+            .map(|entry| {
+                format!(
+                    "{} old {:?} -> new {:?} introduced by {:?}",
+                    entry.source_path,
+                    entry.old_source_text.as_deref().unwrap_or(""),
+                    entry.source_text,
+                    entry.owner
+                )
+            })
+            .collect::<Vec<_>>();
+        return Err(format!(
+            "translation stale strict policy failed for target {}: {} stale translation(s): {}",
+            plan.target,
+            stale.len(),
+            details.join(", ")
+        ));
+    }
+    if !stale.is_empty() {
+        warnings.push(format!(
+            "stale translation warning for target {}: {} stale translation(s): {}",
+            plan.target,
+            stale.len(),
+            stale
+                .iter()
+                .take(10)
+                .map(|entry| {
+                    format!(
+                        "{} old {:?} -> new {:?} introduced by {:?}",
+                        entry.source_path,
+                        entry.old_source_text.as_deref().unwrap_or(""),
+                        entry.source_text,
+                        entry.owner
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
     }
     Ok(())
 }

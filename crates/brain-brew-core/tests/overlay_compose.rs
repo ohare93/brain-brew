@@ -7,8 +7,9 @@ use brain_brew_core::{
     MessageComponent, Note, NoteChange, NoteType, NoteTypeChange, Overlay, OverlayKind,
     PropertyChange, StableId, StaleTranslation, StructuredMessage, TagChange, TargetAdaptation,
     TombstoneAddress, Tombstones, TranslationCoverageCategory, TranslationDictionary,
-    ValidationErrorKind, fingerprint_card_template, fingerprint_field_definition,
-    fingerprint_media_reference, fingerprint_note, fingerprint_note_type,
+    TranslationStackCoverageStatus, TranslationUnitOwner, ValidationErrorKind,
+    fingerprint_card_template, fingerprint_field_definition, fingerprint_media_reference,
+    fingerprint_note, fingerprint_note_type,
 };
 
 fn target_adaptation(
@@ -972,6 +973,107 @@ fn translation_dictionary_target_adaptation_fails_when_expected_source_mismatche
         error.path == "notes.note.finland.fields.field.capital"
             && error.message.contains("target adaptation expected source")
     }));
+}
+
+#[test]
+fn stack_coverage_attributes_final_missing_text_to_its_introducing_overlay() {
+    let base = ug_style_deck();
+    let base_translation = Overlay {
+        id: sid("overlay.translation.da"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::from([("Helsinki".to_owned(), "Helsingfors".to_owned())]),
+            ..TranslationDictionary::default()
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+    let extension = overlay_replacing_capital(
+        ChangeIntent::Replace,
+        Some(ExpectedBase::FieldValue("Helsingfors".to_owned().into())),
+        "Capital City",
+    );
+
+    let report = base
+        .translation_stack_coverage(&[base_translation, extension])
+        .expect("ordered stack composes");
+    let missing = report
+        .entries
+        .iter()
+        .find(|entry| entry.source_path == "notes.note.finland.fields.field.capital")
+        .expect("final capital is covered");
+
+    assert_eq!(
+        missing.status,
+        TranslationStackCoverageStatus::UntranslatedFallback
+    );
+    assert_eq!(missing.source_text, "Capital City");
+    assert_eq!(
+        missing.owner,
+        TranslationUnitOwner::Overlay(sid("overlay.patch.capital"))
+    );
+    assert_eq!(
+        missing.target_stack,
+        vec![sid("overlay.translation.da"), sid("overlay.patch.capital")]
+    );
+}
+
+#[test]
+fn stack_coverage_uses_later_extension_dictionary_for_the_extension_unit() {
+    let base = ug_style_deck();
+    let base_translation = Overlay {
+        id: sid("overlay.translation.da"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::from([("Helsinki".to_owned(), "Helsingfors".to_owned())]),
+            ..TranslationDictionary::default()
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+    let extension = overlay_replacing_capital(
+        ChangeIntent::Replace,
+        Some(ExpectedBase::FieldValue("Helsingfors".to_owned().into())),
+        "Capital City",
+    );
+    let extension_translation = Overlay {
+        id: sid("overlay.translation.hardcore.da"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::from([("Capital City".to_owned(), "Hovedstad".to_owned())]),
+            ..TranslationDictionary::default()
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let report = base
+        .translation_stack_coverage(&[base_translation, extension, extension_translation])
+        .expect("Main/Hardcore-style stack composes");
+    let capital = report
+        .entries
+        .iter()
+        .find(|entry| entry.source_path == "notes.note.finland.fields.field.capital")
+        .unwrap();
+    assert_eq!(capital.status, TranslationStackCoverageStatus::Direct);
+    assert_eq!(capital.source_text, "Capital City");
+    assert_eq!(capital.translated_text.as_deref(), Some("Hovedstad"));
+    assert_eq!(
+        capital.resolved_by,
+        Some(sid("overlay.translation.hardcore.da"))
+    );
+    assert!(
+        report
+            .entries
+            .windows(2)
+            .all(|pair| pair[0].source_path <= pair[1].source_path)
+    );
 }
 
 #[test]

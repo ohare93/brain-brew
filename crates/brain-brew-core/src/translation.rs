@@ -22,12 +22,242 @@ impl CanonicalDeck {
         translation_coverage_report(self, overlay, translations)
     }
 
+    /// Resolve translation coverage across an ordered stack without format or filesystem input.
+    ///
+    /// A unit keeps the overlay that introduced its current source text, while its
+    /// completeness is evaluated only after every overlay has been applied.
+    pub fn translation_stack_coverage(
+        &self,
+        overlays: &[Overlay],
+    ) -> Result<TranslationStackCoverageReport, ComposeReport> {
+        let target_stack = overlays
+            .iter()
+            .map(|overlay| overlay.id.clone())
+            .collect::<Vec<_>>();
+        let mut current = self.clone();
+        let mut snapshot =
+            translation_unit_snapshot(&current).map_err(stack_coverage_graph_error)?;
+        let mut states = snapshot
+            .iter()
+            .map(|(path, source)| {
+                (
+                    path.clone(),
+                    StackTranslationUnit {
+                        owner: TranslationUnitOwner::Base,
+                        source_text: source.clone(),
+                        old_source_text: None,
+                        status: TranslationStackCoverageStatus::UntranslatedFallback,
+                        resolved_by: None,
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let mut deleted = Vec::new();
+
+        for overlay in overlays {
+            if overlay.translations.is_some() {
+                let report = current
+                    .translation_coverage(overlay)
+                    .map_err(stack_coverage_graph_error)?;
+                for entry in report.entries {
+                    let Some(status) = stack_status(entry.category) else {
+                        continue;
+                    };
+                    if let Some(unit) = states.get_mut(&entry.path) {
+                        set_stack_resolution(unit, status, entry.old_source, &overlay.id);
+                    } else if status == TranslationStackCoverageStatus::Stale {
+                        // A shadowed stale record has a dictionary path rather than a
+                        // unit path. It remains review debt for the active source unit.
+                        for (path, unit) in &mut states {
+                            if unit.source_text == entry.source
+                                && entry
+                                    .context
+                                    .as_deref()
+                                    .is_none_or(|context| context_matches_path(context, path))
+                            {
+                                set_stack_resolution(
+                                    unit,
+                                    status,
+                                    entry.old_source.clone(),
+                                    &overlay.id,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            current = current.compose(std::slice::from_ref(overlay))?;
+            let next_snapshot =
+                translation_unit_snapshot(&current).map_err(stack_coverage_graph_error)?;
+
+            // Dictionary application changes target text, never source ownership. All
+            // other overlays own source units that they add or replace.
+            if overlay.translations.is_none() {
+                for (path, source) in &next_snapshot {
+                    if snapshot.get(path) != Some(source) {
+                        states.insert(
+                            path.clone(),
+                            StackTranslationUnit {
+                                owner: TranslationUnitOwner::Overlay(overlay.id.clone()),
+                                source_text: source.clone(),
+                                old_source_text: None,
+                                status: TranslationStackCoverageStatus::UntranslatedFallback,
+                                resolved_by: None,
+                            },
+                        );
+                    }
+                }
+                for path in snapshot
+                    .keys()
+                    .filter(|path| !next_snapshot.contains_key(*path))
+                {
+                    if let Some(unit) = states.remove(path) {
+                        deleted.push(TranslationStackCoverageEntry {
+                            status: TranslationStackCoverageStatus::Deleted,
+                            owner: unit.owner,
+                            source_path: path.clone(),
+                            source_text: unit.source_text,
+                            old_source_text: unit.old_source_text,
+                            translated_text: None,
+                            resolved_by: Some(overlay.id.clone()),
+                            target_stack: target_stack.clone(),
+                        });
+                    }
+                }
+            }
+            snapshot = next_snapshot;
+        }
+
+        let mut entries = states
+            .into_iter()
+            .filter_map(|(path, unit)| {
+                snapshot
+                    .get(&path)
+                    .map(|target| TranslationStackCoverageEntry {
+                        status: unit.status,
+                        owner: unit.owner,
+                        source_path: path,
+                        source_text: unit.source_text,
+                        old_source_text: unit.old_source_text,
+                        translated_text: Some(target.clone()),
+                        resolved_by: unit.resolved_by,
+                        target_stack: target_stack.clone(),
+                    })
+            })
+            .collect::<Vec<_>>();
+        entries.append(&mut deleted);
+        entries.sort_by(|left, right| {
+            left.source_path
+                .cmp(&right.source_path)
+                .then_with(|| left.status.cmp(&right.status))
+                .then_with(|| left.source_text.cmp(&right.source_text))
+        });
+        Ok(TranslationStackCoverageReport {
+            target_stack,
+            entries,
+        })
+    }
+
     /// Build translator-facing note/field/card context for one coverage report.
     pub fn translation_context(
         &self,
         report: &TranslationCoverageReport,
     ) -> Result<TranslationContextView, FieldGraphReport> {
         translation_context_view(self, report)
+    }
+}
+
+#[derive(Clone)]
+struct StackTranslationUnit {
+    owner: TranslationUnitOwner,
+    source_text: String,
+    old_source_text: Option<String>,
+    status: TranslationStackCoverageStatus,
+    resolved_by: Option<StableId>,
+}
+
+fn set_stack_resolution(
+    unit: &mut StackTranslationUnit,
+    status: TranslationStackCoverageStatus,
+    old_source_text: Option<String>,
+    overlay_id: &StableId,
+) {
+    if status != TranslationStackCoverageStatus::UntranslatedFallback
+        || unit.status == TranslationStackCoverageStatus::UntranslatedFallback
+    {
+        unit.status = status;
+        unit.old_source_text = old_source_text;
+        unit.resolved_by = Some(overlay_id.clone());
+    }
+}
+
+fn translation_unit_snapshot(
+    deck: &CanonicalDeck,
+) -> Result<BTreeMap<String, String>, FieldGraphReport> {
+    let overlay = Overlay {
+        id: StableId::new("overlay.translation.coverage-snapshot")
+            .expect("static coverage overlay id is valid"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary::default()),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+    Ok(deck
+        .translation_coverage(&overlay)?
+        .entries
+        .into_iter()
+        .filter(|entry| {
+            matches!(
+                entry.category,
+                TranslationCoverageCategory::UntranslatedFallback
+                    | TranslationCoverageCategory::IgnoredSource
+            )
+        })
+        .map(|entry| (entry.path, entry.source))
+        .collect())
+}
+
+fn stack_coverage_graph_error(report: FieldGraphReport) -> ComposeReport {
+    let error = report.errors.first();
+    ComposeReport {
+        errors: vec![ComposeError::new(
+            ComposeErrorKind::ValidationFailed,
+            error
+                .map(|entry| entry.consuming_path.clone())
+                .unwrap_or_default(),
+            format!("translation stack coverage could not resolve source fields: {report}"),
+        )],
+    }
+}
+
+fn stack_status(category: TranslationCoverageCategory) -> Option<TranslationStackCoverageStatus> {
+    match category {
+        TranslationCoverageCategory::UntranslatedFallback => {
+            Some(TranslationStackCoverageStatus::UntranslatedFallback)
+        }
+        TranslationCoverageCategory::DirectTranslation => {
+            Some(TranslationStackCoverageStatus::Direct)
+        }
+        TranslationCoverageCategory::ContextualTranslation => {
+            Some(TranslationStackCoverageStatus::Contextual)
+        }
+        TranslationCoverageCategory::NoChange => Some(TranslationStackCoverageStatus::NoChange),
+        TranslationCoverageCategory::StaleTranslation => {
+            Some(TranslationStackCoverageStatus::Stale)
+        }
+        TranslationCoverageCategory::TargetAdaptation => {
+            Some(TranslationStackCoverageStatus::Adaptation)
+        }
+        TranslationCoverageCategory::VariableTranslation => {
+            Some(TranslationStackCoverageStatus::Variable)
+        }
+        TranslationCoverageCategory::IgnoredSource => {
+            Some(TranslationStackCoverageStatus::HiddenExcluded)
+        }
+        _ => None,
     }
 }
 

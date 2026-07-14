@@ -1326,6 +1326,72 @@ pub struct TranslationCoverageEntry {
     pub context: Option<String>,
 }
 
+/// Deterministic final-target translation coverage for an ordered overlay stack.
+///
+/// Unlike [`TranslationCoverageReport`], this report retains source ownership while
+/// evaluating completeness against the final active deck.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranslationStackCoverageReport {
+    /// The exact ordered overlay IDs used to resolve the target.
+    pub target_stack: Vec<StableId>,
+    /// Active and deliberately deleted translation units in deterministic order.
+    pub entries: Vec<TranslationStackCoverageEntry>,
+}
+
+impl TranslationStackCoverageReport {
+    /// Units that make a strict translated target incomplete or need review.
+    pub fn problem_entries(&self) -> impl Iterator<Item = &TranslationStackCoverageEntry> {
+        self.entries
+            .iter()
+            .filter(|entry| entry.status.is_problem())
+    }
+}
+
+/// One source unit resolved against the final target stack.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranslationStackCoverageEntry {
+    pub status: TranslationStackCoverageStatus,
+    /// The overlay that introduced the current source unit, or the base deck.
+    pub owner: TranslationUnitOwner,
+    pub source_path: String,
+    pub source_text: String,
+    /// Prior source text retained by a stale translation review record.
+    pub old_source_text: Option<String>,
+    pub translated_text: Option<String>,
+    /// Translation overlay that supplied the effective decision, when one did.
+    pub resolved_by: Option<StableId>,
+    /// Exact ordered overlay IDs used to resolve this unit.
+    pub target_stack: Vec<StableId>,
+}
+
+/// Source ownership used by stack coverage.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum TranslationUnitOwner {
+    Base,
+    Overlay(StableId),
+}
+
+/// Final resolution state for a translation unit.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum TranslationStackCoverageStatus {
+    UntranslatedFallback,
+    Direct,
+    Contextual,
+    NoChange,
+    Stale,
+    Adaptation,
+    Variable,
+    Deleted,
+    StructuralExcluded,
+    HiddenExcluded,
+}
+
+impl TranslationStackCoverageStatus {
+    pub fn is_problem(self) -> bool {
+        matches!(self, Self::UntranslatedFallback | Self::Stale)
+    }
+}
+
 /// Translator-facing contextual view for one translation coverage report.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TranslationContextView {

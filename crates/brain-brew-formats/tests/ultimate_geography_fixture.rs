@@ -191,6 +191,46 @@ fn ultimate_geography_fixture_manifest_composes_all_targets() {
 }
 
 #[test]
+fn ultimate_geography_main_and_hardcore_stack_coverage_is_deterministic_and_excludes_ids() {
+    let root = fixture_root();
+    let manifest = read_manifest(&root);
+
+    for target in ["de-standard", "de-hardcore-standard"] {
+        let expanded = manifest.expand_target(target).expect("target expands");
+        let base = read_canonical_deck_file(&root, &root.join(&expanded.base))
+            .expect("target base parses");
+        let overlays = expanded
+            .overlays
+            .iter()
+            .map(|entry| read_overlay_file(&root, &root.join(&entry.file)).expect("overlay parses"))
+            .collect::<Vec<_>>();
+        let first = base
+            .translation_stack_coverage(&overlays)
+            .expect("target stack composes for coverage");
+        let second = base
+            .translation_stack_coverage(&overlays)
+            .expect("target stack repeats deterministically");
+
+        assert_eq!(first, second, "{target} coverage order is deterministic");
+        assert_eq!(
+            first.target_stack,
+            overlays
+                .iter()
+                .map(|overlay| overlay.id.clone())
+                .collect::<Vec<_>>(),
+            "{target} retains its exact expanded stack"
+        );
+        assert!(
+            first
+                .entries
+                .iter()
+                .all(|entry| !entry.source_path.contains("adapter_ids")),
+            "{target} must not inflate normal coverage with adapter identifiers"
+        );
+    }
+}
+
+#[test]
 fn ultimate_geography_fixture_formatting_is_byte_idempotent() {
     let root = fixture_root();
 
