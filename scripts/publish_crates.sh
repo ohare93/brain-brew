@@ -111,7 +111,7 @@ case "$target" in
       indexed_gate cli
       publish_one cli
     else
-      echo "BLOCKED: formats and CLI dry-runs require real indexed alpha.2 predecessors." >&2
+      echo "BLOCKED: formats and CLI dry-runs require real indexed $version predecessors." >&2
       echo "Run the individual dependent dry-runs after manually publishing and indexing core, then formats." >&2
       # A dry-run cannot create the prerequisite index entries; returning failure
       # is intentional so release automation never records this as success.

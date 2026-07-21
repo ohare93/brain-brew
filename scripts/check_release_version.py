@@ -10,19 +10,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PUBLISHABLE = {"brain-brew-core", "brain-brew-formats", "brainbrew"}
 INTERNAL = {"brain-brew-core", "brain-brew-formats"}
-CURRENT = "1.0.0-alpha.2"
-STALE = "1.0.0-alpha.1"
+CURRENT = "1.0.0-alpha.3"
+STALE = "1.0.0-alpha.2"
 CURRENT_DOCS = [
     Path("README.md"),
     Path("documentation/docs/getting-started/install.md"),
     Path("documentation/docs/reference/releasing.md"),
 ]
-HISTORICAL_ALPHA_ONE = {
+ALLOWED_STALE_REFERENCES = {
     Path("CHANGELOG.md"),
     Path("audit/13-ultimate-geography.md"),
     Path("audit/14-docs.md"),
     Path("audit/15-release-security.md"),
     Path("audit/16-synthesis.md"),
+    Path("crates/brain-brew-cli/tests/registry_planner.rs"),
+    Path("crates/brain-brew-formats/src/package_semver.rs"),
+    Path("documentation/docs/authoring/packages-locking.md"),
 }
 IGNORED_DIRECTORIES = {
     ".agentleman",
@@ -73,8 +76,8 @@ def main() -> int:
         error(errors, f"Cargo.lock publishable package versions must be {workspace_version}")
 
     devenv = (ROOT / "devenv.nix").read_text()
-    if 'dist manifest --tag "v$version"' not in devenv:
-        error(errors, "devenv dist:plan must derive its tag from Cargo.toml")
+    if 'dist manifest --allow-dirty --tag "v$version"' not in devenv:
+        error(errors, "devenv dist:plan must allow the reviewed workflow divergence and derive its tag from Cargo.toml")
     dist = tomllib.loads((ROOT / "dist-workspace.toml").read_text())["dist"]
     if dist.get("installers") != ["shell", "powershell"] or "publish-jobs" in dist:
         error(errors, "cargo-dist must generate only the supported GitHub Release installers")
@@ -93,15 +96,15 @@ def main() -> int:
             error(errors, f"{document} retains current-facing stale {STALE} reference")
 
     changelog = (ROOT / "CHANGELOG.md").read_text()
-    history = f"`{STALE}` was published with interfaces incompatible with `{CURRENT}`"
+    history = "`1.0.0-alpha.1` was published with interfaces incompatible with `1.0.0-alpha.2`"
     if history not in changelog:
-        error(errors, "CHANGELOG.md must retain the explicit alpha.1 incompatibility record")
+        error(errors, "CHANGELOG.md must retain the explicit alpha.1/alpha.2 incompatibility record")
 
     for path in ROOT.rglob("*"):
         if not path.is_file() or any(part in IGNORED_DIRECTORIES for part in path.parts):
             continue
         relative = path.relative_to(ROOT)
-        if relative in HISTORICAL_ALPHA_ONE or relative in IGNORED_FILES:
+        if relative in ALLOWED_STALE_REFERENCES or relative in IGNORED_FILES:
             continue
         try:
             source = path.read_text()

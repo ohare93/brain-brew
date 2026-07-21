@@ -9,6 +9,24 @@ trap 'rm -rf "$out_dir"' EXIT
 
 "$brainbrew_bin" --version
 
+# Every shipped binary must include the Workbench write capability while still
+# requiring the explicit runtime opt-in. A missing manifest proves argument
+# parsing accepted --enable-write and advanced to workspace loading.
+write_probe="$out_dir/workbench-write-capability.stderr"
+if "$brainbrew_bin" workbench serve \
+  --manifest "$out_dir/missing-brainbrew.yaml" \
+  --no-open \
+  --enable-write \
+  2>"$write_probe"; then
+  echo "expected the Workbench write-capability probe to fail on its missing manifest" >&2
+  exit 1
+fi
+if grep -q "built without the development-only workbench-write-dev capability" "$write_probe"; then
+  echo "release binary omitted the default Workbench write capability" >&2
+  exit 1
+fi
+grep -q "missing-brainbrew.yaml" "$write_probe"
+
 "$brainbrew_bin" validate \
   --manifest "$manifest" \
   --target full-demo

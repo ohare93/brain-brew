@@ -2,8 +2,9 @@
 
 ## Unreleased
 
-The next preview is `1.0.0-alpha.2`; it is pending the documented release gates and manual crates.io publication.
+The next preview is `1.0.0-alpha.3`; it is pending the documented release gates and manual crates.io publication.
 
+- Distributed Workbench binaries now include the write implementation by default while retaining the explicit runtime `--enable-write` opt-in; release smoke tests reject artifacts that omit the capability.
 - Recursive package-root discovery is now deterministic, no-follow, and registry-owned, with exact built-in VCS/build/output/cache pruning, authorized component-glob ignores, explicit depth/entry/manifest budgets, structured actionable errors, and JSON visit/prune statistics shared by every package-root command.
 - Media-bearing `verify` and manifest/ad-hoc CrowdAnki export are now release-strict by default: every final package owner needs an explicit media root, hashes must be canonical lowercase SHA-256, and bytes must exist and match before clean-tree publication. Hashless/source-only fixtures must migrate to explicit `--media-mode reference-only`, whose human/JSON status is always marked not release-ready when media is present.
 - Structured `!image` rendering percent-encodes hostile filenames and HTML-attribute escapes output without changing declaration/CrowdAnki filenames; media paths now reject control, URL/platform, bidi/format-control, and reserved-name ambiguity, while scanners decode normalized HTML/URL references before comparison.

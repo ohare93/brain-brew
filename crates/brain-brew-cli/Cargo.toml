@@ -15,9 +15,11 @@ dist = true
 formula = "brainbrew"
 
 [features]
-default = []
-# Development/test-only access to unsafe Workbench mutation implementations.
-# Normal and distributed release artifacts must not enable this feature.
+# Shipped binaries include the Workbench write implementation, but source
+# mutation still requires the explicit runtime `--enable-write` opt-in.
+default = ["workbench-write-dev"]
+# Allows `--enable-write`; retained as a separate capability so constrained
+# builds can still compile a read-only binary with `--no-default-features`.
 workbench-write-dev = []
 
 [[bin]]

@@ -94,7 +94,9 @@ in
   scripts."dist:generate".exec = "dist generate";
   scripts."dist:plan".exec = ''
     version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"
-    dist manifest --tag "v$version" --artifacts=all --no-local-paths --output-format=json
+    # release.yml is intentionally security-hardened beyond cargo-dist's generated
+    # template, so planning must accept that reviewed workflow divergence.
+    dist manifest --allow-dirty --tag "v$version" --artifacts=all --no-local-paths --output-format=json
   '';
   scripts."release:version-check".exec = "scripts/check_release_version.py";
   scripts."release:security-check".exec = ''

@@ -3,7 +3,7 @@
 
 ``pre-publish`` is intentionally offline after packaging.  It replaces crates.io
 with a Cargo directory source made from the exact extracted archives and vendored
-third-party sources, so formats and the CLI can resolve the staged alpha.2
+third-party sources, so formats and the CLI can resolve the staged current-version
 implementation crates without a network upload.  ``indexed`` does *not* install
 that replacement: it verifies the extracted dependents against real crates.io
 once each predecessor is published and indexed.
@@ -64,8 +64,8 @@ def package_archives(work: Path, version: str) -> dict[str, Path]:
     """Ask Cargo to package in a disposable workspace with staged predecessors.
 
     Cargo validates normalized dependencies while creating a package, so its
-    package command itself cannot create formats while alpha.2 core is absent
-    from crates.io. The disposable copy changes only that *packaging input* to
+    package command itself cannot create formats while the current-version core
+    is absent from crates.io. The disposable copy changes only that *packaging input* to
     point at the predecessor archive already extracted above. The resulting
     normalized archive drops the path; all verification after this function is
     exclusively against those archives, never this workspace copy.
