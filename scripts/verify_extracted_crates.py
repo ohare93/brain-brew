@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Build Cargo's packaged crates outside this workspace in publication order.
+"""Test Cargo's packaged crates outside this workspace in publication order.
 
-``pre-publish`` is intentionally offline after packaging.  It replaces crates.io
+``pre-publish`` is intentionally offline after packaging. It replaces crates.io
 with a Cargo directory source made from the exact extracted archives and vendored
-third-party sources, so formats and the CLI can resolve the staged current-version
-implementation crates without a network upload.  ``indexed`` does *not* install
-that replacement: it verifies the extracted dependents against real crates.io
-once each predecessor is published and indexed.
+third-party sources, then runs each extracted package's tests so repository-only
+tests or missing packaged data cannot escape the release gate. Formats and the
+CLI resolve the staged current-version implementation crates without a network
+upload. ``indexed`` does *not* install that replacement: it verifies the
+extracted dependents against real crates.io once each predecessor is published
+and indexed.
 """
 
 from __future__ import annotations
@@ -33,6 +35,20 @@ PACKAGES = (
     ("cli", "brainbrew"),
 )
 REQUIRED_ARCHIVE_FILES = {"LICENSE", "README.md"}
+REPOSITORY_ONLY_PACKAGE_FILES = {
+    "brain-brew-formats": {
+        "tests/crowdanki_import_plan.rs",
+        "tests/ultimate_geography_fixture.rs",
+    },
+    "brainbrew": {
+        "tests/cli.rs",
+        "tests/crowdanki_import_media_cli.rs",
+        "tests/crowdanki_import_plan_cli.rs",
+        "tests/release_media_integrity.rs",
+        "tests/safe_paths.rs",
+        "tests/ug_style_fixture.rs",
+    },
+}
 
 
 class VerificationError(RuntimeError):
@@ -169,6 +185,12 @@ def unpack_archive(archive: Path, destination: Path, package: str, version: str)
     missing = REQUIRED_ARCHIVE_FILES - names
     if missing:
         raise VerificationError(f"{archive.name} is missing required archive material: {', '.join(sorted(missing))}")
+    leaked_repository_tests = REPOSITORY_ONLY_PACKAGE_FILES.get(package, set()) & names
+    if leaked_repository_tests:
+        raise VerificationError(
+            f"{archive.name} contains repository-only tests without their repository-root data: "
+            f"{', '.join(sorted(leaked_repository_tests))}"
+        )
     readme = extracted / "README.md"
     readme_text = readme.read_text(encoding="utf-8")
     if not readme_text.strip():
@@ -243,6 +265,22 @@ def build_extracted(label: str, package: str, version: str, extracted: Path, *, 
     run(command, cwd=manifest.parent)
 
 
+def test_extracted(label: str, package: str, version: str, extracted: Path) -> None:
+    manifest = extracted / f"{package}-{version}" / "Cargo.toml"
+    run(
+        [
+            "cargo",
+            "test",
+            "--manifest-path",
+            str(manifest),
+            "--target-dir",
+            str(extracted / "test" / label),
+            "--offline",
+        ],
+        cwd=manifest.parent,
+    )
+
+
 def explain_index_failure(package: str, version: str, error: subprocess.CalledProcessError) -> VerificationError:
     if package in {"brain-brew-formats", "brainbrew"}:
         predecessor = "brain-brew-core" if package == "brain-brew-formats" else "brain-brew-formats"
@@ -262,8 +300,15 @@ def verify_pre_publish(work: Path, archives: dict[str, Path], version: str, repo
     for label, package in PACKAGES:
         package_root = extracted / f"{package}-{version}"
         write_source_config(package_root, vendor)
-        build_extracted(label, package, version, extracted, offline=True)
-        report["builds"].append({"package": package, "dependency_source": "staged extracted directory source", "status": "passed"})
+        test_extracted(label, package, version, extracted)
+        report["tests"].append(
+            {
+                "package": package,
+                "dependency_source": "staged extracted directory source",
+                "network": "offline",
+                "status": "passed",
+            }
+        )
 
 
 def verify_indexed(work: Path, archives: dict[str, Path], version: str, through: str, report: dict[str, Any]) -> None:
@@ -289,7 +334,13 @@ def main() -> int:
     started = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     evidence = args.evidence_dir or ROOT / "target" / "release-evidence" / f"extracted-{args.mode}-{started}"
     evidence.mkdir(parents=True, exist_ok=True)
-    report: dict[str, Any] = {"mode": args.mode, "version": version, "archives": {}, "builds": []}
+    report: dict[str, Any] = {
+        "mode": args.mode,
+        "version": version,
+        "archives": {},
+        "builds": [],
+        "tests": [],
+    }
     try:
         with tempfile.TemporaryDirectory(prefix="brainbrew-extracted-") as temporary:
             work = Path(temporary)

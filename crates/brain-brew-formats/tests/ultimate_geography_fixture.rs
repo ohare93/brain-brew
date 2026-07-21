@@ -12,6 +12,8 @@ use brain_brew_formats::core::{
 use brain_brew_formats::{
     canonical_yaml, crowdanki, lockfile, manifest, media, media_map, source_includes,
 };
+use sha2::{Digest, Sha256};
+use unicode_normalization::UnicodeNormalization;
 
 fn import_approved(input: &str) -> Result<CanonicalDeck, crowdanki::CrowdAnkiError> {
     let plan = crowdanki::plan_import(input.as_bytes())?;
@@ -176,10 +178,14 @@ fn ultimate_geography_fixture_manifest_composes_all_targets() {
     assert_eq!(manifest.languages.len(), 16);
     assert!(manifest.languages.contains_key("he"));
     for target in manifest.targets.keys() {
-        assert!(
-            manifest.targets[target].exports.is_empty(),
-            "{target} relies on the manifest-target default CrowdAnki output path"
-        );
+        if let Some(export) = &manifest.targets[target].exports.crowdanki
+            && let Some(golden) = &export.golden
+        {
+            assert!(
+                root.join(golden).is_file(),
+                "{target} preserves its UG-owned referenced golden"
+            );
+        }
 
         let deck = compose_target(&root, &manifest, target);
         deck.validate()
@@ -312,6 +318,75 @@ fn ultimate_geography_media_map_declares_expected_entry_count() {
     let source = fs::read_to_string(root.join("media.yaml")).unwrap();
     let media = media_map::from_str(&source).expect("media.yaml parses as media map");
     assert_eq!(media.len(), 546, "media.yaml declares every UG media asset");
+}
+
+#[test]
+fn ultimate_geography_media_attribution_inventory_is_exact() {
+    let root = fixture_root();
+    let supplement_root = root
+        .parent()
+        .expect("fixture has fixtures parent")
+        .join("ultimate-geography-attribution/hardcore-geography");
+    let media = read_real_media_assets(&root.join("media"));
+    let ug = attribution_filenames(&root.join("sources.csv"), "UG sources.csv");
+    let hardcore = attribution_filenames(
+        &supplement_root.join("sources.csv"),
+        "Hardcore Geography sources.csv",
+    );
+    let ug_notice = BTreeSet::from([
+        "_ug-interactive_map_config.js".to_owned(),
+        "_ug-interactive_map_init.js".to_owned(),
+        "_ug-jsvectormap.js".to_owned(),
+        "_ug-jsvectormap.min.css".to_owned(),
+        "_ug-world.js".to_owned(),
+    ]);
+
+    assert_eq!(ug.len(), 546);
+    assert_eq!(hardcore.len(), 56);
+    assert!(
+        ug.is_disjoint(&hardcore),
+        "no image has ambiguous attribution"
+    );
+    assert!(ug.is_disjoint(&ug_notice));
+    assert!(hardcore.is_disjoint(&ug_notice));
+    assert_eq!(
+        hardcore
+            .iter()
+            .filter(|filename| filename.starts_with("ug-flag-"))
+            .count(),
+        39
+    );
+    assert_eq!(
+        hardcore
+            .iter()
+            .filter(|filename| filename.starts_with("ug-map-"))
+            .count(),
+        17
+    );
+
+    let image_media = media
+        .keys()
+        .filter(|filename| filename.ends_with(".png") || filename.ends_with(".svg"))
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let attributed_images = ug.union(&hardcore).cloned().collect::<BTreeSet<_>>();
+    assert_eq!(image_media.len(), 602);
+    assert_eq!(attributed_images, image_media);
+    let non_image_media = media
+        .keys()
+        .filter(|filename| !image_media.contains(*filename))
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    assert_eq!(non_image_media, ug_notice);
+    let all_attributed = attributed_images
+        .union(&ug_notice)
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        all_attributed,
+        media.keys().cloned().collect::<BTreeSet<_>>(),
+        "every used media file has exactly one normalized attribution owner"
+    );
 }
 
 #[test]
@@ -588,50 +663,269 @@ fn ultimate_geography_translation_overlays_use_dictionaries_not_template_copies(
 }
 
 #[test]
-fn ultimate_geography_fixture_exports_match_release_oracle_semantics_when_available() {
-    let oracle_root = ultimate_geography_release_oracle_root();
-    if !oracle_root
-        .join("Ultimate Geography [EN]/deck.json")
-        .exists()
-    {
-        eprintln!(
-            "skipping Ultimate Geography release parity check; {} is missing. Run `scripts/fetch_ug_release_oracle.py --tag v5.3` or set BRAINBREW_UG_CROWDANKI_ORACLE to a CrowdAnki oracle root.",
-            oracle_root.display()
-        );
-        return;
-    }
+fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media() {
+    const UG_REVISION: &str = "1017a39990e571a2355c9682af4499bb0ad8bb5d";
+    const HARDCORE_REVISION: &str = "09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46";
+    const BRAINBREW_REVISION: &str = "6ee570d427a1a8eec92c22668442f9b7186f9ba7";
+    const SOURCE_SHA256: &str = "2b04bdc726543990a842738a23388fd984aa0cfa4350468c35d1b258ba152634";
+    const MEDIA_SHA256: &str = "548d06511effa33230c69aab721f6d639c0816eb7eacc27bee87db1e43971dde";
+    const ATTRIBUTION_SHA256: &str =
+        "fa74228f06784236f2d0e035eb1a84ae004f608ab2448a78d70131f05ea5e835";
+    const HARDCORE_ATTRIBUTION_SHA256: &str =
+        "aada4219077e5fa77756701e537789c22b2baad29a961c456b3406f3e3629b06";
+    const ATTRIBUTION_COVERAGE_SHA256: &str =
+        "e8f9a5c2a3c3889993520cafbd22e3a51e8b5ced223cd2e73b00aa4d3e27fda9";
+    const GENERATOR_EXECUTABLE_SHA256: &str =
+        "e27d4f62e411eb6dd950e78f7311d5a47f59f5ccf591657b3bbaf76ca994d816";
+    const GENERATOR_SOURCE_SHA256: &str =
+        "6c5d9aa7522268530981cf128a6d949b70477225815c3be392c498d11327b014";
+    const GENERATOR_IDENTITY_SHA256: &str =
+        "a1ce83b5c71085705feb2fadfa4d2ea2116f3f37e582b7f4b283e7475842eebe";
+    const EXPECTED_SHA256: &str =
+        "d40d5a1c6a5350414eb0c0af3bf6bd112febd196ec10063effc65b27c1d5c248";
 
     let root = fixture_root();
-    let manifest = read_manifest(&root);
-    for target in manifest
-        .targets
-        .keys()
-        .filter(|target| matches!(target_parts(target).1, "standard" | "extended"))
-    {
-        let deck = compose_target(&root, &manifest, target);
-        let export = crowdanki::export_deck(&deck)
-            .unwrap_or_else(|error| panic!("{target} exports to CrowdAnki: {error}"));
-        let new: serde_json::Value = serde_json::from_str(&export.deck_json).unwrap();
-        let old: serde_json::Value = serde_json::from_str(
-            &fs::read_to_string(release_oracle_deck_json_path(&oracle_root, target)).unwrap(),
-        )
-        .unwrap();
+    let lock_path = root.with_file_name("ultimate-geography.lock.json");
+    let lock: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&lock_path).expect("fixture lock reads"))
+            .expect("fixture lock is JSON");
+    assert_eq!(lock["schema_version"], 3);
+    assert_eq!(
+        lock["provenance"]["ultimate_geography"]["revision"],
+        UG_REVISION
+    );
+    assert_eq!(
+        lock["provenance"]["hardcore_geography"]["revision"],
+        HARDCORE_REVISION
+    );
+    assert_eq!(
+        lock["provenance"]["brain_brew"]["revision"],
+        BRAINBREW_REVISION
+    );
+    assert_eq!(lock["provenance"]["brain_brew"]["version"], "1.0.0-alpha.3");
 
-        let old_deck = import_approved(&old.to_string())
-            .unwrap_or_else(|error| panic!("{target} release oracle imports: {error}"));
-        let new_deck = import_approved(&new.to_string())
-            .unwrap_or_else(|error| panic!("{target} generated export imports: {error}"));
-        let old_projection = crowdanki::project_deck_for_crowdanki_round_trip(&old_deck)
-            .unwrap_or_else(|error| panic!("{target} release oracle projects: {error}"));
-        let new_projection = crowdanki::project_deck_for_crowdanki_round_trip(&new_deck)
-            .unwrap_or_else(|error| panic!("{target} generated export projects: {error}"));
-        let diff = old_projection.semantic_diff(&new_projection);
-        assert!(
-            diff.is_empty(),
-            "{target} {} mismatch: {diff:#?}",
-            crowdanki::CROWDANKI_ROUND_TRIP_PROFILE.name
-        );
+    let required_source_entries = BTreeSet::from([
+        "LICENSE.md".to_owned(),
+        "brainbrew-hardcore.yaml".to_owned(),
+        "brainbrew.yaml".to_owned(),
+        "deck-hardcore.yaml".to_owned(),
+        "deck.yaml".to_owned(),
+        "descriptions".to_owned(),
+        "goldens".to_owned(),
+        "media".to_owned(),
+        "media.yaml".to_owned(),
+        "overlays".to_owned(),
+        "sources.csv".to_owned(),
+        "styles".to_owned(),
+        "templates".to_owned(),
+    ]);
+    let actual_source_entries = fs::read_dir(&root)
+        .expect("fixture source root reads")
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(actual_source_entries, required_source_entries);
+
+    let source_metadata = tree_metadata(&root);
+    assert_eq!(source_metadata.file_count, 736);
+    assert_eq!(source_metadata.byte_count, 19_919_556);
+    assert_eq!(source_metadata.sha256, SOURCE_SHA256);
+    assert_tree_lock(&lock["source"], &source_metadata, "source snapshot");
+    assert_eq!(lock["source"]["sha256"], SOURCE_SHA256);
+
+    let media_root = root.join("media");
+    let media_metadata = tree_metadata(&media_root);
+    assert_eq!(media_metadata.file_count, 607);
+    assert_eq!(media_metadata.byte_count, 17_444_480);
+    assert_eq!(media_metadata.sha256, MEDIA_SHA256);
+    assert_tree_lock(&lock["source"]["media"], &media_metadata, "media snapshot");
+
+    let attribution = &lock["source"]["third_party_attribution"];
+    assert_eq!(attribution["algorithm"], "sha256-path-length-content-v1");
+    assert_eq!(attribution["file_count"], 2);
+    assert_eq!(attribution["byte_count"], 58_366);
+    assert_eq!(attribution["sha256"], ATTRIBUTION_SHA256);
+    assert_eq!(
+        attribution["paths"],
+        serde_json::json!(["LICENSE.md", "sources.csv"])
+    );
+    assert_eq!(
+        sha256_file(&root.join("LICENSE.md")),
+        "e69b8954905c6a3ac9c104e1ea9d320da7deb1d867679d314dd61c32cf63df56"
+    );
+    assert_eq!(
+        sha256_file(&root.join("sources.csv")),
+        "09969004a54930c8488e0c7ad4eaad192ea8af39a0e530ccd273eae686e2f576"
+    );
+
+    let supplement_root = root
+        .parent()
+        .expect("fixture has fixtures parent")
+        .join("ultimate-geography-attribution/hardcore-geography");
+    let supplement_metadata = tree_metadata(&supplement_root);
+    assert_eq!(supplement_metadata.file_count, 2);
+    assert_eq!(supplement_metadata.byte_count, 6_126);
+    assert_eq!(supplement_metadata.sha256, HARDCORE_ATTRIBUTION_SHA256);
+    let supplement = &lock["attribution"]["supplements"]["hardcore_geography"];
+    assert_tree_lock(
+        supplement,
+        &supplement_metadata,
+        "Hardcore attribution supplement",
+    );
+    assert_eq!(
+        supplement["root"],
+        "ultimate-geography-attribution/hardcore-geography"
+    );
+    assert_eq!(supplement["provenance"]["revision"], HARDCORE_REVISION);
+    assert_eq!(
+        supplement["paths"],
+        serde_json::json!(["README.md", "sources.csv"])
+    );
+    assert_eq!(
+        sha256_file(&supplement_root.join("README.md")),
+        "ea7da97156e5688e36b8c32eaaf2f5dd805620edf5c3face9ff4d7508fdb7e07"
+    );
+    assert_eq!(
+        sha256_file(&supplement_root.join("sources.csv")),
+        "aa3d9a96a0ae9dd15f6e108891b9a667c70ad9a97f64036045c13a5f4ecf204c"
+    );
+    let coverage = &lock["attribution"]["coverage"];
+    assert_eq!(coverage["algorithm"], "sha256-normalized-filename-owner-v1");
+    assert_eq!(
+        coverage["filename_normalization"],
+        "unicode-nfc-posix-basename-v1"
+    );
+    assert_eq!(coverage["media_file_count"], 607);
+    assert_eq!(coverage["image_file_count"], 602);
+    assert_eq!(
+        coverage["ultimate_geography"]["sources_csv_file_count"],
+        546
+    );
+    assert_eq!(
+        coverage["ultimate_geography"]["license_notice_file_count"],
+        5
+    );
+    assert_eq!(coverage["hardcore_geography"]["sources_csv_file_count"], 56);
+    assert_eq!(coverage["hardcore_geography"]["flag_file_count"], 39);
+    assert_eq!(coverage["hardcore_geography"]["map_file_count"], 17);
+    assert_eq!(coverage["unattributed_file_count"], 0);
+    assert_eq!(coverage["ambiguous_file_count"], 0);
+    assert_eq!(coverage["sha256"], ATTRIBUTION_COVERAGE_SHA256);
+
+    let expected_root = root
+        .parent()
+        .expect("fixture has fixtures parent")
+        .join("ultimate-geography-expected/crowdanki");
+    let manifest_contracts = [
+        ("brainbrew.yaml", "main", 74_usize),
+        ("brainbrew-hardcore.yaml", "companion", 26_usize),
+    ];
+    let source_records = lock["source"]["manifests"]
+        .as_array()
+        .expect("source manifests are an array");
+    let expected_records = lock["expected"]["manifests"]
+        .as_array()
+        .expect("expected manifests are an array");
+    assert_eq!(source_records, expected_records);
+    assert_eq!(
+        lock["expected"]["accepted_from_source_sha256"],
+        SOURCE_SHA256
+    );
+    let generator = &lock["expected"]["generated_by"];
+    assert_eq!(generator["revision"], BRAINBREW_REVISION);
+    assert_eq!(
+        generator["executable"]["sha256"],
+        GENERATOR_EXECUTABLE_SHA256
+    );
+    assert_eq!(generator["executable"]["byte_count"], 15_346_312);
+    assert_eq!(generator["source"]["sha256"], GENERATOR_SOURCE_SHA256);
+    assert_eq!(generator["source"]["file_count"], 68);
+    assert_eq!(generator["source"]["byte_count"], 2_888_252);
+    assert_eq!(
+        generator["build"]["cargo_lock_sha256"],
+        "ea2858def2a0528b781d992930a8f6067e71b4baa8ef6bf6b298f3b44a120cd1"
+    );
+    assert_eq!(generator["identity"]["sha256"], GENERATOR_IDENTITY_SHA256);
+    assert_eq!(lock["expected"]["file_count"], 100);
+    assert_eq!(lock["expected"]["sha256"], EXPECTED_SHA256);
+
+    let assets = read_real_media_assets(&media_root);
+    assert_eq!(assets.len(), 607);
+    let mut all_expected_targets = BTreeSet::new();
+    let mut all_declared_media = BTreeSet::new();
+    let mut compared = 0_usize;
+    for (record_index, (manifest_file, role, target_count)) in
+        manifest_contracts.into_iter().enumerate()
+    {
+        let manifest = read_manifest_file(&root, manifest_file);
+        assert_eq!(manifest.targets.len(), target_count);
+        let record = &source_records[record_index];
+        assert_eq!(record["path"], manifest_file);
+        assert_eq!(record["role"], role);
+        assert_eq!(record["target_count"], target_count);
+        let recorded_targets = record["targets"]
+            .as_array()
+            .expect("recorded targets are an array")
+            .iter()
+            .map(|target| target.as_str().unwrap().to_owned())
+            .collect::<BTreeSet<_>>();
+        let manifest_targets = manifest.targets.keys().cloned().collect::<BTreeSet<_>>();
+        assert_eq!(recorded_targets, manifest_targets);
+
+        for target in manifest.targets.keys() {
+            assert!(
+                all_expected_targets.insert(target.clone()),
+                "target {target} occurs in only one manifest"
+            );
+            let expected_path = expected_root.join(target).join("deck.json");
+            assert!(
+                expected_path.is_file(),
+                "{target} expected deck.json exists"
+            );
+            let expected: serde_json::Value = serde_json::from_str(
+                &fs::read_to_string(&expected_path)
+                    .unwrap_or_else(|error| panic!("{} reads: {error}", expected_path.display())),
+            )
+            .unwrap_or_else(|error| panic!("{} parses: {error}", expected_path.display()));
+
+            let deck = compose_target(&root, &manifest, target);
+            media::validate_declarations(&deck, media::MediaHashPolicy::Required)
+                .unwrap_or_else(|error| panic!("{target} has strict media declarations: {error}"));
+            media::validate_references(&deck)
+                .unwrap_or_else(|error| panic!("{target} media references validate: {error}"));
+            media::validate_hashes(&deck, &assets)
+                .unwrap_or_else(|error| panic!("{target} real media bytes validate: {error}"));
+            all_declared_media.extend(deck.media.values().map(|entry| entry.path.clone()));
+
+            let actual = exported_json(&deck);
+            assert_eq!(
+                actual, expected,
+                "{target} parsed CrowdAnki output drifted from its mandatory expected deck.json"
+            );
+            compared += 1;
+        }
     }
+    assert_eq!(compared, 100);
+    assert_eq!(all_expected_targets.len(), 100);
+    assert_eq!(
+        all_declared_media,
+        assets.keys().cloned().collect::<BTreeSet<_>>(),
+        "the all-target strict verification covers every byte in the single vendored media tree"
+    );
+    assert_exact_expected_tree(&expected_root, &all_expected_targets);
+
+    let expected_metadata = canonical_json_tree_metadata(&expected_root);
+    assert_eq!(expected_metadata.file_count, 100);
+    assert_eq!(expected_metadata.canonical_byte_count, 9_984_230);
+    assert_eq!(expected_metadata.sha256, EXPECTED_SHA256);
+    assert_eq!(
+        lock["expected"]["algorithm"],
+        "sha256-path-canonical-json-v1"
+    );
+    assert_eq!(
+        lock["expected"]["canonical_byte_count"],
+        expected_metadata.canonical_byte_count
+    );
+    assert_eq!(lock["expected"]["sha256"], expected_metadata.sha256);
 }
 
 #[test]
@@ -1894,22 +2188,258 @@ fn read_overlay_file(root: &Path, path: &Path) -> Result<Overlay, String> {
     canonical_yaml::overlay_from_str(&resolved).map_err(|error| error.to_string())
 }
 
-fn release_oracle_deck_json_path(root: &Path, target: &str) -> PathBuf {
-    let (language, variant) = target_parts(target);
-    let suffix = if variant == "extended" {
-        " [Extended]"
-    } else {
-        ""
-    };
-    root.join(format!("Ultimate Geography [{language}]{suffix}/deck.json"))
+#[derive(Debug, Eq, PartialEq)]
+struct TreeMetadata {
+    file_count: usize,
+    byte_count: u64,
+    sha256: String,
 }
 
-fn target_parts(target: &str) -> (&str, &str) {
-    if let Some(variant) = target.strip_prefix("zh-tw-") {
-        return ("ZH-TW", variant);
+#[derive(Debug, Eq, PartialEq)]
+struct JsonTreeMetadata {
+    file_count: usize,
+    canonical_byte_count: usize,
+    sha256: String,
+}
+
+fn tree_metadata(root: &Path) -> TreeMetadata {
+    let mut files = Vec::new();
+    collect_regular_files(root, root, &mut files);
+    files.sort_by(|left, right| left.0.cmp(&right.0));
+    let mut hasher = Sha256::new();
+    hasher.update(b"brainbrew-tree-sha256-v1\0");
+    let mut byte_count = 0_u64;
+    for (relative, path) in &files {
+        let bytes =
+            fs::read(path).unwrap_or_else(|error| panic!("{} reads: {error}", path.display()));
+        update_framed_digest(&mut hasher, relative, &bytes);
+        byte_count += bytes.len() as u64;
     }
-    let (language, variant) = target.split_once('-').unwrap();
-    (language.to_ascii_uppercase().leak(), variant)
+    TreeMetadata {
+        file_count: files.len(),
+        byte_count,
+        sha256: format!("{:x}", hasher.finalize()),
+    }
+}
+
+fn sha256_file(path: &Path) -> String {
+    let bytes = fs::read(path).unwrap_or_else(|error| panic!("{} reads: {error}", path.display()));
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+fn canonical_json_tree_metadata(root: &Path) -> JsonTreeMetadata {
+    let mut targets = fs::read_dir(root)
+        .unwrap_or_else(|error| panic!("{} reads: {error}", root.display()))
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    targets.sort();
+    let mut hasher = Sha256::new();
+    hasher.update(b"brainbrew-json-tree-sha256-v1\0");
+    let mut canonical_byte_count = 0_usize;
+    for target_dir in &targets {
+        let target = target_dir.file_name().unwrap().to_str().unwrap();
+        let deck_path = target_dir.join("deck.json");
+        let value: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(&deck_path)
+                .unwrap_or_else(|error| panic!("{} reads: {error}", deck_path.display())),
+        )
+        .unwrap_or_else(|error| panic!("{} parses: {error}", deck_path.display()));
+        let canonical = serde_json::to_vec(&value).expect("expected JSON canonicalizes");
+        update_framed_digest(&mut hasher, &format!("{target}/deck.json"), &canonical);
+        canonical_byte_count += canonical.len();
+    }
+    JsonTreeMetadata {
+        file_count: targets.len(),
+        canonical_byte_count,
+        sha256: format!("{:x}", hasher.finalize()),
+    }
+}
+
+fn update_framed_digest(hasher: &mut Sha256, relative: &str, bytes: &[u8]) {
+    hasher.update(relative.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(bytes.len().to_string().as_bytes());
+    hasher.update(b"\0");
+    hasher.update(bytes);
+}
+
+fn collect_regular_files(root: &Path, dir: &Path, files: &mut Vec<(String, PathBuf)>) {
+    for entry in
+        fs::read_dir(dir).unwrap_or_else(|error| panic!("{} reads: {error}", dir.display()))
+    {
+        let path = entry.unwrap().path();
+        let metadata = fs::symlink_metadata(&path)
+            .unwrap_or_else(|error| panic!("{} metadata reads: {error}", path.display()));
+        assert!(
+            !metadata.file_type().is_symlink(),
+            "fixture trees contain no symlinks: {}",
+            path.display()
+        );
+        if metadata.is_dir() {
+            collect_regular_files(root, &path, files);
+        } else {
+            assert!(
+                metadata.is_file(),
+                "fixture trees contain regular files only: {}",
+                path.display()
+            );
+            files.push((
+                path.strip_prefix(root)
+                    .unwrap()
+                    .to_str()
+                    .expect("fixture paths are UTF-8")
+                    .replace('\\', "/"),
+                path,
+            ));
+        }
+    }
+}
+
+fn assert_tree_lock(record: &serde_json::Value, actual: &TreeMetadata, label: &str) {
+    assert_eq!(
+        record["algorithm"], "sha256-path-length-content-v1",
+        "{label} algorithm"
+    );
+    assert_eq!(
+        record["file_count"], actual.file_count,
+        "{label} file count"
+    );
+    assert_eq!(
+        record["byte_count"], actual.byte_count,
+        "{label} byte count"
+    );
+    assert_eq!(record["sha256"], actual.sha256, "{label} digest");
+}
+
+fn read_real_media_assets(root: &Path) -> BTreeMap<String, Vec<u8>> {
+    let mut files = Vec::new();
+    collect_regular_files(root, root, &mut files);
+    files
+        .into_iter()
+        .map(|(relative, path)| {
+            let bytes =
+                fs::read(&path).unwrap_or_else(|error| panic!("{} reads: {error}", path.display()));
+            (relative, bytes)
+        })
+        .collect()
+}
+
+fn attribution_filenames(path: &Path, label: &str) -> BTreeSet<String> {
+    let source = fs::read_to_string(path)
+        .unwrap_or_else(|error| panic!("{} reads: {error}", path.display()));
+    let mut lines = source.lines();
+    let header = lines
+        .next()
+        .unwrap_or_else(|| panic!("{label} has a header"));
+    assert_eq!(
+        parse_fixture_csv_row(header, label, 1),
+        ["File", "Source", "License", "Modifications"],
+        "{label} columns"
+    );
+    let mut filenames = BTreeSet::new();
+    for (index, line) in lines.enumerate() {
+        let row_number = index + 2;
+        let fields = parse_fixture_csv_row(line, label, row_number);
+        assert_eq!(fields.len(), 4, "{label} row {row_number} has four fields");
+        assert!(
+            !fields[1].is_empty(),
+            "{label} row {row_number} has a source"
+        );
+        assert!(
+            !fields[2].is_empty(),
+            "{label} row {row_number} has a license"
+        );
+        let filename = &fields[0];
+        assert_eq!(
+            filename.trim(),
+            filename,
+            "{label} filename whitespace drift"
+        );
+        assert!(
+            !filename.is_empty()
+                && !filename.contains('/')
+                && !filename.contains('\\')
+                && filename != "."
+                && filename != "..",
+            "{label} row {row_number} File is a basename"
+        );
+        assert_eq!(
+            filename.nfc().collect::<String>(),
+            *filename,
+            "{label} row {row_number} File is Unicode NFC"
+        );
+        assert!(
+            filenames.insert(filename.clone()),
+            "{label} repeats normalized filename {filename:?}"
+        );
+    }
+    filenames
+}
+
+fn parse_fixture_csv_row(line: &str, label: &str, row_number: usize) -> Vec<String> {
+    let mut fields = vec![String::new()];
+    let mut chars = line.chars().peekable();
+    let mut quoted = false;
+    while let Some(character) = chars.next() {
+        match character {
+            '"' if quoted && chars.peek() == Some(&'"') => {
+                fields.last_mut().unwrap().push('"');
+                chars.next();
+            }
+            '"' if quoted => quoted = false,
+            '"' if fields.last().unwrap().is_empty() => quoted = true,
+            '"' => panic!("{label} row {row_number} has an unexpected quote"),
+            ',' if !quoted => fields.push(String::new()),
+            _ => fields.last_mut().unwrap().push(character),
+        }
+    }
+    assert!(
+        !quoted,
+        "{label} row {row_number} has an unterminated quote"
+    );
+    fields
+}
+
+fn assert_exact_expected_tree(root: &Path, targets: &BTreeSet<String>) {
+    let mut actual = BTreeSet::new();
+    for entry in
+        fs::read_dir(root).unwrap_or_else(|error| panic!("{} reads: {error}", root.display()))
+    {
+        let target_dir = entry.unwrap().path();
+        let target_metadata = fs::symlink_metadata(&target_dir)
+            .unwrap_or_else(|error| panic!("{} metadata reads: {error}", target_dir.display()));
+        assert!(
+            target_metadata.is_dir() && !target_metadata.file_type().is_symlink(),
+            "expected root contains real target directories only"
+        );
+        let target = target_dir
+            .file_name()
+            .unwrap()
+            .to_str()
+            .expect("target name is UTF-8")
+            .to_owned();
+        assert!(actual.insert(target.clone()), "target directory is unique");
+        let children = fs::read_dir(&target_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect::<Vec<_>>();
+        assert_eq!(children.len(), 1, "{target} contains one expected file");
+        assert_eq!(
+            children[0].file_name().and_then(|name| name.to_str()),
+            Some("deck.json"),
+            "{target} contains parsed deck.json only (never duplicated media)"
+        );
+        let deck_metadata = fs::symlink_metadata(&children[0])
+            .unwrap_or_else(|error| panic!("{} metadata reads: {error}", children[0].display()));
+        assert!(
+            deck_metadata.is_file() && !deck_metadata.file_type().is_symlink(),
+            "{target}/deck.json is a real regular file"
+        );
+    }
+    assert_eq!(
+        &actual, targets,
+        "missing or extra expected target directory"
+    );
 }
 
 fn sid(value: &str) -> StableId {
@@ -1931,13 +2461,4 @@ fn collect_yaml_files(dir: &Path, files: &mut Vec<PathBuf>) {
 
 fn fixture_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/ultimate-geography")
-}
-
-fn ultimate_geography_release_oracle_root() -> PathBuf {
-    std::env::var_os("BRAINBREW_UG_CROWDANKI_ORACLE")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../.cache/brainbrew/ug-release-oracle/v5.3/crowdanki")
-        })
 }

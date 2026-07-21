@@ -9,6 +9,17 @@ authors.workspace = true
 repository.workspace = true
 description = "Rust-based Brain Brew CLI for local-first Anki-compatible deck federation"
 homepage = "https://github.com/jeprecated/brain-brew"
+# These integration tests intentionally exercise repository-root fixtures,
+# policy files, or documentation. Keep them in repository CI without making
+# those inputs part of the crates.io CLI package.
+exclude = [
+    "tests/cli.rs",
+    "tests/crowdanki_import_media_cli.rs",
+    "tests/crowdanki_import_plan_cli.rs",
+    "tests/release_media_integrity.rs",
+    "tests/safe_paths.rs",
+    "tests/ug_style_fixture.rs",
+]
 
 [package.metadata.dist]
 dist = true

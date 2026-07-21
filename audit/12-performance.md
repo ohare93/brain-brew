@@ -1,5 +1,14 @@
 ## Review
 
+> **Resolution annotation (current fixture):** The baseline measurements below
+> describe the former 119-file source-only fixture and remain historical. The
+> maintained pinned fixture now has 736 files/19,919,556 bytes, including one
+> 607-file/17,444,480-byte real media tree, plus 100 media-free expected JSON
+> outputs. The mandatory oracle verifies all 74 + 26 targets and strict real
+> media bytes offline. Performance findings remain useful, but the statements
+> that real media was unavailable or integrity was only code-derived are no
+> longer current.
+
 ### Scope and baseline
 
 - Reviewed composition/translation complexity, manifest planning and package discovery, canonical/CrowdAnki serialization, media hashing, lock hashing, output ordering, and Workbench caching/list behavior.

@@ -1,5 +1,16 @@
 # Test-suite false-confidence audit
 
+> **Current resolution of the UG oracle finding:** This historical audit predates
+> the pinned full fixture contract. The default formats integration suite now
+> requires exact parsed CrowdAnki equality for all 100 UG targets, exact 74 + 26
+> inventory, locked source/expected digests, and strict verification of every
+> target against the single real 607-file media tree. A separate locked inventory
+> proves exact attribution by 546 UG image rows, 56 HG image rows, and the UG
+> notice for five runtime files. The absent external oracle no longer returns a
+> passing optional test. Boundary tests reject source drift, count-preserving
+> expected-value substitution, missing/extra targets, and attribution drift.
+> Other findings below remain historical evidence and are not rewritten.
+
 ## Review
 
 ### Correct — what the suite genuinely proves

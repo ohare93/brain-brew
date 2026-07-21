@@ -1,0 +1,7477 @@
+{
+  "__type__": "Deck",
+  "children": [],
+  "crowdanki_uuid": "43c5ba66-9a65-11e8-90c9-a0481cc15658",
+  "deck_config_uuid": "43d37fac-9a65-11e8-9cc5-a0481cc15658",
+  "deck_configurations": [
+    {
+      "__type__": "DeckConfig",
+      "autoplay": false,
+      "crowdanki_uuid": "43d37fac-9a65-11e8-9cc5-a0481cc15658",
+      "dyn": false,
+      "lapse": {
+        "delays": [
+          10
+        ],
+        "leechAction": 0,
+        "leechFails": 8,
+        "minInt": 1,
+        "mult": 0
+      },
+      "maxTaken": 60,
+      "name": "Ultimate Geography",
+      "new": {
+        "bury": true,
+        "delays": [
+          1,
+          10
+        ],
+        "initialFactor": 2500,
+        "ints": [
+          1,
+          4,
+          7
+        ],
+        "order": 0,
+        "perDay": 15,
+        "separate": true
+      },
+      "replayq": true,
+      "rev": {
+        "bury": true,
+        "ease4": 1.3,
+        "fuzz": 0.05,
+        "ivlFct": 1,
+        "maxIvl": 36500,
+        "minSpace": 1,
+        "perDay": 100
+      },
+      "timer": 0
+    }
+  ],
+  "desc": "<a href=\"https://github.com/anki-geo/ultimate-geography/\"><b>FULL DESCRIPTION</b></a> | <a href=\"https://github.com/anki-geo/ultimate-geography/releases\"><b>RELEASE NOTES</b></a> | <a href=\"https://github.com/anki-geo/ultimate-geography/blob/master/CONTRIBUTING.md\"><b>CONTRIBUTING</b></a>\n\n<b>Ultimate Geography v5.3</b> features:\n\n- the world's <a href=\"https://en.wikipedia.org/wiki/List_of_sovereign_states\"><b>205 sovereign states</b></a> (820 cards)\n- <b>59 territories, world regions, and other entities</b> (103 cards)\n- <b>48 oceans and seas</b> (48 cards, maps only)\n- <b>7 continents</b> (7 cards, maps only)\n- for a total of <b>319 unique notes</b>, <b>978 cards</b>, <b>221 flags</b> and <b>319 maps</b>.\n\nThe deck is <a href=\"https://github.com/anki-geo/ultimate-geography#other-languages-and-versions\">available</a> in <b>English</b>, <b>German</b>, <b>Spanish</b>, <b>French</b>, <b>Norwegian</b>, <b>Czech</b>, <b>Russian</b>, <b>Dutch</b>, <b>Swedish</b>, <b>Portuguese</b>, <b>Chinese</b> (simplified and traditional), <b>Polish</b>, <b>Italian</b>, <b>Danish</b> and <b>Hebrew</b>. An <a href=\"https://github.com/anki-geo/ultimate-geography#other-languages-and-versions\"><b>extended version</b></a> is also available in each language. To help with memorisation and provide context while learning, some notes include extra information such as similar flags, governance information, alternative country names, etc.\n\nYou can use Anki's <a href=\"https://github.com/anki-geo/ultimate-geography#custom-study\">filtered deck feature</a> to focus your study on a subset of the deck, such as sovereign states, a single note template (e.g. map to country), or a specific continent (e.g. Europe).\n\nThis deck is <a href=\"https://github.com/anki-geo/ultimate-geography\"><b>maintained on GitHub</b></a>. If you spot a mistake, have a suggestion or want to help, please don't hesitate to <a href=\"https://github.com/anki-geo/ultimate-geography/issues\">open an issue</a>. Want to <b>stay informed of new releases</b>? Watch the GitHub repository or subscribe to the <a href=\"https://github.com/anki-geo/ultimate-geography/releases.atom\">releases feed</a>!\n",
+  "dyn": 0,
+  "extendNew": 10,
+  "extendRev": 50,
+  "media_files": [
+    "ug-flag-abkhazia.svg",
+    "ug-flag-afghanistan.svg",
+    "ug-flag-aland_islands.svg",
+    "ug-flag-albania.svg",
+    "ug-flag-algeria.svg",
+    "ug-flag-andorra.svg",
+    "ug-flag-angola.svg",
+    "ug-flag-antigua_and_barbuda.svg",
+    "ug-flag-argentina.svg",
+    "ug-flag-armenia.svg",
+    "ug-flag-aruba.svg",
+    "ug-flag-australia.svg",
+    "ug-flag-austria.svg",
+    "ug-flag-azerbaijan.svg",
+    "ug-flag-bahrain.svg",
+    "ug-flag-bangladesh.svg",
+    "ug-flag-barbados.svg",
+    "ug-flag-belarus.svg",
+    "ug-flag-belgium.svg",
+    "ug-flag-belize.svg",
+    "ug-flag-benin.svg",
+    "ug-flag-bhutan.svg",
+    "ug-flag-bolivia-blur.svg",
+    "ug-flag-bolivia.svg",
+    "ug-flag-bosnia_and_herzegovina.svg",
+    "ug-flag-botswana.svg",
+    "ug-flag-brazil.svg",
+    "ug-flag-brunei.svg",
+    "ug-flag-bulgaria.svg",
+    "ug-flag-burkina_faso.svg",
+    "ug-flag-burundi.svg",
+    "ug-flag-cambodia.svg",
+    "ug-flag-cameroon.svg",
+    "ug-flag-canada.svg",
+    "ug-flag-cape_verde.svg",
+    "ug-flag-central_african_republic.svg",
+    "ug-flag-chad.svg",
+    "ug-flag-chile.svg",
+    "ug-flag-china.svg",
+    "ug-flag-colombia.svg",
+    "ug-flag-comoros.svg",
+    "ug-flag-cook_islands.svg",
+    "ug-flag-costa_rica-blur.svg",
+    "ug-flag-costa_rica.svg",
+    "ug-flag-croatia.svg",
+    "ug-flag-cuba.svg",
+    "ug-flag-curacao.svg",
+    "ug-flag-cyprus.svg",
+    "ug-flag-czech_republic.svg",
+    "ug-flag-democratic_republic_of_the_congo.svg",
+    "ug-flag-denmark.svg",
+    "ug-flag-djibouti.svg",
+    "ug-flag-dominica.svg",
+    "ug-flag-dominican_republic.svg",
+    "ug-flag-ecuador.svg",
+    "ug-flag-egypt.svg",
+    "ug-flag-el_salvador-blur.svg",
+    "ug-flag-el_salvador.svg",
+    "ug-flag-england.svg",
+    "ug-flag-equatorial_guinea.svg",
+    "ug-flag-eritrea.svg",
+    "ug-flag-estonia.svg",
+    "ug-flag-eswatini.svg",
+    "ug-flag-ethiopia.svg",
+    "ug-flag-european_union.svg",
+    "ug-flag-faroe_islands.svg",
+    "ug-flag-federated_states_of_micronesia.svg",
+    "ug-flag-fiji.svg",
+    "ug-flag-finland.svg",
+    "ug-flag-france.svg",
+    "ug-flag-french_polynesia.svg",
+    "ug-flag-gabon.svg",
+    "ug-flag-georgia.svg",
+    "ug-flag-germany.svg",
+    "ug-flag-ghana.svg",
+    "ug-flag-greece.svg",
+    "ug-flag-greenland.svg",
+    "ug-flag-grenada.svg",
+    "ug-flag-guam-blur.svg",
+    "ug-flag-guam.svg",
+    "ug-flag-guatemala.svg",
+    "ug-flag-guinea-bissau.svg",
+    "ug-flag-guinea.svg",
+    "ug-flag-guyana.svg",
+    "ug-flag-haiti.svg",
+    "ug-flag-honduras.svg",
+    "ug-flag-hong_kong.svg",
+    "ug-flag-hungary.svg",
+    "ug-flag-iceland.svg",
+    "ug-flag-india.svg",
+    "ug-flag-indonesia.svg",
+    "ug-flag-iran.svg",
+    "ug-flag-iraq.svg",
+    "ug-flag-ireland.svg",
+    "ug-flag-israel.svg",
+    "ug-flag-italy.svg",
+    "ug-flag-ivory_coast.svg",
+    "ug-flag-jamaica.svg",
+    "ug-flag-japan.svg",
+    "ug-flag-jordan.svg",
+    "ug-flag-kazakhstan.svg",
+    "ug-flag-kenya.svg",
+    "ug-flag-kiribati.svg",
+    "ug-flag-kosovo.svg",
+    "ug-flag-kuwait.svg",
+    "ug-flag-kyrgyzstan.svg",
+    "ug-flag-laos.svg",
+    "ug-flag-latvia.svg",
+    "ug-flag-lebanon.svg",
+    "ug-flag-lesotho.svg",
+    "ug-flag-liberia.svg",
+    "ug-flag-libya.svg",
+    "ug-flag-liechtenstein.svg",
+    "ug-flag-lithuania.svg",
+    "ug-flag-luxembourg.svg",
+    "ug-flag-macau.svg",
+    "ug-flag-madagascar.svg",
+    "ug-flag-malawi.svg",
+    "ug-flag-malaysia.svg",
+    "ug-flag-maldives.svg",
+    "ug-flag-mali.svg",
+    "ug-flag-malta.svg",
+    "ug-flag-marshall_islands.svg",
+    "ug-flag-mauritania.svg",
+    "ug-flag-mauritius.svg",
+    "ug-flag-mexico.svg",
+    "ug-flag-moldova.svg",
+    "ug-flag-monaco.svg",
+    "ug-flag-mongolia.svg",
+    "ug-flag-montenegro.svg",
+    "ug-flag-morocco.svg",
+    "ug-flag-mozambique.svg",
+    "ug-flag-myanmar.svg",
+    "ug-flag-namibia.svg",
+    "ug-flag-nauru.svg",
+    "ug-flag-nepal-nobox.svg",
+    "ug-flag-netherlands.svg",
+    "ug-flag-new_caledonia.svg",
+    "ug-flag-new_zealand.svg",
+    "ug-flag-nicaragua-blur.svg",
+    "ug-flag-nicaragua.svg",
+    "ug-flag-niger.svg",
+    "ug-flag-nigeria.svg",
+    "ug-flag-niue.svg",
+    "ug-flag-north_korea.svg",
+    "ug-flag-north_macedonia.svg",
+    "ug-flag-northern_cyprus.svg",
+    "ug-flag-norway.svg",
+    "ug-flag-oman.svg",
+    "ug-flag-pakistan.svg",
+    "ug-flag-palau.svg",
+    "ug-flag-palestine.svg",
+    "ug-flag-panama.svg",
+    "ug-flag-papua_new_guinea.svg",
+    "ug-flag-paraguay-blur.svg",
+    "ug-flag-paraguay.svg",
+    "ug-flag-peru.svg",
+    "ug-flag-philippines.svg",
+    "ug-flag-poland.svg",
+    "ug-flag-portugal.svg",
+    "ug-flag-puerto_rico.svg",
+    "ug-flag-qatar.svg",
+    "ug-flag-republic_of_the_congo.svg",
+    "ug-flag-romania.svg",
+    "ug-flag-russia.svg",
+    "ug-flag-rwanda.svg",
+    "ug-flag-sahrawi_arab_democratic_republic.svg",
+    "ug-flag-saint_kitts_and_nevis.svg",
+    "ug-flag-saint_lucia.svg",
+    "ug-flag-saint_vincent_and_the_grenadines.svg",
+    "ug-flag-samoa.svg",
+    "ug-flag-san_marino.svg",
+    "ug-flag-sao_tome_and_principe.svg",
+    "ug-flag-saudi_arabia.svg",
+    "ug-flag-scotland.svg",
+    "ug-flag-senegal.svg",
+    "ug-flag-serbia.svg",
+    "ug-flag-seychelles.svg",
+    "ug-flag-sierra_leone.svg",
+    "ug-flag-singapore.svg",
+    "ug-flag-slovakia.svg",
+    "ug-flag-slovenia.svg",
+    "ug-flag-solomon_islands.svg",
+    "ug-flag-somalia.svg",
+    "ug-flag-somaliland.svg",
+    "ug-flag-south_africa.svg",
+    "ug-flag-south_korea.svg",
+    "ug-flag-south_ossetia.svg",
+    "ug-flag-south_sudan.svg",
+    "ug-flag-spain.svg",
+    "ug-flag-sri_lanka.svg",
+    "ug-flag-sudan.svg",
+    "ug-flag-suriname.svg",
+    "ug-flag-sweden.svg",
+    "ug-flag-switzerland.svg",
+    "ug-flag-syria.svg",
+    "ug-flag-taiwan.svg",
+    "ug-flag-tajikistan.svg",
+    "ug-flag-tanzania.svg",
+    "ug-flag-thailand.svg",
+    "ug-flag-the_bahamas.svg",
+    "ug-flag-the_gambia.svg",
+    "ug-flag-timor-leste.svg",
+    "ug-flag-togo.svg",
+    "ug-flag-tonga.svg",
+    "ug-flag-transnistria.svg",
+    "ug-flag-trinidad_and_tobago.svg",
+    "ug-flag-tunisia.svg",
+    "ug-flag-turkey.svg",
+    "ug-flag-turkmenistan.svg",
+    "ug-flag-tuvalu.svg",
+    "ug-flag-uganda.svg",
+    "ug-flag-ukraine.svg",
+    "ug-flag-united_arab_emirates.svg",
+    "ug-flag-united_kingdom.svg",
+    "ug-flag-united_states_of_america.svg",
+    "ug-flag-united_states_virgin_islands.svg",
+    "ug-flag-uruguay.svg",
+    "ug-flag-uzbekistan.svg",
+    "ug-flag-vanuatu.svg",
+    "ug-flag-vatican_city.svg",
+    "ug-flag-venezuela.svg",
+    "ug-flag-vietnam.svg",
+    "ug-flag-wales.svg",
+    "ug-flag-yemen.svg",
+    "ug-flag-zambia.svg",
+    "ug-flag-zimbabwe.svg",
+    "ug-map-abkhazia.png",
+    "ug-map-adriatic_sea.png",
+    "ug-map-aegean_sea.png",
+    "ug-map-afghanistan.png",
+    "ug-map-africa-nobox.png",
+    "ug-map-akrotiri_and_dhekelia.png",
+    "ug-map-aland_islands.png",
+    "ug-map-alaska.png",
+    "ug-map-albania.png",
+    "ug-map-algeria.png",
+    "ug-map-american_samoa.png",
+    "ug-map-andorra.png",
+    "ug-map-angola.png",
+    "ug-map-anguilla.png",
+    "ug-map-antarctica-nobox.png",
+    "ug-map-antigua_and_barbuda.png",
+    "ug-map-arabian_sea.png",
+    "ug-map-aral_sea.png",
+    "ug-map-arctic_ocean-nobox.png",
+    "ug-map-argentina.png",
+    "ug-map-armenia.png",
+    "ug-map-aruba.png",
+    "ug-map-asia-nobox.png",
+    "ug-map-atlantic_ocean-nobox.png",
+    "ug-map-australia.png",
+    "ug-map-austria.png",
+    "ug-map-azerbaijan.png",
+    "ug-map-azores.png",
+    "ug-map-bahrain.png",
+    "ug-map-bali.png",
+    "ug-map-balkan_peninsula.png",
+    "ug-map-baltic_sea.png",
+    "ug-map-banda_sea.png",
+    "ug-map-bangladesh.png",
+    "ug-map-barbados.png",
+    "ug-map-barents_sea.png",
+    "ug-map-bay_of_bengal.png",
+    "ug-map-bay_of_biscay.png",
+    "ug-map-belarus.png",
+    "ug-map-belgium.png",
+    "ug-map-belize.png",
+    "ug-map-benin.png",
+    "ug-map-bering_strait.png",
+    "ug-map-bermuda.png",
+    "ug-map-bhutan.png",
+    "ug-map-black_sea.png",
+    "ug-map-bolivia.png",
+    "ug-map-bosnia_and_herzegovina.png",
+    "ug-map-botswana.png",
+    "ug-map-bougainville.png",
+    "ug-map-brazil.png",
+    "ug-map-british_virgin_islands.png",
+    "ug-map-brunei.png",
+    "ug-map-bulgaria.png",
+    "ug-map-burkina_faso.png",
+    "ug-map-burundi.png",
+    "ug-map-cambodia.png",
+    "ug-map-cameroon.png",
+    "ug-map-canada.png",
+    "ug-map-canary_islands.png",
+    "ug-map-cape_verde.png",
+    "ug-map-caribbean_sea.png",
+    "ug-map-caspian_sea.png",
+    "ug-map-cayman_islands.png",
+    "ug-map-celebes_sea.png",
+    "ug-map-celtic_sea.png",
+    "ug-map-central_african_republic.png",
+    "ug-map-chad.png",
+    "ug-map-chile.png",
+    "ug-map-china.png",
+    "ug-map-colombia.png",
+    "ug-map-comoros.png",
+    "ug-map-cook_islands.png",
+    "ug-map-coral_sea.png",
+    "ug-map-corsica.png",
+    "ug-map-costa_rica.png",
+    "ug-map-croatia.png",
+    "ug-map-cuba.png",
+    "ug-map-curacao.png",
+    "ug-map-cyprus.png",
+    "ug-map-czech_republic.png",
+    "ug-map-dead_sea.png",
+    "ug-map-democratic_republic_of_the_congo.png",
+    "ug-map-denmark.png",
+    "ug-map-denmark_strait.png",
+    "ug-map-djibouti.png",
+    "ug-map-dominica.png",
+    "ug-map-dominican_republic.png",
+    "ug-map-east_china_sea.png",
+    "ug-map-east_siberian_sea.png",
+    "ug-map-ecuador.png",
+    "ug-map-egypt.png",
+    "ug-map-el_salvador.png",
+    "ug-map-england.png",
+    "ug-map-english_channel.png",
+    "ug-map-equatorial_guinea.png",
+    "ug-map-eritrea.png",
+    "ug-map-estonia.png",
+    "ug-map-eswatini.png",
+    "ug-map-ethiopia.png",
+    "ug-map-europe-nobox.png",
+    "ug-map-european_union.png",
+    "ug-map-falkland_islands.png",
+    "ug-map-faroe_islands.png",
+    "ug-map-federated_states_of_micronesia.png",
+    "ug-map-fiji.png",
+    "ug-map-finland.png",
+    "ug-map-france.png",
+    "ug-map-french_guiana.png",
+    "ug-map-french_polynesia.png",
+    "ug-map-gabon.png",
+    "ug-map-georgia.png",
+    "ug-map-germany.png",
+    "ug-map-ghana.png",
+    "ug-map-gibraltar.png",
+    "ug-map-greece.png",
+    "ug-map-greenland.png",
+    "ug-map-grenada.png",
+    "ug-map-guadeloupe.png",
+    "ug-map-guam.png",
+    "ug-map-guatemala.png",
+    "ug-map-guernsey.png",
+    "ug-map-guinea-bissau.png",
+    "ug-map-guinea.png",
+    "ug-map-gulf_of_alaska.png",
+    "ug-map-gulf_of_california.png",
+    "ug-map-gulf_of_carpentaria.png",
+    "ug-map-gulf_of_guinea.png",
+    "ug-map-gulf_of_mexico.png",
+    "ug-map-gulf_of_thailand.png",
+    "ug-map-guyana.png",
+    "ug-map-haiti.png",
+    "ug-map-hawaii.png",
+    "ug-map-honduras.png",
+    "ug-map-hong_kong.png",
+    "ug-map-hudson_bay.png",
+    "ug-map-hungary.png",
+    "ug-map-iceland.png",
+    "ug-map-india.png",
+    "ug-map-indian_ocean-nobox.png",
+    "ug-map-indonesia.png",
+    "ug-map-iran.png",
+    "ug-map-iraq.png",
+    "ug-map-ireland.png",
+    "ug-map-isle_of_man.png",
+    "ug-map-israel.png",
+    "ug-map-italy.png",
+    "ug-map-ivory_coast.png",
+    "ug-map-jamaica.png",
+    "ug-map-japan.png",
+    "ug-map-java.png",
+    "ug-map-jeju.png",
+    "ug-map-jersey.png",
+    "ug-map-jordan.png",
+    "ug-map-kaliningrad_oblast.png",
+    "ug-map-kazakhstan.png",
+    "ug-map-kenya.png",
+    "ug-map-kiribati.png",
+    "ug-map-kosovo.png",
+    "ug-map-kuwait.png",
+    "ug-map-kyrgyzstan.png",
+    "ug-map-labrador_sea.png",
+    "ug-map-laos.png",
+    "ug-map-latvia.png",
+    "ug-map-lebanon.png",
+    "ug-map-lesotho.png",
+    "ug-map-liberia.png",
+    "ug-map-libya.png",
+    "ug-map-liechtenstein.png",
+    "ug-map-lithuania.png",
+    "ug-map-luxembourg.png",
+    "ug-map-macau.png",
+    "ug-map-madagascar.png",
+    "ug-map-madeira.png",
+    "ug-map-malawi.png",
+    "ug-map-malaysia.png",
+    "ug-map-maldives.png",
+    "ug-map-mali.png",
+    "ug-map-malta.png",
+    "ug-map-marshall_islands.png",
+    "ug-map-martinique.png",
+    "ug-map-mauritania.png",
+    "ug-map-mauritius.png",
+    "ug-map-mayotte.png",
+    "ug-map-mediterranean_sea.png",
+    "ug-map-melanesia.png",
+    "ug-map-mexico.png",
+    "ug-map-micronesia.png",
+    "ug-map-moldova.png",
+    "ug-map-monaco.png",
+    "ug-map-mongolia.png",
+    "ug-map-montenegro.png",
+    "ug-map-morocco.png",
+    "ug-map-mozambique.png",
+    "ug-map-myanmar.png",
+    "ug-map-namibia.png",
+    "ug-map-nauru.png",
+    "ug-map-nepal.png",
+    "ug-map-netherlands.png",
+    "ug-map-new_caledonia.png",
+    "ug-map-new_zealand.png",
+    "ug-map-nicaragua.png",
+    "ug-map-niger.png",
+    "ug-map-nigeria.png",
+    "ug-map-niue.png",
+    "ug-map-north_america-nobox.png",
+    "ug-map-north_korea.png",
+    "ug-map-north_macedonia.png",
+    "ug-map-north_sea.png",
+    "ug-map-northern_cyprus.png",
+    "ug-map-northern_ireland.png",
+    "ug-map-northern_mariana_islands.png",
+    "ug-map-norway.png",
+    "ug-map-norwegian_sea.png",
+    "ug-map-oceania-nobox.png",
+    "ug-map-oman.png",
+    "ug-map-pacific_ocean-nobox.png",
+    "ug-map-pakistan.png",
+    "ug-map-palau.png",
+    "ug-map-palestine.png",
+    "ug-map-panama.png",
+    "ug-map-papua_new_guinea.png",
+    "ug-map-paraguay.png",
+    "ug-map-persian_gulf.png",
+    "ug-map-peru.png",
+    "ug-map-philippine_sea.png",
+    "ug-map-philippines.png",
+    "ug-map-poland.png",
+    "ug-map-polynesia.png",
+    "ug-map-portugal.png",
+    "ug-map-puerto_rico.png",
+    "ug-map-qatar.png",
+    "ug-map-red_sea.png",
+    "ug-map-republic_of_the_congo.png",
+    "ug-map-reunion.png",
+    "ug-map-romania.png",
+    "ug-map-russia.png",
+    "ug-map-rwanda.png",
+    "ug-map-sahrawi_arab_democratic_republic.png",
+    "ug-map-saint_kitts_and_nevis.png",
+    "ug-map-saint_lucia.png",
+    "ug-map-saint_martin.png",
+    "ug-map-saint_vincent_and_the_grenadines.png",
+    "ug-map-samoa.png",
+    "ug-map-san_marino.png",
+    "ug-map-sao_tome_and_principe.png",
+    "ug-map-sardinia.png",
+    "ug-map-saudi_arabia.png",
+    "ug-map-scandinavia.png",
+    "ug-map-scotland.png",
+    "ug-map-sea_of_galilee.png",
+    "ug-map-sea_of_japan.png",
+    "ug-map-sea_of_okhotsk.png",
+    "ug-map-senegal.png",
+    "ug-map-serbia.png",
+    "ug-map-seychelles.png",
+    "ug-map-sicily.png",
+    "ug-map-sierra_leone.png",
+    "ug-map-singapore.png",
+    "ug-map-sint_maarten.png",
+    "ug-map-slovakia.png",
+    "ug-map-slovenia.png",
+    "ug-map-solomon_islands.png",
+    "ug-map-somalia.png",
+    "ug-map-somaliland.png",
+    "ug-map-south_africa.png",
+    "ug-map-south_america-nobox.png",
+    "ug-map-south_china_sea.png",
+    "ug-map-south_korea.png",
+    "ug-map-south_ossetia.png",
+    "ug-map-south_sudan.png",
+    "ug-map-southern_ocean-nobox.png",
+    "ug-map-spain.png",
+    "ug-map-sri_lanka.png",
+    "ug-map-sudan.png",
+    "ug-map-sumatra.png",
+    "ug-map-suriname.png",
+    "ug-map-svalbard.png",
+    "ug-map-sweden.png",
+    "ug-map-switzerland.png",
+    "ug-map-syria.png",
+    "ug-map-taiwan.png",
+    "ug-map-tajikistan.png",
+    "ug-map-tanzania.png",
+    "ug-map-tasman_sea.png",
+    "ug-map-thailand.png",
+    "ug-map-the_bahamas.png",
+    "ug-map-the_gambia.png",
+    "ug-map-timor-leste.png",
+    "ug-map-timor_sea.png",
+    "ug-map-togo.png",
+    "ug-map-tonga.png",
+    "ug-map-transnistria.png",
+    "ug-map-trinidad_and_tobago.png",
+    "ug-map-tunisia.png",
+    "ug-map-turkey.png",
+    "ug-map-turkmenistan.png",
+    "ug-map-turks_and_caicos_islands.png",
+    "ug-map-tuvalu.png",
+    "ug-map-uganda.png",
+    "ug-map-ukraine.png",
+    "ug-map-united_arab_emirates.png",
+    "ug-map-united_kingdom.png",
+    "ug-map-united_states_of_america.png",
+    "ug-map-united_states_virgin_islands.png",
+    "ug-map-uruguay.png",
+    "ug-map-uzbekistan.png",
+    "ug-map-vanuatu.png",
+    "ug-map-vatican_city.png",
+    "ug-map-venezuela.png",
+    "ug-map-vietnam.png",
+    "ug-map-wales.png",
+    "ug-map-wallis_and_futuna.png",
+    "ug-map-white_sea.png",
+    "ug-map-yellow_sea.png",
+    "ug-map-yemen.png",
+    "ug-map-zambia.png",
+    "ug-map-zanzibar.png",
+    "ug-map-zimbabwe.png"
+  ],
+  "name": "Ultimate Geography",
+  "note_models": [
+    {
+      "__type__": "NoteModel",
+      "crowdanki_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "css": ".card {\n  padding: 1em 0;\n  background-color: white;\n  color: black;\n  direction: ltr;\n  font-family: Verdana;\n  font-size: 16px;\n  text-align: center;\n}\n\n.type {\n  margin-bottom: 0.25em;\n  color: #333;\n  font-size: 70%;\n  font-weight: bold;\n  text-transform: uppercase;\n}\n\n.info {\n  max-width: 30em;\n  margin: 0.75em auto;\n  color: #333;\n  font-size: 90%;\n  font-style: italic;\n}\n\n.value {\n  font-size: 150%;\n}\n\n.value--top {\n  margin-top: 1em;\n}\n\n.value--image {\n  margin-top: 0.75em;\n}\n\n.value--map {\n  width: 90%;\n  height: 65vh;\n  margin: 2em auto 0 auto;\n}\n\n.value > img,\n.value > .placeholder {\n  max-width: 100%;\n  height: auto;\n}\n\n/**\n * Apply shadow to images, notably to bring out white areas on flags.\n * Ignore images with non-rectangular outlines (e.g. flag of Nepal).\n */\n.value > img:not([src*=\"-nobox\"]) {\n  box-shadow: 0 1px 4px 1px rgba(0, 0, 0, 0.2);\n}\n\n/**\n * Some flags (e.g. Guam's) contain identifying words that can give away the answer.\n * If a blurred version is available, show it on the front but not on the back.\n */\n.value--front > img[src*=\"-blur\"] + img {\n  display: none;\n}\n\n.value--back > img[src*=\"-blur\"] {\n  display: none;\n}\n\n/**\n * Placeholder SVG to hint at the type of answer that is expected.\n * Used on \"Country - Flag\" and \"Country - Map\" templates.\n */\n.placeholder {\n  color: #333;\n}\n\n.placeholder > path {\n  fill: none;\n  stroke: currentColor;\n  stroke-width: 1;\n}\n\n.night_mode .info,\n.night_mode .type,\n.night_mode .placeholder,\n.nightMode .info,\n.nightMode .type,\n.nightMode .placeholder {\n  color: #ccc;\n}\n\n/**\n * Apply shadow to images, to bring out black areas on flags, in night\n   mode.\n */\n.nightMode .value > img:not([src*=\"-nobox\"]),\n.night_mode .value > img:not([src*=\"-nobox\"]) {\n  box-shadow: 0 0 4px 1px rgba(54, 54, 54, 0.9);\n}\n\nhr {\n  margin: 1.5em 0;\n}\n",
+      "flds": [
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Country",
+          "ord": 0,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        },
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Country info",
+          "ord": 1,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        },
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Capital",
+          "ord": 2,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        },
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Capital info",
+          "ord": 3,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        },
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Capital hint",
+          "ord": 4,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        },
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Flag",
+          "ord": 5,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        },
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Flag similarity",
+          "ord": 6,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        },
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Map",
+          "ord": 7,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        }
+      ],
+      "latexPost": "\\end{document}",
+      "latexPre": "\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n",
+      "latexsvg": false,
+      "name": "Ultimate Geography [PT]",
+      "req": [],
+      "sortf": 0,
+      "tags": [],
+      "tmpls": [
+        {
+          "afmt": "<div class=\"value value--top\">{{Country}}</div>\n{{#Country info}}<div class=\"info\">{{Country info}}</div>{{/Country info}}\n\n<hr id=answer>\n\n<div class=\"type\">Capital</div>\n<div class=\"value\">{{Capital}}</div>\n{{#Capital info}}<div class=\"info\">{{Capital info}}</div>{{/Capital info}}\n",
+          "bafmt": "",
+          "bfont": "",
+          "bqfmt": "",
+          "bsize": 0,
+          "did": null,
+          "name": "Country - Capital",
+          "ord": 0,
+          "qfmt": "{{#Capital}}\n  <div class=\"value value--top\">{{Country}}</div>\n  {{#Country info}}<div class=\"info\">{{Country info}}</div>{{/Country info}}\n\n  <hr>\n\n  <div class=\"type\">Capital</div>\n  <div class=\"value\">?</div>\n{{/Capital}}",
+          "scratchPad": 0
+        },
+        {
+          "afmt": "<div id=answer class=\"value value--top\">{{Country}}</div>\n{{#Country info}}<div class=\"info\">{{Country info}}</div>{{/Country info}}\n\n<hr>\n\n<div class=\"type\">Capital</div>\n<div class=\"value\">{{Capital}}</div>\n{{#Capital hint}}<div class=\"info\">Dica: {{Capital hint}}</div>{{/Capital hint}}\n{{#Capital info}}<div class=\"info\">{{Capital info}}</div>{{/Capital info}}\n",
+          "bafmt": "",
+          "bfont": "",
+          "bqfmt": "",
+          "bsize": 0,
+          "did": null,
+          "name": "Capital - Country",
+          "ord": 1,
+          "qfmt": "{{#Capital}}\n  <div class=\"value value--top\">?</div>\n\n  <hr>\n\n  <div class=\"type\">Capital</div>\n  <div class=\"value\">{{Capital}}</div>\n  {{#Capital hint}}<div class=\"info\">Hint: {{Capital hint}}</div>{{/Capital hint}}\n{{/Capital}}",
+          "scratchPad": 0
+        },
+        {
+          "afmt": "<div id=answer class=\"value value--top\">{{Country}}</div>\n{{#Country info}}<div class=\"info\">{{Country info}}</div>{{/Country info}}\n\n<hr>\n\n<div class=\"type\">Bandeira</div>\n<div class=\"value value--image value--back\">{{Flag}}</div>\n{{#Flag similarity}}<div class=\"info\">Bandeira parecida com: {{Flag similarity}}.</div>{{/Flag similarity}}\n",
+          "bafmt": "",
+          "bfont": "",
+          "bqfmt": "",
+          "bsize": 0,
+          "did": null,
+          "name": "Flag - Country",
+          "ord": 2,
+          "qfmt": "{{#Flag}}\n  <div class=\"value value--top\">?</div>\n\n  <hr>\n\n  <div class=\"type\">Bandeira</div>\n  <div class=\"value value--image value--front\">{{Flag}}</div>\n{{/Flag}}",
+          "scratchPad": 0
+        },
+        {
+          "afmt": "<div id=answer class=\"value value--top\">{{Country}}</div>\n{{#Country info}}<div class=\"info\">{{Country info}}</div>{{/Country info}}\n\n<hr>\n\n<div class=\"type\">Localização</div>\n<div class=\"value value--image\">{{Map}}</div>\n",
+          "bafmt": "",
+          "bfont": "",
+          "bqfmt": "",
+          "bsize": 0,
+          "did": null,
+          "name": "Map - Country",
+          "ord": 3,
+          "qfmt": "{{#Map}}\n  <div class=\"value value--top\">?</div>\n\n  <hr>\n\n  <div class=\"type\">Localização</div>\n  <div class=\"value value--image\">{{Map}}</div>\n{{/Map}}",
+          "scratchPad": 0
+        }
+      ],
+      "type": 0,
+      "vers": []
+    }
+  ],
+  "notes": [
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Abecásia",
+        "Estado independente reivindicado pela Geórgia.",
+        "Sucumi",
+        "",
+        "",
+        "<img src=\"ug-flag-abkhazia.svg\" />",
+        "",
+        "<img src=\"ug-map-abkhazia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "BZ|D48kZ6%",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar Adriático",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-adriatic_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "k.<MjI(i0l",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar Egeu",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-aegean_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "HJN6(i^z~8",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Afeganistão",
+        "",
+        "Cabul",
+        "",
+        "",
+        "<img src=\"ug-flag-afghanistan.svg\" />",
+        "",
+        "<img src=\"ug-map-afghanistan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "GvA01=D7>z",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "África",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-africa-nobox.png\" />"
+      ],
+      "flags": 0,
+      "guid": "d}3y)SgyoJ",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Continents"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Acrotíri e Deceleia",
+        "Território ultramarino do Reino Unido.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-akrotiri_and_dhekelia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "PdPaEws@.2",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Mediterranean",
+        "UG::Middle_East"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Alasca",
+        "Estado dos Estados Unidos.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-alaska.png\" />"
+      ],
+      "flags": 0,
+      "guid": "B|dJ6T]U$e",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Albânia",
+        "",
+        "Tirana",
+        "",
+        "",
+        "<img src=\"ug-flag-albania.svg\" />",
+        "",
+        "<img src=\"ug-map-albania.png\" />"
+      ],
+      "flags": 0,
+      "guid": "h{SZE<_@pF",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Argélia",
+        "",
+        "Argel",
+        "",
+        "",
+        "<img src=\"ug-flag-algeria.svg\" />",
+        "",
+        "<img src=\"ug-map-algeria.png\" />"
+      ],
+      "flags": 0,
+      "guid": "fV^xZWq#U8",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Samoa Americana",
+        "Território não incorporado dos Estados Unidos.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-american_samoa.png\" />"
+      ],
+      "flags": 0,
+      "guid": "dDu`aH[7Od",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Andorra",
+        "",
+        "Andorra-a-Velha",
+        "",
+        "",
+        "<img src=\"ug-flag-andorra.svg\" />",
+        "Moldávia (mais larga, brasão com águia)",
+        "<img src=\"ug-map-andorra.png\" />"
+      ],
+      "flags": 0,
+      "guid": "wDA~K0^p(*",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Angola",
+        "",
+        "Luanda",
+        "",
+        "",
+        "<img src=\"ug-flag-angola.svg\" />",
+        "",
+        "<img src=\"ug-map-angola.png\" />"
+      ],
+      "flags": 0,
+      "guid": "w/S^-U}^gl",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Anguila",
+        "Território ultramarino do Reino Unido.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-anguilla.png\" />"
+      ],
+      "flags": 0,
+      "guid": "n9+C*4}y8Y",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Antártica",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-antarctica-nobox.png\" />"
+      ],
+      "flags": 0,
+      "guid": "d}/izW7q$h",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Continents"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Antígua e Barbuda",
+        "",
+        "São João",
+        "",
+        "Estado soberano",
+        "<img src=\"ug-flag-antigua_and_barbuda.svg\" />",
+        "",
+        "<img src=\"ug-map-antigua_and_barbuda.png\" />"
+      ],
+      "flags": 0,
+      "guid": "uLT/@mIHyE",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar Arábico",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-arabian_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "A}C>b%U#S}",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar de Aral",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-aral_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "N4Q0mRJom{",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Oceano Ártico",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-arctic_ocean-nobox.png\" />"
+      ],
+      "flags": 0,
+      "guid": "rJI8->gW%l",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Argentina",
+        "",
+        "Buenos Aires",
+        "",
+        "",
+        "<img src=\"ug-flag-argentina.svg\" />",
+        "",
+        "<img src=\"ug-map-argentina.png\" />"
+      ],
+      "flags": 0,
+      "guid": "B[J}Z4r84@",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::South_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Armênia (BR), Arménia (PT)",
+        "",
+        "Erevã",
+        "",
+        "",
+        "<img src=\"ug-flag-armenia.svg\" />",
+        "",
+        "<img src=\"ug-map-armenia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "lj6RZd*;o!",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Aruba",
+        "País constituinte do Reino dos Países Baixos.",
+        "Oranjestade",
+        "",
+        "",
+        "<img src=\"ug-flag-aruba.svg\" />",
+        "",
+        "<img src=\"ug-map-aruba.png\" />"
+      ],
+      "flags": 0,
+      "guid": "tU-h*1<Z9g",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ásia",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-asia-nobox.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Q0g%)%UY`W",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Continents"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Oceano Atlântico",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-atlantic_ocean-nobox.png\" />"
+      ],
+      "flags": 0,
+      "guid": "w5X%!:NGm:",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Austrália",
+        "",
+        "Camberra",
+        "",
+        "",
+        "<img src=\"ug-flag-australia.svg\" />",
+        "Nova Zelândia (estrelas vermelhas, duas estrelas a menos)",
+        "<img src=\"ug-map-australia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "KsSd*uaf=t",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Áustria",
+        "",
+        "Viena",
+        "",
+        "",
+        "<img src=\"ug-flag-austria.svg\" />",
+        "Letônia (vermelho mais escuro, faixa branca mais estreita)",
+        "<img src=\"ug-map-austria.png\" />"
+      ],
+      "flags": 0,
+      "guid": "I|&C8!2</#",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Azerbaijão",
+        "",
+        "Bacu",
+        "",
+        "",
+        "<img src=\"ug-flag-azerbaijan.svg\" />",
+        "",
+        "<img src=\"ug-map-azerbaijan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "NQY/-?zn+<",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Açores",
+        "Região autônoma de Portugal.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-azores.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Gs)`C+V}D+",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Barém",
+        "",
+        "Manama",
+        "",
+        "",
+        "<img src=\"ug-flag-bahrain.svg\" />",
+        "Catar (mais larga, bordas serrilhadas, marrom)",
+        "<img src=\"ug-map-bahrain.png\" />"
+      ],
+      "flags": 0,
+      "guid": "gm+.@W/3UE",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Bali",
+        "Ilha da Indonésia.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-bali.png\" />"
+      ],
+      "flags": 0,
+      "guid": "w@=dG}+guF",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Bálcãs",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-balkan_peninsula.png\" />"
+      ],
+      "flags": 0,
+      "guid": "A#xTVpn3Ks",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar Báltico",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-baltic_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "E_&3V&K[)_",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar de Banda",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-banda_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "oxXKJj(4f:",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Bangladexe",
+        "",
+        "Daca",
+        "",
+        "",
+        "<img src=\"ug-flag-bangladesh.svg\" />",
+        "",
+        "<img src=\"ug-map-bangladesh.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Q9>YoEa|XH",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Barbados",
+        "",
+        "Bridgetown",
+        "",
+        "",
+        "<img src=\"ug-flag-barbados.svg\" />",
+        "",
+        "<img src=\"ug-map-barbados.png\" />"
+      ],
+      "flags": 0,
+      "guid": "I1w1@S?{u2",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar de Barents",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-barents_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "msxAK,LCh{",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Baía de Bengala",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-bay_of_bengal.png\" />"
+      ],
+      "flags": 0,
+      "guid": "g<j_zQ:^mn",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Golfo da Biscaia",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-bay_of_biscay.png\" />"
+      ],
+      "flags": 0,
+      "guid": "H|DRE(4*?I",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Bielorrúsia",
+        "",
+        "Minsque",
+        "",
+        "",
+        "<img src=\"ug-flag-belarus.svg\" />",
+        "",
+        "<img src=\"ug-map-belarus.png\" />"
+      ],
+      "flags": 0,
+      "guid": "LtQnEnv]mQ",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Bélgica",
+        "",
+        "Bruxelas",
+        "",
+        "",
+        "<img src=\"ug-flag-belgium.svg\" />",
+        "",
+        "<img src=\"ug-map-belgium.png\" />"
+      ],
+      "flags": 0,
+      "guid": "iM3lUK!|>*",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Belize",
+        "",
+        "Belmopã",
+        "",
+        "",
+        "<img src=\"ug-flag-belize.svg\" />",
+        "",
+        "<img src=\"ug-map-belize.png\" />"
+      ],
+      "flags": 0,
+      "guid": "hsYz#zh=Oy",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Benim",
+        "",
+        "Porto Novo",
+        "Embora Porto Novo seja capital oficial, Cotonu é a sede do governo.",
+        "",
+        "<img src=\"ug-flag-benin.svg\" />",
+        "",
+        "<img src=\"ug-map-benin.png\" />"
+      ],
+      "flags": 0,
+      "guid": "d#EjdF.*f6",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Estreito de Bering",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-bering_strait.png\" />"
+      ],
+      "flags": 0,
+      "guid": "PW&nJyIgfN",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Bermudas",
+        "Território ultramarino do Reino Unido.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-bermuda.png\" />"
+      ],
+      "flags": 0,
+      "guid": "bS{]Ow*V`E",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Butão",
+        "",
+        "Timbu",
+        "",
+        "",
+        "<img src=\"ug-flag-bhutan.svg\" />",
+        "",
+        "<img src=\"ug-map-bhutan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "I^7LI/]z58",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar Negro",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-black_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "nkl5f<lZZR",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Bolívia",
+        "",
+        "Sucre",
+        "Embora Sucre seja a capital constitucional, La Paz é a sede do governo.",
+        "",
+        "<img src=\"ug-flag-bolivia-blur.svg\" /><img src=\"ug-flag-bolivia.svg\" />",
+        "Gana (estrela em vez de brasão)",
+        "<img src=\"ug-map-bolivia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "AofLiY]`Ti",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::South_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Bósnia e Herzegovina",
+        "",
+        "Sarajevo",
+        "",
+        "",
+        "<img src=\"ug-flag-bosnia_and_herzegovina.svg\" />",
+        "",
+        "<img src=\"ug-map-bosnia_and_herzegovina.png\" />"
+      ],
+      "flags": 0,
+      "guid": "cIm?2955ae",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Botsuana",
+        "",
+        "Gaborone",
+        "",
+        "",
+        "<img src=\"ug-flag-botswana.svg\" />",
+        "",
+        "<img src=\"ug-map-botswana.png\" />"
+      ],
+      "flags": 0,
+      "guid": "PiHl6BLN4X",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Bougainville",
+        "Região autônoma de Papua-Nova Guiné.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-bougainville.png\" />"
+      ],
+      "flags": 0,
+      "guid": "f=?%:&eo,J",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Brasil",
+        "",
+        "Brasília",
+        "",
+        "",
+        "<img src=\"ug-flag-brazil.svg\" />",
+        "",
+        "<img src=\"ug-map-brazil.png\" />"
+      ],
+      "flags": 0,
+      "guid": "B`AJ:-Smw.",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::South_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ilhas Virgens Britânicas",
+        "Território ultramarino do Reino Unido.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-british_virgin_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "gqj^s3}^Y6",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Brunei",
+        "",
+        "Bandar Seri Begauã",
+        "",
+        "",
+        "<img src=\"ug-flag-brunei.svg\" />",
+        "",
+        "<img src=\"ug-map-brunei.png\" />"
+      ],
+      "flags": 0,
+      "guid": "f*5blT|2d0",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Southeast_Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Bulgária",
+        "",
+        "Sófia",
+        "",
+        "",
+        "<img src=\"ug-flag-bulgaria.svg\" />",
+        "",
+        "<img src=\"ug-map-bulgaria.png\" />"
+      ],
+      "flags": 0,
+      "guid": "cSW!~j9W8E",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Burquina Fasso",
+        "",
+        "Uagadugu",
+        "",
+        "",
+        "<img src=\"ug-flag-burkina_faso.svg\" />",
+        "",
+        "<img src=\"ug-map-burkina_faso.png\" />"
+      ],
+      "flags": 0,
+      "guid": "i6aNJwa%b_",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Burundi",
+        "",
+        "Guitega",
+        "A capital oficial foi transferida de Bujumbura para Guitega em 2019.",
+        "",
+        "<img src=\"ug-flag-burundi.svg\" />",
+        "",
+        "<img src=\"ug-map-burundi.png\" />"
+      ],
+      "flags": 0,
+      "guid": "g%>:=;Tc=R",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Camboja",
+        "",
+        "Penome Pene",
+        "",
+        "",
+        "<img src=\"ug-flag-cambodia.svg\" />",
+        "",
+        "<img src=\"ug-map-cambodia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "O0hlf9Z-!z",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Southeast_Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Camarões",
+        "",
+        "Iaundé",
+        "",
+        "",
+        "<img src=\"ug-flag-cameroon.svg\" />",
+        "Senegal (verde/amarelo/vermelho, estrela verde)",
+        "<img src=\"ug-map-cameroon.png\" />"
+      ],
+      "flags": 0,
+      "guid": "H^&r5vlQP5",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Canadá",
+        "",
+        "Otava",
+        "",
+        "",
+        "<img src=\"ug-flag-canada.svg\" />",
+        "",
+        "<img src=\"ug-map-canada.png\" />"
+      ],
+      "flags": 0,
+      "guid": "i52amy!D0$",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ilhas Canárias",
+        "Comunidade autônoma da Espanha.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-canary_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "hPMh5n}qbU",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Cabo Verde",
+        "",
+        "Praia",
+        "",
+        "",
+        "<img src=\"ug-flag-cape_verde.svg\" />",
+        "",
+        "<img src=\"ug-map-cape_verde.png\" />"
+      ],
+      "flags": 0,
+      "guid": "w=(azb)1FN",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar das Caraíbas",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-caribbean_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "JQ.625BEIH",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar Cáspio",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-caspian_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "m4fmq/A-=@",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ilhas Caimã",
+        "Território ultramarino do Reino Unido.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-cayman_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "fLt!@-+AbO",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar de Celebes",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-celebes_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "C@O711uUdL",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar Celta",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-celtic_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "csHk9=FjrN",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "República Centro-Africana",
+        "",
+        "Bangui",
+        "",
+        "",
+        "<img src=\"ug-flag-central_african_republic.svg\" />",
+        "",
+        "<img src=\"ug-map-central_african_republic.png\" />"
+      ],
+      "flags": 0,
+      "guid": "KxV>K,YQ3`",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Chade",
+        "",
+        "Jamena",
+        "",
+        "",
+        "<img src=\"ug-flag-chad.svg\" />",
+        "Romênia (azul ligeiramente mais claro)",
+        "<img src=\"ug-map-chad.png\" />"
+      ],
+      "flags": 0,
+      "guid": "kX4<H^@qRr",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Chile",
+        "",
+        "Santiago",
+        "",
+        "",
+        "<img src=\"ug-flag-chile.svg\" />",
+        "",
+        "<img src=\"ug-map-chile.png\" />"
+      ],
+      "flags": 0,
+      "guid": "E)^;rOW-vz",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::South_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "China",
+        "",
+        "Pequim",
+        "",
+        "",
+        "<img src=\"ug-flag-china.svg\" />",
+        "",
+        "<img src=\"ug-map-china.png\" />"
+      ],
+      "flags": 0,
+      "guid": "IJ3K*pLd9J",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Colômbia",
+        "",
+        "Bogotá",
+        "",
+        "",
+        "<img src=\"ug-flag-colombia.svg\" />",
+        "Equador (com brasão)",
+        "<img src=\"ug-map-colombia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "jdd5B*m>02",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::South_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Comores",
+        "",
+        "Moroni",
+        "",
+        "",
+        "<img src=\"ug-flag-comoros.svg\" />",
+        "",
+        "<img src=\"ug-map-comoros.png\" />"
+      ],
+      "flags": 0,
+      "guid": "y#6U?b$7aD",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ilhas Cook",
+        "",
+        "Avarua",
+        "",
+        "",
+        "<img src=\"ug-flag-cook_islands.svg\" />",
+        "",
+        "<img src=\"ug-map-cook_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "M@Uja@7DwC",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar de Coral",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-coral_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "oiene4;[Kl",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Córsega",
+        "Região da França.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-corsica.png\" />"
+      ],
+      "flags": 0,
+      "guid": "fAFgA,TS$w",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Costa Rica",
+        "",
+        "São José",
+        "",
+        "",
+        "<img src=\"ug-flag-costa_rica-blur.svg\" /><img src=\"ug-flag-costa_rica.svg\" />",
+        "",
+        "<img src=\"ug-map-costa_rica.png\" />"
+      ],
+      "flags": 0,
+      "guid": "DEMGqHWrE%",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Croácia",
+        "",
+        "Zagrebe",
+        "",
+        "",
+        "<img src=\"ug-flag-croatia.svg\" />",
+        "",
+        "<img src=\"ug-map-croatia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "v%N%D<K[gS",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Cuba",
+        "",
+        "Havana",
+        "",
+        "",
+        "<img src=\"ug-flag-cuba.svg\" />",
+        "Porto Rico (triângulo azul, listras vermelhas)",
+        "<img src=\"ug-map-cuba.png\" />"
+      ],
+      "flags": 0,
+      "guid": "t]9y*|+tZ",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Curaçao",
+        "País constituinte do Reino dos Países Baixos.",
+        "Willemstad",
+        "",
+        "",
+        "<img src=\"ug-flag-curacao.svg\" />",
+        "Nauru (estrela única abaixo da faixa amarela)",
+        "<img src=\"ug-map-curacao.png\" />"
+      ],
+      "flags": 0,
+      "guid": "e(pOqB.N-d",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Chipre",
+        "",
+        "Nicósia",
+        "",
+        "",
+        "<img src=\"ug-flag-cyprus.svg\" />",
+        "",
+        "<img src=\"ug-map-cyprus.png\" />"
+      ],
+      "flags": 0,
+      "guid": "DK#M)PH#C[",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::European_Union",
+        "UG::Mediterranean",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Tchéquia (BR), Chéquia (PT)",
+        "",
+        "Praga",
+        "",
+        "",
+        "<img src=\"ug-flag-czech_republic.svg\" />",
+        "",
+        "<img src=\"ug-map-czech_republic.png\" />"
+      ],
+      "flags": 0,
+      "guid": "pa6]%Am.&V",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar Morto",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-dead_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "AF)CrV]`OA",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "República Democrática do Congo",
+        "",
+        "Quinxassa",
+        "",
+        "",
+        "<img src=\"ug-flag-democratic_republic_of_the_congo.svg\" />",
+        "",
+        "<img src=\"ug-map-democratic_republic_of_the_congo.png\" />"
+      ],
+      "flags": 0,
+      "guid": "e@O&4[m@W1",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Dinamarca",
+        "",
+        "Copenhague (BR), Copenhaga (PT)",
+        "",
+        "",
+        "<img src=\"ug-flag-denmark.svg\" />",
+        "",
+        "<img src=\"ug-map-denmark.png\" />"
+      ],
+      "flags": 0,
+      "guid": "y+Y77T.gg&",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Estreito da Dinamarca",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-denmark_strait.png\" />"
+      ],
+      "flags": 0,
+      "guid": "r[yPN|H[T}",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Djibuti (BR), Jibuti (PT)",
+        "",
+        "Djibuti (BR), Jibuti (PT)",
+        "",
+        "",
+        "<img src=\"ug-flag-djibouti.svg\" />",
+        "",
+        "<img src=\"ug-map-djibouti.png\" />"
+      ],
+      "flags": 0,
+      "guid": "iFefV_U<5d",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Dominica",
+        "",
+        "Roseau",
+        "",
+        "",
+        "<img src=\"ug-flag-dominica.svg\" />",
+        "",
+        "<img src=\"ug-map-dominica.png\" />"
+      ],
+      "flags": 0,
+      "guid": "hq<./^6hM?",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "República Dominicana",
+        "",
+        "São Domingos",
+        "",
+        "",
+        "<img src=\"ug-flag-dominican_republic.svg\" />",
+        "",
+        "<img src=\"ug-map-dominican_republic.png\" />"
+      ],
+      "flags": 0,
+      "guid": "yOTi(~YAk6",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar da China Oriental",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-east_china_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "v)_Oh`bF,*",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar Siberiano Oriental",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-east_siberian_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "N*r4!:+/}l",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Equador",
+        "",
+        "Quito",
+        "",
+        "",
+        "<img src=\"ug-flag-ecuador.svg\" />",
+        "Colômbia (sem brasão)",
+        "<img src=\"ug-map-ecuador.png\" />"
+      ],
+      "flags": 0,
+      "guid": "B/@.]cvXSU",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::South_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Egito (BR), Egipto (PT)",
+        "",
+        "Cairo",
+        "",
+        "",
+        "<img src=\"ug-flag-egypt.svg\" />",
+        "Iraque (texto em vez de emblema) e Iêmen (sem emblema)",
+        "<img src=\"ug-map-egypt.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Q-U(os@S&S",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Mediterranean",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "El Salvador",
+        "",
+        "São Salvador",
+        "",
+        "",
+        "<img src=\"ug-flag-el_salvador-blur.svg\" /><img src=\"ug-flag-el_salvador.svg\" />",
+        "Nicarágua (brasão diferente, azul ligeiramente mais claro)",
+        "<img src=\"ug-map-el_salvador.png\" />"
+      ],
+      "flags": 0,
+      "guid": "hdIq-F%tt3",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Inglaterra",
+        "País constituinte do Reino Unido.",
+        "Londres",
+        "",
+        "Não é um Estado soberano",
+        "<img src=\"ug-flag-england.svg\" />",
+        "",
+        "<img src=\"ug-map-england.png\" />"
+      ],
+      "flags": 0,
+      "guid": "O>f7b9D1hF",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Canal da Mancha",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-english_channel.png\" />"
+      ],
+      "flags": 0,
+      "guid": "C]:V&kby#o",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Guiné Equatorial",
+        "",
+        "Cidade da Paz",
+        "A capital oficial foi transferida de Malabo para Cidade da Paz em 2026.",
+        "",
+        "<img src=\"ug-flag-equatorial_guinea.svg\" />",
+        "",
+        "<img src=\"ug-map-equatorial_guinea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "ctod6{!$KH",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Eritreia",
+        "",
+        "Asmara",
+        "",
+        "",
+        "<img src=\"ug-flag-eritrea.svg\" />",
+        "",
+        "<img src=\"ug-map-eritrea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Q{)8B-]wUq",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Estônia (BR), Estónia (PT)",
+        "",
+        "Talim",
+        "",
+        "",
+        "<img src=\"ug-flag-estonia.svg\" />",
+        "",
+        "<img src=\"ug-map-estonia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "yv4SxGLP&,",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Essuatíni",
+        "Conhecido como Suazilândia até 2018.",
+        "Mebabane",
+        "Embora Mebabane seja a capital oficial e executiva, Lobamba é a capital tradicional, espiritual e legislativa.",
+        "",
+        "<img src=\"ug-flag-eswatini.svg\" />",
+        "",
+        "<img src=\"ug-map-eswatini.png\" />"
+      ],
+      "flags": 0,
+      "guid": "fXz}(XSfFj",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Etiópia",
+        "",
+        "Adis Abeba",
+        "",
+        "",
+        "<img src=\"ug-flag-ethiopia.svg\" />",
+        "",
+        "<img src=\"ug-map-ethiopia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "s1i:%+hNpC",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Europa",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-europe-nobox.png\" />"
+      ],
+      "flags": 0,
+      "guid": "PVnr|TgMw7",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Continents"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "União Europeia",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-flag-european_union.svg\" />",
+        "",
+        "<img src=\"ug-map-european_union.png\" />"
+      ],
+      "flags": 0,
+      "guid": "j)QbJ69Vad",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ilhas Malvinas",
+        "Território ultramarino do Reino Unido.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-falkland_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "HhAt<K@[Kw",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::South_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ilhas Faroé",
+        "País constituinte do Reino da Dinamarca.",
+        "Tórshavn",
+        "",
+        "",
+        "<img src=\"ug-flag-faroe_islands.svg\" />",
+        "Islândia (fundo azul, cruz vermelha e branca) e Noruega (fundo vermelho, cruz azul e branca)",
+        "<img src=\"ug-map-faroe_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "gaM:=v}hwy",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Estados Federados da Micronésia",
+        "",
+        "Paliquir",
+        "",
+        "",
+        "<img src=\"ug-flag-federated_states_of_micronesia.svg\" />",
+        "",
+        "<img src=\"ug-map-federated_states_of_micronesia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "tI[-w:S[nz",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Fiji",
+        "",
+        "Suva",
+        "",
+        "",
+        "<img src=\"ug-flag-fiji.svg\" />",
+        "",
+        "<img src=\"ug-map-fiji.png\" />"
+      ],
+      "flags": 0,
+      "guid": "EsE.-qmRj",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Finlândia",
+        "",
+        "Helsinque (BR), Helsínquia (PT)",
+        "",
+        "",
+        "<img src=\"ug-flag-finland.svg\" />",
+        "",
+        "<img src=\"ug-map-finland.png\" />"
+      ],
+      "flags": 0,
+      "guid": "f*6$32AnHC",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "França",
+        "",
+        "Paris",
+        "",
+        "",
+        "<img src=\"ug-flag-france.svg\" />",
+        "",
+        "<img src=\"ug-map-france.png\" />"
+      ],
+      "flags": 0,
+      "guid": "BYSXQQPC^Z",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Guiana Francesa",
+        "Departamento ultramarino da França.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-french_guiana.png\" />"
+      ],
+      "flags": 0,
+      "guid": "M4ikwvZDb7",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::South_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Polinésia Francesa",
+        "Território ultramarino da França.",
+        "Papete",
+        "",
+        "",
+        "<img src=\"ug-flag-french_polynesia.svg\" />",
+        "",
+        "<img src=\"ug-map-french_polynesia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "p1SyIlllJ",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Gabão",
+        "",
+        "Librevile",
+        "",
+        "",
+        "<img src=\"ug-flag-gabon.svg\" />",
+        "",
+        "<img src=\"ug-map-gabon.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Gj;ANGAUma",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Geórgia",
+        "",
+        "Tiblissi",
+        "",
+        "",
+        "<img src=\"ug-flag-georgia.svg\" />",
+        "",
+        "<img src=\"ug-map-georgia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Bs.>u/)4+/",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Alemanha",
+        "",
+        "Berlim",
+        "",
+        "",
+        "<img src=\"ug-flag-germany.svg\" />",
+        "",
+        "<img src=\"ug-map-germany.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Ooz-xs3u9<",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Gana",
+        "",
+        "Acra",
+        "",
+        "",
+        "<img src=\"ug-flag-ghana.svg\" />",
+        " Bolívia (brasão de armas em vez de estrela)",
+        "<img src=\"ug-map-ghana.png\" />"
+      ],
+      "flags": 0,
+      "guid": "KOyffK#a5H",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Gibraltar",
+        "Território ultramarino do Reino Unido.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-gibraltar.png\" />"
+      ],
+      "flags": 0,
+      "guid": "dH*XdVw~QD",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Mediterranean"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Grécia",
+        "",
+        "Atenas",
+        "",
+        "",
+        "<img src=\"ug-flag-greece.svg\" />",
+        "",
+        "<img src=\"ug-map-greece.png\" />"
+      ],
+      "flags": 0,
+      "guid": "BhD{XddD~W",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Groenlândia",
+        "País constituinte do Reino da Dinamarca.",
+        "Nuque",
+        "",
+        "",
+        "<img src=\"ug-flag-greenland.svg\" />",
+        "",
+        "<img src=\"ug-map-greenland.png\" />"
+      ],
+      "flags": 0,
+      "guid": "MGy&<;.7Fv",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Granada",
+        "",
+        "São Jorge",
+        "",
+        "",
+        "<img src=\"ug-flag-grenada.svg\" />",
+        "",
+        "<img src=\"ug-map-grenada.png\" />"
+      ],
+      "flags": 0,
+      "guid": "kG0ycx1-&@",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Guadalupe",
+        "Departamento ultramarino da França.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-guadeloupe.png\" />"
+      ],
+      "flags": 0,
+      "guid": "KIg(;uu).*",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Guam",
+        "Território não incorporado dos Estados Unidos.",
+        "Aganha",
+        "",
+        "",
+        "<img src=\"ug-flag-guam-blur.svg\" /><img src=\"ug-flag-guam.svg\" />",
+        "",
+        "<img src=\"ug-map-guam.png\" />"
+      ],
+      "flags": 0,
+      "guid": "c+r?+))vw9",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Guatemala",
+        "",
+        "Cidade da Guatemala",
+        "",
+        "",
+        "<img src=\"ug-flag-guatemala.svg\" />",
+        "",
+        "<img src=\"ug-map-guatemala.png\" />"
+      ],
+      "flags": 0,
+      "guid": "pZ,nCA,.0R",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Guernesei",
+        "Dependência da coroa do Reino Unido.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-guernsey.png\" />"
+      ],
+      "flags": 0,
+      "guid": "eNR2Z!EX8I",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Guiné",
+        "",
+        "Conacri",
+        "",
+        "",
+        "<img src=\"ug-flag-guinea.svg\" />",
+        "Mali (vermelho e verde invertidos, verde ligeiramente mais brilhante)",
+        "<img src=\"ug-map-guinea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "CMz9QB%2X^",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Guiné-Bissau",
+        "",
+        "Bissau",
+        "",
+        "",
+        "<img src=\"ug-flag-guinea-bissau.svg\" />",
+        "",
+        "<img src=\"ug-map-guinea-bissau.png\" />"
+      ],
+      "flags": 0,
+      "guid": "phTnzN7*fo",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Golfo do Alasca",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-gulf_of_alaska.png\" />"
+      ],
+      "flags": 0,
+      "guid": "AySdJa*$Gr",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Golfo da Califórnia",
+        "Também conhecido como Mar de Cortez.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-gulf_of_california.png\" />"
+      ],
+      "flags": 0,
+      "guid": "B|Vp[->]3b",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Golfo de Carpentária",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-gulf_of_carpentaria.png\" />"
+      ],
+      "flags": 0,
+      "guid": "lwRG[9-e^s",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Golfo da Guiné",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-gulf_of_guinea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "f)@hpqBJK?",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Golfo do México",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-gulf_of_mexico.png\" />"
+      ],
+      "flags": 0,
+      "guid": "L.bEhS#[bm",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Golfo da Tailândia",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-gulf_of_thailand.png\" />"
+      ],
+      "flags": 0,
+      "guid": "eprA@[$2!T",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Guiana",
+        "",
+        "Georgetown",
+        "",
+        "",
+        "<img src=\"ug-flag-guyana.svg\" />",
+        "",
+        "<img src=\"ug-map-guyana.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Lrgy`zP-}Q",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::South_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Haiti",
+        "",
+        "Porto Príncipe",
+        "",
+        "",
+        "<img src=\"ug-flag-haiti.svg\" />",
+        "",
+        "<img src=\"ug-map-haiti.png\" />"
+      ],
+      "flags": 0,
+      "guid": "wXo*CTq<vz",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Havaí",
+        "Estado dos Estados Unidos.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-hawaii.png\" />"
+      ],
+      "flags": 0,
+      "guid": "t1Nxa2/6]g",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Honduras",
+        "",
+        "Tegucigalpa",
+        "",
+        "",
+        "<img src=\"ug-flag-honduras.svg\" />",
+        "",
+        "<img src=\"ug-map-honduras.png\" />"
+      ],
+      "flags": 0,
+      "guid": "I[EaKvyq9C",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Hong Kong",
+        "Região Administrativa Especial da China.",
+        "",
+        "",
+        "",
+        "<img src=\"ug-flag-hong_kong.svg\" />",
+        "",
+        "<img src=\"ug-map-hong_kong.png\" />"
+      ],
+      "flags": 0,
+      "guid": "kujN}`[*;M",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Baía de Hudson",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-hudson_bay.png\" />"
+      ],
+      "flags": 0,
+      "guid": "k@SZ]//WP;",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Hungria",
+        "",
+        "Budapeste",
+        "",
+        "",
+        "<img src=\"ug-flag-hungary.svg\" />",
+        "",
+        "<img src=\"ug-map-hungary.png\" />"
+      ],
+      "flags": 0,
+      "guid": "p38Y/C3r?j",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Islândia",
+        "",
+        "Reiquiavique",
+        "",
+        "",
+        "<img src=\"ug-flag-iceland.svg\" />",
+        "Noruega (fundo vermelho, cruz azul) e Ilhas Faroé (fundo branco, cruz vermelha e azul)",
+        "<img src=\"ug-map-iceland.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Pvf0f_)tm@",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Índia",
+        "",
+        "Nova Deli",
+        "",
+        "",
+        "<img src=\"ug-flag-india.svg\" />",
+        "",
+        "<img src=\"ug-map-india.png\" />"
+      ],
+      "flags": 0,
+      "guid": "JIBC<y/Yvk",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Oceano Índico",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-indian_ocean-nobox.png\" />"
+      ],
+      "flags": 0,
+      "guid": "M.$!dle5NI",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Indonésia",
+        "",
+        "Jacarta",
+        "",
+        "",
+        "<img src=\"ug-flag-indonesia.svg\" />",
+        "Mônaco (mais estreita, vermelho mais escuro) e Polônia (vermelho e branco invertidos, vermelho mais escuro)",
+        "<img src=\"ug-map-indonesia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "d*Y)3qd@/C",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Southeast_Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Irã (BR), Irão (PT)",
+        "",
+        "Teerão",
+        "",
+        "",
+        "<img src=\"ug-flag-iran.svg\" />",
+        "",
+        "<img src=\"ug-map-iran.png\" />"
+      ],
+      "flags": 0,
+      "guid": "O:=Be<m;jh",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Iraque",
+        "",
+        "Bagdá (BR), Bagdade (PT)",
+        "",
+        "",
+        "<img src=\"ug-flag-iraq.svg\" />",
+        "Egito (emblema em vez de texto) e Iêmen (sem texto)",
+        "<img src=\"ug-map-iraq.png\" />"
+      ],
+      "flags": 0,
+      "guid": "vP%fqrhm.3",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Irlanda",
+        "",
+        "Dublim",
+        "",
+        "",
+        "<img src=\"ug-flag-ireland.svg\" />",
+        "Costa do Marfim (verde e laranja invertidos, mais estreita)",
+        "<img src=\"ug-map-ireland.png\" />"
+      ],
+      "flags": 0,
+      "guid": "b#,3j{C;Ii",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ilha de Man",
+        "Ilha de Man",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-isle_of_man.png\" />"
+      ],
+      "flags": 0,
+      "guid": "^eu[i$#E%",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Israel",
+        "",
+        "Jerusalém",
+        "Disputado; reivindicado pela Palestina.",
+        "Reivindicado e controlado",
+        "<img src=\"ug-flag-israel.svg\" />",
+        "",
+        "<img src=\"ug-map-israel.png\" />"
+      ],
+      "flags": 0,
+      "guid": "tf~~,M|yc&",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Mediterranean",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Itália",
+        "",
+        "Roma",
+        "",
+        "",
+        "<img src=\"ug-flag-italy.svg\" />",
+        "",
+        "<img src=\"ug-map-italy.png\" />"
+      ],
+      "flags": 0,
+      "guid": "jFu+)N8B>b",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Costa do Marfim",
+        "Oficialmente Côte d'Ivoire.",
+        "Iamussucro",
+        "Embora Iamussucro seja a capital oficial, Abidjã é a sede do governo.",
+        "",
+        "<img src=\"ug-flag-ivory_coast.svg\" />",
+        "Irlanda (laranja e verde invertidos, mais larga)",
+        "<img src=\"ug-map-ivory_coast.png\" />"
+      ],
+      "flags": 0,
+      "guid": "ld@6qzuh4:",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Jamaica",
+        "",
+        "Kingston",
+        "",
+        "",
+        "<img src=\"ug-flag-jamaica.svg\" />",
+        "",
+        "<img src=\"ug-map-jamaica.png\" />"
+      ],
+      "flags": 0,
+      "guid": "lj(hdT=ie~",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Japão",
+        "",
+        "Tóquio",
+        "",
+        "",
+        "<img src=\"ug-flag-japan.svg\" />",
+        "",
+        "<img src=\"ug-map-japan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "yeX,UZ1JrP",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Java",
+        "Ilha da Indonésia.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-java.png\" />"
+      ],
+      "flags": 0,
+      "guid": "I7oz98q8(-",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Jeju",
+        "Província autônoma da Coreia do Sul.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-jeju.png\" />"
+      ],
+      "flags": 0,
+      "guid": "lwH=^9v6=A",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Jérsia",
+        "Dependência da coroa do Reino Unido.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-jersey.png\" />"
+      ],
+      "flags": 0,
+      "guid": "B8PvZsL%=,",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Jordânia",
+        "",
+        "Amã",
+        "",
+        "",
+        "<img src=\"ug-flag-jordan.svg\" />",
+        "",
+        "<img src=\"ug-map-jordan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "m~e0bQg80^",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Caliningrado",
+        "Oblast (região administrativa) da Federação Russa.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-kaliningrad_oblast.png\" />"
+      ],
+      "flags": 0,
+      "guid": "G#>XV1}xL2",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Cazaquistão",
+        "",
+        "Astana",
+        "Conhecida como Nur-Sultã entre 2019 e 2022",
+        "",
+        "<img src=\"ug-flag-kazakhstan.svg\" />",
+        "",
+        "<img src=\"ug-map-kazakhstan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "ryXF~Goixn",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Quênia (BR), Quénia (PT)",
+        "",
+        "Nairóbi",
+        "",
+        "",
+        "<img src=\"ug-flag-kenya.svg\" />",
+        "",
+        "<img src=\"ug-map-kenya.png\" />"
+      ],
+      "flags": 0,
+      "guid": "M||-.i#[l)",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Quiribati",
+        "",
+        "Taraua do Sul",
+        "",
+        "",
+        "<img src=\"ug-flag-kiribati.svg\" />",
+        "",
+        "<img src=\"ug-map-kiribati.png\" />"
+      ],
+      "flags": 0,
+      "guid": "dniv8r!ci3",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Kosovo",
+        "Estado parcialmente reconhecido reivindicado pela Sérvia.",
+        "Pristina",
+        "",
+        "",
+        "<img src=\"ug-flag-kosovo.svg\" />",
+        "",
+        "<img src=\"ug-map-kosovo.png\" />"
+      ],
+      "flags": 0,
+      "guid": "n~]=K*@H_e",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Kuwait",
+        "",
+        "Kuwait",
+        "",
+        "",
+        "<img src=\"ug-flag-kuwait.svg\" />",
+        "",
+        "<img src=\"ug-map-kuwait.png\" />"
+      ],
+      "flags": 0,
+      "guid": "h+>APLLb!{",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Quirguistão",
+        "",
+        "Bisqueque",
+        "",
+        "",
+        "<img src=\"ug-flag-kyrgyzstan.svg\" />",
+        "",
+        "<img src=\"ug-map-kyrgyzstan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "s@13Ith.ZH",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar de Labrador",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-labrador_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Oz!#K-Ae}V",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Alanda",
+        "Região autônoma da Finlândia.",
+        "Marianhamina",
+        "",
+        "",
+        "<img src=\"ug-flag-aland_islands.svg\" />",
+        "",
+        "<img src=\"ug-map-aland_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "i@oGe!DhQ3",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Laos",
+        "",
+        "Vienciana",
+        "",
+        "",
+        "<img src=\"ug-flag-laos.svg\" />",
+        "",
+        "<img src=\"ug-map-laos.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Qm#z-X2)Eh",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Southeast_Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Letônia (BR), Letónia (PT)",
+        "",
+        "Riga",
+        "",
+        "",
+        "<img src=\"ug-flag-latvia.svg\" />",
+        "Áustria (vermelho mais brilhante, faixa branca mais larga)",
+        "<img src=\"ug-map-latvia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "OO%Kq^F$Z`",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Líbano",
+        "",
+        "Beirute",
+        "",
+        "",
+        "<img src=\"ug-flag-lebanon.svg\" />",
+        "",
+        "<img src=\"ug-map-lebanon.png\" />"
+      ],
+      "flags": 0,
+      "guid": "k$9ns[=Fo{",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Mediterranean",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Lesoto",
+        "",
+        "Maseru",
+        "",
+        "",
+        "<img src=\"ug-flag-lesotho.svg\" />",
+        "",
+        "<img src=\"ug-map-lesotho.png\" />"
+      ],
+      "flags": 0,
+      "guid": "y}L.*_s{2c",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Libéria",
+        "",
+        "Monróvia",
+        "",
+        "",
+        "<img src=\"ug-flag-liberia.svg\" />",
+        "",
+        "<img src=\"ug-map-liberia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Efj[#`oxYU",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Líbia",
+        "",
+        "Trípoli",
+        "",
+        "",
+        "<img src=\"ug-flag-libya.svg\" />",
+        "",
+        "<img src=\"ug-map-libya.png\" />"
+      ],
+      "flags": 0,
+      "guid": "t%glMxI7,6",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Liechtenstein",
+        "",
+        "Vaduz",
+        "",
+        "",
+        "<img src=\"ug-flag-liechtenstein.svg\" />",
+        "",
+        "<img src=\"ug-map-liechtenstein.png\" />"
+      ],
+      "flags": 0,
+      "guid": "B|UQP+^>3F",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Lituânia",
+        "",
+        "Vilnius",
+        "",
+        "",
+        "<img src=\"ug-flag-lithuania.svg\" />",
+        "",
+        "<img src=\"ug-map-lithuania.png\" />"
+      ],
+      "flags": 0,
+      "guid": "GI5y>iv~[H",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Luxemburgo",
+        "",
+        "Luxemburgo",
+        "",
+        "",
+        "<img src=\"ug-flag-luxembourg.svg\" />",
+        "Países Baixos (azul mais escuro)",
+        "<img src=\"ug-map-luxembourg.png\" />"
+      ],
+      "flags": 0,
+      "guid": "w@c5memCCS",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Macau",
+        "Região Administrativa Especial da China.",
+        "",
+        "",
+        "",
+        "<img src=\"ug-flag-macau.svg\" />",
+        "",
+        "<img src=\"ug-map-macau.png\" />"
+      ],
+      "flags": 0,
+      "guid": "F)w6t`GX4(",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Madagascar",
+        "",
+        "Antananarivo",
+        "",
+        "",
+        "<img src=\"ug-flag-madagascar.svg\" />",
+        "",
+        "<img src=\"ug-map-madagascar.png\" />"
+      ],
+      "flags": 0,
+      "guid": "su=H/7(%]k",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Madeira",
+        "Região Autônoma de Portugal.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-madeira.png\" />"
+      ],
+      "flags": 0,
+      "guid": "NGbgN#o/Ie",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Maláui",
+        "",
+        "Lilongué",
+        "",
+        "",
+        "<img src=\"ug-flag-malawi.svg\" />",
+        "",
+        "<img src=\"ug-map-malawi.png\" />"
+      ],
+      "flags": 0,
+      "guid": "y&&oj#+jmF",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Malásia",
+        "",
+        "Quala Lumpur",
+        "",
+        "",
+        "<img src=\"ug-flag-malaysia.svg\" />",
+        "",
+        "<img src=\"ug-map-malaysia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "J]]?!DDjUQ",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Southeast_Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Maldivas",
+        "",
+        "Malé",
+        "",
+        "",
+        "<img src=\"ug-flag-maldives.svg\" />",
+        "",
+        "<img src=\"ug-map-maldives.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Dc^-[NKeM9",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mali",
+        "",
+        "Bamaco",
+        "",
+        "",
+        "<img src=\"ug-flag-mali.svg\" />",
+        "Guiné (verde e vermelho invertidos, verde ligeiramente mais escuro)",
+        "<img src=\"ug-map-mali.png\" />"
+      ],
+      "flags": 0,
+      "guid": "A?qpd&5PT&",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Malta",
+        "",
+        "Valeta",
+        "",
+        "",
+        "<img src=\"ug-flag-malta.svg\" />",
+        "",
+        "<img src=\"ug-map-malta.png\" />"
+      ],
+      "flags": 0,
+      "guid": "eE8!1jmWPI",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ilhas Marshall",
+        "",
+        "Majuro",
+        "",
+        "",
+        "<img src=\"ug-flag-marshall_islands.svg\" />",
+        "",
+        "<img src=\"ug-map-marshall_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "h@yv7?b9!l",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Martinica",
+        "Departamento ultramarino da França.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-martinique.png\" />"
+      ],
+      "flags": 0,
+      "guid": "qw`r9pt!l-",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mauritânia",
+        "",
+        "Nuaquexote",
+        "",
+        "",
+        "<img src=\"ug-flag-mauritania.svg\" />",
+        "",
+        "<img src=\"ug-map-mauritania.png\" />"
+      ],
+      "flags": 0,
+      "guid": "EIju~|9Wsy",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Maurício (BR), Maurícia (PT)",
+        "",
+        "Porto Luís",
+        "",
+        "",
+        "<img src=\"ug-flag-mauritius.svg\" />",
+        "",
+        "<img src=\"ug-map-mauritius.png\" />"
+      ],
+      "flags": 0,
+      "guid": "zph}.HR/d/",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Maiote",
+        "Departamento ultramarino da França.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-mayotte.png\" />"
+      ],
+      "flags": 0,
+      "guid": "O]6^$Y;9N",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar Mediterrâneo",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-mediterranean_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "v]Gu}_Sgmm",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Melanésia",
+        "Sub-região da Oceania que inclui Vanuatu, Ilhas Salomão, Fiji e Papua-Nova Guiné.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-melanesia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "t+E0yUq~3C",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "México",
+        "",
+        "Cidade do México",
+        "",
+        "",
+        "<img src=\"ug-flag-mexico.svg\" />",
+        "",
+        "<img src=\"ug-map-mexico.png\" />"
+      ],
+      "flags": 0,
+      "guid": "p<FKrHg99Q",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Micronésia",
+        "Sub-região da Oceania que compreende milhares de pequenas ilhas no oeste do Oceano Pacífico.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-micronesia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "rJMplZ%}9O",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Moldávia",
+        "",
+        "Quixinau",
+        "",
+        "",
+        "<img src=\"ug-flag-moldova.svg\" />",
+        "Andorra (mais estreita, brasão com lema)",
+        "<img src=\"ug-map-moldova.png\" />"
+      ],
+      "flags": 0,
+      "guid": "K!n@~ay/du",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mônaco (BR), Mónaco (PT)",
+        "",
+        "Mônaco (BR), Mónaco (PT)",
+        "",
+        "",
+        "<img src=\"ug-flag-monaco.svg\" />",
+        "Indonésia (mais larga, vermelho mais brilhante) e Polônia (mais larga, vermelho e branco invertidos)",
+        "<img src=\"ug-map-monaco.png\" />"
+      ],
+      "flags": 0,
+      "guid": "zclXW*ihxo",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mongólia",
+        "",
+        "Ulã Bator",
+        "",
+        "",
+        "<img src=\"ug-flag-mongolia.svg\" />",
+        "",
+        "<img src=\"ug-map-mongolia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "I{3qN!QnX}",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Montenegro",
+        "",
+        "Podgorica",
+        "Cetinje é uma capital honorária.",
+        "",
+        "<img src=\"ug-flag-montenegro.svg\" />",
+        "",
+        "<img src=\"ug-map-montenegro.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Nj!o5F[Y={",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Marrocos",
+        "",
+        "Rabate",
+        "",
+        "",
+        "<img src=\"ug-flag-morocco.svg\" />",
+        "",
+        "<img src=\"ug-map-morocco.png\" />"
+      ],
+      "flags": 0,
+      "guid": "JtIxz8?/O!",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Moçambique",
+        "",
+        "Maputo",
+        "",
+        "",
+        "<img src=\"ug-flag-mozambique.svg\" />",
+        "",
+        "<img src=\"ug-map-mozambique.png\" />"
+      ],
+      "flags": 0,
+      "guid": "uDFLbP[Qng",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mianmar",
+        "",
+        "Nepiedó",
+        "",
+        "",
+        "<img src=\"ug-flag-myanmar.svg\" />",
+        "",
+        "<img src=\"ug-map-myanmar.png\" />"
+      ],
+      "flags": 0,
+      "guid": "ndPX6tuc3[",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Southeast_Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Namíbia",
+        "",
+        "Vinduque",
+        "",
+        "",
+        "<img src=\"ug-flag-namibia.svg\" />",
+        "",
+        "<img src=\"ug-map-namibia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "I=PnRY[6IS",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Nauru",
+        "",
+        "Iarém",
+        "Nauru não tem capital oficial; o distrito de Iarém é apenas considerada a capital.",
+        "",
+        "<img src=\"ug-flag-nauru.svg\" />",
+        "Curaçao (duas estrelas no canto superior esquerdo)",
+        "<img src=\"ug-map-nauru.png\" />"
+      ],
+      "flags": 0,
+      "guid": "KsV`wSHfP8",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Nepal",
+        "",
+        "Catmandu",
+        "",
+        "",
+        "<img src=\"ug-flag-nepal-nobox.svg\" />",
+        "",
+        "<img src=\"ug-map-nepal.png\" />"
+      ],
+      "flags": 0,
+      "guid": "d2v?T?w[3T",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Países Baixos",
+        "Conhecidos informalmente como Holanda.",
+        "Amsterdã (BR), Amsterdão (PT)",
+        "Embora Amsterdã seja a capital oficial, Haia é a sede dos ramos executivo e legislativo.",
+        "",
+        "<img src=\"ug-flag-netherlands.svg\" />",
+        "do Luxemburgo (azul mais claro)",
+        "<img src=\"ug-map-netherlands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "qMY9o*hf**",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Nova Caledônia",
+        "Território ultramarino da França.",
+        "Numeá",
+        "",
+        "",
+        "<img src=\"ug-flag-new_caledonia.svg\" />",
+        "",
+        "<img src=\"ug-map-new_caledonia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "IGD[r5m}DP",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Nova Zelândia",
+        "",
+        "Wellington",
+        "",
+        "",
+        "<img src=\"ug-flag-new_zealand.svg\" />",
+        "Austrália (estrelas brancas, duas estrelas a mais)",
+        "<img src=\"ug-map-new_zealand.png\" />"
+      ],
+      "flags": 0,
+      "guid": "tEG*ja>]Nv",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Nicarágua",
+        "",
+        "Manágua",
+        "",
+        "",
+        "<img src=\"ug-flag-nicaragua-blur.svg\" /><img src=\"ug-flag-nicaragua.svg\" />",
+        "El Salvador (brasão diferente, azul ligeiramente mais escuro)",
+        "<img src=\"ug-map-nicaragua.png\" />"
+      ],
+      "flags": 0,
+      "guid": "k-UG}XV}RQ",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Níger",
+        "",
+        "Niamei",
+        "",
+        "",
+        "<img src=\"ug-flag-niger.svg\" />",
+        "",
+        "<img src=\"ug-map-niger.png\" />"
+      ],
+      "flags": 0,
+      "guid": "wk!g#_2-WE",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Nigéria",
+        "",
+        "Abuja",
+        "",
+        "",
+        "<img src=\"ug-flag-nigeria.svg\" />",
+        "",
+        "<img src=\"ug-map-nigeria.png\" />"
+      ],
+      "flags": 0,
+      "guid": "JWO]%|yV%9",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Niuê",
+        "",
+        "Alofi",
+        "",
+        "",
+        "<img src=\"ug-flag-niue.svg\" />",
+        "",
+        "<img src=\"ug-map-niue.png\" />"
+      ],
+      "flags": 0,
+      "guid": "BiJoHsq#gs",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "América do Norte",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-north_america-nobox.png\" />"
+      ],
+      "flags": 0,
+      "guid": "zCAd}@3:9U",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Continents"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Coreia do Norte",
+        "",
+        "Pionguiangue",
+        "",
+        "",
+        "<img src=\"ug-flag-north_korea.svg\" />",
+        "",
+        "<img src=\"ug-map-north_korea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Q%iy;<@JH&",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Macedônia do Norte (BR), Macedónia do Norte (PT)",
+        "Anteriormente conhecida como Macedônia.",
+        "Escópia",
+        "",
+        "",
+        "<img src=\"ug-flag-north_macedonia.svg\" />",
+        "",
+        "<img src=\"ug-map-north_macedonia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "nzv6%{z8e8",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar do Norte",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-north_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "odvY;N=cs5",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Chipre do Norte",
+        "Estado reconhecido apenas pela Turquia e reivindicado por Chipre.",
+        "Nicósia do Norte",
+        "",
+        "",
+        "<img src=\"ug-flag-northern_cyprus.svg\" />",
+        "",
+        "<img src=\"ug-map-northern_cyprus.png\" />"
+      ],
+      "flags": 0,
+      "guid": "ODBApmZ]n:",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Mediterranean",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Irlanda do Norte",
+        "País constituinte do Reino Unido.",
+        "Belfaste",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-northern_ireland.png\" />"
+      ],
+      "flags": 0,
+      "guid": "qRhw-3oO|0",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ilhas Marianas do Norte",
+        "Território não incorporado dos Estados Unidos.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-northern_mariana_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Iy_EqYuh9C",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Noruega",
+        "",
+        "Oslo",
+        "",
+        "",
+        "<img src=\"ug-flag-norway.svg\" />",
+        "Islândia (fundo azul, cruz vermelha) e Ilhas Faroé (fundo branco, cruz vermelha e azul)",
+        "<img src=\"ug-map-norway.png\" />"
+      ],
+      "flags": 0,
+      "guid": "i1N+^dagz@",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar da Noruega",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-norwegian_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "bQ.I*Gfr5}",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Oceania",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-oceania-nobox.png\" />"
+      ],
+      "flags": 0,
+      "guid": "mc/k|TM}m*",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Continents"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Omã (BR), Omão (PT)",
+        "",
+        "Mascate",
+        "",
+        "",
+        "<img src=\"ug-flag-oman.svg\" />",
+        "",
+        "<img src=\"ug-map-oman.png\" />"
+      ],
+      "flags": 0,
+      "guid": "EjR]<Vp9Z{",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Oceano Pacífico",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-pacific_ocean-nobox.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Bmj!9P&|{=",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Paquistão",
+        "",
+        "Islamabade",
+        "",
+        "",
+        "<img src=\"ug-flag-pakistan.svg\" />",
+        "",
+        "<img src=\"ug-map-pakistan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "i]HndhS#jS",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Palau",
+        "",
+        "Ngerulmud",
+        "",
+        "",
+        "<img src=\"ug-flag-palau.svg\" />",
+        "",
+        "<img src=\"ug-map-palau.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Lkpnrm+}N*",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Palestina",
+        "",
+        "Jerusalém",
+        "Disputada; reivindicada por Israel; Ramala é o centro administrativo.",
+        "Reivindicada, mas não controlada",
+        "<img src=\"ug-flag-palestine.svg\" />",
+        "Sudão (vermelho/branco/preto, seta verde) e República Árabe Saaraui Democrática (com estrela e crescente)",
+        "<img src=\"ug-map-palestine.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Db5g|/x_nA",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Mediterranean",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Panamá",
+        "",
+        "Cidade do Panamá",
+        "",
+        "",
+        "<img src=\"ug-flag-panama.svg\" />",
+        "",
+        "<img src=\"ug-map-panama.png\" />"
+      ],
+      "flags": 0,
+      "guid": "r79P4ThUyr",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Papua-Nova Guiné",
+        "",
+        "Porto Moresby",
+        "",
+        "",
+        "<img src=\"ug-flag-papua_new_guinea.svg\" />",
+        "",
+        "<img src=\"ug-map-papua_new_guinea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "t|nO-D<u)D",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Paraguai",
+        "",
+        "Assunção",
+        "",
+        "",
+        "<img src=\"ug-flag-paraguay-blur.svg\" /><img src=\"ug-flag-paraguay.svg\" />",
+        "",
+        "<img src=\"ug-map-paraguay.png\" />"
+      ],
+      "flags": 0,
+      "guid": "L+`m,K,TjN",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::South_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Golfo Pérsico",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-persian_gulf.png\" />"
+      ],
+      "flags": 0,
+      "guid": "k[}Db7_UdK",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Peru",
+        "",
+        "Lima",
+        "",
+        "",
+        "<img src=\"ug-flag-peru.svg\" />",
+        "",
+        "<img src=\"ug-map-peru.png\" />"
+      ],
+      "flags": 0,
+      "guid": "rt/cNV?%Os",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::South_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar das Filipinas",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-philippine_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "z!(JMxmH=r",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Filipinas",
+        "",
+        "Manila",
+        "",
+        "",
+        "<img src=\"ug-flag-philippines.svg\" />",
+        "",
+        "<img src=\"ug-map-philippines.png\" />"
+      ],
+      "flags": 0,
+      "guid": "N]c2]O;WnL",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Southeast_Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Polônia (BR), Polónia (PT)",
+        "",
+        "Varsóvia",
+        "",
+        "",
+        "<img src=\"ug-flag-poland.svg\" />",
+        "Indonésia (branco e vermelho invertidos, vermelho mais brilhante) e Mônaco (branco e vermelho invertidos, mais estreita)",
+        "<img src=\"ug-map-poland.png\" />"
+      ],
+      "flags": 0,
+      "guid": "w:J$-ahRdF",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Polinésia",
+        "Sub-região da Oceania que compreende milhares de pequenas ilhas no Oceano Pacífico central e meridional.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-polynesia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "GxAVE4X5.9",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Portugal",
+        "",
+        "Lisboa",
+        "",
+        "",
+        "<img src=\"ug-flag-portugal.svg\" />",
+        "",
+        "<img src=\"ug-map-portugal.png\" />"
+      ],
+      "flags": 0,
+      "guid": "p@{qCWlnXH",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Porto Rico",
+        "Território não incorporado dos Estados Unidos.",
+        "São João",
+        "",
+        "Não é um Estado soberano",
+        "<img src=\"ug-flag-puerto_rico.svg\" />",
+        "Cuba (triângulo vermelho, listras azuis)",
+        "<img src=\"ug-map-puerto_rico.png\" />"
+      ],
+      "flags": 0,
+      "guid": "voNLUF#rIP",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Catar",
+        "",
+        "Doa",
+        "",
+        "",
+        "<img src=\"ug-flag-qatar.svg\" />",
+        "Barém (mais estreita, menos bordas serrilhadas, vermelha)",
+        "<img src=\"ug-map-qatar.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Kry$&wZmW`",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Reunião",
+        "Departamento ultramarino da França.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-reunion.png\" />"
+      ],
+      "flags": 0,
+      "guid": "K]w/Sxim{^",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar Vermelho",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-red_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "OJ4}BH2QfK",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Congo",
+        "",
+        "Brazavile",
+        "",
+        "",
+        "<img src=\"ug-flag-republic_of_the_congo.svg\" />",
+        "",
+        "<img src=\"ug-map-republic_of_the_congo.png\" />"
+      ],
+      "flags": 0,
+      "guid": "vmRU)X?30m",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Romênia (BR), Roménia (PT)",
+        "",
+        "Bucareste",
+        "",
+        "",
+        "<img src=\"ug-flag-romania.svg\" />",
+        "Chade (azul ligeiramente mais escuro)",
+        "<img src=\"ug-map-romania.png\" />"
+      ],
+      "flags": 0,
+      "guid": "qb(2zU!2v_",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Rússia",
+        "",
+        "Moscou (BR), Moscovo (PT)",
+        "",
+        "",
+        "<img src=\"ug-flag-russia.svg\" />",
+        "Eslováquia (com brasão)",
+        "<img src=\"ug-map-russia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "nhJb958%1",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ruanda",
+        "",
+        "Quigali",
+        "",
+        "",
+        "<img src=\"ug-flag-rwanda.svg\" />",
+        "",
+        "<img src=\"ug-map-rwanda.png\" />"
+      ],
+      "flags": 0,
+      "guid": "lBV|L_Y=Rb",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "São Tomé e Príncipe",
+        "",
+        "São Tomé",
+        "",
+        "",
+        "<img src=\"ug-flag-sao_tome_and_principe.svg\" />",
+        "",
+        "<img src=\"ug-map-sao_tome_and_principe.png\" />"
+      ],
+      "flags": 0,
+      "guid": "GUDe$&2Ul)",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "República Árabe Saaraui Democrática (RASD)",
+        "Estado parcialmente reconhecido reivindicado por Marrocos.",
+        "Laiune",
+        "Embora Laiune, também conhecida como El Aiune, seja a capital declarada, Tifariti é a sede do governo.",
+        "",
+        "<img src=\"ug-flag-sahrawi_arab_democratic_republic.svg\" />",
+        "Palestina (sem símbolo)",
+        "<img src=\"ug-map-sahrawi_arab_democratic_republic.png\" />"
+      ],
+      "flags": 0,
+      "guid": "j,S/:GbM;^",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "São Cristóvão e Névis",
+        "",
+        "Basseterre",
+        "",
+        "",
+        "<img src=\"ug-flag-saint_kitts_and_nevis.svg\" />",
+        "",
+        "<img src=\"ug-map-saint_kitts_and_nevis.png\" />"
+      ],
+      "flags": 0,
+      "guid": "leBrcK+h^",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Santa Lúcia",
+        "",
+        "Castries",
+        "",
+        "",
+        "<img src=\"ug-flag-saint_lucia.svg\" />",
+        "",
+        "<img src=\"ug-map-saint_lucia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "mBqT]p_`hn",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "São Martinho (França)",
+        "País constituinte do Reino dos Países Baixos.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-saint_martin.png\" />"
+      ],
+      "flags": 0,
+      "guid": "t|n7?F8IO|",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "São Vicente e Granadinas",
+        "",
+        "Kingstown",
+        "",
+        "",
+        "<img src=\"ug-flag-saint_vincent_and_the_grenadines.svg\" />",
+        "",
+        "<img src=\"ug-map-saint_vincent_and_the_grenadines.png\" />"
+      ],
+      "flags": 0,
+      "guid": "yS!)#wTR3,",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Samoa",
+        "",
+        "Apia",
+        "",
+        "",
+        "<img src=\"ug-flag-samoa.svg\" />",
+        "",
+        "<img src=\"ug-map-samoa.png\" />"
+      ],
+      "flags": 0,
+      "guid": "kwjZ:hu+^b",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "São Marinho",
+        "",
+        "São Marinho",
+        "",
+        "",
+        "<img src=\"ug-flag-san_marino.svg\" />",
+        "",
+        "<img src=\"ug-map-san_marino.png\" />"
+      ],
+      "flags": 0,
+      "guid": "DuTF$#n0`&",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Sardenha",
+        "Região autônoma da Itália.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-sardinia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "D9X*P<0(5R",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Arábia Saudita",
+        "",
+        "Riade",
+        "",
+        "",
+        "<img src=\"ug-flag-saudi_arabia.svg\" />",
+        "",
+        "<img src=\"ug-map-saudi_arabia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "ggAWcodmSr",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Escandinávia",
+        "Região histórica e cultural do norte da Europa, que inclui os países da Dinamarca, Noruega e Suécia, e às vezes Finlândia e Islândia.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-scandinavia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "L~fP+M7<pi",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Escócia",
+        "País constituinte do Reino Unido.",
+        "Edimburgo",
+        "",
+        "",
+        "<img src=\"ug-flag-scotland.svg\" />",
+        "",
+        "<img src=\"ug-map-scotland.png\" />"
+      ],
+      "flags": 0,
+      "guid": "x1O4C)?pj1",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar da Galileia",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-sea_of_galilee.png\" />"
+      ],
+      "flags": 0,
+      "guid": "FNcuka+yo(",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar do Japão",
+        "Existe uma disputa de nomenclatura entre os países limítrofes do mar, com a Coreia do Sul apoiando notavelmente o nome Mar do Leste.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-sea_of_japan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "iS2|sUiSh`",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar de Okhotsk",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-sea_of_okhotsk.png\" />"
+      ],
+      "flags": 0,
+      "guid": "FZZeug$TYn",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Senegal",
+        "",
+        "Dacar",
+        "",
+        "",
+        "<img src=\"ug-flag-senegal.svg\" />",
+        "Camarões (verde/vermelho/amarelo, estrela amarela)",
+        "<img src=\"ug-map-senegal.png\" />"
+      ],
+      "flags": 0,
+      "guid": "w|**t4}*5:",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Sérvia",
+        "",
+        "Belgrado",
+        "",
+        "",
+        "<img src=\"ug-flag-serbia.svg\" />",
+        "",
+        "<img src=\"ug-map-serbia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "yC[`HZT>8~",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Seicheles",
+        "",
+        "Vitória",
+        "",
+        "",
+        "<img src=\"ug-flag-seychelles.svg\" />",
+        "",
+        "<img src=\"ug-map-seychelles.png\" />"
+      ],
+      "flags": 0,
+      "guid": "e;|GubFA|k",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Sicília",
+        "Região autônoma da Itália.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-sicily.png\" />"
+      ],
+      "flags": 0,
+      "guid": "mY!C2YP~(S",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Serra Leoa",
+        "",
+        "Freetown",
+        "",
+        "",
+        "<img src=\"ug-flag-sierra_leone.svg\" />",
+        "",
+        "<img src=\"ug-map-sierra_leone.png\" />"
+      ],
+      "flags": 0,
+      "guid": "L>wqh,KqZ.",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Singapura",
+        "",
+        "Singapura",
+        "",
+        "",
+        "<img src=\"ug-flag-singapore.svg\" />",
+        "",
+        "<img src=\"ug-map-singapore.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Nfur#3pX!%",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Southeast_Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "São Martinho (Países Baixos)",
+        "País constituinte do Reino dos Países Baixos.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-sint_maarten.png\" />"
+      ],
+      "flags": 0,
+      "guid": "k]EOmk4}A?",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Eslováquia",
+        "",
+        "Bratislava",
+        "",
+        "",
+        "<img src=\"ug-flag-slovakia.svg\" />",
+        "Rússia (sem brasão) e Eslovênia (brasão mais largo e menor)",
+        "<img src=\"ug-map-slovakia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "h^$-C4XKc}",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Eslovênia (BR), Eslovénia (PT)",
+        "",
+        "Liubliana",
+        "",
+        "",
+        "<img src=\"ug-flag-slovenia.svg\" />",
+        "Eslováquia (mais estreita, brasão maior)",
+        "<img src=\"ug-map-slovenia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "sf|,28pc/9",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ilhas Salomão",
+        "",
+        "Honiara",
+        "",
+        "",
+        "<img src=\"ug-flag-solomon_islands.svg\" />",
+        "",
+        "<img src=\"ug-map-solomon_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "BvP+F:QCTH",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Somália",
+        "",
+        "Mogadíscio",
+        "",
+        "",
+        "<img src=\"ug-flag-somalia.svg\" />",
+        "",
+        "<img src=\"ug-map-somalia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "z{%WvW,O^e",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Somalilândia",
+        "Estado independente reivindicado pela Somália.",
+        "Hargeisa",
+        "",
+        "",
+        "<img src=\"ug-flag-somaliland.svg\" />",
+        "",
+        "<img src=\"ug-map-somaliland.png\" />"
+      ],
+      "flags": 0,
+      "guid": "u3Kaf5B|v`",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "África do Sul",
+        "",
+        "Pretória, Cidade do Cabo, Blumefontaina",
+        "A África do Sul não tem capital legalmente definida: os ramos do governo estão divididos em três cidades: Pretória (executivo), Cidade do Cabo (legislativo) e Blumefontaina (judicial).",
+        "",
+        "<img src=\"ug-flag-south_africa.svg\" />",
+        "",
+        "<img src=\"ug-map-south_africa.png\" />"
+      ],
+      "flags": 0,
+      "guid": "c#3w!!.a^C",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "América do Sul",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-south_america-nobox.png\" />"
+      ],
+      "flags": 0,
+      "guid": "L0+1:;EPg/",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Continents"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar da China Meridional",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-south_china_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "s&^*ax7mk5",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Coreia do Sul",
+        "",
+        "Seul",
+        "",
+        "",
+        "<img src=\"ug-flag-south_korea.svg\" />",
+        "",
+        "<img src=\"ug-map-south_korea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "j?GNhOWK$8",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ossétia do Sul",
+        "Estado independente reivindicado pela Geórgia.",
+        "Tsequinváli",
+        "",
+        "",
+        "<img src=\"ug-flag-south_ossetia.svg\" />",
+        "",
+        "<img src=\"ug-map-south_ossetia.png\" />"
+      ],
+      "flags": 0,
+      "guid": ",yh{iX8m{",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Sudão do Sul",
+        "",
+        "Juba",
+        "",
+        "",
+        "<img src=\"ug-flag-south_sudan.svg\" />",
+        "",
+        "<img src=\"ug-map-south_sudan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "w?EtZ3tDY9",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Oceano Antártico",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-southern_ocean-nobox.png\" />"
+      ],
+      "flags": 0,
+      "guid": "b#XvD_w?e<",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Espanha",
+        "",
+        "Madri (BR), Madrid (PT)",
+        "",
+        "",
+        "<img src=\"ug-flag-spain.svg\" />",
+        "",
+        "<img src=\"ug-map-spain.png\" />"
+      ],
+      "flags": 0,
+      "guid": "F9/|i`ALwZ",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Sri Lanka",
+        "",
+        "Seri Jaiavardenapura-Cota",
+        "Colombo é muitas vezes referido como a capital, mas Seri Jaiavardenapura-Cota, um subúrbio de Colombo, é a capital legislativa oficial.",
+        "",
+        "<img src=\"ug-flag-sri_lanka.svg\" />",
+        "",
+        "<img src=\"ug-map-sri_lanka.png\" />"
+      ],
+      "flags": 0,
+      "guid": "o{L!(ulPuC",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Sudão",
+        "",
+        "Cartum",
+        "",
+        "",
+        "<img src=\"ug-flag-sudan.svg\" />",
+        "Palestina (preto/branco/verde, seta vermelha)",
+        "<img src=\"ug-map-sudan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "db,aa$e4w1",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Sumatra",
+        "Ilha da Indonésia.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-sumatra.png\" />"
+      ],
+      "flags": 0,
+      "guid": "p4FOjAZZk@",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Suriname",
+        "",
+        "Paramaribo",
+        "",
+        "",
+        "<img src=\"ug-flag-suriname.svg\" />",
+        "",
+        "<img src=\"ug-map-suriname.png\" />"
+      ],
+      "flags": 0,
+      "guid": "L`GYI/ekhp",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::South_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Esvalbarda",
+        "Área interna não incorporada da Noruega.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-svalbard.png\" />"
+      ],
+      "flags": 0,
+      "guid": "C]<u7;BN.m",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Suécia",
+        "",
+        "Estocolmo",
+        "",
+        "",
+        "<img src=\"ug-flag-sweden.svg\" />",
+        "",
+        "<img src=\"ug-map-sweden.png\" />"
+      ],
+      "flags": 0,
+      "guid": "p%]qRYCgpv",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::European_Union",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Suíca",
+        "",
+        "Berna",
+        "A Suíça não tem capital oficial; Berna é apenas considerada a capital.",
+        "",
+        "<img src=\"ug-flag-switzerland.svg\" />",
+        "",
+        "<img src=\"ug-map-switzerland.png\" />"
+      ],
+      "flags": 0,
+      "guid": "eyZ[vXX1Y&",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Síria",
+        "",
+        "Damasco",
+        "",
+        "",
+        "<img src=\"ug-flag-syria.svg\" />",
+        "",
+        "<img src=\"ug-map-syria.png\" />"
+      ],
+      "flags": 0,
+      "guid": "k<mp?aNi<n",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Mediterranean",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Taiwan",
+        "Estado parcialmente reconhecido reivindicado pela China.",
+        "Taipé",
+        "",
+        "",
+        "<img src=\"ug-flag-taiwan.svg\" />",
+        "",
+        "<img src=\"ug-map-taiwan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "ly9aPK_@5B",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Tajiquistão",
+        "",
+        "Duxambé",
+        "",
+        "",
+        "<img src=\"ug-flag-tajikistan.svg\" />",
+        "",
+        "<img src=\"ug-map-tajikistan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "hl9LK`>En1",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Tanzânia",
+        "",
+        "Dodoma",
+        "Embora Dodoma seja a capital oficial, Dar es Salã é a sede do governo.",
+        "",
+        "<img src=\"ug-flag-tanzania.svg\" />",
+        "",
+        "<img src=\"ug-map-tanzania.png\" />"
+      ],
+      "flags": 0,
+      "guid": "b,`C.1o0K]",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar de Tasman",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-tasman_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "MCvO(+y^XJ",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Tailândia",
+        "",
+        "Bancoque (BR), Banguecoque (PT)",
+        "",
+        "",
+        "<img src=\"ug-flag-thailand.svg\" />",
+        "",
+        "<img src=\"ug-map-thailand.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Hdh?z^QMqR",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Southeast_Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Bahamas",
+        "",
+        "Nassau",
+        "",
+        "",
+        "<img src=\"ug-flag-the_bahamas.svg\" />",
+        "",
+        "<img src=\"ug-map-the_bahamas.png\" />"
+      ],
+      "flags": 0,
+      "guid": "bm_rpQxEpV",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Gâmbia",
+        "",
+        "Banjul",
+        "",
+        "",
+        "<img src=\"ug-flag-the_gambia.svg\" />",
+        "",
+        "<img src=\"ug-map-the_gambia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "sktKlO<#lL",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Timor-Leste",
+        "",
+        "Díli",
+        "",
+        "",
+        "<img src=\"ug-flag-timor-leste.svg\" />",
+        "",
+        "<img src=\"ug-map-timor-leste.png\" />"
+      ],
+      "flags": 0,
+      "guid": "c_|S!EHTyr",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Southeast_Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar de Timor",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-timor_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "M2F[Y-o77g",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Togo",
+        "",
+        "Lomé",
+        "",
+        "",
+        "<img src=\"ug-flag-togo.svg\" />",
+        "",
+        "<img src=\"ug-map-togo.png\" />"
+      ],
+      "flags": 0,
+      "guid": "e<+G+n.W89",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Sovereign_State",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Tonga",
+        "",
+        "Nucualofa",
+        "",
+        "",
+        "<img src=\"ug-flag-tonga.svg\" />",
+        "",
+        "<img src=\"ug-map-tonga.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Gjci[`.B}=",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Transnístria",
+        "Estado independente reivindicado pela Moldávia.",
+        "Tiráspol",
+        "",
+        "",
+        "<img src=\"ug-flag-transnistria.svg\" />",
+        "",
+        "<img src=\"ug-map-transnistria.png\" />"
+      ],
+      "flags": 0,
+      "guid": "G%yn8F/|RL",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Trindade e Tobago",
+        "",
+        "Porto da Espanha",
+        "",
+        "",
+        "<img src=\"ug-flag-trinidad_and_tobago.svg\" />",
+        "",
+        "<img src=\"ug-map-trinidad_and_tobago.png\" />"
+      ],
+      "flags": 0,
+      "guid": "H>U*FzuU!q",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Tunísia",
+        "",
+        "Tunes",
+        "",
+        "",
+        "<img src=\"ug-flag-tunisia.svg\" />",
+        "",
+        "<img src=\"ug-map-tunisia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "i,9aCetA#N",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::Mediterranean",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Turquia",
+        "",
+        "Ancara",
+        "",
+        "",
+        "<img src=\"ug-flag-turkey.svg\" />",
+        "",
+        "<img src=\"ug-map-turkey.png\" />"
+      ],
+      "flags": 0,
+      "guid": "sSCPjs@7rI",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Mediterranean",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Turcomenistão",
+        "",
+        "Asgabate",
+        "",
+        "",
+        "<img src=\"ug-flag-turkmenistan.svg\" />",
+        "",
+        "<img src=\"ug-map-turkmenistan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "c!=R$K79Ci",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Turcas e Caicos",
+        "Território ultramarino do Reino Unido.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-turks_and_caicos_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "I5siG$Ea{.",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Tuvalu",
+        "",
+        "Funafuti",
+        "",
+        "",
+        "<img src=\"ug-flag-tuvalu.svg\" />",
+        "",
+        "<img src=\"ug-map-tuvalu.png\" />"
+      ],
+      "flags": 0,
+      "guid": "e_W9-v{whs",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Uganda",
+        "",
+        "Campala",
+        "",
+        "",
+        "<img src=\"ug-flag-uganda.svg\" />",
+        "",
+        "<img src=\"ug-map-uganda.png\" />"
+      ],
+      "flags": 0,
+      "guid": "hK{#z+aR76",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ucrânia",
+        "",
+        "Quieve",
+        "",
+        "",
+        "<img src=\"ug-flag-ukraine.svg\" />",
+        "",
+        "<img src=\"ug-map-ukraine.png\" />"
+      ],
+      "flags": 0,
+      "guid": "y[NG^n3YP9",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Emirados Árabes Unidos",
+        "",
+        "Abu Dabi",
+        "",
+        "",
+        "<img src=\"ug-flag-united_arab_emirates.svg\" />",
+        "",
+        "<img src=\"ug-map-united_arab_emirates.png\" />"
+      ],
+      "flags": 0,
+      "guid": "p.bqdPDaHE",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Reino Unido",
+        "",
+        "Londres",
+        "",
+        "Estado soberano",
+        "<img src=\"ug-flag-united_kingdom.svg\" />",
+        "",
+        "<img src=\"ug-map-united_kingdom.png\" />"
+      ],
+      "flags": 0,
+      "guid": "oV{vjm9,oV",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Estados Unidos",
+        "",
+        "Washington, D.C.",
+        "",
+        "",
+        "<img src=\"ug-flag-united_states_of_america.svg\" />",
+        "",
+        "<img src=\"ug-map-united_states_of_america.png\" />"
+      ],
+      "flags": 0,
+      "guid": "ef`]u!|V{`",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::North_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ilhas Virgens Americanas",
+        "Território não incorporado dos Estados Unidos.",
+        "Carlota Amália",
+        "",
+        "",
+        "<img src=\"ug-flag-united_states_virgin_islands.svg\" />",
+        "",
+        "<img src=\"ug-map-united_states_virgin_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "wNjlEuB#7E",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Uruguai",
+        "",
+        "Montevidéu (BR), Montevideu (PT)",
+        "",
+        "",
+        "<img src=\"ug-flag-uruguay.svg\" />",
+        "",
+        "<img src=\"ug-map-uruguay.png\" />"
+      ],
+      "flags": 0,
+      "guid": "pb(wj%}GZv",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::South_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Uzbequistão",
+        "",
+        "Tasquente",
+        "",
+        "",
+        "<img src=\"ug-flag-uzbekistan.svg\" />",
+        "",
+        "<img src=\"ug-map-uzbekistan.png\" />"
+      ],
+      "flags": 0,
+      "guid": "ly*3s`V(Xf",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Vanuatu",
+        "",
+        "Porto Vila",
+        "",
+        "",
+        "<img src=\"ug-flag-vanuatu.svg\" />",
+        "",
+        "<img src=\"ug-map-vanuatu.png\" />"
+      ],
+      "flags": 0,
+      "guid": "EUa!tJ$q~<",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Vaticano",
+        "",
+        "Vaticano",
+        "",
+        "",
+        "<img src=\"ug-flag-vatican_city.svg\" />",
+        "",
+        "<img src=\"ug-map-vatican_city.png\" />"
+      ],
+      "flags": 0,
+      "guid": "u,;q[t6_@V",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Venezuela",
+        "",
+        "Caracas",
+        "",
+        "",
+        "<img src=\"ug-flag-venezuela.svg\" />",
+        "",
+        "<img src=\"ug-map-venezuela.png\" />"
+      ],
+      "flags": 0,
+      "guid": "px9xQ@Ka`i",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::South_America",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Vietnã (BR), Vietname (PT)",
+        "",
+        "Hanói",
+        "",
+        "",
+        "<img src=\"ug-flag-vietnam.svg\" />",
+        "",
+        "<img src=\"ug-map-vietnam.png\" />"
+      ],
+      "flags": 0,
+      "guid": "Fd74/NPKj",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Southeast_Asia",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "País de Gales",
+        "País constituinte do Reino Unido.",
+        "Cardife",
+        "",
+        "",
+        "<img src=\"ug-flag-wales.svg\" />",
+        "",
+        "<img src=\"ug-map-wales.png\" />"
+      ],
+      "flags": 0,
+      "guid": "KgOKBn.!r{",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Wallis e Futuna",
+        "Território ultramarino da França.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-wallis_and_futuna.png\" />"
+      ],
+      "flags": 0,
+      "guid": "JZR=,>T#/~",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceania"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar Branco",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-white_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "dAn9Lu_CJ^",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mar Amarelo",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-yellow_sea.png\" />"
+      ],
+      "flags": 0,
+      "guid": "jeR</Vr#^>",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Iêmen (BR), Iémen (PT)",
+        "",
+        "Saná",
+        "",
+        "",
+        "<img src=\"ug-flag-yemen.svg\" />",
+        "Egito (com emblema), e Iraque (com texto)",
+        "<img src=\"ug-map-yemen.png\" />"
+      ],
+      "flags": 0,
+      "guid": "jJMevp,*!q",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Asia",
+        "UG::Middle_East",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Zâmbia",
+        "",
+        "Lusaca",
+        "",
+        "",
+        "<img src=\"ug-flag-zambia.svg\" />",
+        "",
+        "<img src=\"ug-map-zambia.png\" />"
+      ],
+      "flags": 0,
+      "guid": "hD@WEVZn_<",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Zanzibar",
+        "Região semi-autônoma da Tanzânia.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-zanzibar.png\" />"
+      ],
+      "flags": 0,
+      "guid": "GmXe5(x+Sd",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Zimbábue",
+        "",
+        "Harare",
+        "",
+        "",
+        "<img src=\"ug-flag-zimbabwe.svg\" />",
+        "",
+        "<img src=\"ug-map-zimbabwe.png\" />"
+      ],
+      "flags": 0,
+      "guid": "PE#<DzLTO8",
+      "note_model_uuid": "3da2a851-258c-447f-9d16-91a663663675",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Sovereign_State"
+      ]
+    }
+  ]
+}

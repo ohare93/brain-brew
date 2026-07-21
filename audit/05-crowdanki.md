@@ -1,5 +1,12 @@
 # CrowdAnki import/export and round-trip audit
 
+> **Current resolution of fixture finding 4:** This historical review predates
+> the complete pinned UG regression fixture. The repository now commits and
+> mandatorily compares full parsed `deck.json` for all 74 main and 26 companion
+> targets, with exact target inventory and no optional skip. The source snapshot,
+> generator provenance, and semantic expected-output digest are locked. This does
+> not alter the unrelated import/GUID/ordinal findings below.
+
 ## Review
 
 ### Blocker

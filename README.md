@@ -13,7 +13,20 @@ Brain Brew now has a working Rust core, reusable format codecs, and a thin CLI f
 The repository includes two tested fixtures:
 
 - `fixtures/ug-style/` — a small Ultimate Geography-style fixture for fast end-to-end checks.
-- `fixtures/ultimate-geography/` — a full Ultimate Geography canonical workspace used as a large parity case study, including Hardcore Geography as an extension overlay.
+- `fixtures/ultimate-geography/` — the complete pinned Ultimate Geography canonical input and real-media snapshot, including Hardcore Geography.
+
+The full fixture is bound by `fixtures/ultimate-geography.lock.json` to UG
+`1017a399...` and Brain Brew `6ee570d...` / `1.0.0-alpha.3`.
+`fixtures/ultimate-geography-expected/crowdanki/` contains exactly 100 parsed
+`deck.json` oracles (74 main and 26 companion) while media is stored only once.
+The default Rust tests compare every output offline and verify real media bytes
+strictly. Source refresh, explicit expected-output acceptance, and read-only
+checking are intentionally separate; see
+[`scripts/ug-fixture-sync/README.md`](scripts/ug-fixture-sync/README.md). Fixture
+media retains upstream per-file terms and attribution and is not licensed
+wholesale by Brain Brew's root license. The 56 Hardcore images use a separately
+pinned attribution supplement without changing the exact UG snapshot; see
+[`THIRD_PARTY_ASSETS.md`](THIRD_PARTY_ASSETS.md).
 
 Ultimate Geography is a fixture and case study for the general federation workflow; it is not a special product-specific CLI feature.
 

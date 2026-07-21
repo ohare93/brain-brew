@@ -64,7 +64,16 @@ in
       RUST_TEST_THREADS=7 CARGO_BUILD_JOBS=9
   '';
   scripts.check.exec = "cargo check --workspace --exclude brain-brew-workbench-e2e --all-targets";
-  scripts.test.exec = "cargo test --workspace --exclude brain-brew-workbench-e2e --all-targets";
+  scripts."test:ug-fixture-boundary".exec = ''
+    PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+      scripts.tests.test_ug_fixture \
+      scripts.tests.test_verify_extracted_crates
+  '';
+  scripts.test.exec = ''
+    set -euo pipefail
+    test:ug-fixture-boundary
+    cargo test --workspace --exclude brain-brew-workbench-e2e --all-targets
+  '';
   scripts.clippy.exec = "cargo clippy --workspace --exclude brain-brew-workbench-e2e --all-targets -- -D warnings";
   scripts."test:workbench-write".exec = "cargo test -p brainbrew --features workbench-write-dev --test cli workbench_";
   scripts."workbench-ui-build".exec = ''
@@ -146,6 +155,7 @@ in
     set -euo pipefail
     check:rust-parallelism
     cargo fmt --all -- --check
+    test:ug-fixture-boundary
     cargo test --workspace --exclude brain-brew-workbench-e2e --all-targets
     cargo test -p brainbrew --features workbench-write-dev --test cli workbench_
     cargo clippy --workspace --exclude brain-brew-workbench-e2e --all-targets -- -D warnings
@@ -160,6 +170,7 @@ in
     ${rustParallelismDefaults}
     check:rust-parallelism
     cargo fmt --all -- --check
+    test:ug-fixture-boundary
     cargo test --workspace --exclude brain-brew-workbench-e2e --all-targets
     cargo clippy --workspace --exclude brain-brew-workbench-e2e --all-targets -- -D warnings
   '';

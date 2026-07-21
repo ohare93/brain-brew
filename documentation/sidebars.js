@@ -59,6 +59,7 @@ const sidebars = {
         'reference/lockfile',
         'reference/release-oracle',
         'reference/crowdanki-equivalence-oracle',
+        'reference/ultimate-geography-fixture',
         'reference/releasing',
         'reference/project-scope',
         {

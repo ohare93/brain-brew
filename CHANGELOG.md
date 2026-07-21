@@ -16,6 +16,7 @@ The next preview is `1.0.0-alpha.3`; it is pending the documented release gates 
 - Package verification detects drift in local path sources, and path locks are stored as portable paths relative to `brainbrew.lock`.
 - Translation coverage now surfaces untranslated structured-message `format` glue strings, and stale-translation resolution removes shadowed stale records cleanly.
 - `validate --json`, `explain --json`, `diff --json`, and `targets --json` now emit machine-parseable failure envelopes on stdout with non-zero exits, empty stderr, and structured `error.errors[]` details where available.
+- The Ultimate Geography regression fixture is now an exact pinned source/media snapshot with a provenance lock and mandatory parsed `deck.json` oracles for all 74 main plus 26 companion targets; source sync, explicit expected-output acceptance, and read-only drift checking are separate hermetic boundaries.
 
 ## v1.0.0-alpha.1
 

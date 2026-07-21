@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import shutil
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPT = Path(__file__).resolve().parents[1] / "verify_extracted_crates.py"
 spec = importlib.util.spec_from_file_location("verify_extracted_crates", SCRIPT)
@@ -18,6 +20,51 @@ spec.loader.exec_module(verify)
 
 
 class ExtractedCrateVerificationTests(unittest.TestCase):
+    def test_pre_publish_test_command_is_explicitly_offline(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            extracted = Path(temporary)
+            manifest = extracted / "example-0.1.0/Cargo.toml"
+            manifest.parent.mkdir()
+            manifest.write_text("[package]\nname = \"example\"\nversion = \"0.1.0\"\n")
+            with mock.patch.object(verify, "run") as run:
+                verify.test_extracted("example", "example", "0.1.0", extracted)
+
+            command = run.call_args.args[0]
+            self.assertEqual(command[0:2], ["cargo", "test"])
+            self.assertIn("--offline", command)
+
+    def test_translation_json_documentation_matches_source_schema(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "crates/brain-brew-cli/src/commands/translations.rs").read_text(
+            encoding="utf-8"
+        )
+        match = re.search(
+            r"const TRANSLATION_JSON_SCHEMA_VERSION: u32 = (\d+);", source
+        )
+        self.assertIsNotNone(match)
+        documentation = (
+            root / "documentation/docs/authoring/translations.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(f'"schema_version": {match.group(1)}', documentation)
+        for kind in (
+            "translation_report",
+            "translation_context",
+            "translation_summary",
+            "stale_resolution",
+        ):
+            self.assertIn(kind, documentation)
+
+    def test_repository_only_tests_are_declared_outside_package_boundaries(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        manifests = {
+            "brain-brew-formats": root / "crates/brain-brew-formats/Cargo.toml",
+            "brainbrew": root / "crates/brain-brew-cli/Cargo.toml",
+        }
+        for package, paths in verify.REPOSITORY_ONLY_PACKAGE_FILES.items():
+            manifest = manifests[package].read_text(encoding="utf-8")
+            for path in paths:
+                self.assertIn(f'\"{path}\"', manifest)
+
     def write_package(self, root: Path, name: str, source: str, dependency: str = "") -> None:
         root.mkdir()
         (root / "src").mkdir()

@@ -1,5 +1,14 @@
 # Code Context
 
+> **Resolution annotation (current fixture):** This is a historical audit of the
+> earlier partial fixture. The fixture-sync gaps and optional parity findings
+> below are now resolved by the exact pinned UG `1017a399...` source/media
+> snapshot, UG attribution plus the pinned HG `09ce7c3...` supplement with exact
+> 607-file coverage, and the mandatory 100-output oracle documented in
+> `documentation/docs/reference/ultimate-geography-fixture.md`.
+> No fixture-only language/profile delta remains. Live-consumer acceptance stays
+> a separate release gate.
+
 Scope: read-only review of the tracked Brain Brew workspace and `/home/jmo/Development/external/ultimate-geography`. No project or consumer source was changed.
 
 ## Files Retrieved

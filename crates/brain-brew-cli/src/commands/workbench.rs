@@ -5391,7 +5391,39 @@ mod transaction_snapshot_tests {
     fn canonical_source_snapshot_is_not_rebased_during_transaction_planning() {
         let workspace = tempfile::tempdir().unwrap();
         let path = workspace.path().join("deck.yaml");
-        let original = include_str!("../../../../fixtures/ug-style/deck.yaml");
+        let original = r#"deck:
+  id: deck.snapshot
+  name: Snapshot
+  description: Transaction snapshot fixture.
+  adapter_ids: {}
+note_types:
+  note-type.country:
+    name: Country
+    field_order:
+      - field.country
+    fields:
+      field.country:
+        name: Country
+    card_template_order:
+      - template.country
+    card_templates:
+      template.country:
+        name: Country
+        question_format: '{{Country}}'
+        answer_format: '{{FrontSide}}'
+        adapter_ids: {}
+    styling: ''
+    adapter_ids: {}
+notes:
+  note.finland:
+    note_type_id: note-type.country
+    fields:
+      field.country: Finland
+    tags: []
+    adapter_ids: {}
+media: {}
+tombstones: []
+"#;
         fs::write(&path, original).unwrap();
         let mut document = canonical_source_document(&path, original).unwrap();
         document

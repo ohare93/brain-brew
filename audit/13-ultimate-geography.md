@@ -1,5 +1,16 @@
 # Ultimate Geography production-consumer audit
 
+> **Current resolution of the fixture findings:** This historical audit describes
+> the earlier partial/future-facing fixture. The repository now vendors the exact
+> UG `1017a399...` canonical input plus its 607 real media files and referenced
+> goldens, with no ADR-0012 splice. A provenance lock and mandatory offline test
+> enforce 74 main + 26 companion parsed CrowdAnki outputs and strict real-media
+> hashes. Source sync, explicit expected acceptance, and read-only check are
+> separate; see `documentation/docs/reference/ultimate-geography-fixture.md`.
+> This resolves H1 and the fixture/oracle/media portions of H3 for the pinned
+> regression fixture. It does not retroactively change this audit's live-consumer
+> findings or claim that a later UG checkout/release workflow is certified.
+
 ## Review
 
 - **Correct:** UG's migrated source follows the intended variable-first/shared-extension model in important places. The base note type defines reusable variables (`deck.yaml:11-21`), standard templates are external includes (`deck.yaml:53-74`), Extended templates exist once (`overlays/variants/extended.yaml:1-28`), and per-language variant overlays are normally identity-only 11-line files. Hardcore blank-field content uses `field_fills` (`overlays/extensions/hardcore/field-fills.yaml:1-84`).

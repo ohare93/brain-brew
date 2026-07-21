@@ -3138,23 +3138,6 @@ mod tests {
     }
 
     #[test]
-    fn translation_json_documentation_matches_the_versioned_envelope() {
-        let documentation =
-            include_str!("../../../../documentation/docs/authoring/translations.md");
-        assert!(documentation.contains(&format!(
-            "\"schema_version\": {TRANSLATION_JSON_SCHEMA_VERSION}"
-        )));
-        for kind in [
-            "translation_report",
-            "translation_context",
-            "translation_summary",
-            "stale_resolution",
-        ] {
-            assert!(documentation.contains(kind));
-        }
-    }
-
-    #[test]
     fn long_options_are_truncated_to_prevent_wrapping() {
         assert_eq!(truncate_chars("abcdef", 4), "abc…");
         let mut input = io::empty();

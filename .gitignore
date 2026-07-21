@@ -29,3 +29,7 @@ devenv.local.yaml
 
 # Local generated/downloaded caches
 /.cache/
+
+# Python bytecode
+__pycache__/
+*.py[cod]

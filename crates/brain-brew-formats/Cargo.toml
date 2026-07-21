@@ -9,6 +9,12 @@ authors.workspace = true
 repository.workspace = true
 description = "Implementation package: YAML and CrowdAnki codecs for Brain Brew; no public Rust API commitment"
 homepage = "https://github.com/jeprecated/brain-brew"
+# These integration tests intentionally exercise repository-root fixtures. The
+# fixtures stay in source archives/CI, not the crates.io implementation package.
+exclude = [
+    "tests/crowdanki_import_plan.rs",
+    "tests/ultimate_geography_fixture.rs",
+]
 
 [dependencies]
 base64 = "0.22"

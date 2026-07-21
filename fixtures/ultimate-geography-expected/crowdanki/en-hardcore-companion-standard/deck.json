@@ -1,0 +1,1205 @@
+{
+  "__type__": "Deck",
+  "children": [],
+  "crowdanki_uuid": "17a30e4f-2229-4ccc-8a6c-7d1ee559ce51",
+  "deck_config_uuid": "43d37fac-9a65-11e8-9cc5-a0481cc15658",
+  "deck_configurations": [
+    {
+      "__type__": "DeckConfig",
+      "autoplay": false,
+      "crowdanki_uuid": "43d37fac-9a65-11e8-9cc5-a0481cc15658",
+      "dyn": false,
+      "lapse": {
+        "delays": [
+          10
+        ],
+        "leechAction": 0,
+        "leechFails": 8,
+        "minInt": 1,
+        "mult": 0
+      },
+      "maxTaken": 60,
+      "name": "Ultimate Geography",
+      "new": {
+        "bury": true,
+        "delays": [
+          1,
+          10
+        ],
+        "initialFactor": 2500,
+        "ints": [
+          1,
+          4,
+          7
+        ],
+        "order": 0,
+        "perDay": 15,
+        "separate": true
+      },
+      "replayq": true,
+      "rev": {
+        "bury": true,
+        "ease4": 1.3,
+        "fuzz": 0.05,
+        "ivlFct": 1,
+        "maxIvl": 36500,
+        "minSpace": 1,
+        "perDay": 100
+      },
+      "timer": 0
+    }
+  ],
+  "desc": "<a href=\"https://github.com/anki-geo/hardcore-geography/\"><b>FULL DESCRIPTION</b></a> | <a href=\"https://github.com/anki-geo/hardcore-geography/releases\"><b>RELEASE NOTES</b></a> | <a href=\"https://github.com/anki-geo/hardcore-geography/blob/master/CONTRIBUTING.md\"><b>CONTRIBUTING</b></a>\n\n<b>Hardcore Geography</b> is a companion add-on for Ultimate Geography. It contains supplemental territories and region cards that can be installed alongside standard Ultimate Geography without taking ownership of UG notes.\n",
+  "dyn": 0,
+  "extendNew": 10,
+  "extendRev": 50,
+  "media_files": [
+    "ug-flag-american_samoa.svg",
+    "ug-flag-anguilla.svg",
+    "ug-flag-azores.svg",
+    "ug-flag-bali-blur.png",
+    "ug-flag-bali.png",
+    "ug-flag-bermuda.svg",
+    "ug-flag-bonaire.svg",
+    "ug-flag-british_indian_ocean_territory.svg",
+    "ug-flag-british_virgin_islands.svg",
+    "ug-flag-canary_islands.svg",
+    "ug-flag-cayman_islands.svg",
+    "ug-flag-ceuta.png",
+    "ug-flag-christmas_island.svg",
+    "ug-flag-cocos_islands.svg",
+    "ug-flag-corsica.svg",
+    "ug-flag-easter_island.svg",
+    "ug-flag-falkland_islands.svg",
+    "ug-flag-galapagos_islands.svg",
+    "ug-flag-gibraltar.svg",
+    "ug-flag-guernsey.svg",
+    "ug-flag-isle_of_man.svg",
+    "ug-flag-jersey.svg",
+    "ug-flag-kaliningrad_oblast.svg",
+    "ug-flag-madeira.svg",
+    "ug-flag-melilla.png",
+    "ug-flag-montserrat.svg",
+    "ug-flag-mount_athos.png",
+    "ug-flag-norfolk_island.svg",
+    "ug-flag-northern_mariana_islands.png",
+    "ug-flag-pitcairn_islands.svg",
+    "ug-flag-saba.svg",
+    "ug-flag-saint_helena.png",
+    "ug-flag-sardinia.svg",
+    "ug-flag-sicily.svg",
+    "ug-flag-sint_eustatius.svg",
+    "ug-flag-sint_maarten.svg",
+    "ug-flag-tokelau.svg",
+    "ug-flag-turks_and_caicos_islands.svg",
+    "ug-flag-zanzibar.svg",
+    "ug-map-bonaire.png",
+    "ug-map-british_indian_ocean_territory.png",
+    "ug-map-ceuta.png",
+    "ug-map-christmas_island.png",
+    "ug-map-cocos_islands.png",
+    "ug-map-easter_island.png",
+    "ug-map-galapagos_islands.png",
+    "ug-map-melilla.png",
+    "ug-map-montserrat.png",
+    "ug-map-mount_athos.png",
+    "ug-map-norfolk_island.png",
+    "ug-map-pitcairn_islands.png",
+    "ug-map-saba.png",
+    "ug-map-saint_barthelemy.png",
+    "ug-map-saint_helena.png",
+    "ug-map-sint_eustatius.png",
+    "ug-map-tokelau.png"
+  ],
+  "name": "Hardcore Geography",
+  "note_models": [
+    {
+      "__type__": "NoteModel",
+      "crowdanki_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "css": ".card {\n  padding: 1em 0;\n  background-color: white;\n  color: black;\n  direction: ltr;\n  font-family: Verdana;\n  font-size: 16px;\n  text-align: center;\n}\n\n.type {\n  margin-bottom: 0.25em;\n  color: #333;\n  font-size: 70%;\n  font-weight: bold;\n  text-transform: uppercase;\n}\n\n.info {\n  max-width: 30em;\n  margin: 0.75em auto;\n  color: #333;\n  font-size: 90%;\n  font-style: italic;\n}\n\n.value {\n  font-size: 150%;\n}\n\n.value--top {\n  margin-top: 1em;\n}\n\n.value--image {\n  margin-top: 0.75em;\n}\n\n.value--map {\n  width: 90%;\n  height: 65vh;\n  margin: 2em auto 0 auto;\n}\n\n.value > img,\n.value > .placeholder {\n  max-width: 100%;\n  height: auto;\n}\n\n/**\n * Apply shadow to images, notably to bring out white areas on flags.\n * Ignore images with non-rectangular outlines (e.g. flag of Nepal).\n */\n.value > img:not([src*=\"-nobox\"]) {\n  box-shadow: 0 1px 4px 1px rgba(0, 0, 0, 0.2);\n}\n\n/**\n * Some flags (e.g. Guam's) contain identifying words that can give away the answer.\n * If a blurred version is available, show it on the front but not on the back.\n */\n.value--front > img[src*=\"-blur\"] + img {\n  display: none;\n}\n\n.value--back > img[src*=\"-blur\"] {\n  display: none;\n}\n\n/**\n * Placeholder SVG to hint at the type of answer that is expected.\n * Used on \"Country - Flag\" and \"Country - Map\" templates.\n */\n.placeholder {\n  color: #333;\n}\n\n.placeholder > path {\n  fill: none;\n  stroke: currentColor;\n  stroke-width: 1;\n}\n\n.night_mode .info,\n.night_mode .type,\n.night_mode .placeholder,\n.nightMode .info,\n.nightMode .type,\n.nightMode .placeholder {\n  color: #ccc;\n}\n\n/**\n * Apply shadow to images, to bring out black areas on flags, in night\n   mode.\n */\n.nightMode .value > img:not([src*=\"-nobox\"]),\n.night_mode .value > img:not([src*=\"-nobox\"]) {\n  box-shadow: 0 0 4px 1px rgba(54, 54, 54, 0.9);\n}\n\nhr {\n  margin: 1.5em 0;\n}\n",
+      "flds": [
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Country",
+          "ord": 0,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        },
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Country info",
+          "ord": 1,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        },
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Capital",
+          "ord": 2,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        },
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Capital info",
+          "ord": 3,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        },
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Capital hint",
+          "ord": 4,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        },
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Flag",
+          "ord": 5,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        },
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Flag similarity",
+          "ord": 6,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        },
+        {
+          "font": "Arial",
+          "media": [],
+          "name": "Map",
+          "ord": 7,
+          "rtl": false,
+          "size": 20,
+          "sticky": false
+        }
+      ],
+      "latexPost": "\\end{document}",
+      "latexPre": "\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n",
+      "latexsvg": false,
+      "name": "Ultimate Geography",
+      "req": [],
+      "sortf": 0,
+      "tags": [],
+      "tmpls": [
+        {
+          "afmt": "<div class=\"value value--top\">{{Country}}</div>\n{{#Country info}}<div class=\"info\">{{Country info}}</div>{{/Country info}}\n\n<hr id=answer>\n\n<div class=\"type\">Capital</div>\n<div class=\"value\">{{Capital}}</div>\n{{#Capital info}}<div class=\"info\">{{Capital info}}</div>{{/Capital info}}\n",
+          "bafmt": "",
+          "bfont": "",
+          "bqfmt": "",
+          "bsize": 0,
+          "did": null,
+          "name": "Country - Capital",
+          "ord": 0,
+          "qfmt": "{{#Capital}}\n  <div class=\"value value--top\">{{Country}}</div>\n  {{#Country info}}<div class=\"info\">{{Country info}}</div>{{/Country info}}\n\n  <hr>\n\n  <div class=\"type\">Capital</div>\n  <div class=\"value\">?</div>\n{{/Capital}}",
+          "scratchPad": 0
+        },
+        {
+          "afmt": "<div id=answer class=\"value value--top\">{{Country}}</div>\n{{#Country info}}<div class=\"info\">{{Country info}}</div>{{/Country info}}\n\n<hr>\n\n<div class=\"type\">Capital</div>\n<div class=\"value\">{{Capital}}</div>\n{{#Capital hint}}<div class=\"info\">Hint: {{Capital hint}}</div>{{/Capital hint}}\n{{#Capital info}}<div class=\"info\">{{Capital info}}</div>{{/Capital info}}\n",
+          "bafmt": "",
+          "bfont": "",
+          "bqfmt": "",
+          "bsize": 0,
+          "did": null,
+          "name": "Capital - Country",
+          "ord": 1,
+          "qfmt": "{{#Capital}}\n  <div class=\"value value--top\">?</div>\n\n  <hr>\n\n  <div class=\"type\">Capital</div>\n  <div class=\"value\">{{Capital}}</div>\n  {{#Capital hint}}<div class=\"info\">Hint: {{Capital hint}}</div>{{/Capital hint}}\n{{/Capital}}",
+          "scratchPad": 0
+        },
+        {
+          "afmt": "<div id=answer class=\"value value--top\">{{Country}}</div>\n{{#Country info}}<div class=\"info\">{{Country info}}</div>{{/Country info}}\n\n<hr>\n\n<div class=\"type\">Flag</div>\n<div class=\"value value--image value--back\">{{Flag}}</div>\n{{#Flag similarity}}<div class=\"info\">Flag similar to {{Flag similarity}}.</div>{{/Flag similarity}}\n",
+          "bafmt": "",
+          "bfont": "",
+          "bqfmt": "",
+          "bsize": 0,
+          "did": null,
+          "name": "Flag - Country",
+          "ord": 2,
+          "qfmt": "{{#Flag}}\n  <div class=\"value value--top\">?</div>\n\n  <hr>\n\n  <div class=\"type\">Flag</div>\n  <div class=\"value value--image value--front\">{{Flag}}</div>\n{{/Flag}}",
+          "scratchPad": 0
+        },
+        {
+          "afmt": "<div id=answer class=\"value value--top\">{{Country}}</div>\n{{#Country info}}<div class=\"info\">{{Country info}}</div>{{/Country info}}\n\n<hr>\n\n<div class=\"type\">Location</div>\n<div class=\"value value--image\">{{Map}}</div>\n",
+          "bafmt": "",
+          "bfont": "",
+          "bqfmt": "",
+          "bsize": 0,
+          "did": null,
+          "name": "Map - Country",
+          "ord": 3,
+          "qfmt": "{{#Map}}\n  <div class=\"value value--top\">?</div>\n\n  <hr>\n\n  <div class=\"type\">Location</div>\n  <div class=\"value value--image\">{{Map}}</div>\n{{/Map}}",
+          "scratchPad": 0
+        }
+      ],
+      "type": 0,
+      "vers": []
+    }
+  ],
+  "notes": [
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Bonaire",
+        "Special municipality of the Netherlands.",
+        "Kralendijk",
+        "",
+        "",
+        "<img src=\"ug-flag-bonaire.svg\" />",
+        "",
+        "<img src=\"ug-map-bonaire.png\" />"
+      ],
+      "flags": 0,
+      "guid": "~)7-62ytBX",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "British Indian Ocean Territory",
+        "Overseas territory of the United Kingdom.",
+        "Camp Justice",
+        "",
+        "",
+        "<img src=\"ug-flag-british_indian_ocean_territory.svg\" />",
+        "",
+        "<img src=\"ug-map-british_indian_ocean_territory.png\" />"
+      ],
+      "flags": 0,
+      "guid": "ArmciP%a;a",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Ceuta",
+        "Autonomous city of Spain.",
+        "",
+        "",
+        "",
+        "<img src=\"ug-flag-ceuta.png\" />",
+        "",
+        "<img src=\"ug-map-ceuta.png\" />"
+      ],
+      "flags": 0,
+      "guid": "rHh8*,y.yc",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Christmas Island",
+        "External territory of Australia.",
+        "Flying Fish Cove",
+        "",
+        "",
+        "<img src=\"ug-flag-christmas_island.svg\" />",
+        "",
+        "<img src=\"ug-map-christmas_island.png\" />"
+      ],
+      "flags": 0,
+      "guid": "k3]]2^DP1R",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Asia",
+        "UG::Southeast_Asia"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Cocos (Keeling) Islands",
+        "External territory of Australia.",
+        "West Island",
+        "",
+        "",
+        "<img src=\"ug-flag-cocos_islands.svg\" />",
+        "",
+        "<img src=\"ug-map-cocos_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "mvNnHkGnVl",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Asia",
+        "UG::Southeast_Asia"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Easter Island",
+        "Polynesian island and special territory of Chile.",
+        "",
+        "",
+        "",
+        "<img src=\"ug-flag-easter_island.svg\" />",
+        "",
+        "<img src=\"ug-map-easter_island.png\" />"
+      ],
+      "flags": 0,
+      "guid": "rNv|0qxR]K",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Oceania"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Galápagos Islands",
+        "Province of Ecuador.",
+        "Puerto Baquerizo Moreno",
+        "",
+        "",
+        "<img src=\"ug-flag-galapagos_islands.svg\" />",
+        "Sierra Leone (slightly lighter blue)",
+        "<img src=\"ug-map-galapagos_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "j=,1:f39$]",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::South_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "American Samoa",
+        "Unincorporated territory of the United States.",
+        "Pago Pago",
+        "",
+        "",
+        "<img src=\"ug-flag-american_samoa.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "lU*>%[&e|.",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Oceania",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Anguilla",
+        "Overseas territory of the United Kingdom.",
+        "The Valley",
+        "",
+        "",
+        "<img src=\"ug-flag-anguilla.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "cy]sz097{A",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Azores",
+        "Autonomous region of Portugal.",
+        "Ponta Delgada",
+        "",
+        "",
+        "<img src=\"ug-flag-azores.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "hz,n^64X%i",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Europe",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Bali",
+        "Island of Indonesia.",
+        "Denpasar",
+        "",
+        "",
+        "<img src=\"ug-flag-bali-blur.png\" /><img src=\"ug-flag-bali.png\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": ",LnVW8IL`",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Asia",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Bermuda",
+        "Overseas territory of the United Kingdom.",
+        "Hamilton",
+        "",
+        "",
+        "<img src=\"ug-flag-bermuda.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "e%!;xc:jxC",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "British Virgin Islands",
+        "Overseas territory of the United Kingdom.",
+        "Road Town",
+        "",
+        "",
+        "<img src=\"ug-flag-british_virgin_islands.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "oDGbPPlkzc",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Canary Islands",
+        "Autonomous community of Spain.",
+        "Santa Cruz de Tenerife, Las Palmas",
+        "The capital is shared between the two cities of Santa Cruz de Tenerife and Las Palmas.",
+        "",
+        "<img src=\"ug-flag-canary_islands.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "cB]XeL7sC?",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Africa",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Cayman Islands",
+        "Overseas territory of the United Kingdom.",
+        "George Town",
+        "",
+        "Not a sovereign country",
+        "<img src=\"ug-flag-cayman_islands.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "t8K|Gnw[k$",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Corsica",
+        "Region of France.",
+        "Ajaccio",
+        "",
+        "",
+        "<img src=\"ug-flag-corsica.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "2N$NqX&k.",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Europe",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Falkland Islands",
+        "Overseas territory of the United Kingdom.",
+        "Stanley",
+        "",
+        "",
+        "<img src=\"ug-flag-falkland_islands.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "UkP!tU%r)",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Overlapping",
+        "UG::South_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "French Guiana",
+        "Overseas department of France.",
+        "Cayenne",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "~F>Y6gVJay",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Overlapping",
+        "UG::South_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Gibraltar",
+        "Overseas territory of the United Kingdom.",
+        "Gibraltar",
+        "",
+        "",
+        "<img src=\"ug-flag-gibraltar.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "mHDrx]xo!x",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Europe",
+        "UG::Mediterranean",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Guadeloupe",
+        "Overseas department of France.",
+        "Basse-Terre",
+        "",
+        "Not a sovereign country",
+        "",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "r]V9W,sj5i",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Guernsey",
+        "Crown dependency of the United Kingdom.",
+        "St. Peter Port",
+        "",
+        "",
+        "<img src=\"ug-flag-guernsey.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "n#k%mr&bc-",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Europe",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Isle of Man",
+        "Crown dependency of the United Kingdom.",
+        "Douglas",
+        "",
+        "",
+        "<img src=\"ug-flag-isle_of_man.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "a_~PL,CWhU",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Europe",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Jersey",
+        "Crown dependency of the United Kingdom.",
+        "Saint Helier",
+        "",
+        "",
+        "<img src=\"ug-flag-jersey.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "kq:]$sh13[",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Europe",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Kaliningrad Oblast",
+        "Oblast (administrative region) of the Russian Federation.",
+        "Kaliningrad",
+        "",
+        "",
+        "<img src=\"ug-flag-kaliningrad_oblast.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "b&sLa#a&vn",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Europe",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Madeira",
+        "Autonomous region of Portugal.",
+        "Funchal",
+        "",
+        "",
+        "<img src=\"ug-flag-madeira.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "fKTU=+DKl]",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Europe",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Martinique",
+        "Overseas department of France.",
+        "Fort-de-France",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "sxF2<dV=;U",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mayotte",
+        "Overseas department of France.",
+        "Mamoudzou",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "v2Z)BIAnoM",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Northern Mariana Islands",
+        "Unincorporated territory of the United States.",
+        "Saipan",
+        "",
+        "",
+        "<img src=\"ug-flag-northern_mariana_islands.png\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "nK;HFcd-1P",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Oceania",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Réunion",
+        "Overseas department of France.",
+        "Saint-Denis",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "t3VhRfcBZs",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Africa",
+        "UG::East_Africa",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Saint Martin",
+        "Overseas territory of France.",
+        "Marigot",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "rbjYQCA<Z.",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Sardinia",
+        "Autonomous region of Italy.",
+        "Cagliari",
+        "",
+        "",
+        "<img src=\"ug-flag-sardinia.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "h/)!YCH&na",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Europe",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Sicily",
+        "Autonomous region of Italy.",
+        "Palermo",
+        "",
+        "",
+        "<img src=\"ug-flag-sicily.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "lIEV|(|pPu",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Europe",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Sint Maarten",
+        "Constituent country of the Kingdom of the Netherlands.",
+        "Philipsburg",
+        "",
+        "",
+        "<img src=\"ug-flag-sint_maarten.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "~Z$*giAq2R",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Turks and Caicos Islands",
+        "Overseas territory of the United Kingdom.",
+        "Cockburn Town",
+        "",
+        "",
+        "<img src=\"ug-flag-turks_and_caicos_islands.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "ogLVp1-2mC",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Zanzibar",
+        "Semi-autonomous region of Tanzania.",
+        "Zanzibar City",
+        "",
+        "",
+        "<img src=\"ug-flag-zanzibar.svg\" />",
+        "",
+        ""
+      ],
+      "flags": 0,
+      "guid": "e1zOyx7^cj",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Africa",
+        "UG::Overlapping"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Melilla",
+        "Autonomous city of Spain",
+        "",
+        "",
+        "",
+        "<img src=\"ug-flag-melilla.png\" />",
+        "",
+        "<img src=\"ug-map-melilla.png\" />"
+      ],
+      "flags": 0,
+      "guid": "d~3m`ihA*b",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Montserrat",
+        "Overseas territory of the United Kingdom.",
+        "Brades",
+        "Eruptions in 1997 destroyed the capital city of Plymouth, making Brades the de facto capital.",
+        "",
+        "<img src=\"ug-flag-montserrat.svg\" />",
+        "",
+        "<img src=\"ug-map-montserrat.png\" />"
+      ],
+      "flags": 0,
+      "guid": "iq7o#n0juD",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Mount Athos",
+        "Autonomous orthodox monastic state in northeastern Greece, also known as the Holy Mountain.",
+        "Karyes",
+        "",
+        "",
+        "<img src=\"ug-flag-mount_athos.png\" />",
+        "",
+        "<img src=\"ug-map-mount_athos.png\" />"
+      ],
+      "flags": 0,
+      "guid": "qAsU}ONgC#",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Europe"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Norfolk Island",
+        "External territory of Australia.",
+        "Kingston",
+        "",
+        "Not a sovereign country",
+        "<img src=\"ug-flag-norfolk_island.svg\" />",
+        "",
+        "<img src=\"ug-map-norfolk_island.png\" />"
+      ],
+      "flags": 0,
+      "guid": "nipI.lOoC;",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Oceania"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Pitcairn Islands",
+        "Overseas territory of the United Kingdom.",
+        "Adamstown",
+        "",
+        "",
+        "<img src=\"ug-flag-pitcairn_islands.svg\" />",
+        "",
+        "<img src=\"ug-map-pitcairn_islands.png\" />"
+      ],
+      "flags": 0,
+      "guid": "mCh>s18~IX",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Oceania"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Saba",
+        "Special municipality of the Netherlands.",
+        "The Bottom",
+        "",
+        "",
+        "<img src=\"ug-flag-saba.svg\" />",
+        "",
+        "<img src=\"ug-map-saba.png\" />"
+      ],
+      "flags": 0,
+      "guid": "i;=jdbhl(w",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Saint Barthélemy",
+        "Overseas territory of France.",
+        "Gustavia",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-saint_barthelemy.png\" />"
+      ],
+      "flags": 0,
+      "guid": "ga97y4Zy0{",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Saint Helena",
+        "Part of Saint Helena, Ascension and Tristan da Cunha, an overseas territory of the United Kingdom.",
+        "Jamestown",
+        "",
+        "",
+        "<img src=\"ug-flag-saint_helena.png\" />",
+        "",
+        "<img src=\"ug-map-saint_helena.png\" />"
+      ],
+      "flags": 0,
+      "guid": "khTp#J9C!!",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Africa",
+        "UG::West_Africa"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Sint Eustatius",
+        "Special municipality of the Netherlands.",
+        "Oranjestad",
+        "",
+        "Special municipality",
+        "<img src=\"ug-flag-sint_eustatius.svg\" />",
+        "",
+        "<img src=\"ug-map-sint_eustatius.png\" />"
+      ],
+      "flags": 0,
+      "guid": "r3?J{NB0J3",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Caribbean",
+        "UG::North_America"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Tokelau",
+        "Dependent territory of New Zealand. Tokelau has no official capital; the meeting place of the Tokelau Council rotates annually.",
+        "",
+        "",
+        "",
+        "<img src=\"ug-flag-tokelau.svg\" />",
+        "",
+        "<img src=\"ug-map-tokelau.png\" />"
+      ],
+      "flags": 0,
+      "guid": "nN<IGBxnX.",
+      "note_model_uuid": "43e2586a-9a65-11e8-a777-a0481cc15658",
+      "tags": [
+        "UG::Oceania"
+      ]
+    }
+  ]
+}

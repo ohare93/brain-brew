@@ -1,5 +1,13 @@
 # Brain Brew audit synthesis
 
+> **Current fixture resolution:** This historical synthesis predates the full
+> pinned Ultimate Geography fixture now described in
+> `documentation/docs/reference/ultimate-geography-fixture.md`. The repository
+> now has an exact UG `1017a399...` source/media snapshot, locked alpha.3
+> provenance, 100 mandatory parsed outputs (74 + 26), strict real-media tests,
+> and separate sync/accept/read-only-check boundaries. Historical live-consumer
+> and unrelated architecture/release findings below remain unchanged.
+
 ## Executive assessment
 
 Brain Brew has a coherent domain model, deterministic happy-path composition, unusually broad integration coverage, and a credible local-first architecture. The primary crate direction is sound (`brain-brew-core` → `brain-brew-formats` → `brainbrew`), the maintained fixture composes 74 main and 26 Hardcore targets, and the default test and browser gates are green.
