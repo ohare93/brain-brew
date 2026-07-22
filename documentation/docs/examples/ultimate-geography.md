@@ -18,7 +18,7 @@ fixtures/
     brainbrew.yaml
     brainbrew-hardcore.yaml
     media.yaml
-    media/                         # one real 607-file tree
+    media/                         # one real 609-file tree
     goldens/                       # UG-owned referenced goldens
     descriptions/
     templates/
@@ -31,7 +31,8 @@ fixtures/
 ```
 
 The source is an exact whitelist from UG `brainbrew-migration` revision
-`1017a399...`, not a fixture-only migrated derivative. It demonstrates:
+`a934c935...`, rebased on upstream `e1fd8518...`, not a fixture-only migrated
+derivative. It demonstrates:
 
 - English Standard as a base Canonical Deck;
 - language overlays for all 16 UG languages, including Hebrew RTL coverage;
@@ -40,7 +41,7 @@ The source is an exact whitelist from UG `brainbrew-migration` revision
 - a shared Extended variant overlay and small language-specific residue;
 - Hardcore Geography as both an extension overlay and standalone companion;
 - real declared media bytes and canonical hashes;
-- exact attribution coverage from 546 UG and 56 separately pinned Hardcore
+- exact attribution coverage from 548 UG and 56 separately pinned Hardcore
   image records, plus five UG runtime files;
 - complete parsed CrowdAnki output for every target.
 

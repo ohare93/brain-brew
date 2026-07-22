@@ -6,7 +6,8 @@ not a submodule, a generated migration fork, or a network cache.
 ## Pinned inputs
 
 - Ultimate Geography: `brainbrew-migration` at
-  `1017a39990e571a2355c9682af4499bb0ad8bb5d`
+  `a934c935083eeb271c553e573d7b9de7d565342a`, rebased on upstream
+  `e1fd85184e70f32650b67b750c44c4b0588c79dd`
 - Brain Brew generator: `rust-brainbrew` / `1.0.0-alpha.3` at
   `6ee570d427a1a8eec92c22668442f9b7186f9ba7`
 - Hardcore Geography attribution source: `main` at
@@ -14,7 +15,7 @@ not a submodule, a generated migration fork, or a network cache.
 
 `fixtures/ultimate-geography.lock.json` records those pins, the exact 74 main +
 26 companion target mapping, source/media/UG-golden metadata, separate UG and
-Hardcore attribution digests, exact 607-file attribution coverage, the source
+Hardcore attribution digests, exact 609-file attribution coverage, the source
 digest from which expected output was accepted, the semantic digest of all 100
 expected JSON files, and the reviewed generator's executable SHA-256 plus
 deterministic source/build identity.
@@ -70,7 +71,7 @@ RUSTFLAGS="-C debuginfo=0 --remap-path-prefix=$source_root=/brainbrew" \
 ```bash
 scripts/sync-ug-fixture.sh --sync-source \
   --ug-checkout /home/jmo/Development/external/ultimate-geography \
-  --ug-revision 1017a39990e571a2355c9682af4499bb0ad8bb5d
+  --ug-revision a934c935083eeb271c553e573d7b9de7d565342a
 ```
 
 This copies the whitelist byte-for-byte in one direction and updates only source
@@ -103,7 +104,7 @@ are a separate mandatory test/gate below.
 ```bash
 scripts/sync-ug-fixture.sh --check \
   --ug-checkout /home/jmo/Development/external/ultimate-geography \
-  --ug-revision 1017a39990e571a2355c9682af4499bb0ad8bb5d \
+  --ug-revision a934c935083eeb271c553e573d7b9de7d565342a \
   --brainbrew-bin /path/to/reviewed/brainbrew \
   --brainbrew-revision 6ee570d427a1a8eec92c22668442f9b7186f9ba7 \
   --brainbrew-source-root /path/to/brain-brew-at-6ee570d
@@ -125,9 +126,9 @@ The normal Rust test gate runs
 It independently enforces source/media/expected digests and exact inventory,
 composes all 100 targets, compares every generated export with its committed
 parsed JSON value, verifies every target's declarations against real media
-bytes/hashes, and proves the union uses exactly the single 607-file media tree.
-The inventory gate separately proves that all 602 images map unambiguously to
-546 UG plus 56 Hardcore source rows, while the five non-image runtime assets map
+bytes/hashes, and proves the union uses exactly the single 609-file media tree.
+The inventory gate separately proves that all 604 images map unambiguously to
+548 UG plus 56 Hardcore source rows, while the five non-image runtime assets map
 to the UG license notice. Matching uses case-preserving Unicode NFC POSIX
 basenames and rejects normalization, collision, missing, extra, and unknown-file
 drift. The boundary unit tests also include count-preserving value substitution,

@@ -114,7 +114,7 @@ All GitHub API, GitHub codeload, and remote tarball requests use one non-environ
 | one PAX/GNU metadata entry | 64 KiB |
 | decompressed/compressed expansion ratio | 200:1 |
 
-These limits leave substantial headroom over the maintained pinned Ultimate Geography fixture: 19,919,556 source bytes across 736 files, including one 607-file/17,444,480-byte media tree, with a largest file of 1,287,962 bytes. The fixture is a regression snapshot rather than an implied package-fetch allowance; the same bounded archive policy still applies to every locked source. There are no hidden environment overrides or CLI limit switches. Code-level policy injection is reserved for deterministic adapter tests.
+These limits leave substantial headroom over the maintained pinned Ultimate Geography fixture: 20,064,738 source bytes across 738 files, including one 609-file/17,579,868-byte media tree, with a largest file of 1,287,962 bytes. The fixture is a regression snapshot rather than an implied package-fetch allowance; the same bounded archive policy still applies to every locked source. There are no hidden environment overrides or CLI limit switches. Code-level policy injection is reserved for deterministic adapter tests.
 
 Redirects are followed manually. Every hop must remain HTTPS, URL credentials are forbidden, and all authorization headers are stripped. HTTPS cross-host redirects are allowed for content-delivery networks, subject to the same redirect and total-deadline budgets. `Content-Length` is rejected early when oversized but is never trusted: missing, false, and chunked lengths are bounded by bytes actually streamed.
 

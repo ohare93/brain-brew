@@ -28,7 +28,7 @@ from typing import Any
 
 
 SCHEMA_VERSION = 3
-PINNED_UG_REVISION = "1017a39990e571a2355c9682af4499bb0ad8bb5d"
+PINNED_UG_REVISION = "a934c935083eeb271c553e573d7b9de7d565342a"
 PINNED_UG_REF = "brainbrew-migration"
 PINNED_UG_REPOSITORY = "https://github.com/anki-geo/ultimate-geography.git"
 PINNED_HARDCORE_REVISION = "09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46"
@@ -44,7 +44,7 @@ PINNED_HARDCORE_ATTRIBUTION_SHA256 = (
     "aada4219077e5fa77756701e537789c22b2baad29a961c456b3406f3e3629b06"
 )
 PINNED_ATTRIBUTION_COVERAGE_SHA256 = (
-    "e8f9a5c2a3c3889993520cafbd22e3a51e8b5ced223cd2e73b00aa4d3e27fda9"
+    "13a1d5c1d04a8eacaae3dd3c1c952483128b8f089779dc622f2014055b72351d"
 )
 PINNED_BRAINBREW_REVISION = "6ee570d427a1a8eec92c22668442f9b7186f9ba7"
 PINNED_BRAINBREW_REF = "rust-brainbrew"
@@ -468,7 +468,7 @@ def attribution_coverage_metadata(
     }
     if enforce_release_counts and coverage != _reviewed_attribution_coverage():
         raise FixtureError(
-            "media attribution coverage drifted from the reviewed 607-file inventory: "
+            "media attribution coverage drifted from the reviewed 609-file inventory: "
             f"actual={coverage!r}"
         )
     return coverage
@@ -839,16 +839,16 @@ def _reviewed_attribution_coverage() -> dict[str, Any]:
     return {
         "algorithm": ATTRIBUTION_COVERAGE_ALGORITHM,
         "filename_normalization": ATTRIBUTION_FILENAME_NORMALIZATION,
-        "media_file_count": 607,
-        "image_file_count": 602,
+        "media_file_count": 609,
+        "image_file_count": 604,
         "unattributed_file_count": 0,
         "ambiguous_file_count": 0,
         "ultimate_geography": {
-            "sources_csv_file_count": 546,
+            "sources_csv_file_count": 548,
             "license_notice_file_count": 5,
-            "attributed_file_count": 551,
+            "attributed_file_count": 553,
             "flag_file_count": 227,
-            "map_file_count": 319,
+            "map_file_count": 321,
         },
         "hardcore_geography": {
             "sources_csv_file_count": 56,

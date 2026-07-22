@@ -11,16 +11,17 @@ release cache.
 ## Contract
 
 The reviewed snapshot is Ultimate Geography `brainbrew-migration` revision
-`1017a39990e571a2355c9682af4499bb0ad8bb5d`. Expected output was accepted with
+`a934c935083eeb271c553e573d7b9de7d565342a`, rebased on upstream revision
+`e1fd85184e70f32650b67b750c44c4b0588c79dd`. Expected output was accepted with
 Brain Brew `1.0.0-alpha.3` revision
 `6ee570d427a1a8eec92c22668442f9b7186f9ba7`. Hardcore image attribution is
 separately pinned to Hardcore Geography revision
 `09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46`.
 
 - `fixtures/ultimate-geography/` is an exact whitelist of the two manifests,
-  canonical deck/overlay source, scalar includes, `media.yaml`, all 607 real
+  canonical deck/overlay source, scalar includes, `media.yaml`, all 609 real
   media files, all eight UG-owned goldens referenced by the manifests, and
-  upstream `LICENSE.md` plus the 546-row UG `sources.csv` attribution.
+  upstream `LICENSE.md` plus the 548-row UG `sources.csv` attribution.
 - `fixtures/ultimate-geography-attribution/hardcore-geography/` preserves the
   exact upstream `README.md` and `sources.csv` attribution bytes without
   changing the byte-exact UG snapshot.
@@ -43,7 +44,7 @@ machine-readable in the lock. There is no hidden fixture-only language/profile
 patch: the manifests are the exact pinned UG bytes.
 
 The vendored media is not covered wholesale by Brain Brew's root license. The
-546 UG image rows and 56 Hardcore image rows retain their separate upstream
+548 UG image rows and 56 Hardcore image rows retain their separate upstream
 terms; the pinned Hardcore revision has no repository `LICENSE`/`NOTICE` and its
 README supplies no broader grant. See `THIRD_PARTY_ASSETS.md`, both pinned
 `sources.csv` files, and UG's `LICENSE.md` before redistribution. The
@@ -58,8 +59,8 @@ of the 100 targets, parses each committed expected `deck.json`, and requires
 exact JSON value equality. It rejects unknown, missing, or extra expected target
 directories. The same test validates canonical non-empty hashes and real bytes
 for every target and proves that the all-target declaration union is exactly the
-single 607-file media tree. An attribution inventory test proves exact,
-unambiguous coverage of all 602 images by 546 UG plus 56 Hardcore source rows
+single 609-file media tree. An attribution inventory test proves exact,
+unambiguous coverage of all 604 images by 548 UG plus 56 Hardcore source rows
 and of the five non-image runtime files by UG's license notice. It uses
 case-preserving Unicode NFC POSIX-basename normalization and fails on any
 normalization collision, missing/extra row, or unknown file.

@@ -3,9 +3,9 @@
 Brain Brew's root `LICENSE` does **not** license the vendored Ultimate Geography
 media wholesale.
 
-The pinned fixture has 607 used media files with exactly one attribution owner:
+The pinned fixture has 609 used media files with exactly one attribution owner:
 
-- 546 Ultimate Geography image files (227 flags and 319 maps) are covered by
+- 548 Ultimate Geography image files (227 flags and 321 maps) are covered by
   `fixtures/ultimate-geography/sources.csv` and the license explanations in
   `fixtures/ultimate-geography/LICENSE.md`;
 - 56 Hardcore Geography image files (39 flags and 17 maps) are covered by the

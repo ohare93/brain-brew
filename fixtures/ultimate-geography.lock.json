@@ -10,15 +10,15 @@
         "map_file_count": 17,
         "sources_csv_file_count": 56
       },
-      "image_file_count": 602,
-      "media_file_count": 607,
-      "sha256": "e8f9a5c2a3c3889993520cafbd22e3a51e8b5ced223cd2e73b00aa4d3e27fda9",
+      "image_file_count": 604,
+      "media_file_count": 609,
+      "sha256": "13a1d5c1d04a8eacaae3dd3c1c952483128b8f089779dc622f2014055b72351d",
       "ultimate_geography": {
-        "attributed_file_count": 551,
+        "attributed_file_count": 553,
         "flag_file_count": 227,
         "license_notice_file_count": 5,
-        "map_file_count": 319,
-        "sources_csv_file_count": 546
+        "map_file_count": 321,
+        "sources_csv_file_count": 548
       },
       "unattributed_file_count": 0
     },
@@ -56,9 +56,9 @@
     }
   },
   "expected": {
-    "accepted_from_source_sha256": "2b04bdc726543990a842738a23388fd984aa0cfa4350468c35d1b258ba152634",
+    "accepted_from_source_sha256": "2f6a08ab17090e674aaf5df1dc0c0c3cf0157d420bb08abb5c1c76f20e8f1e5c",
     "algorithm": "sha256-path-canonical-json-v1",
-    "canonical_byte_count": 9984230,
+    "canonical_byte_count": 10024344,
     "file_count": 100,
     "generated_by": {
       "build": {
@@ -226,7 +226,7 @@
       }
     ],
     "root": "ultimate-geography-expected/crowdanki",
-    "sha256": "d40d5a1c6a5350414eb0c0af3bf6bd112febd196ec10063effc65b27c1d5c248"
+    "sha256": "49ca36eb60dbce4f61aba9890955ef9d8b1f83237dd49403eced4c916f1de855"
   },
   "provenance": {
     "brain_brew": {
@@ -243,19 +243,19 @@
     "ultimate_geography": {
       "ref": "brainbrew-migration",
       "repository": "https://github.com/anki-geo/ultimate-geography.git",
-      "revision": "1017a39990e571a2355c9682af4499bb0ad8bb5d"
+      "revision": "a934c935083eeb271c553e573d7b9de7d565342a"
     }
   },
   "schema_version": 3,
   "source": {
     "algorithm": "sha256-path-length-content-v1",
-    "byte_count": 19919556,
-    "file_count": 736,
+    "byte_count": 20064738,
+    "file_count": 738,
     "goldens": {
       "algorithm": "sha256-path-length-content-v1",
-      "byte_count": 1315719,
+      "byte_count": 1321851,
       "file_count": 8,
-      "sha256": "52dd29392b50e96ba864dc39b050b0da07338789e23a24dd33187fa0206b61bd"
+      "sha256": "9b21fc9d0acad0a22fdf92e11a585a0a84913ab436f26c5d9c7047c11b621b41"
     },
     "intentional_exclusions": [
       {
@@ -404,21 +404,21 @@
     ],
     "media": {
       "algorithm": "sha256-path-length-content-v1",
-      "byte_count": 17444480,
-      "file_count": 607,
-      "sha256": "548d06511effa33230c69aab721f6d639c0816eb7eacc27bee87db1e43971dde"
+      "byte_count": 17579868,
+      "file_count": 609,
+      "sha256": "ad8bd371b4837d639d76f3a56a11fd7437d0ca0d31022ff5022fe5d5ce03e761"
     },
     "root": "ultimate-geography",
-    "sha256": "2b04bdc726543990a842738a23388fd984aa0cfa4350468c35d1b258ba152634",
+    "sha256": "2f6a08ab17090e674aaf5df1dc0c0c3cf0157d420bb08abb5c1c76f20e8f1e5c",
     "third_party_attribution": {
       "algorithm": "sha256-path-length-content-v1",
-      "byte_count": 58366,
+      "byte_count": 58618,
       "file_count": 2,
       "paths": [
         "LICENSE.md",
         "sources.csv"
       ],
-      "sha256": "fa74228f06784236f2d0e035eb1a84ae004f608ab2448a78d70131f05ea5e835"
+      "sha256": "0f1d0c3c7b9d9465a7d0279050f54460ed4a31d5fa2703a140abe3da6e522151"
     },
     "whitelist": [
       "LICENSE.md",

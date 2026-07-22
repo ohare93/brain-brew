@@ -78,7 +78,7 @@ class UltimateGeographyFixtureBoundaryTests(unittest.TestCase):
         lock = ug_fixture.validate_fixture_state(repo_root)
 
         self.assertEqual(lock["schema_version"], 3)
-        self.assertEqual(lock["source"]["file_count"], 736)
+        self.assertEqual(lock["source"]["file_count"], 738)
         self.assertEqual(lock["source"]["third_party_attribution"]["file_count"], 2)
         supplement = lock["attribution"]["supplements"]["hardcore_geography"]
         self.assertEqual(supplement["file_count"], 2)
@@ -87,8 +87,8 @@ class UltimateGeographyFixtureBoundaryTests(unittest.TestCase):
             supplement["provenance"]["revision"],
             ug_fixture.PINNED_HARDCORE_REVISION,
         )
-        self.assertEqual(lock["attribution"]["coverage"]["media_file_count"], 607)
-        self.assertEqual(lock["attribution"]["coverage"]["image_file_count"], 602)
+        self.assertEqual(lock["attribution"]["coverage"]["media_file_count"], 609)
+        self.assertEqual(lock["attribution"]["coverage"]["image_file_count"], 604)
         self.assertEqual(lock["expected"]["file_count"], 100)
 
     def test_committed_media_attribution_inventory_is_exact(self):
@@ -104,9 +104,10 @@ class UltimateGeographyFixtureBoundaryTests(unittest.TestCase):
             supplement_root / "sources.csv",
         )
 
-        self.assertEqual(coverage["media_file_count"], 607)
-        self.assertEqual(coverage["image_file_count"], 602)
-        self.assertEqual(coverage["ultimate_geography"]["sources_csv_file_count"], 546)
+        self.assertEqual(coverage["media_file_count"], 609)
+        self.assertEqual(coverage["image_file_count"], 604)
+        self.assertEqual(coverage["ultimate_geography"]["sources_csv_file_count"], 548)
+        self.assertEqual(coverage["ultimate_geography"]["map_file_count"], 321)
         self.assertEqual(coverage["hardcore_geography"]["sources_csv_file_count"], 56)
         self.assertEqual(coverage["hardcore_geography"]["flag_file_count"], 39)
         self.assertEqual(coverage["hardcore_geography"]["map_file_count"], 17)

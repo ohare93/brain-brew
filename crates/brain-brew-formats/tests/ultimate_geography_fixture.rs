@@ -317,7 +317,15 @@ fn ultimate_geography_media_map_declares_expected_entry_count() {
     let root = fixture_root();
     let source = fs::read_to_string(root.join("media.yaml")).unwrap();
     let media = media_map::from_str(&source).expect("media.yaml parses as media map");
-    assert_eq!(media.len(), 546, "media.yaml declares every UG media asset");
+    assert_eq!(media.len(), 548, "media.yaml declares every UG media asset");
+
+    let mut yaml_files = Vec::new();
+    collect_yaml_files(&root, &mut yaml_files);
+    let structured_image_references = yaml_files
+        .iter()
+        .map(|path| fs::read_to_string(path).unwrap().matches("!image ").count())
+        .sum::<usize>();
+    assert_eq!(structured_image_references, 604);
 }
 
 #[test]
@@ -341,7 +349,7 @@ fn ultimate_geography_media_attribution_inventory_is_exact() {
         "_ug-world.js".to_owned(),
     ]);
 
-    assert_eq!(ug.len(), 546);
+    assert_eq!(ug.len(), 548);
     assert_eq!(hardcore.len(), 56);
     assert!(
         ug.is_disjoint(&hardcore),
@@ -370,7 +378,7 @@ fn ultimate_geography_media_attribution_inventory_is_exact() {
         .cloned()
         .collect::<BTreeSet<_>>();
     let attributed_images = ug.union(&hardcore).cloned().collect::<BTreeSet<_>>();
-    assert_eq!(image_media.len(), 602);
+    assert_eq!(image_media.len(), 604);
     assert_eq!(attributed_images, image_media);
     let non_image_media = media
         .keys()
@@ -495,8 +503,13 @@ fn ultimate_geography_hardcore_extension_builds_on_main_deck_without_erasing_bas
     let manifest = read_manifest(&root);
 
     let english = compose_target(&root, &manifest, "en-hardcore-standard");
-    assert_eq!(english.notes.len(), 364);
+    assert_eq!(english.notes.len(), 366);
     assert!(english.notes.contains_key(&sid("note.pitcairn-islands")));
+    assert_eq!(
+        english.notes[&sid("note.strait-of-hormuz")].fields[&sid("field.country")],
+        "Strait of Hormuz"
+    );
+    assert_eq!(note_guid(&english, "note.strait-of-malacca"), "K4>1fnrM;@");
     assert_eq!(
         english.notes[&sid("note.hardcore-anguilla")].fields[&sid("field.capital")],
         "The Valley"
@@ -664,17 +677,18 @@ fn ultimate_geography_translation_overlays_use_dictionaries_not_template_copies(
 
 #[test]
 fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media() {
-    const UG_REVISION: &str = "1017a39990e571a2355c9682af4499bb0ad8bb5d";
+    const UG_REVISION: &str = "a934c935083eeb271c553e573d7b9de7d565342a";
     const HARDCORE_REVISION: &str = "09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46";
     const BRAINBREW_REVISION: &str = "6ee570d427a1a8eec92c22668442f9b7186f9ba7";
-    const SOURCE_SHA256: &str = "2b04bdc726543990a842738a23388fd984aa0cfa4350468c35d1b258ba152634";
-    const MEDIA_SHA256: &str = "548d06511effa33230c69aab721f6d639c0816eb7eacc27bee87db1e43971dde";
+    const SOURCE_SHA256: &str = "2f6a08ab17090e674aaf5df1dc0c0c3cf0157d420bb08abb5c1c76f20e8f1e5c";
+    const MEDIA_SHA256: &str = "ad8bd371b4837d639d76f3a56a11fd7437d0ca0d31022ff5022fe5d5ce03e761";
+    const GOLDENS_SHA256: &str = "9b21fc9d0acad0a22fdf92e11a585a0a84913ab436f26c5d9c7047c11b621b41";
     const ATTRIBUTION_SHA256: &str =
-        "fa74228f06784236f2d0e035eb1a84ae004f608ab2448a78d70131f05ea5e835";
+        "0f1d0c3c7b9d9465a7d0279050f54460ed4a31d5fa2703a140abe3da6e522151";
     const HARDCORE_ATTRIBUTION_SHA256: &str =
         "aada4219077e5fa77756701e537789c22b2baad29a961c456b3406f3e3629b06";
     const ATTRIBUTION_COVERAGE_SHA256: &str =
-        "e8f9a5c2a3c3889993520cafbd22e3a51e8b5ced223cd2e73b00aa4d3e27fda9";
+        "13a1d5c1d04a8eacaae3dd3c1c952483128b8f089779dc622f2014055b72351d";
     const GENERATOR_EXECUTABLE_SHA256: &str =
         "e27d4f62e411eb6dd950e78f7311d5a47f59f5ccf591657b3bbaf76ca994d816";
     const GENERATOR_SOURCE_SHA256: &str =
@@ -682,7 +696,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
     const GENERATOR_IDENTITY_SHA256: &str =
         "a1ce83b5c71085705feb2fadfa4d2ea2116f3f37e582b7f4b283e7475842eebe";
     const EXPECTED_SHA256: &str =
-        "d40d5a1c6a5350414eb0c0af3bf6bd112febd196ec10063effc65b27c1d5c248";
+        "49ca36eb60dbce4f61aba9890955ef9d8b1f83237dd49403eced4c916f1de855";
 
     let root = fixture_root();
     let lock_path = root.with_file_name("ultimate-geography.lock.json");
@@ -726,23 +740,33 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
     assert_eq!(actual_source_entries, required_source_entries);
 
     let source_metadata = tree_metadata(&root);
-    assert_eq!(source_metadata.file_count, 736);
-    assert_eq!(source_metadata.byte_count, 19_919_556);
+    assert_eq!(source_metadata.file_count, 738);
+    assert_eq!(source_metadata.byte_count, 20_064_738);
     assert_eq!(source_metadata.sha256, SOURCE_SHA256);
     assert_tree_lock(&lock["source"], &source_metadata, "source snapshot");
     assert_eq!(lock["source"]["sha256"], SOURCE_SHA256);
 
     let media_root = root.join("media");
     let media_metadata = tree_metadata(&media_root);
-    assert_eq!(media_metadata.file_count, 607);
-    assert_eq!(media_metadata.byte_count, 17_444_480);
+    assert_eq!(media_metadata.file_count, 609);
+    assert_eq!(media_metadata.byte_count, 17_579_868);
     assert_eq!(media_metadata.sha256, MEDIA_SHA256);
     assert_tree_lock(&lock["source"]["media"], &media_metadata, "media snapshot");
+
+    let goldens_metadata = tree_metadata(&root.join("goldens"));
+    assert_eq!(goldens_metadata.file_count, 8);
+    assert_eq!(goldens_metadata.byte_count, 1_321_851);
+    assert_eq!(goldens_metadata.sha256, GOLDENS_SHA256);
+    assert_tree_lock(
+        &lock["source"]["goldens"],
+        &goldens_metadata,
+        "UG goldens snapshot",
+    );
 
     let attribution = &lock["source"]["third_party_attribution"];
     assert_eq!(attribution["algorithm"], "sha256-path-length-content-v1");
     assert_eq!(attribution["file_count"], 2);
-    assert_eq!(attribution["byte_count"], 58_366);
+    assert_eq!(attribution["byte_count"], 58_618);
     assert_eq!(attribution["sha256"], ATTRIBUTION_SHA256);
     assert_eq!(
         attribution["paths"],
@@ -754,7 +778,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
     );
     assert_eq!(
         sha256_file(&root.join("sources.csv")),
-        "09969004a54930c8488e0c7ad4eaad192ea8af39a0e530ccd273eae686e2f576"
+        "ea4c77d1af88fc01e18de3d751235610a3af7f3c6916e2c0f09229b8597baabc"
     );
 
     let supplement_root = root
@@ -794,11 +818,11 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
         coverage["filename_normalization"],
         "unicode-nfc-posix-basename-v1"
     );
-    assert_eq!(coverage["media_file_count"], 607);
-    assert_eq!(coverage["image_file_count"], 602);
+    assert_eq!(coverage["media_file_count"], 609);
+    assert_eq!(coverage["image_file_count"], 604);
     assert_eq!(
         coverage["ultimate_geography"]["sources_csv_file_count"],
-        546
+        548
     );
     assert_eq!(
         coverage["ultimate_geography"]["license_notice_file_count"],
@@ -849,7 +873,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
     assert_eq!(lock["expected"]["sha256"], EXPECTED_SHA256);
 
     let assets = read_real_media_assets(&media_root);
-    assert_eq!(assets.len(), 607);
+    assert_eq!(assets.len(), 609);
     let mut all_expected_targets = BTreeSet::new();
     let mut all_declared_media = BTreeSet::new();
     let mut compared = 0_usize;
@@ -915,7 +939,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
 
     let expected_metadata = canonical_json_tree_metadata(&expected_root);
     assert_eq!(expected_metadata.file_count, 100);
-    assert_eq!(expected_metadata.canonical_byte_count, 9_984_230);
+    assert_eq!(expected_metadata.canonical_byte_count, 10_024_344);
     assert_eq!(expected_metadata.sha256, EXPECTED_SHA256);
     assert_eq!(
         lock["expected"]["algorithm"],

@@ -49,7 +49,7 @@
       "timer": 0
     }
   ],
-  "desc": "<a href=\"https://github.com/anki-geo/ultimate-geography/\"><b>DESCRIPCIÓN COMPLETA</b></a> | <a href=\"https://github.com/anki-geo/ultimate-geography/releases\"><b>NOTAS DE LANZAMIENTO</b></a> | <a href=\"https://github.com/anki-geo/ultimate-geography/blob/master/CONTRIBUTING.md\"><b>CÓMO CONTRIBUIR</b></a>\n\nCaracterísticas de <b>Ultimate Geography v5.3</b>:\n\n- Los <a href=\"https://en.wikipedia.org/wiki/List_of_sovereign_states\"><b>205 estados soberanos</b></a> del mundo (820 cartas).\n- <b>59 territorios, regiones del mundo, y otras entidades</b> (103 cartas).\n- <b>48 océanos y mares</b> (48 cartas, solo mapas).\n- <b>7 continentes</b> (7 cartas, solo mapas).\n- Un total de <b>319 notas diferentes</b>, <b>978 cartas</b>, <b>221 banderas</b> y <b>319 mapas</b>.\n\nEste mazo está <a href=\"https://github.com/anki-geo/ultimate-geography#other-languages-and-versions\">disponible</a> en <b>inglés</b>, <b>alemán</b>, <b>español</b>, <b>francés</b>, <b>noruego</b>, <b>checo</b>, <b>ruso</b>, <b>neerlandés</b>, <b>sueco</b>, <b>portugués</b>, <b>chino</b> (simplificado y tradicional), <b>polaco</b>, <b>italiano</b>, <b>danés</b> y <b>hebreo</b>. También está disponible una <a href=\"https://github.com/anki-geo/ultimate-geography#other-languages-and-versions\"><b>versión extendida</b></a> en cada idioma. Para ayudar a la memorización y contextualizar mientras se aprende, algunas notas incluyen información extra como banderas similares, información sobre la forma de gobierno, nombres alternativos del país, etc.\n\nPuedes usar la <a href=\"https://github.com/anki-geo/ultimate-geography#custom-study\">función de Anki de mazos filtrados</a> para centrarte en alguna parte del mazo en particular, como estados soberanos, un tipo de plantilla de nota (por ejemplo, mapa-país) o un continente en concreto (por ejemplo, Europa).\n\nEste mazo <a href=\"https://github.com/anki-geo/ultimate-geography\"><b>se desarrolla en Github</b></a>. Si encuentras algún fallo, tienes alguna sugerencia o quieres ayudar, por favor, no dudes en <a href=\"https://github.com/anki-geo/ultimate-geography/issues\">abrir una incidencia</a>. ¿Quieres <b>mantenerte informado de las nuevas versiones</b>? ¡Mira el repositorio de Github o <a href=\"https://github.com/anki-geo/ultimate-geography/releases.atom\">sigue los lanzamientos</a>!\n",
+  "desc": "<a href=\"https://github.com/anki-geo/ultimate-geography/\"><b>DESCRIPCIÓN COMPLETA</b></a> | <a href=\"https://github.com/anki-geo/ultimate-geography/releases\"><b>NOTAS DE LANZAMIENTO</b></a> | <a href=\"https://github.com/anki-geo/ultimate-geography/blob/master/CONTRIBUTING.md\"><b>CÓMO CONTRIBUIR</b></a>\n\nCaracterísticas de <b>Ultimate Geography v5.3</b>:\n\n- Los <a href=\"https://en.wikipedia.org/wiki/List_of_sovereign_states\"><b>205 estados soberanos</b></a> del mundo (820 cartas).\n- <b>59 territorios, regiones del mundo, y otras entidades</b> (103 cartas).\n- <b>48 océanos y mares</b> (48 cartas, solo mapas).\n- <b>7 continentes</b> (7 cartas, solo mapas).\n- Un total de <b>321 notas diferentes</b>, <b>980 cartas</b>, <b>221 banderas</b> y <b>321 mapas</b>.\n\nEste mazo está <a href=\"https://github.com/anki-geo/ultimate-geography#other-languages-and-versions\">disponible</a> en <b>inglés</b>, <b>alemán</b>, <b>español</b>, <b>francés</b>, <b>noruego</b>, <b>checo</b>, <b>ruso</b>, <b>neerlandés</b>, <b>sueco</b>, <b>portugués</b>, <b>chino</b> (simplificado y tradicional), <b>polaco</b>, <b>italiano</b>, <b>danés</b> y <b>hebreo</b>. También está disponible una <a href=\"https://github.com/anki-geo/ultimate-geography#other-languages-and-versions\"><b>versión extendida</b></a> en cada idioma. Para ayudar a la memorización y contextualizar mientras se aprende, algunas notas incluyen información extra como banderas similares, información sobre la forma de gobierno, nombres alternativos del país, etc.\n\nPuedes usar la <a href=\"https://github.com/anki-geo/ultimate-geography#custom-study\">función de Anki de mazos filtrados</a> para centrarte en alguna parte del mazo en particular, como estados soberanos, un tipo de plantilla de nota (por ejemplo, mapa-país) o un continente en concreto (por ejemplo, Europa).\n\nEste mazo <a href=\"https://github.com/anki-geo/ultimate-geography\"><b>se desarrolla en Github</b></a>. Si encuentras algún fallo, tienes alguna sugerencia o quieres ayudar, por favor, no dudes en <a href=\"https://github.com/anki-geo/ultimate-geography/issues\">abrir una incidencia</a>. ¿Quieres <b>mantenerte informado de las nuevas versiones</b>? ¡Mira el repositorio de Github o <a href=\"https://github.com/anki-geo/ultimate-geography/releases.atom\">sigue los lanzamientos</a>!\n",
   "dyn": 0,
   "extendNew": 10,
   "extendRev": 50,
@@ -559,6 +559,8 @@
     "ug-map-southern_ocean-nobox.png",
     "ug-map-spain.png",
     "ug-map-sri_lanka.png",
+    "ug-map-strait_of_hormuz.png",
+    "ug-map-strait_of_malacca.png",
     "ug-map-sudan.png",
     "ug-map-sumatra.png",
     "ug-map-suriname.png",
@@ -6828,6 +6830,48 @@
       "tags": [
         "UG::Asia",
         "UG::Sovereign_State"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Estrecho de Ormuz",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-strait_of_hormuz.png\" />",
+        ""
+      ],
+      "flags": 0,
+      "guid": "FuO:*C>pjI",
+      "note_model_uuid": "b7610e2c-c28f-402a-b86a-57a44fdf11f7",
+      "tags": [
+        "UG::Oceans+Seas"
+      ]
+    },
+    {
+      "__type__": "Note",
+      "data": "",
+      "fields": [
+        "Estrecho de Malaca",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "<img src=\"ug-map-strait_of_malacca.png\" />",
+        ""
+      ],
+      "flags": 0,
+      "guid": "s9)d.?!wN0",
+      "note_model_uuid": "b7610e2c-c28f-402a-b86a-57a44fdf11f7",
+      "tags": [
+        "UG::Oceans+Seas"
       ]
     },
     {
