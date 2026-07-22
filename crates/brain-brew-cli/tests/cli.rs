@@ -4002,16 +4002,14 @@ fn translations_default_report_focuses_on_translatable_note_text() {
 
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let out = stdout(&output);
-    assert!(out.contains("missing text translations: 2"));
-    assert!(out.contains("intentionally unchanged text: 329"));
+    assert!(out.contains("missing text translations: 0"));
+    assert!(out.contains("intentionally unchanged text: 330"));
     assert!(out.contains("hidden structural/media/tag fallbacks:"));
     assert!(out.contains("hint: use --full"));
     assert!(!out.contains("deck.description source="));
     assert!(!out.contains("notes.note.abkhazia.fields.field.flag"));
     assert!(!out.contains("notes.note.abkhazia.fields.field.capital"));
-    assert!(out.contains("notes.note.ghana.fields.field.flag-similarity.message.format"));
-    assert!(out.contains("notes.note.iceland.fields.field.flag-similarity.message.format"));
-    assert!(!out.contains("notes.note.andorra.fields.field.flag-similarity.message.format"));
+    assert!(!out.contains("field.flag-similarity.message.format"));
 }
 
 #[test]

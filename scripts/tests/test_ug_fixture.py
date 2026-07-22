@@ -16,6 +16,35 @@ class UltimateGeographyFixtureBoundaryTests(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
+    def test_reviewed_generator_and_source_pins_are_independent_constants(self):
+        self.assertEqual(
+            ug_fixture.PINNED_UG_REVISION,
+            "795853d49832ab550b5cb872da47413377ebec5e",
+        )
+        self.assertEqual(
+            ug_fixture.PINNED_BRAINBREW_REVISION,
+            "77b092ddb82fb0dfdaf64713ed081a4ac9f2eb97",
+        )
+        self.assertEqual(
+            ug_fixture.PINNED_BRAINBREW_EXECUTABLE_SHA256,
+            "58782c88efedc3691be904bcf730f4314c4ce475c7ccb607ee4556ddb767c259",
+        )
+        self.assertEqual(ug_fixture.PINNED_BRAINBREW_EXECUTABLE_BYTES, 15_690_040)
+        self.assertEqual(
+            ug_fixture.PINNED_BRAINBREW_SOURCE_SHA256,
+            "754018e336b8f5877460c4430be7809d703f34762439dc477441eebb10a3be61",
+        )
+        self.assertEqual(ug_fixture.PINNED_BRAINBREW_SOURCE_FILES, 68)
+        self.assertEqual(ug_fixture.PINNED_BRAINBREW_SOURCE_BYTES, 2_944_523)
+        self.assertEqual(
+            ug_fixture.PINNED_BRAINBREW_CARGO_LOCK_SHA256,
+            "ea2858def2a0528b781d992930a8f6067e71b4baa8ef6bf6b298f3b44a120cd1",
+        )
+        self.assertEqual(
+            ug_fixture._reviewed_generator()["identity"]["sha256"],
+            "ed75f9aa6a5ebcef08549fa1f8f8429bb065ea500728227a37f263f5cbe9e89e",
+        )
+
     def test_tree_metadata_detects_source_drift(self):
         source = self.root / "source"
         source.mkdir()

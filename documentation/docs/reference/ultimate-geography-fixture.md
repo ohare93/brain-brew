@@ -11,11 +11,13 @@ release cache.
 ## Contract
 
 The reviewed snapshot is Ultimate Geography `brainbrew-migration` revision
-`adda7ad925c62fa6542679dfb5bc1c6401466480`, descending from the migration
+`795853d49832ab550b5cb872da47413377ebec5e`, descending from the migration
 history rebased on upstream revision
 `e1fd85184e70f32650b67b750c44c4b0588c79dd`. Expected output was accepted with
 Brain Brew `1.0.0-alpha.3` revision
-`d745834534139b965732e007a58b489dad44449d`. Hardcore image attribution is
+`77b092ddb82fb0dfdaf64713ed081a4ac9f2eb97`. This snapshot includes the reviewed
+flag-similarity translation and separator corrections recorded by the UG source
+revision. Hardcore image attribution is
 separately pinned to Hardcore Geography revision
 `09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46`.
 
@@ -70,6 +72,13 @@ Serialization whitespace and object-key order are not regressions: the lock and
 tests digest parsed JSON in canonical key order. Any count-preserving value
 substitution is a regression and fails.
 
+The `795853d…` refresh deliberately corrects flag-similarity content in 28
+of the 100 targets. Against the preceding accepted snapshot, the complete parsed
+JSON delta is 74 occurrences of 17 reviewed `(GUID, field 6, old, new)` tuples;
+there are no changes at any other JSON path. The source-owned audit is excluded
+from the runtime fixture whitelist, while this repository retains the accepted
+all-target outputs and their changed semantic digest as the regression oracle.
+
 ## Maintenance boundaries
 
 `scripts/sync-ug-fixture.sh` has three mutually exclusive operations:
@@ -81,9 +90,9 @@ substitution is a regression and fails.
    100 expected JSON files. It requires the exact reviewed executable, explicit
    revision, and a source root matching the hard-coded alpha.3 source identity.
    The current reviewed binary has SHA-256
-   `063a2106ad5c0000eb6afbb5896e950d2616b98aac372498cc623be0d358c411`,
+   `58782c88efedc3691be904bcf730f4314c4ce475c7ccb607ee4556ddb767c259`,
    and its 68-file generator source identity is
-   `19b6910358db8c0dd1cd35f4ae936deff1d3090ea88ec8a1c7f9ab9686c96081`.
+   `754018e336b8f5877460c4430be7809d703f34762439dc477441eebb10a3be61`.
 3. `--check` is read-only. It authenticates the same executable/source/build
    identity, checks the lock/source/target/expected state, validates the pinned
    Hardcore supplement and attribution coverage, and regenerates all outputs in

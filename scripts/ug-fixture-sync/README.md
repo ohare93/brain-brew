@@ -6,10 +6,10 @@ not a submodule, a generated migration fork, or a network cache.
 ## Pinned inputs
 
 - Ultimate Geography: `brainbrew-migration` at
-  `adda7ad925c62fa6542679dfb5bc1c6401466480`, descending from the migration
+  `795853d49832ab550b5cb872da47413377ebec5e`, descending from the migration
   history rebased on upstream `e1fd85184e70f32650b67b750c44c4b0588c79dd`
 - Brain Brew generator: `rust-brainbrew` / `1.0.0-alpha.3` at
-  `d745834534139b965732e007a58b489dad44449d`
+  `77b092ddb82fb0dfdaf64713ed081a4ac9f2eb97`
 - Hardcore Geography attribution source: `main` at
   `09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46`
 
@@ -41,16 +41,18 @@ an active local path or dependency.
 Full parsed outputs live separately at
 `fixtures/ultimate-geography-expected/crowdanki/<target>/deck.json`. There are
 exactly 100. No expected target contains media; all targets share the one real
-vendored media tree.
+vendored media tree. The `795853d…` acceptance intentionally changes 28 target
+projections: exactly 74 `Flag similarity` field occurrences drawn from 17
+reviewed old/new tuples, with no change at any other parsed JSON path.
 
 ## Three separate boundaries
 
 Acceptance and generated-output checks require both the exact reviewed binary
 and a source root at the pinned Brain Brew revision. The reproducible release
 executable SHA-256 is
-`063a2106ad5c0000eb6afbb5896e950d2616b98aac372498cc623be0d358c411`;
+`58782c88efedc3691be904bcf730f4314c4ce475c7ccb607ee4556ddb767c259`;
 the 68-file generator source identity is
-`19b6910358db8c0dd1cd35f4ae936deff1d3090ea88ec8a1c7f9ab9686c96081`.
+`754018e336b8f5877460c4430be7809d703f34762439dc477441eebb10a3be61`.
 A different executable is rejected even if it prints `1.0.0-alpha.3`, and a
 changed lock cannot bless a different hash because both Python and Rust tests
 hold reviewed constants. The lock records the exact Rust/Cargo versions and the
@@ -59,7 +61,7 @@ no debug info, and `<source-root>` remapped to `/brainbrew`. Two independent
 source-root builds produced byte-identical executables during acceptance.
 
 ```bash
-source_root=/path/to/brain-brew-at-d745834
+source_root=/path/to/brain-brew-at-77b092d
 CARGO_INCREMENTAL=0 \
 RUSTFLAGS="-C debuginfo=0 --remap-path-prefix=$source_root=/brainbrew" \
   cargo build --locked --offline --release -p brainbrew --bin brainbrew \
@@ -71,7 +73,7 @@ RUSTFLAGS="-C debuginfo=0 --remap-path-prefix=$source_root=/brainbrew" \
 ```bash
 scripts/sync-ug-fixture.sh --sync-source \
   --ug-checkout /home/jmo/Development/external/ultimate-geography \
-  --ug-revision adda7ad925c62fa6542679dfb5bc1c6401466480
+  --ug-revision 795853d49832ab550b5cb872da47413377ebec5e
 ```
 
 This copies the whitelist byte-for-byte in one direction and updates only source
@@ -88,8 +90,8 @@ After reviewing the source delta and generator pin:
 ```bash
 scripts/sync-ug-fixture.sh --accept-expected \
   --brainbrew-bin /path/to/reviewed/brainbrew \
-  --brainbrew-revision d745834534139b965732e007a58b489dad44449d \
-  --brainbrew-source-root /path/to/brain-brew-at-d745834
+  --brainbrew-revision 77b092ddb82fb0dfdaf64713ed081a4ac9f2eb97 \
+  --brainbrew-source-root /path/to/brain-brew-at-77b092d
 ```
 
 Only this command regenerates and publishes the 100 expected `deck.json` files.
@@ -104,10 +106,10 @@ are a separate mandatory test/gate below.
 ```bash
 scripts/sync-ug-fixture.sh --check \
   --ug-checkout /home/jmo/Development/external/ultimate-geography \
-  --ug-revision adda7ad925c62fa6542679dfb5bc1c6401466480 \
+  --ug-revision 795853d49832ab550b5cb872da47413377ebec5e \
   --brainbrew-bin /path/to/reviewed/brainbrew \
-  --brainbrew-revision d745834534139b965732e007a58b489dad44449d \
-  --brainbrew-source-root /path/to/brain-brew-at-d745834
+  --brainbrew-revision 77b092ddb82fb0dfdaf64713ed081a4ac9f2eb97 \
+  --brainbrew-source-root /path/to/brain-brew-at-77b092d
 ```
 
 `--check` never updates source, lock, or expected files. It rejects source/lock

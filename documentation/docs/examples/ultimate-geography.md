@@ -31,7 +31,7 @@ fixtures/
 ```
 
 The source is an exact whitelist from UG `brainbrew-migration` revision
-`adda7ad...`, descending from migration history rebased on upstream
+`795853d...`, descending from migration history rebased on upstream
 `e1fd8518...`, not a fixture-only migrated derivative. It demonstrates:
 
 - English Standard as a base Canonical Deck;

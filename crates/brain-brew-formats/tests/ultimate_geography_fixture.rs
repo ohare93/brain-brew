@@ -106,9 +106,13 @@ fn ultimate_geography_fixture_uses_list_patterns_for_flag_similarity() {
     for relative_path in ["deck.yaml", "overlays/extensions/hardcore.yaml"] {
         let source = fs::read_to_string(root.join(relative_path)).unwrap();
         assert!(
-            source.contains("field.flag-similarity:\n        items:")
-                || source.contains("field.flag-similarity:\n          items:"),
-            "{relative_path} should use concise list-message items for ordinary non-empty flag similarities"
+            source.contains("field.flag-similarity:\n        - country:")
+                || source.contains("field.flag-similarity:\n          - country:"),
+            "{relative_path} should use direct list-message sequences for ordinary non-empty flag similarities"
+        );
+        assert!(
+            !source.lines().any(|line| line.trim() == "items:"),
+            "{relative_path} should not retain the legacy list-message items wrapper"
         );
         assert!(
             !source.lines().any(
@@ -686,12 +690,12 @@ fn ultimate_geography_translation_overlays_use_dictionaries_not_template_copies(
 
 #[test]
 fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media() {
-    const UG_REVISION: &str = "adda7ad925c62fa6542679dfb5bc1c6401466480";
+    const UG_REVISION: &str = "795853d49832ab550b5cb872da47413377ebec5e";
     const HARDCORE_REVISION: &str = "09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46";
-    const BRAINBREW_REVISION: &str = "d745834534139b965732e007a58b489dad44449d";
-    const SOURCE_SHA256: &str = "166626c79fc5828f543ce6ff7862c84d4aa7af8ed8f471d3014c3cb9ebee94d7";
+    const BRAINBREW_REVISION: &str = "77b092ddb82fb0dfdaf64713ed081a4ac9f2eb97";
+    const SOURCE_SHA256: &str = "167d69416951c06462c1a0f23411fa37470b0d12e2cd1d897a51ac29a0f7adf1";
     const MEDIA_SHA256: &str = "ad8bd371b4837d639d76f3a56a11fd7437d0ca0d31022ff5022fe5d5ce03e761";
-    const GOLDENS_SHA256: &str = "9b21fc9d0acad0a22fdf92e11a585a0a84913ab436f26c5d9c7047c11b621b41";
+    const GOLDENS_SHA256: &str = "383a2a9512888f874c314ae5b0bb69217da6ecf4f2a67cf4ec2a3528b99d84fc";
     const ATTRIBUTION_SHA256: &str =
         "0f1d0c3c7b9d9465a7d0279050f54460ed4a31d5fa2703a140abe3da6e522151";
     const HARDCORE_ATTRIBUTION_SHA256: &str =
@@ -699,13 +703,13 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
     const ATTRIBUTION_COVERAGE_SHA256: &str =
         "13a1d5c1d04a8eacaae3dd3c1c952483128b8f089779dc622f2014055b72351d";
     const GENERATOR_EXECUTABLE_SHA256: &str =
-        "063a2106ad5c0000eb6afbb5896e950d2616b98aac372498cc623be0d358c411";
+        "58782c88efedc3691be904bcf730f4314c4ce475c7ccb607ee4556ddb767c259";
     const GENERATOR_SOURCE_SHA256: &str =
-        "19b6910358db8c0dd1cd35f4ae936deff1d3090ea88ec8a1c7f9ab9686c96081";
+        "754018e336b8f5877460c4430be7809d703f34762439dc477441eebb10a3be61";
     const GENERATOR_IDENTITY_SHA256: &str =
-        "63b44c01b64b82904eef1ecb11751b980f899cf3e407aaf1174aeab4acb25ada";
+        "ed75f9aa6a5ebcef08549fa1f8f8429bb065ea500728227a37f263f5cbe9e89e";
     const EXPECTED_SHA256: &str =
-        "49ca36eb60dbce4f61aba9890955ef9d8b1f83237dd49403eced4c916f1de855";
+        "f4ebfb8e20fe0f6d91a134eb3292832589902db81b1c87c75dc1a6c1bf79c119";
 
     let root = fixture_root();
     let lock_path = root.with_file_name("ultimate-geography.lock.json");
@@ -750,7 +754,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
 
     let source_metadata = tree_metadata(&root);
     assert_eq!(source_metadata.file_count, 738);
-    assert_eq!(source_metadata.byte_count, 20_059_004);
+    assert_eq!(source_metadata.byte_count, 20_055_819);
     assert_eq!(source_metadata.sha256, SOURCE_SHA256);
     assert_tree_lock(&lock["source"], &source_metadata, "source snapshot");
     assert_eq!(lock["source"]["sha256"], SOURCE_SHA256);
@@ -764,7 +768,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
 
     let goldens_metadata = tree_metadata(&root.join("goldens"));
     assert_eq!(goldens_metadata.file_count, 8);
-    assert_eq!(goldens_metadata.byte_count, 1_321_851);
+    assert_eq!(goldens_metadata.byte_count, 1_321_848);
     assert_eq!(goldens_metadata.sha256, GOLDENS_SHA256);
     assert_tree_lock(
         &lock["source"]["goldens"],
@@ -872,7 +876,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
     assert_eq!(generator["executable"]["byte_count"], 15_690_040);
     assert_eq!(generator["source"]["sha256"], GENERATOR_SOURCE_SHA256);
     assert_eq!(generator["source"]["file_count"], 68);
-    assert_eq!(generator["source"]["byte_count"], 2_943_250);
+    assert_eq!(generator["source"]["byte_count"], 2_944_523);
     assert_eq!(
         generator["build"]["cargo_lock_sha256"],
         "ea2858def2a0528b781d992930a8f6067e71b4baa8ef6bf6b298f3b44a120cd1"
@@ -948,7 +952,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
 
     let expected_metadata = canonical_json_tree_metadata(&expected_root);
     assert_eq!(expected_metadata.file_count, 100);
-    assert_eq!(expected_metadata.canonical_byte_count, 10_024_344);
+    assert_eq!(expected_metadata.canonical_byte_count, 10_024_406);
     assert_eq!(expected_metadata.sha256, EXPECTED_SHA256);
     assert_eq!(
         lock["expected"]["algorithm"],

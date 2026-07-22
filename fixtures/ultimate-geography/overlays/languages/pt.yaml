@@ -518,7 +518,6 @@ translations:
     with emblem: com emblema
     with star and crescent: com estrela e crescente
     with text: com texto
-    '{country_1} ({description_1}), {country_2} ({description_2})': '{country_1} ({description_1}) e {country_2} ({description_2})'
     'Åland Islands': Alanda
   contextual:
     note_types.note-type.ultimate-geography.fields.field.flag-similarity.message_pattern:
@@ -535,8 +534,6 @@ translations:
         Yemen: 'Iêmen'
       french-polynesia:
         Overseas territory of France.: 'Território ultramarino da França.'
-      ghana.fields.field.flag-similarity.message.format:
-        '{country_1} ({description_1})': ' {country_1} ({description_1})'
       guernsey:
         Crown dependency of the United Kingdom.: 'Dependência da coroa do Reino Unido.'
       indonesia.fields.field.flag-similarity.message.items.0.country:
@@ -571,11 +568,6 @@ translations:
         Overseas territory of France.: 'Território ultramarino da França.'
       yemen.fields.field.flag-similarity.message.items.0.country:
         Egypt: Egito
-      yemen.fields.field.flag-similarity.message.items.1.country:
-        Iraq: Iraque
-    notes.note.yemen.fields.field.flag-similarity.message:
-      separator:
-        ', ': ', e '
   no_change:
     - Abuja
     - Alofi

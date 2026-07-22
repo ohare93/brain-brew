@@ -652,8 +652,6 @@ translations:
     with emblem: '带徽章'
     with star and crescent: '有星形和新月形'
     with text: '带文字'
-    '{country_1} ({description_1})': '{country_1}({description_1})'
-    '{country_1} ({description_1}), {country_2} ({description_2})': '{country_1}({description_1})、{country_2}({description_2})'
     'Åland Islands': '奥兰群岛(Åland Islands)'
   contextual:
     note_types.note-type.ultimate-geography.fields.field.flag-similarity.message_pattern:
@@ -694,15 +692,15 @@ translations:
         Iceland: '冰岛'
       faroe-islands.fields.field.flag-similarity.message.items.1.country:
         Norway: '挪威'
-      ghana.fields.field.flag-similarity.message.variables.country_1:
+      ghana.fields.field.flag-similarity.message.items.0.country:
         Bolivia: '玻利维亚'
       guinea.fields.field.flag-similarity.message.items.0.country:
         Mali: '马里'
-      iceland.fields.field.flag-similarity.message.variables.country_1:
+      iceland.fields.field.flag-similarity.message.items.0.country:
         Norway: '挪威'
-      iceland.fields.field.flag-similarity.message.variables.country_2:
+      iceland.fields.field.flag-similarity.message.items.1.country:
         Faroe Islands: '法罗群岛'
-      iceland.fields.field.flag-similarity.message.variables.description_2:
+      iceland.fields.field.flag-similarity.message.items.1.description:
         white background, red and blue cross: '白底红蓝十字'
       indonesia.fields.field.flag-similarity.message.items.0.country:
         Monaco: '摩纳哥'
@@ -729,7 +727,7 @@ translations:
       monaco.fields.field.flag-similarity.message.items.1.country:
         Poland: '波兰'
       nauru.fields.field.flag-similarity.message.items.0.country:
-        'Curaçao': '库拉索岛'
+        'Curaçao': '库拉索'
       netherlands.fields.field.flag-similarity.message.items.0.country:
         Luxembourg: '卢森堡'
       new-zealand.fields.field.flag-similarity.message.items.0.country:
@@ -776,21 +774,6 @@ translations:
         Egypt: '埃及'
       yemen.fields.field.flag-similarity.message.items.1.country:
         Iraq: '伊拉克'
-    notes.note.faroe-islands.fields.field.flag-similarity.message:
-      separator:
-        ', ': '，'
-    notes.note.indonesia.fields.field.flag-similarity.message:
-      separator:
-        ', ': '，'
-    notes.note.monaco.fields.field.flag-similarity.message:
-      separator:
-        ', ': '，'
-    notes.note.norway.fields.field.flag-similarity.message:
-      separator:
-        ', ': '，'
-    notes.note.poland.fields.field.flag-similarity.message:
-      separator:
-        ', ': '，'
   variables:
     label.capital:
       Capital: '首都'

@@ -643,8 +643,6 @@ translations:
     with emblem: '徽章'
     with star and crescent: '星星與新月'
     with text: '文字'
-    '{country_1} ({description_1})': '{country_1}({description_1})'
-    '{country_1} ({description_1}), {country_2} ({description_2})': '{country_1}({description_1})、{country_2}({description_2})'
     'Åland Islands': '奧蘭群島 (Åland Islands)'
   contextual:
     note_types.note-type.ultimate-geography.fields.field.flag-similarity.message_pattern:
@@ -691,14 +689,14 @@ translations:
         Iceland: '冰島'
       faroe-islands.fields.field.flag-similarity.message.items.1.country:
         Norway: '挪威'
-      ghana.fields.field.flag-similarity.message.variables.country_1:
-        Bolivia: '波利維亞'
+      ghana.fields.field.flag-similarity.message.items.0.country:
+        Bolivia: '玻利維亞'
       guinea.fields.field.flag-similarity.message.items.0.country:
         Mali: '馬利'
-      iceland.fields.field.flag-similarity.message.format:
-        '{country_1} ({description_1}), {country_2} ({description_2})': '{country_1}({description_1})'
-      iceland.fields.field.flag-similarity.message.variables.country_1:
+      iceland.fields.field.flag-similarity.message.items.0.country:
         Norway: '挪威'
+      iceland.fields.field.flag-similarity.message.items.1.country:
+        Faroe Islands: '法羅群島'
       indonesia.fields.field.flag-similarity.message.items.0.country:
         Monaco: '摩納哥'
       indonesia.fields.field.flag-similarity.message.items.1.country:
@@ -716,7 +714,7 @@ translations:
       luxembourg.fields.field.flag-similarity.message.items.0.country:
         Netherlands: '荷蘭'
       mali.fields.field.flag-similarity.message.items.0.country:
-        Guinea: '圭亞那'
+        Guinea: '幾內亞'
       moldova.fields.field.flag-similarity.message.items.0.country:
         Andorra: '安道爾'
       monaco.fields.field.flag-similarity.message.items.0.country:
@@ -757,8 +755,6 @@ translations:
         Cameroon: '喀麥隆'
       slovakia.fields.field.flag-similarity.message.items.0.country:
         Russia: '俄羅斯'
-      slovakia.fields.field.flag-similarity.message.items.0.description:
-        no coat of arms: '沒徽章'
       slovakia.fields.field.flag-similarity.message.items.1.country:
         Slovenia: '斯洛維尼亞'
       slovenia.fields.field.flag-similarity.message.items.0.country:
