@@ -150,6 +150,50 @@ Translation coverage and application resolve source fields through the same vali
 
 Coordinate with deck maintainers before migrating existing large fields: structured messages are best for repeated, composite source text where component reuse clearly reduces duplication.
 
+### Translate reusable list message patterns
+
+A field-level list message pattern keeps repeated glue out of each note. Translate its shared `item_format` and `separator` at the field-definition context. Nested contextual mappings group the common stable path without changing the flattened matching semantics:
+
+```yaml
+translations:
+  contextual:
+    note_types.note-type.ultimate-geography.fields.field.flag-similarity.message_pattern:
+      item_format:
+        '{country} ({description})': '{country}（{description}）'
+      separator:
+        ', ': '、'
+```
+
+Each `text` item parameter remains a translatable unit at a stable path such as:
+
+```text
+notes.note.yemen.fields.field.flag-similarity.message.items.0.description
+```
+
+A `note_field_ref` parameter reuses the referenced field's normal translation. A consuming-path contextual translation may intentionally specialize that one occurrence. It is materialized even when its target equals the source, so an explicit decision such as `Puerto Rico: Puerto Rico` at `notes.note.cuba.fields.field.flag-similarity.message.items.0.country` wins over a reusable direct `Puerto Rico: Portoriko` translation.
+
+When a target composition does not contain the referenced note, a `note_field_ref` argument can instead carry explicit translatable text without creating a graph dependency:
+
+```yaml
+field.flag-similarity:
+  items:
+    - country:
+        text: Sierra Leone
+      description: slightly lighter blue
+```
+
+The explicit country text and the scalar description both appear at their consuming item paths in translation coverage. A genuine note-specific list-format exception can override the source separator without copying the item format or whole rendered field:
+
+```yaml
+translations:
+  contextual:
+    notes.note.yemen.fields.field.flag-similarity.message:
+      separator:
+        ', ': ', e '
+```
+
+Shared glue appears once in translation coverage; item text and references retain their consuming note/item/parameter context. Existing inline structured messages remain compatible and should be used for irregular composites rather than forcing them into a list pattern.
+
 ## Stale translations
 
 Use `stale_translations` when source text changed and the previous target text should keep translated decks usable until a translator reviews it.

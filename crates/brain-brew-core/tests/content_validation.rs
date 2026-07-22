@@ -173,6 +173,7 @@ fn deck_with_content(
             fields: vec![FieldDefinition {
                 id: stable_id("field.country"),
                 name: "Country".to_owned(),
+                message_pattern: None,
             }],
             card_templates: vec![CardTemplate {
                 id: template_id,

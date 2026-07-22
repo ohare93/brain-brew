@@ -69,10 +69,10 @@ impl std::error::Error for InvalidStableId {}
 /// this printer/parser boundary injective for StableId path segments, deck validation
 /// rejects StableIds containing `..`, reserved container marker substrings
 /// (`.fields.`, `.card_templates.`, `.variables.`, `.adapter_ids.`, `.tags.`,
-/// `.images.`, `.message.`), or reserved property suffixes (`.id`, `.name`, `.styling`,
-/// `.fields`, `.card_templates`, `.variables`, `.adapter_ids`, `.tags`, `.images`,
-/// `.note_type_id`, `.message`, `.path`, `.sha256`, `.question_format`,
-/// `.answer_format`). Non-StableId map keys and tag strings are exempt from that
+/// `.images.`, `.message.`, `.message_pattern.`), or reserved property suffixes (`.id`,
+/// `.name`, `.styling`, `.fields`, `.card_templates`, `.variables`, `.adapter_ids`,
+/// `.tags`, `.images`, `.note_type_id`, `.message`, `.message_pattern`, `.item_format`,
+/// `.separator`, `.path`, `.sha256`, `.question_format`, `.answer_format`). Non-StableId map keys and tag strings are exempt from that
 /// StableId-only invariant, so keys such as `note-type.name` remain legal after
 /// the first reserved container split.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -119,6 +119,18 @@ pub enum DeckPath {
         field_id: StableId,
     },
     NoteTypeFieldName {
+        note_type_id: StableId,
+        field_id: StableId,
+    },
+    NoteTypeFieldMessagePattern {
+        note_type_id: StableId,
+        field_id: StableId,
+    },
+    NoteTypeFieldMessagePatternItemFormat {
+        note_type_id: StableId,
+        field_id: StableId,
+    },
+    NoteTypeFieldMessagePatternSeparator {
         note_type_id: StableId,
         field_id: StableId,
     },
@@ -213,6 +225,16 @@ pub enum DeckPath {
         field_id: StableId,
         variable: String,
     },
+    NoteFieldMessageItemParameter {
+        note_id: StableId,
+        field_id: StableId,
+        index: usize,
+        parameter: String,
+    },
+    NoteFieldMessageSeparator {
+        note_id: StableId,
+        field_id: StableId,
+    },
     NoteTags {
         note_id: StableId,
     },
@@ -279,6 +301,27 @@ impl fmt::Display for DeckPath {
                 note_type_id,
                 field_id,
             } => write!(f, "note_types.{note_type_id}.fields.{field_id}.name"),
+            Self::NoteTypeFieldMessagePattern {
+                note_type_id,
+                field_id,
+            } => write!(
+                f,
+                "note_types.{note_type_id}.fields.{field_id}.message_pattern"
+            ),
+            Self::NoteTypeFieldMessagePatternItemFormat {
+                note_type_id,
+                field_id,
+            } => write!(
+                f,
+                "note_types.{note_type_id}.fields.{field_id}.message_pattern.item_format"
+            ),
+            Self::NoteTypeFieldMessagePatternSeparator {
+                note_type_id,
+                field_id,
+            } => write!(
+                f,
+                "note_types.{note_type_id}.fields.{field_id}.message_pattern.separator"
+            ),
             Self::NoteTypeCardTemplates { note_type_id } => {
                 write!(f, "note_types.{note_type_id}.card_templates")
             }
@@ -380,6 +423,18 @@ impl fmt::Display for DeckPath {
                 f,
                 "notes.{note_id}.fields.{field_id}.message.variables.{variable}"
             ),
+            Self::NoteFieldMessageItemParameter {
+                note_id,
+                field_id,
+                index,
+                parameter,
+            } => write!(
+                f,
+                "notes.{note_id}.fields.{field_id}.message.items.{index}.{parameter}"
+            ),
+            Self::NoteFieldMessageSeparator { note_id, field_id } => {
+                write!(f, "notes.{note_id}.fields.{field_id}.message.separator")
+            }
             Self::NoteTags { note_id } => write!(f, "notes.{note_id}.tags"),
             Self::NoteTag { note_id, tag } => write!(f, "notes.{note_id}.tags.{tag}"),
             Self::NoteAdapterIds { note_id } => write!(f, "notes.{note_id}.adapter_ids"),
@@ -505,6 +560,28 @@ fn parse_note_type_path(rest: &str) -> Option<DeckPath> {
 }
 
 fn parse_note_type_field_path(note_type_id: StableId, rest: &str) -> Option<DeckPath> {
+    if let Some(field_text) = rest.strip_suffix(".message_pattern.item_format") {
+        return stable_id(field_text).map(|field_id| {
+            DeckPath::NoteTypeFieldMessagePatternItemFormat {
+                note_type_id,
+                field_id,
+            }
+        });
+    }
+    if let Some(field_text) = rest.strip_suffix(".message_pattern.separator") {
+        return stable_id(field_text).map(|field_id| {
+            DeckPath::NoteTypeFieldMessagePatternSeparator {
+                note_type_id,
+                field_id,
+            }
+        });
+    }
+    if let Some(field_text) = rest.strip_suffix(".message_pattern") {
+        return stable_id(field_text).map(|field_id| DeckPath::NoteTypeFieldMessagePattern {
+            note_type_id,
+            field_id,
+        });
+    }
     if let Some(field_text) = rest.strip_suffix(".id") {
         return stable_id(field_text).map(|field_id| DeckPath::NoteTypeFieldId {
             note_type_id,
@@ -627,6 +704,20 @@ fn parse_note_path(rest: &str) -> Option<DeckPath> {
 }
 
 fn parse_note_field_path(note_id: StableId, rest: &str) -> Option<DeckPath> {
+    if let Some(field_text) = rest.strip_suffix(".message.separator") {
+        let field_id = stable_id(field_text)?;
+        return Some(DeckPath::NoteFieldMessageSeparator { note_id, field_id });
+    }
+    if let Some((field_text, item_rest)) = rest.split_once(".message.items.") {
+        let field_id = stable_id(field_text)?;
+        let (index, parameter) = item_rest.split_once('.')?;
+        return Some(DeckPath::NoteFieldMessageItemParameter {
+            note_id,
+            field_id,
+            index: index.parse().ok()?,
+            parameter: non_empty_string(parameter)?,
+        });
+    }
     if let Some((field_text, index_text)) = rest.rsplit_once(".images.") {
         let field_id = stable_id(field_text)?;
         let index = index_text.parse::<usize>().ok()?;
@@ -1797,6 +1888,73 @@ pub struct NoteType {
 pub struct FieldDefinition {
     pub id: StableId,
     pub name: String,
+    pub message_pattern: Option<ListMessagePattern>,
+}
+
+/// A reusable ordered-list message pattern declared by a note field.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ListMessagePattern {
+    pub item_format: String,
+    pub separator: String,
+    pub parameters: BTreeMap<String, ListMessageParameter>,
+}
+
+/// The semantic kind of one list-message item parameter.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum ListMessageParameter {
+    NoteFieldRef { field_id: StableId },
+    Text,
+}
+
+/// One argument supplied to a reusable list-message parameter.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum ListMessageArgument {
+    /// Concise scalar syntax interpreted according to the parameter declaration.
+    Scalar(String),
+    /// Explicit independently translatable text, including as an escape hatch for a ref parameter.
+    Text(String),
+}
+
+impl ListMessageArgument {
+    pub fn scalar(value: impl Into<String>) -> Self {
+        Self::Scalar(value.into())
+    }
+
+    pub fn text(value: impl Into<String>) -> Self {
+        Self::Text(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Scalar(value) | Self::Text(value) => value,
+        }
+    }
+
+    pub fn as_str_mut(&mut self) -> &mut String {
+        match self {
+            Self::Scalar(value) | Self::Text(value) => value,
+        }
+    }
+}
+
+/// An invocation of the reusable message pattern declared by its field definition.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ListMessageItems {
+    pub items: Vec<BTreeMap<String, ListMessageArgument>>,
+    /// Temporary translation-owned usage-specific values, materialized before compose returns.
+    pub(crate) argument_overrides: BTreeMap<(usize, String), String>,
+    /// Temporary translation-owned usage-specific separator, materialized before compose returns.
+    pub(crate) separator_override: Option<String>,
+}
+
+impl ListMessageItems {
+    pub fn new(items: Vec<BTreeMap<String, ListMessageArgument>>) -> Self {
+        Self {
+            items,
+            argument_overrides: BTreeMap::new(),
+            separator_override: None,
+        }
+    }
 }
 
 /// Raw Anki-compatible card template text plus identity metadata.
@@ -1901,6 +2059,7 @@ pub enum FieldValue {
     Scalar(String),
     Images(Vec<FieldImageReference>),
     Message(StructuredMessage),
+    MessageItems(ListMessageItems),
 }
 
 impl FieldValue {
@@ -1924,35 +2083,35 @@ impl FieldValue {
     pub fn as_scalar(&self) -> Option<&str> {
         match self {
             Self::Scalar(value) => Some(value),
-            Self::Images(_) | Self::Message(_) => None,
+            Self::Images(_) | Self::Message(_) | Self::MessageItems(_) => None,
         }
     }
 
     pub fn as_scalar_mut(&mut self) -> Option<&mut String> {
         match self {
             Self::Scalar(value) => Some(value),
-            Self::Images(_) | Self::Message(_) => None,
+            Self::Images(_) | Self::Message(_) | Self::MessageItems(_) => None,
         }
     }
 
     pub fn as_images(&self) -> Option<&[FieldImageReference]> {
         match self {
             Self::Images(images) => Some(images),
-            Self::Scalar(_) | Self::Message(_) => None,
+            Self::Scalar(_) | Self::Message(_) | Self::MessageItems(_) => None,
         }
     }
 
     pub fn as_message(&self) -> Option<&StructuredMessage> {
         match self {
             Self::Message(message) => Some(message),
-            Self::Scalar(_) | Self::Images(_) => None,
+            Self::Scalar(_) | Self::Images(_) | Self::MessageItems(_) => None,
         }
     }
 
     pub fn as_message_mut(&mut self) -> Option<&mut StructuredMessage> {
         match self {
             Self::Message(message) => Some(message),
-            Self::Scalar(_) | Self::Images(_) => None,
+            Self::Scalar(_) | Self::Images(_) | Self::MessageItems(_) => None,
         }
     }
 
@@ -2476,6 +2635,7 @@ pub enum FieldValueKind {
     Scalar,
     Images,
     Message,
+    MessageItems,
 }
 
 impl FieldValueKind {
@@ -2484,6 +2644,7 @@ impl FieldValueKind {
             Self::Scalar => "scalar",
             Self::Images => "images",
             Self::Message => "message",
+            Self::MessageItems => "message_items",
         }
     }
 }

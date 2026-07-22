@@ -4,8 +4,9 @@ use std::str::FromStr;
 use sha2::{Digest, Sha256};
 
 use crate::{
-    AdapterIds, CardTemplate, FieldDefinition, FieldValue, MediaReference, MessageComponent, Note,
-    NoteType, StableId, StructuredMessage,
+    AdapterIds, CardTemplate, FieldDefinition, FieldValue, ListMessageArgument,
+    ListMessageParameter, MediaReference, MessageComponent, Note, NoteType, StableId,
+    StructuredMessage,
 };
 
 /// Canonical entity fingerprint schema version.
@@ -258,6 +259,23 @@ fn encode_note_type(encoder: &mut CanonicalEncoder, value: &NoteType) {
 fn encode_field_definition(encoder: &mut CanonicalEncoder, value: &FieldDefinition) {
     encoder.stable_id(2, &value.id);
     encoder.string(3, &value.name);
+    if let Some(pattern) = &value.message_pattern {
+        encoder.tag(4);
+        encoder.string(1, &pattern.item_format);
+        encoder.string(2, &pattern.separator);
+        encoder.sequence(3, pattern.parameters.len(), |encoder| {
+            for (name, parameter) in &pattern.parameters {
+                encoder.string(1, name);
+                match parameter {
+                    ListMessageParameter::NoteFieldRef { field_id } => {
+                        encoder.tag(1);
+                        encoder.stable_id(2, field_id);
+                    }
+                    ListMessageParameter::Text => encoder.tag(2),
+                }
+            }
+        });
+    }
 }
 
 fn encode_card_template(encoder: &mut CanonicalEncoder, value: &CardTemplate) {
@@ -304,6 +322,38 @@ fn encode_field_value(encoder: &mut CanonicalEncoder, value: &FieldValue) {
         FieldValue::Message(message) => {
             encoder.tag(3);
             encode_message(encoder, message);
+        }
+        FieldValue::MessageItems(message) => {
+            encoder.tag(4);
+            encoder.sequence(1, message.items.len(), |encoder| {
+                for item in &message.items {
+                    encoder.sequence(1, item.len(), |encoder| {
+                        for (name, value) in item {
+                            encoder.string(1, name);
+                            match value {
+                                ListMessageArgument::Scalar(value) => encoder.string(2, value),
+                                ListMessageArgument::Text(value) => encoder.string(3, value),
+                            }
+                        }
+                    });
+                }
+            });
+            encoder.sequence(2, message.argument_overrides.len(), |encoder| {
+                for ((index, name), value) in &message.argument_overrides {
+                    encoder.string(1, &index.to_string());
+                    encoder.string(2, name);
+                    encoder.string(3, value);
+                }
+            });
+            encoder.option(3, message.separator_override.is_some(), |encoder| {
+                encoder.string(
+                    1,
+                    message
+                        .separator_override
+                        .as_deref()
+                        .expect("present separator override"),
+                );
+            });
         }
     }
 }

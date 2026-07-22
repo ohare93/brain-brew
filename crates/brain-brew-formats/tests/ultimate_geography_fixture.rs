@@ -1194,6 +1194,7 @@ fn ug_regression_field_definition_changes_flow_to_crowdanki_for_every_target() {
                 field: Some(FieldDefinition {
                     id: field_id.clone(),
                     name: format!("Regression Capital Field {target}"),
+                    message_pattern: None,
                 }),
                 expected_base: Some(ExpectedBase::EntityFingerprint(
                     fingerprint_field_definition(
@@ -1242,6 +1243,7 @@ fn ug_regression_field_definition_changes_flow_to_crowdanki_for_every_target() {
                 field: Some(FieldDefinition {
                     id: field_id.clone(),
                     name: field_name.clone(),
+                    message_pattern: None,
                 }),
                 expected_base: None,
             },

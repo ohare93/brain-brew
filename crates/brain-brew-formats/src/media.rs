@@ -320,7 +320,7 @@ fn collect_references(deck: &CanonicalDeck) -> CollectedReferences {
                         }
                     }
                 }
-                FieldValue::Message(_) => {}
+                FieldValue::Message(_) | FieldValue::MessageItems(_) => {}
             }
         }
     }

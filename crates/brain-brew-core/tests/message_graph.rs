@@ -116,6 +116,7 @@ fn missing_definition_value_and_tombstone_have_typed_consuming_diagnostics() {
         .push(FieldDefinition {
             id: sid("field.missing-value"),
             name: "field.missing-value".to_owned(),
+            message_pattern: None,
         });
     assert_graph_error(
         &missing_value,
@@ -417,6 +418,7 @@ fn graph_deck<'a>(values: impl IntoIterator<Item = (&'a str, FieldValue)>) -> Ca
         .map(|field_id| FieldDefinition {
             id: sid(field_id),
             name: (*field_id).to_owned(),
+            message_pattern: None,
         })
         .collect::<Vec<_>>();
     let note_fields = values

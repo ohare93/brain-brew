@@ -308,10 +308,12 @@ fn fixtures() -> Fixtures {
     let field = FieldDefinition {
         id: sid("field.front"),
         name: "Front".to_owned(),
+        message_pattern: None,
     };
     let second_field = FieldDefinition {
         id: sid("field.back"),
         name: "Back".to_owned(),
+        message_pattern: None,
     };
     let mut template_adapter_ids = AdapterIds::new();
     template_adapter_ids.insert("anki:ord", "0");

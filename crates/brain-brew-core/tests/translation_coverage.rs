@@ -155,10 +155,12 @@ fn structured_message_deck() -> CanonicalDeck {
             FieldDefinition {
                 id: sid("field.country"),
                 name: "Country".to_owned(),
+                message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.summary"),
                 name: "Summary".to_owned(),
+                message_pattern: None,
             },
         ],
         card_templates: vec![CardTemplate {

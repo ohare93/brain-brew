@@ -81,10 +81,12 @@ fn extension_overlay_can_add_a_note_type_and_notes_using_it() {
             FieldDefinition {
                 id: sid("field.region"),
                 name: "Region".to_owned(),
+                message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.map"),
                 name: "Map".to_owned(),
+                message_pattern: None,
             },
         ],
         card_templates: vec![CardTemplate {
@@ -1231,6 +1233,7 @@ fn translation_coverage_reports_new_note_and_new_field_fallbacks() {
         .push(FieldDefinition {
             id: sid("field.population"),
             name: "Population".to_owned(),
+            message_pattern: None,
         });
     let overlay = Overlay {
         id: sid("overlay.translation.da"),
@@ -2069,6 +2072,7 @@ fn extension_overlay_can_add_a_note_type_field_and_backfill_note_values() {
                         field: Some(FieldDefinition {
                             id: sid("field.population"),
                             name: "Population".to_owned(),
+                            message_pattern: None,
                         }),
                         expected_base: None,
                     },
@@ -2139,6 +2143,7 @@ fn extension_overlay_adds_blank_values_for_new_fields_without_explicit_values() 
                         field: Some(FieldDefinition {
                             id: sid("field.region-code"),
                             name: "Region code".to_owned(),
+                            message_pattern: None,
                         }),
                         expected_base: None,
                     },
@@ -2432,6 +2437,7 @@ fn remove_overlay_can_tombstone_an_unused_note_type() {
             fields: vec![FieldDefinition {
                 id: sid("field.region"),
                 name: "Region".to_owned(),
+                message_pattern: None,
             }],
             card_templates: vec![CardTemplate {
                 id: sid("template.region"),
@@ -2691,6 +2697,7 @@ fn identical_nested_ids_under_different_parents_do_not_alias() {
                         field: Some(FieldDefinition {
                             id: sid("field.flag"),
                             name: "Region flag".to_owned(),
+                            message_pattern: None,
                         }),
                         expected_base: Some(ExpectedBase::EntityFingerprint(
                             fingerprint_field_definition(
@@ -3062,6 +3069,7 @@ fn missing_field_definition_rejects_merge_replace_and_override() {
                             field: Some(FieldDefinition {
                                 id: sid("field.population"),
                                 name: "Population".to_owned(),
+                                message_pattern: None,
                             }),
                             expected_base: Some(ExpectedBase::EntityFingerprint(
                                 fingerprint_field_definition(
@@ -3232,6 +3240,7 @@ fn destructive_operation_matrix_covers_core_change_families() {
             Some(FieldDefinition {
                 id: sid("field.flag"),
                 name: "Flag image".to_owned(),
+                message_pattern: None,
             }),
             Some(ExpectedBase::EntityFingerprint(
                 fingerprint_field_definition(field_definition),
@@ -3528,6 +3537,7 @@ fn merge_and_override_variants_compose_where_supported() {
             Some(FieldDefinition {
                 id: sid("field.flag"),
                 name: "Flag merged".to_owned(),
+                message_pattern: None,
             }),
             Some(ExpectedBase::EntityFingerprint(
                 fingerprint_field_definition(&base.note_types[&sid("note-type.country")].fields[2]),
@@ -3691,14 +3701,17 @@ fn ug_style_deck() -> CanonicalDeck {
             FieldDefinition {
                 id: sid("field.country"),
                 name: "Country".to_owned(),
+                message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.capital"),
                 name: "Capital".to_owned(),
+                message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.flag"),
                 name: "Flag".to_owned(),
+                message_pattern: None,
             },
         ],
         card_templates: vec![CardTemplate {
@@ -3761,6 +3774,7 @@ fn ug_style_deck_with_variable_field_ref_message(target_note: &str) -> Canonical
         .push(FieldDefinition {
             id: sid("field.summary"),
             name: "Summary".to_owned(),
+            message_pattern: None,
         });
     deck.notes.insert(
         sid("note.iceland"),
@@ -3805,6 +3819,7 @@ fn ug_style_deck_with_flag_similarity_message() -> CanonicalDeck {
         .push(FieldDefinition {
             id: sid("field.flag-similarity"),
             name: "Flag similarity".to_owned(),
+            message_pattern: None,
         });
     deck.notes.insert(
         sid("note.iceland"),
@@ -4133,6 +4148,7 @@ fn already_existing_field_definition_overlay() -> Overlay {
         FieldDefinition {
             id: sid("field.flag"),
             name: "Flag duplicate".to_owned(),
+            message_pattern: None,
         },
     )
 }
@@ -4230,6 +4246,7 @@ fn mismatched_field_definition_payload_overlay() -> Overlay {
         FieldDefinition {
             id: sid("field.other"),
             name: "Population".to_owned(),
+            message_pattern: None,
         },
     )
 }

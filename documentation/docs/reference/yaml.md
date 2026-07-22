@@ -132,6 +132,55 @@ notes:
 
 `format` renders `{variable}` placeholders and can itself be translated when a language needs different glue or ordering. `ref` resolves another note field before export, `text` is extracted for translation coverage at the named variable path, and `literal` is available for non-translatable named variables. Adapter exports receive a plain resolved string.
 
+### Reusable list message patterns
+
+When many values of one field repeat the same item structure, declare it once on the field definition:
+
+```yaml
+fields:
+  field.flag-similarity:
+    name: Flag similarity
+    message_pattern:
+      kind: list
+      item_format: '{country} ({description})'
+      separator: ', '
+      parameters:
+        country:
+          type: note_field_ref
+          field: field.country
+        description:
+          type: text
+```
+
+Notes then provide only a non-empty ordered item sequence:
+
+```yaml
+field.flag-similarity:
+  items:
+    - country: note.egypt
+      description: with emblem
+    - country: note.iraq
+      description: with text
+```
+
+For a `note_field_ref` parameter, the scalar is a note stable ID and the declaration supplies the target field. Thus `country: note.egypt` resolves `notes.note.egypt.fields.field.country`. When no referenced note exists in the composed target, explicitly supply independently translatable text instead:
+
+```yaml
+field.flag-similarity:
+  items:
+    - country:
+        text: Sierra Leone
+      description: slightly lighter blue
+```
+
+A `text` parameter remains a concise independently translatable scalar; wrapping it in `{text: ...}` is rejected as redundant. The argument representation is semantic, so explicit text is not treated as a dependency or as equivalent to a scalar note reference. Items must provide exactly the declared parameters, pattern placeholders must exactly match those parameters, and malformed explicit objects, missing references, or cycles fail validation at the item parameter path. Item order is preserved. An intentional empty scalar remains valid and is the only blank/fillable representation:
+
+```yaml
+field.flag-similarity: ''
+```
+
+Inline structured messages remain available for irregular composites that do not share a field-level pattern. Overlay note changes and field fills accept the same `items` value shape when the composed field definition declares the pattern.
+
 ### Message reference scope and graph resolution
 
 A `ref` is always a complete canonical `notes.<note-id>.fields.<field-id>` path. References may cross notes in the same composed deck; aliases and display names are not reference keys. Brain Brew builds one deck-wide graph from the final semantic `FieldValue` map after the ordered overlay/translation stack. Scalar fields are terminal nodes, messages depend on every referenced field, and structured images are terminal semantic nodes lowered by the rendering adapter. A message may therefore reference a scalar, another message, or an image field. Image lowering keeps the exact deterministic `<img src="..." />` adapter form documented above.

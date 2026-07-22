@@ -186,10 +186,12 @@ fn diff_field_definitions(
             let FieldDefinition {
                 id: left_id,
                 name: left_name,
+                message_pattern: left_pattern,
             } = left;
             let FieldDefinition {
                 id: right_id,
                 name: right_name,
+                message_pattern: right_pattern,
             } = right;
             modified(
                 changes,
@@ -211,6 +213,17 @@ fn diff_field_definitions(
                 .to_string(),
                 left_name,
                 right_name,
+            );
+            modified(
+                changes,
+                DeckPath::NoteTypeFieldMessagePattern {
+                    note_type_id: note_type_id.clone(),
+                    field_id: key.clone(),
+                }
+                .to_string(),
+                left_pattern,
+                right_pattern,
+                |pattern| format!("{pattern:?}"),
             );
         },
     );
@@ -449,9 +462,26 @@ fn diff_field_value(
         (FieldValue::Message(left), FieldValue::Message(right)) => {
             diff_message(changes, note_id, field_id, left, right)
         }
+        (FieldValue::MessageItems(left), FieldValue::MessageItems(right)) => modified(
+            changes,
+            DeckPath::NoteFieldMessage {
+                note_id: note_id.clone(),
+                field_id: field_id.clone(),
+            }
+            .to_string(),
+            left,
+            right,
+            |message| format!("{message:?}"),
+        ),
         (
-            FieldValue::Scalar(_) | FieldValue::Images(_) | FieldValue::Message(_),
-            FieldValue::Scalar(_) | FieldValue::Images(_) | FieldValue::Message(_),
+            FieldValue::Scalar(_)
+            | FieldValue::Images(_)
+            | FieldValue::Message(_)
+            | FieldValue::MessageItems(_),
+            FieldValue::Scalar(_)
+            | FieldValue::Images(_)
+            | FieldValue::Message(_)
+            | FieldValue::MessageItems(_),
         ) => modified_string(
             changes,
             DeckPath::NoteField {
@@ -928,8 +958,16 @@ fn kind_rank(kind: SemanticChangeKind) -> u8 {
 }
 
 fn field_definition_summary(field: &FieldDefinition) -> String {
-    let FieldDefinition { id, name } = field;
-    format!("field(id={},name={})", quote(id.as_str()), quote(name))
+    let FieldDefinition {
+        id,
+        name,
+        message_pattern,
+    } = field;
+    format!(
+        "field(id={},name={},message_pattern={message_pattern:?})",
+        quote(id.as_str()),
+        quote(name)
+    )
 }
 
 fn card_template_summary(template: &CardTemplate) -> String {
@@ -1020,6 +1058,7 @@ fn field_value_summary(value: &FieldValue) -> String {
             format!("images[{values}]")
         }
         FieldValue::Message(message) => message_summary(message),
+        FieldValue::MessageItems(message) => format!("message_items({message:?})"),
     }
 }
 

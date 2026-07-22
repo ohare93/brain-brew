@@ -19,10 +19,12 @@ fn deck(question_format: &str, answer_format: &str) -> CanonicalDeck {
             FieldDefinition {
                 id: sid("field.country"),
                 name: "Country".to_owned(),
+                message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.capital"),
                 name: "Capital".to_owned(),
+                message_pattern: None,
             },
         ],
         card_templates: vec![CardTemplate {

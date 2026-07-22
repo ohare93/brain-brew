@@ -2682,6 +2682,7 @@ impl CrowdAnkiNoteModelJson {
                 Ok(FieldDefinition {
                     id,
                     name: field.name,
+                    message_pattern: None,
                 })
             })
             .collect::<Result<Vec<_>, CrowdAnkiError>>()?;

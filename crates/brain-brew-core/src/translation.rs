@@ -403,6 +403,26 @@ fn translation_coverage_report(
         );
         // Anki field-definition names are structural identifiers. Localized
         // display labels belong in source variables, not translation dictionaries.
+        for field in &note_type.fields {
+            if let Some(pattern) = &field.message_pattern {
+                builder.record_string_without_fallback(
+                    &pattern.item_format,
+                    DeckPath::NoteTypeFieldMessagePatternItemFormat {
+                        note_type_id: note_type_id.clone(),
+                        field_id: field.id.clone(),
+                    }
+                    .to_string(),
+                );
+                builder.record_string_without_fallback(
+                    &pattern.separator,
+                    DeckPath::NoteTypeFieldMessagePatternSeparator {
+                        note_type_id: note_type_id.clone(),
+                        field_id: field.id.clone(),
+                    }
+                    .to_string(),
+                );
+            }
+        }
         for template in &note_type.card_templates {
             if deck
                 .tombstones
@@ -489,6 +509,17 @@ fn translation_coverage_report(
                         .get(&path)
                         .expect("every planned message has a resolved value");
                     builder.record_message(rendered, path, note_id, field_id, message);
+                }
+                FieldValue::MessageItems(message) => {
+                    let pattern = deck
+                        .note_types
+                        .get(&note.note_type_id)
+                        .and_then(|note_type| {
+                            note_type.fields.iter().find(|field| field.id == *field_id)
+                        })
+                        .and_then(|field| field.message_pattern.as_ref())
+                        .expect("list message patterns were validated by the field graph");
+                    builder.record_list_message(note_id, field_id, message, pattern);
                 }
                 FieldValue::Images(_) => {}
             }
@@ -733,6 +764,74 @@ impl TranslationCoverageBuilder<'_> {
     fn record_variables(&mut self, variables: &BTreeMap<String, String>, path_prefix: &str) {
         for (key, value) in variables {
             self.record_string(value, map_entry_path(path_prefix, key), Some(key));
+        }
+    }
+
+    fn record_list_message(
+        &mut self,
+        note_id: &StableId,
+        field_id: &StableId,
+        message: &ListMessageItems,
+        pattern: &ListMessagePattern,
+    ) {
+        let separator_path = DeckPath::NoteFieldMessageSeparator {
+            note_id: note_id.clone(),
+            field_id: field_id.clone(),
+        }
+        .to_string();
+        if matches!(
+            resolve_translation(
+                self.translations,
+                &pattern.separator,
+                TranslationResolveOptions {
+                    path: &separator_path,
+                    variable_key: None,
+                    include_target_adaptation: false,
+                    include_variable: false,
+                    include_ignored: false,
+                },
+            ),
+            TranslationOutcome::Contextual { .. }
+        ) {
+            self.record_string_without_fallback(&pattern.separator, separator_path);
+        }
+        for (index, item) in message.items.iter().enumerate() {
+            for (parameter, definition) in &pattern.parameters {
+                let path = DeckPath::NoteFieldMessageItemParameter {
+                    note_id: note_id.clone(),
+                    field_id: field_id.clone(),
+                    index,
+                    parameter: parameter.clone(),
+                }
+                .to_string();
+                match (definition, &item[parameter]) {
+                    (ListMessageParameter::Text, ListMessageArgument::Scalar(value))
+                    | (
+                        ListMessageParameter::NoteFieldRef { .. },
+                        ListMessageArgument::Text(value),
+                    ) => self.record_string(value, path, None),
+                    (
+                        ListMessageParameter::NoteFieldRef { field_id },
+                        ListMessageArgument::Scalar(note_id),
+                    ) => {
+                        let referenced_note = StableId::new(note_id.clone())
+                            .expect("list message references were graph-validated");
+                        let reference = DeckPath::NoteField {
+                            note_id: referenced_note,
+                            field_id: field_id.clone(),
+                        }
+                        .to_string();
+                        let value = self
+                            .resolved
+                            .get(&reference)
+                            .expect("list message references were graph-validated");
+                        self.record_string(value, path, None);
+                    }
+                    (ListMessageParameter::Text, ListMessageArgument::Text(_)) => {
+                        unreachable!("list message argument kinds were graph-validated")
+                    }
+                }
+            }
         }
     }
 
@@ -1270,7 +1369,14 @@ fn translation_context_unit(
         .unwrap_or_default();
     let message = note.zip(note_id.as_ref()).zip(field_id.as_ref()).and_then(
         |((note, note_id), field_id)| {
-            message_context(note, note_id, field_id, resolved, entries_by_path)
+            message_context(
+                note,
+                note_type?,
+                note_id,
+                field_id,
+                resolved,
+                entries_by_path,
+            )
         },
     );
     let card_templates = note_type
@@ -1308,6 +1414,8 @@ fn note_id_from_translation_path(path: &str) -> Option<StableId> {
         | DeckPath::NoteFieldMessageComponent { note_id, .. }
         | DeckPath::NoteFieldMessageFormat { note_id, .. }
         | DeckPath::NoteFieldMessageVariable { note_id, .. }
+        | DeckPath::NoteFieldMessageItemParameter { note_id, .. }
+        | DeckPath::NoteFieldMessageSeparator { note_id, .. }
         | DeckPath::NoteTags { note_id }
         | DeckPath::NoteTag { note_id, .. }
         | DeckPath::NoteAdapterIds { note_id }
@@ -1327,6 +1435,9 @@ fn note_type_id_from_translation_path(path: &str) -> Option<StableId> {
         | DeckPath::NoteTypeFields { note_type_id }
         | DeckPath::NoteTypeField { note_type_id, .. }
         | DeckPath::NoteTypeFieldName { note_type_id, .. }
+        | DeckPath::NoteTypeFieldMessagePattern { note_type_id, .. }
+        | DeckPath::NoteTypeFieldMessagePatternItemFormat { note_type_id, .. }
+        | DeckPath::NoteTypeFieldMessagePatternSeparator { note_type_id, .. }
         | DeckPath::NoteTypeCardTemplates { note_type_id }
         | DeckPath::NoteTypeCardTemplate { note_type_id, .. }
         | DeckPath::NoteTypeCardTemplateName { note_type_id, .. }
@@ -1349,8 +1460,13 @@ fn field_id_from_translation_path(path: &str) -> Option<StableId> {
         | DeckPath::NoteFieldMessageComponent { field_id, .. }
         | DeckPath::NoteFieldMessageFormat { field_id, .. }
         | DeckPath::NoteFieldMessageVariable { field_id, .. }
+        | DeckPath::NoteFieldMessageItemParameter { field_id, .. }
+        | DeckPath::NoteFieldMessageSeparator { field_id, .. }
         | DeckPath::NoteTypeField { field_id, .. }
-        | DeckPath::NoteTypeFieldName { field_id, .. } => Some(field_id),
+        | DeckPath::NoteTypeFieldName { field_id, .. }
+        | DeckPath::NoteTypeFieldMessagePattern { field_id, .. }
+        | DeckPath::NoteTypeFieldMessagePatternItemFormat { field_id, .. }
+        | DeckPath::NoteTypeFieldMessagePatternSeparator { field_id, .. } => Some(field_id),
         _ => None,
     }
 }
@@ -1400,12 +1516,31 @@ fn note_field_contexts(
 
 fn message_context(
     note: &Note,
+    note_type: &NoteType,
     note_id: &StableId,
     field_id: &StableId,
     resolved: &ResolvedFieldGraph,
     entries_by_path: &BTreeMap<&str, &TranslationCoverageEntry>,
 ) -> Option<TranslationMessageContext> {
-    let message = note.fields.get(field_id)?.as_message()?;
+    let value = note.fields.get(field_id)?;
+    if let FieldValue::MessageItems(message) = value {
+        let pattern = note_type
+            .fields
+            .iter()
+            .find(|field| &field.id == field_id)?
+            .message_pattern
+            .as_ref()?;
+        return list_message_context(
+            note_type,
+            note_id,
+            field_id,
+            message,
+            pattern,
+            resolved,
+            entries_by_path,
+        );
+    }
+    let message = value.as_message()?;
     let field_path = DeckPath::NoteField {
         note_id: note_id.clone(),
         field_id: field_id.clone(),
@@ -1491,6 +1626,138 @@ fn message_context(
         source: resolved_source,
         translated,
         format: None,
+        components,
+    })
+}
+
+fn list_message_context(
+    note_type: &NoteType,
+    note_id: &StableId,
+    field_id: &StableId,
+    message: &ListMessageItems,
+    pattern: &ListMessagePattern,
+    resolved: &ResolvedFieldGraph,
+    entries_by_path: &BTreeMap<&str, &TranslationCoverageEntry>,
+) -> Option<TranslationMessageContext> {
+    let source = resolved
+        .get(
+            &DeckPath::NoteField {
+                note_id: note_id.clone(),
+                field_id: field_id.clone(),
+            }
+            .to_string(),
+        )?
+        .to_owned();
+    let format_path = DeckPath::NoteTypeFieldMessagePatternItemFormat {
+        note_type_id: note_type.id.clone(),
+        field_id: field_id.clone(),
+    }
+    .to_string();
+    let format_entry = entries_by_path.get(format_path.as_str()).copied();
+    let translated_format = format_entry
+        .and_then(|entry| entry.translated.clone())
+        .unwrap_or_else(|| pattern.item_format.clone());
+    let format = TranslationMessageComponentContext {
+        index: 0,
+        name: Some("item_format".to_owned()),
+        kind: MessageComponentKind::Format,
+        path: format_path,
+        source: pattern.item_format.clone(),
+        translated: translated_format.clone(),
+        reference: None,
+        category: format_entry.map(|entry| entry.category),
+    };
+
+    let shared_separator_path = DeckPath::NoteTypeFieldMessagePatternSeparator {
+        note_type_id: note_type.id.clone(),
+        field_id: field_id.clone(),
+    }
+    .to_string();
+    let usage_separator_path = DeckPath::NoteFieldMessageSeparator {
+        note_id: note_id.clone(),
+        field_id: field_id.clone(),
+    }
+    .to_string();
+    let separator_entry = entries_by_path
+        .get(usage_separator_path.as_str())
+        .or_else(|| entries_by_path.get(shared_separator_path.as_str()))
+        .copied();
+    let translated_separator = separator_entry
+        .and_then(|entry| entry.translated.clone())
+        .unwrap_or_else(|| pattern.separator.clone());
+    let mut components = vec![TranslationMessageComponentContext {
+        index: 0,
+        name: Some("separator".to_owned()),
+        kind: MessageComponentKind::Literal,
+        path: separator_entry
+            .filter(|entry| entry.path == usage_separator_path)
+            .map_or(shared_separator_path, |_| usage_separator_path),
+        source: pattern.separator.clone(),
+        translated: translated_separator.clone(),
+        reference: None,
+        category: separator_entry.map(|entry| entry.category),
+    }];
+
+    let mut rendered_items = Vec::new();
+    for (item_index, item) in message.items.iter().enumerate() {
+        let mut arguments = BTreeMap::new();
+        for (parameter_index, (parameter, definition)) in pattern.parameters.iter().enumerate() {
+            let path = DeckPath::NoteFieldMessageItemParameter {
+                note_id: note_id.clone(),
+                field_id: field_id.clone(),
+                index: item_index,
+                parameter: parameter.clone(),
+            }
+            .to_string();
+            let entry = entries_by_path.get(path.as_str()).copied();
+            let (kind, source_value, reference) = match (definition, &item[parameter]) {
+                (ListMessageParameter::Text, ListMessageArgument::Scalar(value))
+                | (ListMessageParameter::NoteFieldRef { .. }, ListMessageArgument::Text(value)) => {
+                    (MessageComponentKind::Text, value.clone(), None)
+                }
+                (
+                    ListMessageParameter::NoteFieldRef { field_id },
+                    ListMessageArgument::Scalar(note_id),
+                ) => {
+                    let referenced_note = StableId::new(note_id.clone()).ok()?;
+                    let reference = DeckPath::NoteField {
+                        note_id: referenced_note,
+                        field_id: field_id.clone(),
+                    }
+                    .to_string();
+                    (
+                        MessageComponentKind::FieldRef,
+                        resolved.get(&reference)?.to_owned(),
+                        Some(reference),
+                    )
+                }
+                (ListMessageParameter::Text, ListMessageArgument::Text(_)) => return None,
+            };
+            let translated = entry
+                .and_then(|entry| entry.translated.clone())
+                .unwrap_or_else(|| source_value.clone());
+            arguments.insert(parameter.clone(), translated.clone());
+            components.push(TranslationMessageComponentContext {
+                index: item_index * pattern.parameters.len() + parameter_index + 1,
+                name: Some(format!("items.{item_index}.{parameter}")),
+                kind,
+                path,
+                source: source_value,
+                translated,
+                reference,
+                category: entry.map(|entry| entry.category),
+            });
+        }
+        rendered_items.push(
+            render_message_format(&translated_format, &arguments)
+                .unwrap_or_else(|_| arguments.values().cloned().collect()),
+        );
+    }
+
+    Some(TranslationMessageContext {
+        source,
+        translated: rendered_items.join(&translated_separator),
+        format: Some(format),
         components,
     })
 }
@@ -1609,6 +1876,7 @@ pub(crate) fn apply_translation_dictionary(
     let mut seen_variables = BTreeSet::new();
     let mut seen_adapter_ids = BTreeSet::new();
     let mut source_paths = BTreeMap::<String, BTreeSet<String>>::new();
+    let mut list_materializations = BTreeSet::<(StableId, StableId)>::new();
 
     {
         let tombstones = resolved.tombstones.clone();
@@ -1622,6 +1890,7 @@ pub(crate) fn apply_translation_dictionary(
             seen_variables: &mut seen_variables,
             seen_adapter_ids: &mut seen_adapter_ids,
             source_paths: &mut source_paths,
+            list_materializations: &mut list_materializations,
             changed_paths,
             errors,
         };
@@ -1671,6 +1940,26 @@ pub(crate) fn apply_translation_dictionary(
                 }
                 .to_string(),
             );
+            for field in &mut note_type.fields {
+                if let Some(pattern) = &mut field.message_pattern {
+                    context.translate_string_without_missing(
+                        &mut pattern.item_format,
+                        DeckPath::NoteTypeFieldMessagePatternItemFormat {
+                            note_type_id: note_type_id.clone(),
+                            field_id: field.id.clone(),
+                        }
+                        .to_string(),
+                    );
+                    context.translate_string_without_missing(
+                        &mut pattern.separator,
+                        DeckPath::NoteTypeFieldMessagePatternSeparator {
+                            note_type_id: note_type_id.clone(),
+                            field_id: field.id.clone(),
+                        }
+                        .to_string(),
+                    );
+                }
+            }
             // Field-definition names remain structural so Mustache and other
             // adapter references stay valid across target languages. Translate
             // display labels through source variables instead.
@@ -1773,6 +2062,28 @@ pub(crate) fn apply_translation_dictionary(
                             *value = FieldValue::Scalar(translated);
                         }
                     }
+                    FieldValue::MessageItems(message) => {
+                        let source_pattern = source_deck
+                            .note_types
+                            .get(&note.note_type_id)
+                            .and_then(|note_type| {
+                                note_type.fields.iter().find(|field| field.id == field_id)
+                            })
+                            .and_then(|field| field.message_pattern.as_ref())
+                            .expect("list message patterns were graph-validated");
+                        let full_override = context.translate_list_message(
+                            &source_graph,
+                            &source,
+                            path,
+                            note_id,
+                            &field_id,
+                            message,
+                            source_pattern,
+                        );
+                        if let Some(translated) = full_override {
+                            *value = FieldValue::Scalar(translated);
+                        }
+                    }
                     FieldValue::Images(_) => {}
                 }
             }
@@ -1790,6 +2101,41 @@ pub(crate) fn apply_translation_dictionary(
                 }
                 .to_string(),
             );
+        }
+    }
+
+    if !list_materializations.is_empty() {
+        let graph = match resolved.resolved_field_graph() {
+            Ok(graph) => graph,
+            Err(report) => {
+                errors.extend(report.errors.into_iter().map(|graph_error| {
+                    let mut error = ComposeError::new(
+                        ComposeErrorKind::ValidationFailed,
+                        graph_error.consuming_path.clone(),
+                        graph_error.message.clone(),
+                    );
+                    error.field_graph_error = Some(graph_error);
+                    error
+                }));
+                return;
+            }
+        };
+        for (note_id, field_id) in list_materializations {
+            let path = DeckPath::NoteField {
+                note_id: note_id.clone(),
+                field_id: field_id.clone(),
+            }
+            .to_string();
+            let value = graph
+                .get(&path)
+                .expect("materialized list message was resolved")
+                .to_owned();
+            resolved
+                .notes
+                .get_mut(&note_id)
+                .expect("materialized note remains live")
+                .fields
+                .insert(field_id, FieldValue::Scalar(value));
         }
     }
 
@@ -1905,6 +2251,7 @@ struct TranslationApplyContext<'a, 'b> {
     seen_variables: &'b mut BTreeSet<(String, String)>,
     seen_adapter_ids: &'b mut BTreeSet<(String, String)>,
     source_paths: &'b mut BTreeMap<String, BTreeSet<String>>,
+    list_materializations: &'b mut BTreeSet<(StableId, StableId)>,
     changed_paths: &'b mut BTreeMap<String, StableId>,
     errors: &'b mut Vec<ComposeError>,
 }
@@ -1914,6 +2261,137 @@ impl TranslationApplyContext<'_, '_> {
         for (key, value) in variables {
             self.translate_string(value, map_entry_path(path_prefix, key), Some(key));
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn translate_list_message(
+        &mut self,
+        source_graph: &ResolvedFieldGraph,
+        resolved_source: &str,
+        path: String,
+        note_id: &StableId,
+        field_id: &StableId,
+        message: &mut ListMessageItems,
+        pattern: &ListMessagePattern,
+    ) -> Option<String> {
+        let full_field_outcome = resolve_translation(
+            self.translations,
+            resolved_source,
+            TranslationResolveOptions {
+                path: &path,
+                variable_key: None,
+                include_target_adaptation: true,
+                include_variable: true,
+                include_ignored: true,
+            },
+        );
+        if matches!(
+            full_field_outcome,
+            TranslationOutcome::TargetAdaptation { .. }
+                | TranslationOutcome::Contextual { .. }
+                | TranslationOutcome::Direct { .. }
+                | TranslationOutcome::Stale { .. }
+        ) {
+            let mut translated = resolved_source.to_owned();
+            self.translate_string(&mut translated, path, None);
+            return Some(translated);
+        }
+        if resolved_source.is_empty() || is_ignored_translation_path(self.translations, &path) {
+            return None;
+        }
+
+        let separator_path = DeckPath::NoteFieldMessageSeparator {
+            note_id: note_id.clone(),
+            field_id: field_id.clone(),
+        }
+        .to_string();
+        if matches!(
+            resolve_translation(
+                self.translations,
+                &pattern.separator,
+                TranslationResolveOptions {
+                    path: &separator_path,
+                    variable_key: None,
+                    include_target_adaptation: false,
+                    include_variable: false,
+                    include_ignored: false,
+                },
+            ),
+            TranslationOutcome::Contextual { .. }
+        ) {
+            let mut translated = pattern.separator.clone();
+            self.translate_string_without_missing(&mut translated, separator_path);
+            message.separator_override = Some(translated);
+            self.list_materializations
+                .insert((note_id.clone(), field_id.clone()));
+        }
+
+        for (index, item) in message.items.iter_mut().enumerate() {
+            for (parameter, definition) in &pattern.parameters {
+                let path = DeckPath::NoteFieldMessageItemParameter {
+                    note_id: note_id.clone(),
+                    field_id: field_id.clone(),
+                    index,
+                    parameter: parameter.clone(),
+                }
+                .to_string();
+                match (
+                    definition,
+                    item.get_mut(parameter).expect("validated parameter"),
+                ) {
+                    (ListMessageParameter::Text, ListMessageArgument::Scalar(value))
+                    | (
+                        ListMessageParameter::NoteFieldRef { .. },
+                        ListMessageArgument::Text(value),
+                    ) => self.translate_string(value, path, None),
+                    (
+                        ListMessageParameter::NoteFieldRef {
+                            field_id: target_field_id,
+                        },
+                        ListMessageArgument::Scalar(referenced_note),
+                    ) => {
+                        let referenced_note = StableId::new(referenced_note.clone())
+                            .expect("list message references were graph-validated");
+                        let reference = DeckPath::NoteField {
+                            note_id: referenced_note,
+                            field_id: target_field_id.clone(),
+                        }
+                        .to_string();
+                        let source = source_graph
+                            .get(&reference)
+                            .expect("list message references were graph-validated");
+                        let outcome = resolve_translation(
+                            self.translations,
+                            source,
+                            TranslationResolveOptions {
+                                path: &path,
+                                variable_key: None,
+                                include_target_adaptation: false,
+                                include_variable: false,
+                                include_ignored: false,
+                            },
+                        );
+                        if let TranslationOutcome::Contextual { translated, .. } = &outcome {
+                            // Materialize every consuming-path decision, including an explicit
+                            // source-equal target that intentionally overrides a conflicting
+                            // reusable direct translation on the referenced field.
+                            self.record_apply_source(source, &path, &outcome);
+                            let mut materialized = source.to_owned();
+                            self.apply_translated_value(&mut materialized, &path, translated);
+                            message
+                                .argument_overrides
+                                .insert((index, parameter.clone()), materialized);
+                            self.list_materializations
+                                .insert((note_id.clone(), field_id.clone()));
+                        }
+                    }
+                    (ListMessageParameter::Text, ListMessageArgument::Text(_)) => {
+                        unreachable!("list message argument kinds were graph-validated")
+                    }
+                }
+            }
+        }
+        None
     }
 
     fn translate_message_field(

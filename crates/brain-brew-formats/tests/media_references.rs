@@ -417,10 +417,12 @@ fn media_deck() -> CanonicalDeck {
             FieldDefinition {
                 id: sid("field.country"),
                 name: "Country".to_owned(),
+                message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.flag"),
                 name: "Flag".to_owned(),
+                message_pattern: None,
             },
         ],
         card_templates: vec![CardTemplate {

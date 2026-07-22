@@ -607,18 +607,22 @@ fn complete_deck() -> CanonicalDeck {
         FieldDefinition {
             id: sid("field.scalar"),
             name: "Scalar".to_owned(),
+            message_pattern: None,
         },
         FieldDefinition {
             id: sid("field.images"),
             name: "Images".to_owned(),
+            message_pattern: None,
         },
         FieldDefinition {
             id: sid("field.composite"),
             name: "Message".to_owned(),
+            message_pattern: None,
         },
         FieldDefinition {
             id: sid("field.formatted"),
             name: "Formatted".to_owned(),
+            message_pattern: None,
         },
     ];
     let templates = vec![

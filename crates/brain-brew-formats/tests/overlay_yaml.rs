@@ -1,4 +1,6 @@
-use brain_brew_core::{ChangeIntent, ExpectedBase, FieldValue, OverlayKind, StableId};
+use brain_brew_core::{
+    ChangeIntent, ExpectedBase, FieldValue, ListMessageArgument, OverlayKind, StableId,
+};
 use brain_brew_formats::canonical_yaml;
 
 #[test]
@@ -33,6 +35,168 @@ note_types:
     assert!(formatted.contains("      template.country-flag:\n        intent: add\n"));
     assert!(formatted.contains("        insert_after: template.capital-country\n"));
     canonical_yaml::overlay_from_str(&formatted).expect("formatted overlay parses");
+}
+
+#[test]
+fn overlay_field_definition_can_add_a_list_message_pattern() {
+    let formatted = canonical_yaml::overlay_format_str(
+        r#"id: overlay.extension.similarity
+kind: extension
+note_types:
+  note-type.country:
+    intent: merge
+    fields:
+      field.flag-similarity:
+        intent: add
+        name: Flag similarity
+        message_pattern:
+          kind: list
+          item_format: '{country} ({description})'
+          separator: ', '
+          parameters:
+            country:
+              type: note_field_ref
+              field: field.country
+            description:
+              type: text
+"#,
+    )
+    .expect("pattern field addition formats");
+
+    assert!(formatted.contains("message_pattern:\n          kind: list"));
+    assert!(!formatted.contains("field_additions:"));
+    let overlay = canonical_yaml::overlay_from_str(&formatted).unwrap();
+    assert!(
+        overlay.note_type_changes[&sid("note-type.country")].fields[&sid("field.flag-similarity")]
+            .field
+            .as_ref()
+            .unwrap()
+            .message_pattern
+            .is_some()
+    );
+}
+
+#[test]
+fn nested_contextual_paths_group_message_pattern_translations() {
+    let formatted = canonical_yaml::overlay_format_str(
+        r#"id: overlay.translation.zh
+kind: translation
+translations:
+  contextual:
+    note_types.note-type.country.fields.field.flag-similarity.message_pattern:
+      item_format:
+        '{country} ({description})': '{country}（{description}）'
+      separator:
+        ', ': '、'
+    notes.note.yemen.fields.field.flag-similarity.message:
+      separator:
+        ', ': ', e '
+"#,
+    )
+    .expect("nested pattern translations format");
+    assert!(
+        formatted.contains(
+            "note_types.note-type.country.fields.field.flag-similarity.message_pattern:\n      item_format:"
+        ),
+        "{formatted}"
+    );
+    assert!(
+        formatted
+            .contains("notes.note.yemen.fields.field.flag-similarity.message:\n      separator:")
+    );
+    let overlay = canonical_yaml::overlay_from_str(&formatted)
+        .expect("formatted nested pattern translations parse");
+    let contextual = &overlay.translations.as_ref().unwrap().contextual;
+    assert_eq!(
+        contextual["note_types.note-type.country.fields.field.flag-similarity.message_pattern.item_format"]
+            ["{country} ({description})"],
+        "{country}（{description}）"
+    );
+    assert_eq!(
+        contextual["note_types.note-type.country.fields.field.flag-similarity.message_pattern.separator"]
+            [", "],
+        "、"
+    );
+    assert_eq!(
+        contextual["notes.note.yemen.fields.field.flag-similarity.message.separator"][", "],
+        ", e "
+    );
+}
+
+#[test]
+fn list_message_items_round_trip_in_overlay_field_values() {
+    let formatted = canonical_yaml::overlay_format_str(
+        r#"id: overlay.patch.similarity
+kind: patch
+notes:
+  note.andorra:
+    intent: merge
+    fields:
+      field.flag-similarity:
+        intent: replace
+        value:
+          items:
+            - country:
+                text: Sierra Leone
+              description: slightly lighter blue
+        expected_base:
+          value: ''
+"#,
+    )
+    .expect("overlay list message formats");
+
+    assert!(
+        formatted.contains(
+            "field_fills:\n  note.andorra:\n    field.flag-similarity:\n      items:\n        - country:\n            text: Sierra Leone\n          description: slightly lighter blue"
+        ),
+        "{formatted}"
+    );
+    let overlay = canonical_yaml::overlay_from_str(&formatted).expect("formatted overlay parses");
+    let value = overlay.note_changes[&sid("note.andorra")].fields[&sid("field.flag-similarity")]
+        .value
+        .as_ref()
+        .expect("field value");
+    let FieldValue::MessageItems(message) = value else {
+        panic!("expected list message items")
+    };
+    assert_eq!(
+        message.items[0]["country"],
+        ListMessageArgument::Text("Sierra Leone".to_owned())
+    );
+}
+
+#[test]
+fn malformed_explicit_list_message_argument_reports_parameter_path() {
+    let error = canonical_yaml::overlay_from_str(
+        r#"id: overlay.patch.similarity
+kind: patch
+notes:
+  note.andorra:
+    intent: merge
+    fields:
+      field.flag-similarity:
+        intent: replace
+        value:
+          items:
+            - country:
+                text: Sierra Leone
+                unexpected: value
+              description: slightly lighter blue
+        expected_base:
+          value: ''
+"#,
+    )
+    .expect_err("ambiguous explicit argument must fail");
+
+    let message = error.to_string();
+    assert!(
+        message.contains("notes.note.andorra.fields.field.flag-similarity.value.items[0].country"),
+        "{message}"
+    );
+    assert!(
+        message.contains("exactly one string `text` property"),
+        "{message}"
+    );
 }
 
 #[test]

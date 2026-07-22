@@ -200,6 +200,9 @@ fn precondition_json(value: &ComposePrecondition) -> Value {
                 "media_ids": images.iter().map(|image| image.media_id.as_str()).collect::<Vec<_>>(),
             }),
             FieldValue::Message(_) => json!({"kind": "field_value", "representation": "message"}),
+            FieldValue::MessageItems(_) => {
+                json!({"kind": "field_value", "representation": "message_items"})
+            }
         },
         ComposePrecondition::Missing => json!({"kind": "missing"}),
     }

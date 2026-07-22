@@ -32,7 +32,7 @@ impl CanonicalDeck {
         let mut resolved = self.clone();
         for (note_id, note) in &mut resolved.notes {
             for (field_id, value) in &mut note.fields {
-                if !matches!(value, FieldValue::Message(_)) {
+                if !matches!(value, FieldValue::Message(_) | FieldValue::MessageItems(_)) {
                     continue;
                 }
                 let path = note_field_path(note_id, field_id);
@@ -77,6 +77,7 @@ struct FieldNode<'a> {
     field_id: StableId,
     path: String,
     value: &'a FieldValue,
+    message_pattern: Option<&'a ListMessagePattern>,
     dependencies: Vec<FieldDependency>,
 }
 
@@ -119,11 +120,19 @@ impl<'a> FieldGraph<'a> {
                     continue;
                 }
                 let path = note_field_path(note_id, field_id);
+                let message_pattern = deck
+                    .note_types
+                    .get(&note.note_type_id)
+                    .and_then(|note_type| {
+                        note_type.fields.iter().find(|field| field.id == *field_id)
+                    })
+                    .and_then(|field| field.message_pattern.as_ref());
                 nodes.push(FieldNode {
                     note_id: note_id.clone(),
                     field_id: field_id.clone(),
                     path,
                     value,
+                    message_pattern,
                     dependencies: Vec::new(),
                 });
             }
@@ -136,10 +145,15 @@ impl<'a> FieldGraph<'a> {
             .collect::<HashMap<_, _>>();
         let mut errors = Vec::new();
         for node in &mut nodes {
-            let FieldValue::Message(message) = node.value else {
-                continue;
-            };
-            collect_message_dependencies(node, message, &mut errors);
+            match node.value {
+                FieldValue::Message(message) => {
+                    collect_message_dependencies(node, message, &mut errors)
+                }
+                FieldValue::MessageItems(items) => {
+                    collect_list_message_dependencies(node, items, &mut errors)
+                }
+                FieldValue::Scalar(_) | FieldValue::Images(_) => {}
+            }
         }
 
         for node in &nodes {
@@ -260,6 +274,137 @@ fn collect_message_dependencies(
             );
         }
     }
+}
+
+pub(crate) fn validate_list_message_pattern(pattern: &ListMessagePattern) -> Result<(), String> {
+    if pattern.parameters.is_empty() {
+        return Err("list message pattern must declare at least one parameter".to_owned());
+    }
+    let parts = parse_message_format(&pattern.item_format)
+        .map_err(|message| format!("invalid list message item_format: {message}"))?;
+    let placeholders = parts
+        .iter()
+        .filter_map(|part| match part {
+            MessageFormatPart::Variable(name) => Some(name.clone()),
+            MessageFormatPart::Literal(_) => None,
+        })
+        .collect::<HashSet<_>>();
+    let declared = pattern.parameters.keys().cloned().collect::<HashSet<_>>();
+    if placeholders != declared {
+        return Err(format!(
+            "list message item_format placeholders {:?} must exactly match declared parameters {:?}",
+            placeholders, declared
+        ));
+    }
+    Ok(())
+}
+
+fn collect_list_message_dependencies(
+    node: &mut FieldNode<'_>,
+    message: &ListMessageItems,
+    errors: &mut Vec<FieldGraphError>,
+) {
+    let Some(pattern) = node.message_pattern else {
+        errors.push(graph_error(
+            node,
+            FieldGraphErrorKind::InvalidMessage,
+            node.path.clone(),
+            None,
+            "list message value requires a message_pattern on its field definition".to_owned(),
+        ));
+        return;
+    };
+    if message.items.is_empty() {
+        errors.push(graph_error(
+            node,
+            FieldGraphErrorKind::InvalidMessage,
+            node.path.clone(),
+            None,
+            "list message must contain at least one item".to_owned(),
+        ));
+        return;
+    }
+    if let Err(message) = validate_list_message_pattern(pattern) {
+        errors.push(graph_error(
+            node,
+            FieldGraphErrorKind::InvalidMessage,
+            node.path.clone(),
+            None,
+            message,
+        ));
+        return;
+    }
+    let declared = pattern.parameters.keys().cloned().collect::<HashSet<_>>();
+    for (index, item) in message.items.iter().enumerate() {
+        let supplied = item.keys().cloned().collect::<HashSet<_>>();
+        if supplied != declared {
+            errors.push(graph_error(
+                node,
+                FieldGraphErrorKind::InvalidMessage,
+                node.path.clone(),
+                None,
+                format!(
+                    "list message item {index} parameters {:?} must exactly match declared parameters {:?}",
+                    supplied, declared
+                ),
+            ));
+            continue;
+        }
+        for (parameter, definition) in &pattern.parameters {
+            let argument = &item[parameter];
+            let parameter_path =
+                list_message_parameter_path(&node.note_id, &node.field_id, index, parameter);
+            match (definition, argument) {
+                (ListMessageParameter::Text, ListMessageArgument::Scalar(_))
+                | (ListMessageParameter::NoteFieldRef { .. }, ListMessageArgument::Text(_)) => {}
+                (ListMessageParameter::Text, ListMessageArgument::Text(_)) => {
+                    errors.push(graph_error(
+                        node,
+                        FieldGraphErrorKind::InvalidMessage,
+                        parameter_path,
+                        None,
+                        "text list message parameter uses concise scalar syntax; explicit `text` is only valid as an escape hatch for note_field_ref parameters".to_owned(),
+                    ));
+                }
+                (
+                    ListMessageParameter::NoteFieldRef { field_id },
+                    ListMessageArgument::Scalar(note_id_text),
+                ) => {
+                    let Ok(note_id) = StableId::new(note_id_text.clone()) else {
+                        errors.push(graph_error(
+                            node,
+                            FieldGraphErrorKind::InvalidReference,
+                            parameter_path,
+                            Some(note_id_text.clone()),
+                            format!(
+                                "list message note reference {note_id_text:?} is not a stable note id"
+                            ),
+                        ));
+                        continue;
+                    };
+                    node.dependencies.push(FieldDependency {
+                        path: note_field_path(&note_id, field_id),
+                        consuming_path: parameter_path,
+                    });
+                }
+            }
+        }
+    }
+}
+
+fn list_message_parameter_path(
+    note_id: &StableId,
+    field_id: &StableId,
+    index: usize,
+    parameter: &str,
+) -> String {
+    DeckPath::NoteFieldMessageItemParameter {
+        note_id: note_id.clone(),
+        field_id: field_id.clone(),
+        index,
+        parameter: parameter.to_owned(),
+    }
+    .to_string()
 }
 
 fn collect_component_dependency(
@@ -527,10 +672,75 @@ where
             })?
         }
         FieldValue::Message(message) => render_structured_message(message, indices, memo),
+        FieldValue::MessageItems(message) => render_list_message(
+            message,
+            node.message_pattern
+                .expect("list message patterns were validated while planning"),
+            indices,
+            memo,
+        ),
     };
     memo[index] = Some(value.clone());
     order.push(node.path.clone());
     Ok(value)
+}
+
+fn render_list_message(
+    message: &ListMessageItems,
+    pattern: &ListMessagePattern,
+    indices: &HashMap<String, usize>,
+    memo: &[Option<String>],
+) -> String {
+    let rendered_items = message
+        .items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let arguments = pattern
+                .parameters
+                .iter()
+                .map(|(name, parameter)| {
+                    let value = if let Some(value) =
+                        message.argument_overrides.get(&(index, name.clone()))
+                    {
+                        value.clone()
+                    } else {
+                        match (parameter, &item[name]) {
+                            (ListMessageParameter::Text, ListMessageArgument::Scalar(value))
+                            | (
+                                ListMessageParameter::NoteFieldRef { .. },
+                                ListMessageArgument::Text(value),
+                            ) => value.clone(),
+                            (
+                                ListMessageParameter::NoteFieldRef { field_id },
+                                ListMessageArgument::Scalar(note_id),
+                            ) => {
+                                let note_id = StableId::new(note_id.clone())
+                                    .expect("note references were validated while planning");
+                                let reference = note_field_path(&note_id, field_id);
+                                memo[indices[&reference]]
+                                    .as_ref()
+                                    .expect("dependencies resolve before their consuming message")
+                                    .clone()
+                            }
+                            (ListMessageParameter::Text, ListMessageArgument::Text(_)) => {
+                                unreachable!("argument kinds were validated while planning")
+                            }
+                        }
+                    };
+                    (name.clone(), value)
+                })
+                .collect::<BTreeMap<_, _>>();
+            render_message_format(&pattern.item_format, &arguments)
+                .expect("list message item_format was validated while planning")
+        })
+        .collect::<Vec<_>>();
+    rendered_items.join(
+        message
+            .separator_override
+            .as_deref()
+            .unwrap_or(&pattern.separator),
+    )
 }
 
 fn render_structured_message(

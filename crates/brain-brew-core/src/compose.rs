@@ -2130,6 +2130,28 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
                 &[&note_type_variables, &deck_variables],
                 &mut errors,
             );
+            if let Some(pattern) = &mut field.message_pattern {
+                render_string_with_variables(
+                    &mut pattern.item_format,
+                    &DeckPath::NoteTypeFieldMessagePatternItemFormat {
+                        note_type_id: note_type_id.clone(),
+                        field_id: field.id.clone(),
+                    }
+                    .to_string(),
+                    &[&note_type_variables, &deck_variables],
+                    &mut errors,
+                );
+                render_string_with_variables(
+                    &mut pattern.separator,
+                    &DeckPath::NoteTypeFieldMessagePatternSeparator {
+                        note_type_id: note_type_id.clone(),
+                        field_id: field.id.clone(),
+                    }
+                    .to_string(),
+                    &[&note_type_variables, &deck_variables],
+                    &mut errors,
+                );
+            }
         }
         for template in &mut note_type.card_templates {
             if tombstones
@@ -2205,6 +2227,36 @@ fn render_deck_variables(deck: &CanonicalDeck) -> Result<CanonicalDeck, Variable
                         &scopes,
                         &mut errors,
                     );
+                }
+                FieldValue::MessageItems(message) => {
+                    for (index, item) in message.items.iter_mut().enumerate() {
+                        for (parameter, argument) in item {
+                            render_string_with_variables(
+                                argument.as_str_mut(),
+                                &DeckPath::NoteFieldMessageItemParameter {
+                                    note_id: note_id.clone(),
+                                    field_id: field_id.clone(),
+                                    index,
+                                    parameter: parameter.clone(),
+                                }
+                                .to_string(),
+                                &scopes,
+                                &mut errors,
+                            );
+                        }
+                    }
+                    if let Some(separator) = &mut message.separator_override {
+                        render_string_with_variables(
+                            separator,
+                            &DeckPath::NoteFieldMessageSeparator {
+                                note_id: note_id.clone(),
+                                field_id: field_id.clone(),
+                            }
+                            .to_string(),
+                            &scopes,
+                            &mut errors,
+                        );
+                    }
                 }
                 FieldValue::Images(_) => {}
             }

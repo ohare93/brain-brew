@@ -4,11 +4,12 @@ use std::fmt::{self, Write as _};
 use brain_brew_core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplate, CardTemplateChange, ChangeIntent,
     DeckChange, DeckPath, EntityFingerprint, ExpectedBase, FieldChange, FieldDefinition,
-    FieldDefinitionChange, FieldImageReference, FieldValue, InvalidStableId, MediaChange,
-    MediaReference, MessageComponent, Note, NoteChange, NoteType, NoteTypeChange, Overlay,
-    OverlayKind, PropertyChange, RemovalProvenance, StableId, StaleTranslation, StructuredMessage,
-    TagChange, TargetAdaptation, TargetAdaptationIntent, TargetAdaptationOwnership,
-    TombstoneAddress, TombstoneRecord, Tombstones, TranslationDictionary, ValidationReport,
+    FieldDefinitionChange, FieldImageReference, FieldValue, InvalidStableId, ListMessageArgument,
+    ListMessageItems, ListMessageParameter, ListMessagePattern, MediaChange, MediaReference,
+    MessageComponent, Note, NoteChange, NoteType, NoteTypeChange, Overlay, OverlayKind,
+    PropertyChange, RemovalProvenance, StableId, StaleTranslation, StructuredMessage, TagChange,
+    TargetAdaptation, TargetAdaptationIntent, TargetAdaptationOwnership, TombstoneAddress,
+    TombstoneRecord, Tombstones, TranslationDictionary, ValidationReport,
 };
 use serde::{Deserialize, Deserializer};
 use serde_yaml::Value;
@@ -167,6 +168,9 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
                 .expect("writing to a string cannot fail");
             writeln!(out, "        name: {}", yaml_scalar(&field.name))
                 .expect("writing to a string cannot fail");
+            if let Some(pattern) = &field.message_pattern {
+                write_list_message_pattern(&mut out, "        ", pattern);
+            }
         }
         if note_type.card_templates.is_empty() {
             writeln!(out, "    card_template_order: []").expect("writing to a string cannot fail");
@@ -229,6 +233,9 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
                     .expect("writing to a string cannot fail"),
                     FieldValue::Message(message) => {
                         write_structured_message_field(&mut out, "      ", field_id, message);
+                    }
+                    FieldValue::MessageItems(message) => {
+                        write_list_message_field(&mut out, "      ", field_id, message);
                     }
                     FieldValue::Images(images) => {
                         write_image_field_value(&mut out, "      ", field_id, images);
@@ -370,6 +377,9 @@ pub fn overlay_to_string(overlay: &Overlay) -> Result<String, CanonicalYamlError
                     if let Some(field) = &field_change.field {
                         writeln!(out, "        name: {}", yaml_scalar(&field.name))
                             .expect("writing to a string cannot fail");
+                        if let Some(pattern) = &field.message_pattern {
+                            write_list_message_pattern(&mut out, "        ", pattern);
+                        }
                     }
                     if let Some(expected_base) = &field_change.expected_base {
                         write_expected_base(&mut out, "        ", expected_base);
@@ -518,6 +528,7 @@ fn split_field_additions_for_format(
             if field_change.intent == ChangeIntent::Add
                 && field_change.expected_base.is_none()
                 && let Some(field) = &field_change.field
+                && field.message_pattern.is_none()
             {
                 field_additions
                     .entry(note_type_id.clone())
@@ -637,6 +648,7 @@ fn field_addition_format_value(change: &FieldChange) -> Option<FieldValueForForm
         FieldValue::Scalar(value) => Some(FieldValue::Scalar(value.clone())),
         FieldValue::Images(images) => Some(FieldValue::Images(images.clone())),
         FieldValue::Message(_) => None,
+        FieldValue::MessageItems(message) => Some(FieldValue::MessageItems(message.clone())),
     }
 }
 
@@ -729,6 +741,9 @@ fn write_field_value_for_format(
         }
         FieldValueForFormat::Message(message) => {
             write_structured_message_field(out, indent, field_id, message);
+        }
+        FieldValueForFormat::MessageItems(message) => {
+            write_list_message_field(out, indent, field_id, message);
         }
         FieldValueForFormat::Images(images) => {
             write_image_field_value(out, indent, field_id, images);
@@ -904,6 +919,50 @@ fn contextual_format_tree(
 ) -> BTreeMap<String, ContextualFormatNode> {
     let mut nodes = BTreeMap::new();
     for (context_path, replacements) in contextual {
+        match context_path.parse::<DeckPath>() {
+            Ok(DeckPath::NoteTypeFieldMessagePatternItemFormat {
+                note_type_id,
+                field_id,
+            }) => {
+                insert_contextual_format_node(
+                    &mut nodes,
+                    &DeckPath::NoteTypeFieldMessagePattern {
+                        note_type_id,
+                        field_id,
+                    }
+                    .to_string(),
+                    "item_format",
+                    replacements,
+                );
+                continue;
+            }
+            Ok(DeckPath::NoteTypeFieldMessagePatternSeparator {
+                note_type_id,
+                field_id,
+            }) => {
+                insert_contextual_format_node(
+                    &mut nodes,
+                    &DeckPath::NoteTypeFieldMessagePattern {
+                        note_type_id,
+                        field_id,
+                    }
+                    .to_string(),
+                    "separator",
+                    replacements,
+                );
+                continue;
+            }
+            Ok(DeckPath::NoteFieldMessageSeparator { note_id, field_id }) => {
+                insert_contextual_format_node(
+                    &mut nodes,
+                    &DeckPath::NoteFieldMessage { note_id, field_id }.to_string(),
+                    "separator",
+                    replacements,
+                );
+                continue;
+            }
+            _ => {}
+        }
         if let Some(suffix) = context_path.strip_prefix("notes.note.") {
             insert_contextual_format_node(&mut nodes, "notes.note", suffix, replacements);
         } else if let Some(suffix) = context_path.strip_prefix("note_types.note-type.") {
@@ -1069,6 +1128,10 @@ fn write_field_change(out: &mut String, indent: &str, field_id: &StableId, chang
             FieldValue::Message(message) => {
                 write_structured_message_value(out, &format!("{indent}  "), message);
             }
+            FieldValue::MessageItems(message) => {
+                writeln!(out, "{indent}  value:").expect("writing to a string cannot fail");
+                write_list_message_items(out, &format!("{indent}    "), message);
+            }
         }
     }
     if let Some(expected_base) = &change.expected_base {
@@ -1119,6 +1182,9 @@ fn write_note_type_payload(out: &mut String, indent: &str, note_type: &NoteType)
             .expect("writing to a string cannot fail");
         writeln!(out, "{indent}    name: {}", yaml_scalar(&field.name))
             .expect("writing to a string cannot fail");
+        if let Some(pattern) = &field.message_pattern {
+            write_list_message_pattern(out, &format!("{indent}    "), pattern);
+        }
     }
     if note_type.card_templates.is_empty() {
         writeln!(out, "{indent}card_template_order: []").expect("writing to a string cannot fail");
@@ -1176,6 +1242,9 @@ fn write_note_payload(out: &mut String, indent: &str, note: &Note) {
             FieldValue::Message(message) => {
                 write_structured_message_field(out, &format!("{indent}  "), field_id, message);
             }
+            FieldValue::MessageItems(message) => {
+                write_list_message_field(out, &format!("{indent}  "), field_id, message);
+            }
             FieldValue::Images(images) => {
                 write_image_field_value(out, &format!("{indent}  "), field_id, images);
             }
@@ -1220,6 +1289,96 @@ fn write_image_field_value(
                 )
                 .expect("writing to a string cannot fail");
             }
+        }
+    }
+}
+
+fn write_list_message_pattern(out: &mut String, indent: &str, pattern: &ListMessagePattern) {
+    writeln!(out, "{indent}message_pattern:").expect("writing to a string cannot fail");
+    writeln!(out, "{indent}  kind: list").expect("writing to a string cannot fail");
+    writeln!(
+        out,
+        "{indent}  item_format: {}",
+        yaml_scalar(&pattern.item_format)
+    )
+    .expect("writing to a string cannot fail");
+    writeln!(
+        out,
+        "{indent}  separator: {}",
+        yaml_scalar(&pattern.separator)
+    )
+    .expect("writing to a string cannot fail");
+    writeln!(out, "{indent}  parameters:").expect("writing to a string cannot fail");
+    for (name, parameter) in &pattern.parameters {
+        writeln!(out, "{indent}    {}:", emitted_key(name))
+            .expect("writing to a string cannot fail");
+        match parameter {
+            ListMessageParameter::NoteFieldRef { field_id } => {
+                writeln!(out, "{indent}      type: note_field_ref")
+                    .expect("writing to a string cannot fail");
+                writeln!(out, "{indent}      field: {field_id}")
+                    .expect("writing to a string cannot fail");
+            }
+            ListMessageParameter::Text => {
+                writeln!(out, "{indent}      type: text").expect("writing to a string cannot fail");
+            }
+        }
+    }
+}
+
+fn write_list_message_field(
+    out: &mut String,
+    indent: &str,
+    field_id: &StableId,
+    message: &ListMessageItems,
+) {
+    writeln!(out, "{indent}{}:", emitted_key(field_id.as_str()))
+        .expect("writing to a string cannot fail");
+    write_list_message_items(out, &format!("{indent}  "), message);
+}
+
+fn write_list_message_items(out: &mut String, indent: &str, message: &ListMessageItems) {
+    writeln!(out, "{indent}items:").expect("writing to a string cannot fail");
+    for item in &message.items {
+        let mut parameters = item.iter();
+        if let Some((name, value)) = parameters.next() {
+            write_list_message_argument(
+                out,
+                &format!("{indent}  - "),
+                &format!("{indent}      "),
+                name,
+                value,
+            );
+        }
+        for (name, value) in parameters {
+            write_list_message_argument(
+                out,
+                &format!("{indent}    "),
+                &format!("{indent}      "),
+                name,
+                value,
+            );
+        }
+    }
+}
+
+fn write_list_message_argument(
+    out: &mut String,
+    indent: &str,
+    nested_indent: &str,
+    name: &str,
+    value: &ListMessageArgument,
+) {
+    match value {
+        ListMessageArgument::Scalar(value) => {
+            writeln!(out, "{indent}{}: {}", emitted_key(name), yaml_scalar(value))
+                .expect("writing to a string cannot fail");
+        }
+        ListMessageArgument::Text(value) => {
+            writeln!(out, "{indent}{}:", emitted_key(name))
+                .expect("writing to a string cannot fail");
+            writeln!(out, "{nested_indent}text: {}", yaml_scalar(value))
+                .expect("writing to a string cannot fail");
         }
     }
 }
@@ -1580,6 +1739,61 @@ fn validate_field_value(
             }
             Ok(())
         }
+        Value::Mapping(mapping)
+            if mapping.len() == 1 && mapping.contains_key(Value::String("items".to_owned())) =>
+        {
+            let Some(items) = mapping_value(value, "items").and_then(Value::as_sequence) else {
+                return schema_error(
+                    format!("{path}.items"),
+                    "list message items must be a sequence",
+                );
+            };
+            if items.is_empty() {
+                return schema_error(
+                    format!("{path}.items"),
+                    "list message must contain at least one item",
+                );
+            }
+            for (index, item) in items.iter().enumerate() {
+                let Some(parameters) = item.as_mapping() else {
+                    return schema_error(
+                        format!("{path}.items[{index}]"),
+                        "list message item must be a parameter mapping",
+                    );
+                };
+                if parameters.is_empty() {
+                    return schema_error(
+                        format!("{path}.items[{index}]"),
+                        "list message item parameters must not be empty",
+                    );
+                }
+                for (name, argument) in parameters {
+                    let name = name.as_str().unwrap_or("<non-string>");
+                    let argument_path = format!("{path}.items[{index}].{name}");
+                    match argument {
+                        Value::String(_) => {}
+                        Value::Mapping(explicit)
+                            if explicit.len() == 1
+                                && explicit
+                                    .get(Value::String("text".to_owned()))
+                                    .is_some_and(Value::is_string) => {}
+                        Value::Mapping(_) => {
+                            return schema_error(
+                                argument_path,
+                                "explicit list message argument must contain exactly one string `text` property",
+                            );
+                        }
+                        _ => {
+                            return schema_error(
+                                argument_path,
+                                "list message argument must be a scalar string or explicit `text` object",
+                            );
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
         Value::Mapping(mapping) if allow_messages => {
             let has_format = mapping.contains_key(Value::String("format".to_owned()));
             let has_variables = mapping.contains_key(Value::String("variables".to_owned()));
@@ -1863,6 +2077,12 @@ fn validate_field_value_representation(
         }
         FieldValue::Images(_) => Ok(()),
         FieldValue::Message(message) => validate_structured_message_representation(message, path),
+        FieldValue::MessageItems(message) if message.items.is_empty() => {
+            Err(CanonicalYamlError::InvalidFieldValue(format!(
+                "list message at {path} must contain at least one item"
+            )))
+        }
+        FieldValue::MessageItems(_) => Ok(()),
     }
 }
 
@@ -2087,7 +2307,11 @@ impl FieldAdditionsYaml {
                 field_id.clone(),
                 FieldDefinitionChange {
                     intent: ChangeIntent::Add,
-                    field: Some(FieldDefinition { id: field_id, name }),
+                    field: Some(FieldDefinition {
+                        id: field_id,
+                        name,
+                        message_pattern: None,
+                    }),
                     expected_base: None,
                 },
             );
@@ -2121,7 +2345,9 @@ impl FieldAdditionsYaml {
                         .map_err(|error| {
                             CanonicalYamlError::InvalidFieldAddition(error.to_string())
                         })?,
-                    FieldValueYaml::Formatted(_) | FieldValueYaml::Message(_) => {
+                    FieldValueYaml::Formatted(_)
+                    | FieldValueYaml::Message(_)
+                    | FieldValueYaml::MessageItems(_) => {
                         return Err(CanonicalYamlError::InvalidFieldAddition(format!(
                             "field_additions.{note_type_id}.values.{note_id}.{field_id} must be a scalar string or !image reference"
                         )));
@@ -2665,6 +2891,8 @@ struct FieldDefinitionChangeYaml {
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
+    message_pattern: Option<MessagePatternYaml>,
+    #[serde(default)]
     expected_base: Option<ExpectedBaseYaml>,
 }
 
@@ -2673,9 +2901,27 @@ impl FieldDefinitionChangeYaml {
         self,
         id: StableId,
     ) -> Result<FieldDefinitionChange, CanonicalYamlError> {
+        let message_pattern = self
+            .message_pattern
+            .map(MessagePatternYaml::into_pattern)
+            .transpose()?;
+        let field = match (self.name, message_pattern) {
+            (Some(name), message_pattern) => Some(FieldDefinition {
+                id,
+                name,
+                message_pattern,
+            }),
+            (None, None) => None,
+            (None, Some(_)) => {
+                return Err(CanonicalYamlError::InvalidFieldValue(
+                    "field-definition message_pattern requires `name` in a complete field payload"
+                        .to_owned(),
+                ));
+            }
+        };
         Ok(FieldDefinitionChange {
             intent: parse_change_intent(&self.intent)?,
-            field: self.name.map(|name| FieldDefinition { id, name }),
+            field,
             expected_base: self
                 .expected_base
                 .map(ExpectedBaseYaml::into_expected_base)
@@ -3169,6 +3415,10 @@ impl NoteTypeYaml {
             Ok(FieldDefinition {
                 id,
                 name: field.name,
+                message_pattern: field
+                    .message_pattern
+                    .map(MessagePatternYaml::into_pattern)
+                    .transpose()?,
             })
         })?;
         let card_templates = ordered_values(
@@ -3203,6 +3453,67 @@ impl NoteTypeYaml {
 #[serde(deny_unknown_fields)]
 struct FieldYaml {
     name: String,
+    #[serde(default)]
+    message_pattern: Option<MessagePatternYaml>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MessagePatternYaml {
+    kind: String,
+    item_format: String,
+    separator: String,
+    parameters: BTreeMap<String, MessagePatternParameterYaml>,
+}
+
+impl MessagePatternYaml {
+    fn into_pattern(self) -> Result<ListMessagePattern, CanonicalYamlError> {
+        if self.kind != "list" {
+            return Err(CanonicalYamlError::InvalidFieldValue(format!(
+                "unsupported message_pattern kind {:?}; expected `list`",
+                self.kind
+            )));
+        }
+        let parameters = self
+            .parameters
+            .into_iter()
+            .map(|(name, parameter)| Ok((name, parameter.into_parameter()?)))
+            .collect::<Result<_, CanonicalYamlError>>()?;
+        Ok(ListMessagePattern {
+            item_format: self.item_format,
+            separator: self.separator,
+            parameters,
+        })
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MessagePatternParameterYaml {
+    #[serde(rename = "type")]
+    kind: String,
+    #[serde(default)]
+    field: Option<String>,
+}
+
+impl MessagePatternParameterYaml {
+    fn into_parameter(self) -> Result<ListMessageParameter, CanonicalYamlError> {
+        match (self.kind.as_str(), self.field) {
+            ("text", None) => Ok(ListMessageParameter::Text),
+            ("note_field_ref", Some(field_id)) => Ok(ListMessageParameter::NoteFieldRef {
+                field_id: sid(&field_id)?,
+            }),
+            ("text", Some(_)) => Err(CanonicalYamlError::InvalidFieldValue(
+                "text message_pattern parameter must not declare `field`".to_owned(),
+            )),
+            ("note_field_ref", None) => Err(CanonicalYamlError::InvalidFieldValue(
+                "note_field_ref message_pattern parameter requires `field`".to_owned(),
+            )),
+            (kind, _) => Err(CanonicalYamlError::InvalidFieldValue(format!(
+                "unsupported message_pattern parameter type {kind:?}"
+            ))),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -3253,6 +3564,7 @@ enum FieldValueYaml {
     Images(ImageReferencesYaml),
     Formatted(FormattedMessageYaml),
     Message(ComponentMessageYaml),
+    MessageItems(ListMessageItemsYaml),
 }
 
 impl FieldValueYaml {
@@ -3265,6 +3577,17 @@ impl FieldValueYaml {
                 .map_err(|error| CanonicalYamlError::InvalidFieldValue(error.to_string())),
             Self::Message(message) => FieldValue::message(message.into_structured_message())
                 .map_err(|error| CanonicalYamlError::InvalidFieldValue(error.to_string())),
+            Self::MessageItems(message) => Ok(FieldValue::MessageItems(ListMessageItems::new(
+                message
+                    .items
+                    .into_iter()
+                    .map(|item| {
+                        item.into_iter()
+                            .map(|(name, argument)| (name, argument.into_argument()))
+                            .collect()
+                    })
+                    .collect(),
+            ))),
         }
     }
 }
@@ -3325,10 +3648,16 @@ fn field_value_from_yaml_value(value: Value) -> Result<FieldValueYaml, String> {
     if let Ok(message) = serde_yaml::from_value::<FormattedMessageYaml>(value.clone()) {
         return Ok(FieldValueYaml::Formatted(message));
     }
-    if let Ok(message) = serde_yaml::from_value::<ComponentMessageYaml>(value) {
+    if let Ok(message) = serde_yaml::from_value::<ComponentMessageYaml>(value.clone()) {
         return Ok(FieldValueYaml::Message(message));
     }
-    Err("field value must be a scalar string, structured message, or !image reference".to_owned())
+    if let Ok(message) = serde_yaml::from_value::<ListMessageItemsYaml>(value) {
+        return Ok(FieldValueYaml::MessageItems(message));
+    }
+    Err(
+        "field value must be a scalar string, structured message, list message items, or !image reference"
+            .to_owned(),
+    )
 }
 
 fn image_scalar_from_yaml_value(value: &Value) -> Result<Option<String>, String> {
@@ -3348,6 +3677,34 @@ fn image_scalar_from_yaml_value(value: &Value) -> Result<Option<String>, String>
         return Err("!image value must not be empty".to_owned());
     }
     Ok(Some(media_id.clone()))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ListMessageItemsYaml {
+    items: Vec<BTreeMap<String, ListMessageArgumentYaml>>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ListMessageArgumentYaml {
+    Scalar(String),
+    ExplicitText(ExplicitListMessageTextYaml),
+}
+
+impl ListMessageArgumentYaml {
+    fn into_argument(self) -> ListMessageArgument {
+        match self {
+            Self::Scalar(value) => ListMessageArgument::Scalar(value),
+            Self::ExplicitText(value) => ListMessageArgument::Text(value.text),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExplicitListMessageTextYaml {
+    text: String,
 }
 
 #[derive(Deserialize)]

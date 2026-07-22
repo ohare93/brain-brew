@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::messages::validate_message_graph;
+use crate::messages::{validate_list_message_pattern, validate_message_graph};
 use crate::*;
 
 impl CanonicalDeck {
@@ -39,6 +39,19 @@ impl CanonicalDeck {
                     &mut errors,
                     &mut invalid_stable_id_paths,
                 );
+                if let Some(pattern) = &field.message_pattern
+                    && let Err(message) = validate_list_message_pattern(pattern)
+                {
+                    errors.push(ValidationError::new(
+                        ValidationErrorKind::ConflictingFieldRepresentation,
+                        DeckPath::NoteTypeFieldMessagePattern {
+                            note_type_id: id.clone(),
+                            field_id: field.id.clone(),
+                        }
+                        .to_string(),
+                        message,
+                    ));
+                }
             }
             for template in &note_type.card_templates {
                 push_invalid_stable_id_error(
@@ -305,7 +318,7 @@ impl CanonicalDeck {
                 .to_string();
                 match value {
                     FieldValue::Scalar(_) => {}
-                    FieldValue::Message(_) => {}
+                    FieldValue::Message(_) | FieldValue::MessageItems(_) => {}
                     FieldValue::Images(images) => {
                         if images.is_empty() {
                             errors.push(ValidationError::new(
@@ -494,6 +507,7 @@ const RESERVED_CONTAINER_MARKERS: &[&str] = &[
     ".tags.",
     ".images.",
     ".message.",
+    ".message_pattern.",
 ];
 
 const RESERVED_PROPERTY_SUFFIXES: &[&str] = &[
@@ -508,6 +522,9 @@ const RESERVED_PROPERTY_SUFFIXES: &[&str] = &[
     ".images",
     ".note_type_id",
     ".message",
+    ".message_pattern",
+    ".item_format",
+    ".separator",
     ".path",
     ".sha256",
     ".question_format",
