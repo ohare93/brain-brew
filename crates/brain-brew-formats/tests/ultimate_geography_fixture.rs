@@ -92,14 +92,23 @@ fn ultimate_geography_fixture_uses_file_includes_for_large_source_text() {
 }
 
 #[test]
-fn ultimate_geography_fixture_uses_structured_messages_for_flag_similarity() {
+fn ultimate_geography_fixture_uses_list_patterns_for_flag_similarity() {
     let root = fixture_root();
+    for relative_path in ["deck.yaml", "deck-hardcore.yaml"] {
+        let source = fs::read_to_string(root.join(relative_path)).unwrap();
+        assert!(
+            source.contains(
+                "field.flag-similarity:\n        name: Flag similarity\n        message_pattern:"
+            ),
+            "{relative_path} should declare the shared flag-similarity message pattern"
+        );
+    }
     for relative_path in ["deck.yaml", "overlays/extensions/hardcore.yaml"] {
         let source = fs::read_to_string(root.join(relative_path)).unwrap();
         assert!(
-            source.contains("field.flag-similarity:\n        format:")
-                || source.contains("field.flag-similarity:\n          format:"),
-            "{relative_path} should use inline formatted structured messages for non-empty flag similarity fields"
+            source.contains("field.flag-similarity:\n        items:")
+                || source.contains("field.flag-similarity:\n          items:"),
+            "{relative_path} should use concise list-message items for ordinary non-empty flag similarities"
         );
         assert!(
             !source.lines().any(
@@ -677,10 +686,10 @@ fn ultimate_geography_translation_overlays_use_dictionaries_not_template_copies(
 
 #[test]
 fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media() {
-    const UG_REVISION: &str = "a934c935083eeb271c553e573d7b9de7d565342a";
+    const UG_REVISION: &str = "adda7ad925c62fa6542679dfb5bc1c6401466480";
     const HARDCORE_REVISION: &str = "09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46";
-    const BRAINBREW_REVISION: &str = "6ee570d427a1a8eec92c22668442f9b7186f9ba7";
-    const SOURCE_SHA256: &str = "2f6a08ab17090e674aaf5df1dc0c0c3cf0157d420bb08abb5c1c76f20e8f1e5c";
+    const BRAINBREW_REVISION: &str = "d745834534139b965732e007a58b489dad44449d";
+    const SOURCE_SHA256: &str = "166626c79fc5828f543ce6ff7862c84d4aa7af8ed8f471d3014c3cb9ebee94d7";
     const MEDIA_SHA256: &str = "ad8bd371b4837d639d76f3a56a11fd7437d0ca0d31022ff5022fe5d5ce03e761";
     const GOLDENS_SHA256: &str = "9b21fc9d0acad0a22fdf92e11a585a0a84913ab436f26c5d9c7047c11b621b41";
     const ATTRIBUTION_SHA256: &str =
@@ -690,11 +699,11 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
     const ATTRIBUTION_COVERAGE_SHA256: &str =
         "13a1d5c1d04a8eacaae3dd3c1c952483128b8f089779dc622f2014055b72351d";
     const GENERATOR_EXECUTABLE_SHA256: &str =
-        "e27d4f62e411eb6dd950e78f7311d5a47f59f5ccf591657b3bbaf76ca994d816";
+        "063a2106ad5c0000eb6afbb5896e950d2616b98aac372498cc623be0d358c411";
     const GENERATOR_SOURCE_SHA256: &str =
-        "6c5d9aa7522268530981cf128a6d949b70477225815c3be392c498d11327b014";
+        "19b6910358db8c0dd1cd35f4ae936deff1d3090ea88ec8a1c7f9ab9686c96081";
     const GENERATOR_IDENTITY_SHA256: &str =
-        "a1ce83b5c71085705feb2fadfa4d2ea2116f3f37e582b7f4b283e7475842eebe";
+        "63b44c01b64b82904eef1ecb11751b980f899cf3e407aaf1174aeab4acb25ada";
     const EXPECTED_SHA256: &str =
         "49ca36eb60dbce4f61aba9890955ef9d8b1f83237dd49403eced4c916f1de855";
 
@@ -741,7 +750,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
 
     let source_metadata = tree_metadata(&root);
     assert_eq!(source_metadata.file_count, 738);
-    assert_eq!(source_metadata.byte_count, 20_064_738);
+    assert_eq!(source_metadata.byte_count, 20_059_004);
     assert_eq!(source_metadata.sha256, SOURCE_SHA256);
     assert_tree_lock(&lock["source"], &source_metadata, "source snapshot");
     assert_eq!(lock["source"]["sha256"], SOURCE_SHA256);
@@ -860,10 +869,10 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
         generator["executable"]["sha256"],
         GENERATOR_EXECUTABLE_SHA256
     );
-    assert_eq!(generator["executable"]["byte_count"], 15_346_312);
+    assert_eq!(generator["executable"]["byte_count"], 15_690_040);
     assert_eq!(generator["source"]["sha256"], GENERATOR_SOURCE_SHA256);
     assert_eq!(generator["source"]["file_count"], 68);
-    assert_eq!(generator["source"]["byte_count"], 2_888_252);
+    assert_eq!(generator["source"]["byte_count"], 2_943_250);
     assert_eq!(
         generator["build"]["cargo_lock_sha256"],
         "ea2858def2a0528b781d992930a8f6067e71b4baa8ef6bf6b298f3b44a120cd1"

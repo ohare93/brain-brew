@@ -11,10 +11,11 @@ release cache.
 ## Contract
 
 The reviewed snapshot is Ultimate Geography `brainbrew-migration` revision
-`a934c935083eeb271c553e573d7b9de7d565342a`, rebased on upstream revision
+`adda7ad925c62fa6542679dfb5bc1c6401466480`, descending from the migration
+history rebased on upstream revision
 `e1fd85184e70f32650b67b750c44c4b0588c79dd`. Expected output was accepted with
 Brain Brew `1.0.0-alpha.3` revision
-`6ee570d427a1a8eec92c22668442f9b7186f9ba7`. Hardcore image attribution is
+`d745834534139b965732e007a58b489dad44449d`. Hardcore image attribution is
 separately pinned to Hardcore Geography revision
 `09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46`.
 
@@ -79,6 +80,10 @@ substitution is a regression and fails.
 2. `--accept-expected` is the only operation that regenerates and blesses all
    100 expected JSON files. It requires the exact reviewed executable, explicit
    revision, and a source root matching the hard-coded alpha.3 source identity.
+   The current reviewed binary has SHA-256
+   `063a2106ad5c0000eb6afbb5896e950d2616b98aac372498cc623be0d358c411`,
+   and its 68-file generator source identity is
+   `19b6910358db8c0dd1cd35f4ae936deff1d3090ea88ec8a1c7f9ab9686c96081`.
 3. `--check` is read-only. It authenticates the same executable/source/build
    identity, checks the lock/source/target/expected state, validates the pinned
    Hardcore supplement and attribution coverage, and regenerates all outputs in

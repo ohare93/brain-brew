@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, FieldImageReference, FieldValue,
-    MediaReference, MessageComponent, Note, NoteType, StableId, StructuredMessage,
-    TombstoneAddress, TombstoneRecord, Tombstones,
+    ListMessageParameter, ListMessagePattern, MediaReference, MessageComponent, Note, NoteType,
+    StableId, StructuredMessage, TombstoneAddress, TombstoneRecord, Tombstones,
 };
 use brain_brew_formats::{canonical_yaml, crowdanki};
 
@@ -66,6 +66,45 @@ fn import_export_round_trip_is_semantically_equal_when_suggested_ids_match_sourc
         diff.is_empty(),
         "{} mismatch: {diff:#?}",
         crowdanki::CROWDANKI_ROUND_TRIP_PROFILE.name
+    );
+}
+
+#[test]
+fn round_trip_projection_discards_source_only_field_message_patterns() {
+    let mut original = ug_style_deck();
+    let field = original
+        .note_types
+        .get_mut(&sid("note-type.country"))
+        .unwrap()
+        .fields
+        .iter_mut()
+        .find(|field| field.id == sid("field.capital"))
+        .unwrap();
+    field.message_pattern = Some(ListMessagePattern {
+        item_format: "{value}".to_owned(),
+        separator: ", ".to_owned(),
+        parameters: BTreeMap::from([("value".to_owned(), ListMessageParameter::Text)]),
+    });
+
+    let export = crowdanki::export_deck(&original).expect("deck exports");
+    let imported = import_approved(&export.deck_json).expect("exported CrowdAnki imports");
+    let expected = crowdanki::project_deck_for_crowdanki_round_trip(&original)
+        .expect("source projects to the named CrowdAnki profile");
+    let actual = crowdanki::project_deck_for_crowdanki_round_trip(&imported)
+        .expect("import projects to the named CrowdAnki profile");
+
+    assert!(expected.semantic_diff(&actual).is_empty());
+    assert!(
+        expected
+            .note_types
+            .values()
+            .flat_map(|note_type| &note_type.fields)
+            .all(|field| field.message_pattern.is_none())
+    );
+    assert!(
+        crowdanki::CROWDANKI_ROUND_TRIP_PROFILE
+            .losses
+            .contains(&crowdanki::CrowdAnkiRoundTripLoss::FieldMessagePatternsAreSourceOnly)
     );
 }
 

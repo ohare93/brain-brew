@@ -1,6 +1,7 @@
 import copy
 import json
 import pathlib
+import shutil
 import tempfile
 import unittest
 
@@ -202,11 +203,23 @@ class UltimateGeographyFixtureBoundaryTests(unittest.TestCase):
 
     def test_descendant_source_cannot_masquerade_as_pinned_generator(self):
         repo_root = pathlib.Path(__file__).resolve().parents[2]
+        descendant = self.root / "descendant-source"
+        descendant.mkdir()
+        for relative in ug_fixture.BRAINBREW_GENERATOR_SOURCE_PATHS:
+            source = repo_root / relative
+            target = descendant / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if source.is_dir():
+                shutil.copytree(source, target)
+            else:
+                shutil.copy2(source, target)
+        changed = descendant / "crates/brain-brew-core/src/model.rs"
+        changed.write_bytes(changed.read_bytes() + b"\n// descendant source drift\n")
 
         with self.assertRaisesRegex(
             ug_fixture.FixtureError, "generator source identity mismatch"
         ):
-            ug_fixture._validate_brainbrew_source(repo_root)
+            ug_fixture._validate_brainbrew_source(descendant)
 
     def test_source_contract_rejects_intentional_exclusion_provenance_drift(self):
         source = {

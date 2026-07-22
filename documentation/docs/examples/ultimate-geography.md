@@ -31,8 +31,8 @@ fixtures/
 ```
 
 The source is an exact whitelist from UG `brainbrew-migration` revision
-`a934c935...`, rebased on upstream `e1fd8518...`, not a fixture-only migrated
-derivative. It demonstrates:
+`adda7ad...`, descending from migration history rebased on upstream
+`e1fd8518...`, not a fixture-only migrated derivative. It demonstrates:
 
 - English Standard as a base Canonical Deck;
 - language overlays for all 16 UG languages, including Hebrew RTL coverage;

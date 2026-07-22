@@ -281,6 +281,7 @@ pub struct CrowdAnkiRoundTripProfile {
 pub enum CrowdAnkiRoundTripLoss {
     SourceVariablesAreRendered,
     StructuredFieldRepresentationsAreLowered,
+    FieldMessagePatternsAreSourceOnly,
     MediaHashesAreNotStored,
     TypedTombstonesBecomePhysicalOmissions,
     UnsupportedAdapterIdsAreDiscarded,
@@ -292,6 +293,7 @@ pub const CROWDANKI_ROUND_TRIP_PROFILE: CrowdAnkiRoundTripProfile = CrowdAnkiRou
     losses: &[
         CrowdAnkiRoundTripLoss::SourceVariablesAreRendered,
         CrowdAnkiRoundTripLoss::StructuredFieldRepresentationsAreLowered,
+        CrowdAnkiRoundTripLoss::FieldMessagePatternsAreSourceOnly,
         CrowdAnkiRoundTripLoss::MediaHashesAreNotStored,
         CrowdAnkiRoundTripLoss::TypedTombstonesBecomePhysicalOmissions,
         CrowdAnkiRoundTripLoss::UnsupportedAdapterIdsAreDiscarded,
@@ -796,6 +798,9 @@ pub fn project_deck_for_crowdanki_round_trip(
     projected.variables.clear();
     for note_type in projected.note_types.values_mut() {
         note_type.variables.clear();
+        for field in &mut note_type.fields {
+            field.message_pattern = None;
+        }
         for template in &mut note_type.card_templates {
             template.variables.clear();
             template.adapter_ids = AdapterIds::new();

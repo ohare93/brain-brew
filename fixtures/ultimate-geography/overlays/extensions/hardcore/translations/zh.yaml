@@ -1,6 +1,10 @@
 id: overlay.translation.hardcore.zh
 kind: translation
 translations:
+  contextual:
+    notes.note:
+      gal-pagos-islands.fields.field.flag-similarity:
+        'Sierra Leone(slightly lighter blue)': 'Sierra Leone (slightly lighter blue)'
   adapter_ids:
     crowdanki:guid:
       ',LnVW8IL`': 'J}Ic}WR-Ys'
