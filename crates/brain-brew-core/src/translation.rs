@@ -2519,12 +2519,12 @@ impl TranslationApplyContext<'_, '_> {
                 };
                 let mut translated = source.to_owned();
                 self.translate_string(&mut translated, path, None);
-                // Keep the edge live when the dependency itself receives the same reusable
-                // translation. Materialize only a consuming-path decision or a translation that
-                // the dependency path intentionally ignores, so later overlays still propagate
-                // whenever semantics permit.
-                if translated != source
-                    && (materialize_path_specific_translation || translated != dependency_target)
+                // Keep the edge live when the consuming and dependency paths resolve to the same
+                // target. A consuming-path decision materializes whenever it intentionally differs
+                // from the dependency target, including an explicit source-equal contextual choice
+                // that overrides a reusable direct translation on the referenced field.
+                if translated != dependency_target
+                    && (materialize_path_specific_translation || translated != source)
                 {
                     *component = MessageComponent::Literal(translated);
                 }

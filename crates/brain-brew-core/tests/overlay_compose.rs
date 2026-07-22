@@ -1617,6 +1617,52 @@ fn translation_dictionary_resolves_structured_message_components() {
 }
 
 #[test]
+fn source_equal_contextual_field_ref_overrides_conflicting_direct_translation() {
+    let base = ug_style_deck_with_flag_similarity_message();
+    let overlay = Overlay {
+        id: sid("overlay.translation.nb"),
+        kind: OverlayKind::Translation,
+        translations: Some(TranslationDictionary {
+            direct: BTreeMap::from([("Iceland".to_owned(), "Island".to_owned())]),
+            contextual: BTreeMap::from([(
+                "notes.note.finland.fields.field.flag-similarity.message.variables.country_1"
+                    .to_owned(),
+                BTreeMap::from([("Iceland".to_owned(), "Iceland".to_owned())]),
+            )]),
+            ..TranslationDictionary::default()
+        }),
+        deck_change: None,
+        note_changes: BTreeMap::new(),
+        note_type_changes: BTreeMap::new(),
+        media_changes: BTreeMap::new(),
+    };
+
+    let resolved = base.compose(&[overlay]).expect("translations compose");
+
+    assert_eq!(
+        resolved
+            .field_text(&sid("note.iceland"), &sid("field.country"))
+            .unwrap(),
+        "Island"
+    );
+    assert!(
+        resolved
+            .field_text(&sid("note.finland"), &sid("field.flag-similarity"))
+            .unwrap()
+            .starts_with("Iceland (")
+    );
+    let FieldValue::Message(message) =
+        &resolved.notes[&sid("note.finland")].fields[&sid("field.flag-similarity")]
+    else {
+        panic!("structured message should remain semantic")
+    };
+    assert_eq!(
+        message.variables["country_1"],
+        MessageComponent::Literal("Iceland".to_owned())
+    );
+}
+
+#[test]
 fn translation_dictionary_no_change_wins_over_stale_record_for_structured_message_format() {
     let base = ug_style_deck_with_flag_similarity_message();
     let format_source = "{country_1} ({description_1}), {country_2} ({description_2})";

@@ -1338,14 +1338,13 @@ fn write_list_message_field(
 }
 
 fn write_list_message_items(out: &mut String, indent: &str, message: &ListMessageItems) {
-    writeln!(out, "{indent}items:").expect("writing to a string cannot fail");
     for item in &message.items {
         let mut parameters = item.iter();
         if let Some((name, value)) = parameters.next() {
             write_list_message_argument(
                 out,
-                &format!("{indent}  - "),
-                &format!("{indent}      "),
+                &format!("{indent}- "),
+                &format!("{indent}    "),
                 name,
                 value,
             );
@@ -1353,8 +1352,8 @@ fn write_list_message_items(out: &mut String, indent: &str, message: &ListMessag
         for (name, value) in parameters {
             write_list_message_argument(
                 out,
+                &format!("{indent}  "),
                 &format!("{indent}    "),
-                &format!("{indent}      "),
                 name,
                 value,
             );
@@ -1721,23 +1720,32 @@ fn validate_field_value(
         Value::String(_) => Ok(()),
         Value::Tagged(tagged) => validate_image_value(&tagged.tag.to_string(), &tagged.value, path),
         Value::Sequence(items) => {
-            if items.is_empty() {
-                return schema_error(path.to_owned(), "image sequence must not be empty");
+            let Some(first) = items.first() else {
+                return schema_error(path.to_owned(), "field sequence must not be empty");
+            };
+            match first {
+                Value::Tagged(_) => {
+                    for (index, item) in items.iter().enumerate() {
+                        let Value::Tagged(tagged) = item else {
+                            return schema_error(
+                                format!("{path}[{index}]"),
+                                "image sequences may contain only !image tagged scalars",
+                            );
+                        };
+                        validate_image_value(
+                            &tagged.tag.to_string(),
+                            &tagged.value,
+                            &format!("{path}[{index}]"),
+                        )?;
+                    }
+                    Ok(())
+                }
+                Value::Mapping(_) => validate_list_message_items(items, path),
+                _ => schema_error(
+                    format!("{path}[0]"),
+                    "field sequences must contain either !image tagged scalars or list-message item mappings",
+                ),
             }
-            for (index, item) in items.iter().enumerate() {
-                let Value::Tagged(tagged) = item else {
-                    return schema_error(
-                        format!("{path}[{index}]"),
-                        "image sequences may contain only !image tagged scalars",
-                    );
-                };
-                validate_image_value(
-                    &tagged.tag.to_string(),
-                    &tagged.value,
-                    &format!("{path}[{index}]"),
-                )?;
-            }
-            Ok(())
         }
         Value::Mapping(mapping)
             if mapping.len() == 1 && mapping.contains_key(Value::String("items".to_owned())) =>
@@ -1748,51 +1756,7 @@ fn validate_field_value(
                     "list message items must be a sequence",
                 );
             };
-            if items.is_empty() {
-                return schema_error(
-                    format!("{path}.items"),
-                    "list message must contain at least one item",
-                );
-            }
-            for (index, item) in items.iter().enumerate() {
-                let Some(parameters) = item.as_mapping() else {
-                    return schema_error(
-                        format!("{path}.items[{index}]"),
-                        "list message item must be a parameter mapping",
-                    );
-                };
-                if parameters.is_empty() {
-                    return schema_error(
-                        format!("{path}.items[{index}]"),
-                        "list message item parameters must not be empty",
-                    );
-                }
-                for (name, argument) in parameters {
-                    let name = name.as_str().unwrap_or("<non-string>");
-                    let argument_path = format!("{path}.items[{index}].{name}");
-                    match argument {
-                        Value::String(_) => {}
-                        Value::Mapping(explicit)
-                            if explicit.len() == 1
-                                && explicit
-                                    .get(Value::String("text".to_owned()))
-                                    .is_some_and(Value::is_string) => {}
-                        Value::Mapping(_) => {
-                            return schema_error(
-                                argument_path,
-                                "explicit list message argument must contain exactly one string `text` property",
-                            );
-                        }
-                        _ => {
-                            return schema_error(
-                                argument_path,
-                                "list message argument must be a scalar string or explicit `text` object",
-                            );
-                        }
-                    }
-                }
-            }
-            Ok(())
+            validate_list_message_items(items, &format!("{path}.items"))
         }
         Value::Mapping(mapping) if allow_messages => {
             let has_format = mapping.contains_key(Value::String("format".to_owned()));
@@ -1818,12 +1782,60 @@ fn validate_field_value(
         _ => schema_error(
             path.to_owned(),
             if allow_messages {
-                "field value must be a string, structured message, or !image reference"
+                "field value must be a string, structured message, list-message sequence, or !image reference"
             } else {
-                "field value must be a string or !image reference"
+                "field value must be a string, list-message sequence, or !image reference"
             },
         ),
     }
+}
+
+fn validate_list_message_items(items: &[Value], path: &str) -> Result<(), CanonicalYamlError> {
+    if items.is_empty() {
+        return schema_error(
+            path.to_owned(),
+            "list message must contain at least one item",
+        );
+    }
+    for (index, item) in items.iter().enumerate() {
+        let Some(parameters) = item.as_mapping() else {
+            return schema_error(
+                format!("{path}[{index}]"),
+                "list message item must be a parameter mapping",
+            );
+        };
+        if parameters.is_empty() {
+            return schema_error(
+                format!("{path}[{index}]"),
+                "list message item parameters must not be empty",
+            );
+        }
+        for (name, argument) in parameters {
+            let name = name.as_str().unwrap_or("<non-string>");
+            let argument_path = format!("{path}[{index}].{name}");
+            match argument {
+                Value::String(_) => {}
+                Value::Mapping(explicit)
+                    if explicit.len() == 1
+                        && explicit
+                            .get(Value::String("text".to_owned()))
+                            .is_some_and(Value::is_string) => {}
+                Value::Mapping(_) => {
+                    return schema_error(
+                        argument_path,
+                        "explicit list message argument must contain exactly one string `text` property",
+                    );
+                }
+                _ => {
+                    return schema_error(
+                        argument_path,
+                        "list message argument must be a scalar string or explicit `text` object",
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn validate_image_value(tag: &str, value: &Value, path: &str) -> Result<(), CanonicalYamlError> {
@@ -3623,19 +3635,35 @@ fn field_value_from_yaml_value(value: Value) -> Result<FieldValueYaml, String> {
     }
 
     if let Value::Sequence(sequence) = &value {
-        if sequence.is_empty() {
-            return Err("!image field sequence must not be empty".to_owned());
-        }
-        let mut images = Vec::new();
-        for item in sequence {
-            let Some(media_id) = image_scalar_from_yaml_value(item)? else {
-                return Err(
-                    "field image sequences may contain only !image tagged scalars".to_owned(),
-                );
-            };
-            images.push(media_id);
-        }
-        return Ok(FieldValueYaml::Images(ImageReferencesYaml(images)));
+        let Some(first) = sequence.first() else {
+            return Err("field sequence must not be empty".to_owned());
+        };
+        return match first {
+            Value::Tagged(_) => {
+                let mut images = Vec::new();
+                for item in sequence {
+                    let Some(media_id) = image_scalar_from_yaml_value(item)? else {
+                        return Err(
+                            "field image sequences may contain only !image tagged scalars"
+                                .to_owned(),
+                        );
+                    };
+                    images.push(media_id);
+                }
+                Ok(FieldValueYaml::Images(ImageReferencesYaml(images)))
+            }
+            Value::Mapping(_) => {
+                let items = serde_yaml::from_value::<
+                    Vec<BTreeMap<String, ListMessageArgumentYaml>>,
+                >(value.clone())
+                .map_err(|error| format!("invalid list message item sequence: {error}"))?;
+                Ok(FieldValueYaml::MessageItems(ListMessageItemsYaml { items }))
+            }
+            _ => Err(
+                "field sequences must contain either !image tagged scalars or list-message item mappings"
+                    .to_owned(),
+            ),
+        };
     }
 
     if matches!(value, Value::Tagged(_)) {

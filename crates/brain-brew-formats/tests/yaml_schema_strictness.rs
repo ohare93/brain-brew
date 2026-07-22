@@ -153,6 +153,15 @@ fn rejects_malformed_base_field_value_unions() {
             "mixed image sequence",
             "      field.value:\n        - !image media.one\n        - plain-string\n",
         ),
+        (
+            "mixed image and list-message sequence",
+            "      field.value:\n        - !image media.one\n        - country: note.one\n",
+        ),
+        (
+            "scalar field sequence",
+            "      field.value:\n        - plain-string\n        - another-string\n",
+        ),
+        ("empty field sequence", "      field.value: []\n"),
         ("empty image payload", "      field.value: !image\n"),
     ];
 

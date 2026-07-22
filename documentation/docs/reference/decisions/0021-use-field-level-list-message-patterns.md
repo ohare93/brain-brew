@@ -19,7 +19,7 @@ A field definition may declare a reusable `message_pattern` of `kind: list`. It 
 
 A `note_field_ref` argument may instead use the explicit `{text: ...}` object when the label is genuinely text rather than a dependency, such as an extension-companion build where the referenced note is absent. The explicit argument kind remains part of semantic equality and fingerprints. Explicit `text` is rejected for a `text` parameter, whose concise scalar already has those semantics.
 
-A note invokes its field's pattern with a non-empty ordered `items` sequence. Empty scalar fields remain valid and are the only blank/fillable representation. Existing inline structured messages remain supported.
+A note invokes its field's pattern with a non-empty ordered YAML sequence of parameter mappings directly at the field value. The earlier `{items: [...]}` mapping remains reader-compatible for migration, but canonical formatting always emits the direct sequence. Tagged `!image` scalar sequences remain structurally distinct from list-message mapping sequences. Empty scalar fields remain valid and are the only blank/fillable representation. Existing inline structured messages remain supported.
 
 List patterns and invocations are semantic core values. Validation checks pattern placeholders, declared and supplied parameters, typed references, missing values, and dependency cycles. Rendering uses the same field dependency graph as inline structured messages and lowers the result to plain adapter text.
 
@@ -30,6 +30,7 @@ Pattern glue is translated once at field-definition paths. Invocation text and r
 - Shared glue is authored and translated once.
 - Ordered items replace numbered variables and naturally support more than two entries.
 - `country: note.moldova` is concise while retaining a typed reference to the declared `field.country`; `country: {text: Sierra Leone}` is an explicit translatable escape hatch when no dependency exists.
+- A direct item sequence removes a redundant `items` wrapper while remaining unambiguous from tagged structured-image sequences.
 - Reference validation, cycle detection, semantic diff, and fingerprints remain format-independent core behavior.
 - Existing adapter output remains a normal scalar string.
 

@@ -58,12 +58,11 @@ notes:
     fields:
       field.country: Andorra
       field.flag-similarity:
-        items:
-          - country: note.moldova
-            description: wider, coat of arms with eagle
-          - country:
-              text: Sierra Leone
-            description: slightly lighter blue
+        - country: note.moldova
+          description: wider, coat of arms with eagle
+        - country:
+            text: Sierra Leone
+          description: slightly lighter blue
     tags: []
     adapter_ids: {}
 media: {}
@@ -80,11 +79,76 @@ tombstones: []
     let formatted = canonical_yaml::to_string(&deck).expect("pattern deck emits");
     assert_eq!(canonical_yaml::format_str(&formatted).unwrap(), formatted);
     assert!(formatted.contains("message_pattern:\n          kind: list"));
-    assert!(formatted.contains("items:\n          - country: note.moldova"));
     assert!(formatted.contains(
-        "          - country:\n              text: Sierra Leone\n            description: slightly lighter blue"
+        "field.flag-similarity:\n        - country: note.moldova\n          description: wider, coat of arms with eagle"
     ));
+    assert!(formatted.contains(
+        "        - country:\n            text: Sierra Leone\n          description: slightly lighter blue"
+    ));
+    assert!(!formatted.contains("field.flag-similarity:\n        items:"));
     assert_eq!(canonical_yaml::from_str(&formatted).unwrap(), deck);
+}
+
+#[test]
+fn legacy_items_wrapper_formats_to_the_canonical_direct_sequence() {
+    let legacy = r#"deck:
+  id: deck.pattern
+  name: Pattern
+  description: ''
+  adapter_ids: {}
+note_types:
+  note-type.country:
+    name: Country
+    field_order:
+      - field.country
+      - field.flag-similarity
+    fields:
+      field.country:
+        name: Country
+      field.flag-similarity:
+        name: Flag similarity
+        message_pattern:
+          kind: list
+          item_format: '{country} ({description})'
+          separator: ', '
+          parameters:
+            country:
+              type: note_field_ref
+              field: field.country
+            description:
+              type: text
+    card_template_order: []
+    card_templates: {}
+    styling: ''
+    adapter_ids: {}
+notes:
+  note.moldova:
+    note_type_id: note-type.country
+    fields:
+      field.country: Moldova
+      field.flag-similarity: ''
+    tags: []
+    adapter_ids: {}
+  note.andorra:
+    note_type_id: note-type.country
+    fields:
+      field.country: Andorra
+      field.flag-similarity:
+        items:
+          - country: note.moldova
+            description: wider
+    tags: []
+    adapter_ids: {}
+media: {}
+tombstones: []
+"#;
+
+    let formatted = canonical_yaml::format_str(legacy).expect("legacy wrapper migrates");
+    assert!(formatted.contains(
+        "field.flag-similarity:\n        - country: note.moldova\n          description: wider"
+    ));
+    assert!(!formatted.contains("field.flag-similarity:\n        items:"));
+    assert_eq!(canonical_yaml::format_str(&formatted).unwrap(), formatted);
 }
 
 #[test]

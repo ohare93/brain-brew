@@ -146,7 +146,7 @@ Island (blå bakgrunn med hvitt kors), Norge (rød bakgrunn med blått kors)
 
 Strict coverage reports missing and stale entries for the `format` glue and for each `text` or `ref` component instead of requiring one long key for the whole composite field. The translator context view shows the resolved message plus its components so translators can edit the glue, reusable country names, and qualifier fragments separately. If a target language needs a special whole-field wording, add a contextual translation for the full resolved source string at the field or note context; that full override replaces the component-composed output for that target.
 
-Translation coverage and application resolve source fields through the same validated dependency graph used by export. Reusable direct/no-change translations stay attached to the referenced upstream field, so a later overlay replacement propagates through downstream messages. A consuming-path contextual adaptation intentionally materializes that component as a literal when it differs from the referenced field. Missing references and cycles are errors rather than empty fallback text.
+Translation coverage and application resolve source fields through the same validated dependency graph used by export. Reusable direct/no-change translations stay attached to the referenced upstream field, so a later overlay replacement propagates through downstream messages. A consuming-path contextual adaptation intentionally materializes that component as a literal when its target differs from the dependency's translated target, including a source-equal contextual decision that overrides a conflicting reusable direct translation. Missing references and cycles are errors rather than empty fallback text.
 
 Coordinate with deck maintainers before migrating existing large fields: structured messages are best for repeated, composite source text where component reuse clearly reduces duplication.
 
@@ -176,10 +176,9 @@ When a target composition does not contain the referenced note, a `note_field_re
 
 ```yaml
 field.flag-similarity:
-  items:
-    - country:
-        text: Sierra Leone
-      description: slightly lighter blue
+  - country:
+      text: Sierra Leone
+    description: slightly lighter blue
 ```
 
 The explicit country text and the scalar description both appear at their consuming item paths in translation coverage. A genuine note-specific list-format exception can override the source separator without copying the item format or whole rendered field:

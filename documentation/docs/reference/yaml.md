@@ -152,25 +152,25 @@ fields:
           type: text
 ```
 
-Notes then provide only a non-empty ordered item sequence:
+Notes then provide only a non-empty ordered item sequence directly as the field value:
 
 ```yaml
 field.flag-similarity:
-  items:
-    - country: note.egypt
-      description: with emblem
-    - country: note.iraq
-      description: with text
+  - country: note.egypt
+    description: with emblem
+  - country: note.iraq
+    description: with text
 ```
+
+The older mapping form `{items: [...]}` remains reader-compatible for migration, but `brainbrew fmt` always writes the direct sequence. A sequence of parameter mappings is a list-message invocation; a sequence of tagged `!image` scalars remains a structured image field. Empty, mixed, and scalar-only sequences are rejected.
 
 For a `note_field_ref` parameter, the scalar is a note stable ID and the declaration supplies the target field. Thus `country: note.egypt` resolves `notes.note.egypt.fields.field.country`. When no referenced note exists in the composed target, explicitly supply independently translatable text instead:
 
 ```yaml
 field.flag-similarity:
-  items:
-    - country:
-        text: Sierra Leone
-      description: slightly lighter blue
+  - country:
+      text: Sierra Leone
+    description: slightly lighter blue
 ```
 
 A `text` parameter remains a concise independently translatable scalar; wrapping it in `{text: ...}` is rejected as redundant. The argument representation is semantic, so explicit text is not treated as a dependency or as equivalent to a scalar note reference. Items must provide exactly the declared parameters, pattern placeholders must exactly match those parameters, and malformed explicit objects, missing references, or cycles fail validation at the item parameter path. Item order is preserved. An intentional empty scalar remains valid and is the only blank/fillable representation:
@@ -179,7 +179,7 @@ A `text` parameter remains a concise independently translatable scalar; wrapping
 field.flag-similarity: ''
 ```
 
-Inline structured messages remain available for irregular composites that do not share a field-level pattern. Overlay note changes and field fills accept the same `items` value shape when the composed field definition declares the pattern.
+Inline structured messages remain available for irregular composites that do not share a field-level pattern. Overlay note changes, field fills, and semantic expected bases accept the same direct sequence shape when the composed field definition declares the pattern.
 
 ### Message reference scope and graph resolution
 

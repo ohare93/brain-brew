@@ -135,10 +135,9 @@ notes:
       field.flag-similarity:
         intent: replace
         value:
-          items:
-            - country:
-                text: Sierra Leone
-              description: slightly lighter blue
+          - country:
+              text: Sierra Leone
+            description: slightly lighter blue
         expected_base:
           value: ''
 "#,
@@ -147,7 +146,7 @@ notes:
 
     assert!(
         formatted.contains(
-            "field_fills:\n  note.andorra:\n    field.flag-similarity:\n      items:\n        - country:\n            text: Sierra Leone\n          description: slightly lighter blue"
+            "field_fills:\n  note.andorra:\n    field.flag-similarity:\n      - country:\n          text: Sierra Leone\n        description: slightly lighter blue"
         ),
         "{formatted}"
     );
@@ -177,11 +176,10 @@ notes:
       field.flag-similarity:
         intent: replace
         value:
-          items:
-            - country:
-                text: Sierra Leone
-                unexpected: value
-              description: slightly lighter blue
+          - country:
+              text: Sierra Leone
+              unexpected: value
+            description: slightly lighter blue
         expected_base:
           value: ''
 "#,
@@ -190,7 +188,7 @@ notes:
 
     let message = error.to_string();
     assert!(
-        message.contains("notes.note.andorra.fields.field.flag-similarity.value.items[0].country"),
+        message.contains("notes.note.andorra.fields.field.flag-similarity.value[0].country"),
         "{message}"
     );
     assert!(
@@ -1150,6 +1148,48 @@ notes:
     let twice =
         canonical_yaml::overlay_format_str(&once).expect("structured expected base reformats");
     assert_eq!(twice, once);
+}
+
+#[test]
+fn list_message_expected_base_uses_the_canonical_direct_sequence() {
+    let source = r#"id: overlay.patch.similarity
+kind: patch
+notes:
+  note.andorra:
+    intent: merge
+    fields:
+      field.flag-similarity:
+        intent: replace
+        value:
+          - country: note.moldova
+            description: narrower
+        expected_base:
+          value:
+            - country: note.moldova
+              description: wider
+"#;
+    let overlay = canonical_yaml::overlay_from_str(source).expect("list expected base parses");
+    let change = &overlay.note_changes[&sid("note.andorra")].fields[&sid("field.flag-similarity")];
+    assert!(matches!(change.value, Some(FieldValue::MessageItems(_))));
+    assert!(matches!(
+        change.expected_base,
+        Some(ExpectedBase::FieldValue(FieldValue::MessageItems(_)))
+    ));
+
+    let formatted = canonical_yaml::overlay_to_string(&overlay).expect("list base emits");
+    assert!(
+        formatted.contains(
+            "value:\n          - country: note.moldova\n            description: narrower"
+        )
+    );
+    assert!(formatted.contains(
+        "expected_base:\n          value:\n            - country: note.moldova\n              description: wider"
+    ));
+    assert!(!formatted.contains("items:"));
+    assert_eq!(
+        canonical_yaml::overlay_format_str(&formatted).unwrap(),
+        formatted
+    );
 }
 
 #[test]
