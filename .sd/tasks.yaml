@@ -46,22 +46,14 @@ tasks:
     run: devenv shell brainbrew verify --manifest fixtures/ultimate-geography/brainbrew.yaml --all-targets --media-mode reference-only
 
   workbench/ug:
-    desc: Build Workbench dev assets and serve the Ultimate Geography manifest; pass -- --no-open or -- --port <port> as needed
+    desc: Build Workbench dev assets and serve a write-capable Ultimate Geography Workbench; pass -- --no-open or -- --port <port> as needed
     run: |
       set -euo pipefail
       if [ "${1:-}" = "--" ]; then
         shift
       fi
       devenv shell workbench-ui-build
-      media_args=()
-      default_media_root="../../external/ultimate-geography/media"
-      media_root="${BRAINBREW_UG_MEDIA_ROOT:-$default_media_root}"
-      if [ -d "$media_root" ]; then
-        media_args=(--media-root "$media_root")
-      else
-        echo "warning: UG media root not found at $media_root; set BRAINBREW_UG_MEDIA_ROOT to override" >&2
-      fi
-      devenv shell brainbrew workbench serve --manifest fixtures/ultimate-geography/brainbrew.yaml --dev-assets target/workbench-ui "${media_args[@]}" "$@"
+      devenv shell brainbrew workbench serve --manifest fixtures/ultimate-geography/brainbrew.yaml --dev-assets target/workbench-ui --enable-write "$@"
 
 passthrough:
   cargo:
