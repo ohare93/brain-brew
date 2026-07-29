@@ -18,6 +18,7 @@ fixtures/
     brainbrew.yaml
     brainbrew-hardcore.yaml
     media.yaml
+    note-types.yaml                # shared declared note-type structure
     media/                         # one real 609-file tree
     goldens/                       # UG-owned referenced goldens
     descriptions/
@@ -31,13 +32,20 @@ fixtures/
 ```
 
 The source is an exact whitelist from UG `brainbrew-migration` revision
-`795853d...`, descending from migration history rebased on upstream
+`54b3254...`, descending from migration history rebased on upstream
 `e1fd8518...`, not a fixture-only migrated derivative. It demonstrates:
 
 - English Standard as a base Canonical Deck;
 - language overlays for all 16 UG languages, including Hebrew RTL coverage;
-- source variables for shared card-template labels;
+- declared field and card-template ordering;
+- source variables for shared card-template labels, including one consolidated
+  capital-hint variable used on both card faces;
+- a shared `note-types.yaml` structural include plus reusable note-type metadata
+  translation overlays;
 - scalar includes for descriptions, templates, and styling;
+- sparse Experimental region-code values with blank values left implicit;
+- field-pattern parameter translation contexts and matching current
+  translation-profile paths;
 - a shared Extended variant overlay and small language-specific residue;
 - Hardcore Geography as both an extension overlay and standalone companion;
 - real declared media bytes and canonical hashes;

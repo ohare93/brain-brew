@@ -1,10 +1,10 @@
-id: overlay.translation.hardcore.companion-note-type.fr
+id: overlay.translation.note-type.fr
 kind: translation
 translations:
   variables:
     label.capital:
       Capital: Capitale
-    label.capital-hint.answer:
+    label.capital-hint:
       'Hint: {{Capital hint}}': 'Indice : {{Capital hint}}'
     label.flag:
       Flag: Drapeau

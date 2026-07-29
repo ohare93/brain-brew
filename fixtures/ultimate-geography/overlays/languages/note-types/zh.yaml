@@ -1,4 +1,4 @@
-id: overlay.translation.hardcore.companion-note-type.zh
+id: overlay.translation.note-type.zh
 kind: translation
 translations:
   contextual:
@@ -8,7 +8,7 @@ translations:
   variables:
     label.capital:
       Capital: '首都'
-    label.capital-hint.answer:
+    label.capital-hint:
       'Hint: {{Capital hint}}': '提示：{{Capital hint}}'
     label.flag:
       Flag: '旗帜'

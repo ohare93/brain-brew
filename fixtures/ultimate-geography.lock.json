@@ -56,9 +56,9 @@
     }
   },
   "expected": {
-    "accepted_from_source_sha256": "167d69416951c06462c1a0f23411fa37470b0d12e2cd1d897a51ac29a0f7adf1",
+    "accepted_from_source_sha256": "e1251709feadd4d494b5dce862e4291a18e5d1ffb5b3dfe31b160ea498947cdd",
     "algorithm": "sha256-path-canonical-json-v1",
-    "canonical_byte_count": 10024406,
+    "canonical_byte_count": 10024794,
     "file_count": 100,
     "generated_by": {
       "build": {
@@ -80,20 +80,20 @@
       },
       "executable": {
         "algorithm": "sha256",
-        "byte_count": 15690040,
-        "sha256": "58782c88efedc3691be904bcf730f4314c4ce475c7ccb607ee4556ddb767c259"
+        "byte_count": 15777528,
+        "sha256": "0a4963db7bf3e2e8ae019902e5aa98fabd165ba93687811db5ed7cbdd064421f"
       },
       "identity": {
         "algorithm": "sha256-canonical-json-v1",
-        "sha256": "ed75f9aa6a5ebcef08549fa1f8f8429bb065ea500728227a37f263f5cbe9e89e"
+        "sha256": "f377b4d27dac34df9b09046cb139f00e1efba570f2592b9b635aa9694963ce9e"
       },
       "ref": "rust-brainbrew",
       "repository": "https://github.com/jeprecated/brain-brew.git",
-      "revision": "77b092ddb82fb0dfdaf64713ed081a4ac9f2eb97",
+      "revision": "68a828350de4bda46af85b5167bca807edd7d733",
       "source": {
         "algorithm": "sha256-generator-path-length-content-v1",
-        "byte_count": 2944523,
-        "file_count": 68,
+        "byte_count": 2985380,
+        "file_count": 69,
         "paths": [
           "Cargo.lock",
           "Cargo.toml",
@@ -105,7 +105,7 @@
           "crates/brain-brew-cli/assets",
           "crates/brain-brew-cli/src"
         ],
-        "sha256": "754018e336b8f5877460c4430be7809d703f34762439dc477441eebb10a3be61"
+        "sha256": "53b7c7a31848035861115972881dfbd70e04ab27ddae11be88b945c7cabe7a27"
       },
       "version": "1.0.0-alpha.3"
     },
@@ -226,13 +226,13 @@
       }
     ],
     "root": "ultimate-geography-expected/crowdanki",
-    "sha256": "f4ebfb8e20fe0f6d91a134eb3292832589902db81b1c87c75dc1a6c1bf79c119"
+    "sha256": "9e6fa4baa2552722f3316bce886eb48e2706f71299acd48a03b4918b4e4f4e7c"
   },
   "provenance": {
     "brain_brew": {
       "ref": "rust-brainbrew",
       "repository": "https://github.com/jeprecated/brain-brew.git",
-      "revision": "77b092ddb82fb0dfdaf64713ed081a4ac9f2eb97",
+      "revision": "68a828350de4bda46af85b5167bca807edd7d733",
       "version": "1.0.0-alpha.3"
     },
     "hardcore_geography": {
@@ -243,19 +243,19 @@
     "ultimate_geography": {
       "ref": "brainbrew-migration",
       "repository": "https://github.com/anki-geo/ultimate-geography.git",
-      "revision": "795853d49832ab550b5cb872da47413377ebec5e"
+      "revision": "54b32544a84d1746403ac8efaa3af0e2250ad4c0"
     }
   },
   "schema_version": 3,
   "source": {
     "algorithm": "sha256-path-length-content-v1",
-    "byte_count": 20055819,
-    "file_count": 738,
+    "byte_count": 20031852,
+    "file_count": 739,
     "goldens": {
       "algorithm": "sha256-path-length-content-v1",
-      "byte_count": 1321848,
+      "byte_count": 1321860,
       "file_count": 8,
-      "sha256": "383a2a9512888f874c314ae5b0bb69217da6ecf4f2a67cf4ec2a3528b99d84fc"
+      "sha256": "6a2ec22f3a937e310e364d50eafb20a5fb73c17c27f6966ef07001c88d49704d"
     },
     "intentional_exclusions": [
       {
@@ -409,7 +409,7 @@
       "sha256": "ad8bd371b4837d639d76f3a56a11fd7437d0ca0d31022ff5022fe5d5ce03e761"
     },
     "root": "ultimate-geography",
-    "sha256": "167d69416951c06462c1a0f23411fa37470b0d12e2cd1d897a51ac29a0f7adf1",
+    "sha256": "e1251709feadd4d494b5dce862e4291a18e5d1ffb5b3dfe31b160ea498947cdd",
     "third_party_attribution": {
       "algorithm": "sha256-path-length-content-v1",
       "byte_count": 58618,
@@ -430,6 +430,7 @@
       "goldens",
       "media",
       "media.yaml",
+      "note-types.yaml",
       "overlays",
       "sources.csv",
       "styles",

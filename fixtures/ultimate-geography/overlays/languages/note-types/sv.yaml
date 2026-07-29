@@ -1,10 +1,10 @@
-id: overlay.translation.hardcore.companion-note-type.sv
+id: overlay.translation.note-type.sv
 kind: translation
 translations:
   variables:
     label.capital:
       Capital: Huvudstad
-    label.capital-hint.answer:
+    label.capital-hint:
       'Hint: {{Capital hint}}': 'Ledtråd: {{Capital hint}}'
     label.flag:
       Flag: Flagga

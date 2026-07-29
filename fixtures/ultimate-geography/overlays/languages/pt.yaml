@@ -521,53 +521,38 @@ translations:
     'Åland Islands': Alanda
   contextual:
     note_types.note-type.ultimate-geography.fields.field.flag-similarity.message_pattern:
+      parameters:
+        country:
+          Egypt: Egito
+          Latvia: 'Letônia'
+          Luxembourg: do Luxemburgo
+          Monaco: 'Mônaco'
+          Poland: 'Polônia'
+          Romania: 'Romênia'
+          Sahrawi Arab Democratic Republic: 'República Árabe Saaraui Democrática'
+          Slovenia: 'Eslovênia'
+          Yemen: 'Iêmen'
       separator:
         ', ': ' e '
     notes.note:
-      austria.fields.field.flag-similarity.message.items.0.country:
-        Latvia: 'Letônia'
       azores:
         Autonomous region of Portugal.: 'Região autônoma de Portugal.'
-      chad.fields.field.flag-similarity.message.items.0.country:
-        Romania: 'Romênia'
-      egypt.fields.field.flag-similarity.message.items.1.country:
-        Yemen: 'Iêmen'
       french-polynesia:
         Overseas territory of France.: 'Território ultramarino da França.'
       guernsey:
         Crown dependency of the United Kingdom.: 'Dependência da coroa do Reino Unido.'
-      indonesia.fields.field.flag-similarity.message.items.0.country:
-        Monaco: 'Mônaco'
-      indonesia.fields.field.flag-similarity.message.items.1.country:
-        Poland: 'Polônia'
-      iraq.fields.field.flag-similarity.message.items.0.country:
-        Egypt: Egito
-      iraq.fields.field.flag-similarity.message.items.1.country:
-        Yemen: 'Iêmen'
       isle-of-man:
         Crown dependency of the United Kingdom.: Ilha de Man
       jersey:
         Crown dependency of the United Kingdom.: 'Dependência da coroa do Reino Unido.'
       madeira:
         Autonomous region of Portugal.: 'Região Autônoma de Portugal.'
-      monaco.fields.field.flag-similarity.message.items.1.country:
-        Poland: 'Polônia'
-      netherlands.fields.field.flag-similarity.message.items.0.country:
-        Luxembourg: do Luxemburgo
       new-caledonia:
         Overseas territory of France.: 'Território ultramarino da França.'
-      palestine.fields.field.flag-similarity.message.items.1.country:
-        Sahrawi Arab Democratic Republic: 'República Árabe Saaraui Democrática'
-      poland.fields.field.flag-similarity.message.items.1.country:
-        Monaco: 'Mônaco'
       saint-martin:
         Overseas territory of France.: 'País constituinte do Reino dos Países Baixos.'
-      slovakia.fields.field.flag-similarity.message.items.1.country:
-        Slovenia: 'Eslovênia'
       wallis-and-futuna:
         Overseas territory of France.: 'Território ultramarino da França.'
-      yemen.fields.field.flag-similarity.message.items.0.country:
-        Egypt: Egito
   no_change:
     - Abuja
     - Alofi
@@ -692,17 +677,6 @@ translations:
     - Wellington
     - Willemstad
     - Zanzibar
-  variables:
-    label.capital-hint.answer:
-      'Hint: {{Capital hint}}': 'Dica: {{Capital hint}}'
-    label.flag:
-      Flag: Bandeira
-    label.location:
-      Location: 'Localização'
-    note-type.name:
-      Ultimate Geography: 'Ultimate Geography [PT]'
-    sentence.flag-similar:
-      'Flag similar to {{Flag similarity}}.': 'Bandeira parecida com: {{Flag similarity}}.'
   adapter_ids:
     crowdanki:guid:
       ')Y}Qy.3GK': 'tEG*ja>]Nv'
@@ -1026,8 +1000,6 @@ translations:
       'yX:tmrd5;]': 'k.<MjI(i0l'
       'z:*d{z(~V2': 'g<j_zQ:^mn'
       'zSc]-^U=0=': 'A#xTVpn3Ks'
-    crowdanki:uuid:
-      43e2586a-9a65-11e8-a777-a0481cc15658: 3da2a851-258c-447f-9d16-91a663663675
 target_adaptations:
   notes.note.antigua-and-barbuda.fields.field.capital-hint:
     intent: adapt

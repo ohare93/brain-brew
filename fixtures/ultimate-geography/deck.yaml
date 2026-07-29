@@ -6,93 +6,16 @@ deck:
     crowdanki:deck_config_name: Ultimate Geography
     crowdanki:deck_config_uuid: 43d37fac-9a65-11e8-9cc5-a0481cc15658
     crowdanki:uuid: 43c5ba66-9a65-11e8-90c9-a0481cc15658
-note_types:
-  note-type.ultimate-geography:
-    name: '${note-type.name}${variant.name-suffix}'
-    variables:
-      label.capital: Capital
-      label.capital-hint.answer: 'Hint: {{Capital hint}}'
-      label.capital-hint.question: 'Hint: {{Capital hint}}'
-      label.flag: Flag
-      label.location: Location
-      note-type.name: Ultimate Geography
-      sentence.flag-similar: 'Flag similar to {{Flag similarity}}.'
-      text.direction: ltr
-      variant.name-suffix: ''
-    field_order:
-      - field.country
-      - field.country-info
-      - field.capital
-      - field.capital-info
-      - field.capital-hint
-      - field.flag
-      - field.flag-similarity
-      - field.map
-    fields:
-      field.capital:
-        name: Capital
-      field.capital-hint:
-        name: Capital hint
-      field.capital-info:
-        name: Capital info
-      field.country:
-        name: Country
-      field.country-info:
-        name: Country info
-      field.flag:
-        name: Flag
-      field.flag-similarity:
-        name: Flag similarity
-        message_pattern:
-          kind: list
-          item_format: '{country} ({description})'
-          separator: ', '
-          parameters:
-            country:
-              type: note_field_ref
-              field: field.country
-            description:
-              type: text
-      field.map:
-        name: Map
-    card_template_order:
-      - template.country-capital
-      - template.capital-country
-      - template.flag-country
-      - template.map-country
-    card_templates:
-      template.capital-country:
-        name: Capital - Country
-        question_format: !include templates/ultimate-geography/capital-country/question.html
-        answer_format: !include templates/ultimate-geography/capital-country/answer.html
-        adapter_ids: {}
-      template.country-capital:
-        name: Country - Capital
-        question_format: !include templates/ultimate-geography/country-capital/question.html
-        answer_format: !include templates/ultimate-geography/country-capital/answer.html
-        adapter_ids: {}
-      template.flag-country:
-        name: Flag - Country
-        question_format: !include templates/ultimate-geography/flag-country/question.html
-        answer_format: !include templates/ultimate-geography/flag-country/answer.html
-        adapter_ids: {}
-      template.map-country:
-        name: Map - Country
-        question_format: !include templates/ultimate-geography/map-country/question.html
-        answer_format: !include templates/ultimate-geography/map-country/answer.html
-        adapter_ids: {}
-    styling: !include styles/ultimate-geography/card.css
-    adapter_ids:
-      crowdanki:uuid: 43e2586a-9a65-11e8-a777-a0481cc15658
+note_types: !include note-types.yaml
 notes:
   note.abkhazia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Sukhumi
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Abkhazia
       field.country-info: Independent state claimed by Georgia.
+      field.capital: Sukhumi
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-abkhazia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-abkhazia-png
@@ -104,11 +27,11 @@ notes:
   note.adriatic-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Adriatic Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-adriatic-sea-png
@@ -119,11 +42,11 @@ notes:
   note.aegean-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Aegean Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-aegean-sea-png
@@ -134,11 +57,11 @@ notes:
   note.afghanistan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Kabul
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Afghanistan
       field.country-info: ''
+      field.capital: Kabul
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-afghanistan-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-afghanistan-png
@@ -150,11 +73,11 @@ notes:
   note.africa:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Africa
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-africa-nobox-png
@@ -165,11 +88,11 @@ notes:
   note.akrotiri-and-dhekelia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Akrotiri and Dhekelia
       field.country-info: Overseas territory of the United Kingdom.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-akrotiri-and-dhekelia-png
@@ -182,11 +105,11 @@ notes:
   note.alaska:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Alaska
       field.country-info: State of the United States.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-alaska-png
@@ -197,11 +120,11 @@ notes:
   note.albania:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Tirana
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Albania
       field.country-info: ''
+      field.capital: Tirana
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-albania-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-albania-png
@@ -214,11 +137,11 @@ notes:
   note.algeria:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Algiers
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Algeria
       field.country-info: ''
+      field.capital: Algiers
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-algeria-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-algeria-png
@@ -231,11 +154,11 @@ notes:
   note.american-samoa:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: American Samoa
       field.country-info: Unincorporated territory of the United States.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-american-samoa-png
@@ -246,11 +169,11 @@ notes:
   note.andorra:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Andorra la Vella
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Andorra
       field.country-info: ''
+      field.capital: Andorra la Vella
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-andorra-svg
       field.flag-similarity:
         - country: note.moldova
@@ -264,11 +187,11 @@ notes:
   note.angola:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Luanda
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Angola
       field.country-info: ''
+      field.capital: Luanda
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-angola-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-angola-png
@@ -280,11 +203,11 @@ notes:
   note.anguilla:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Anguilla
       field.country-info: Overseas territory of the United Kingdom.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-anguilla-png
@@ -296,11 +219,11 @@ notes:
   note.antarctica:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Antarctica
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-antarctica-nobox-png
@@ -311,11 +234,11 @@ notes:
   note.antigua-and-barbuda:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'St. John''s'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Antigua and Barbuda
       field.country-info: ''
+      field.capital: 'St. John''s'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-antigua-and-barbuda-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-antigua-and-barbuda-png
@@ -328,11 +251,11 @@ notes:
   note.arabian-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Arabian Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-arabian-sea-png
@@ -343,11 +266,11 @@ notes:
   note.aral-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Aral Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-aral-sea-png
@@ -358,11 +281,11 @@ notes:
   note.arctic-ocean:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Arctic Ocean
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-arctic-ocean-nobox-png
@@ -373,11 +296,11 @@ notes:
   note.argentina:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Buenos Aires
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Argentina
       field.country-info: ''
+      field.capital: Buenos Aires
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-argentina-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-argentina-png
@@ -389,11 +312,11 @@ notes:
   note.armenia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Yerevan
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Armenia
       field.country-info: ''
+      field.capital: Yerevan
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-armenia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-armenia-png
@@ -405,11 +328,11 @@ notes:
   note.aruba:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Oranjestad
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Aruba
       field.country-info: Constituent country of the Kingdom of the Netherlands.
+      field.capital: Oranjestad
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-aruba-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-aruba-png
@@ -421,11 +344,11 @@ notes:
   note.asia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Asia
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-asia-nobox-png
@@ -436,11 +359,11 @@ notes:
   note.atlantic-ocean:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Atlantic Ocean
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-atlantic-ocean-nobox-png
@@ -451,11 +374,11 @@ notes:
   note.australia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Canberra
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Australia
       field.country-info: ''
+      field.capital: Canberra
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-australia-svg
       field.flag-similarity:
         - country: note.new-zealand
@@ -469,11 +392,11 @@ notes:
   note.austria:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Vienna
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Austria
       field.country-info: ''
+      field.capital: Vienna
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-austria-svg
       field.flag-similarity:
         - country: note.latvia
@@ -488,11 +411,11 @@ notes:
   note.azerbaijan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Baku
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Azerbaijan
       field.country-info: ''
+      field.capital: Baku
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-azerbaijan-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-azerbaijan-png
@@ -504,11 +427,11 @@ notes:
   note.azores:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Azores
       field.country-info: Autonomous region of Portugal.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-azores-png
@@ -519,11 +442,11 @@ notes:
   note.bahrain:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Manama
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Bahrain
       field.country-info: ''
+      field.capital: Manama
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-bahrain-svg
       field.flag-similarity:
         - country: note.qatar
@@ -538,11 +461,11 @@ notes:
   note.bali:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Bali
       field.country-info: Island of Indonesia.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-bali-png
@@ -553,11 +476,11 @@ notes:
   note.balkan-peninsula:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Balkan Peninsula
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-balkan-peninsula-png
@@ -568,11 +491,11 @@ notes:
   note.baltic-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Baltic Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-baltic-sea-png
@@ -583,11 +506,11 @@ notes:
   note.banda-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Banda Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-banda-sea-png
@@ -598,11 +521,11 @@ notes:
   note.bangladesh:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Dhaka
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Bangladesh
       field.country-info: ''
+      field.capital: Dhaka
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-bangladesh-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-bangladesh-png
@@ -614,11 +537,11 @@ notes:
   note.barbados:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Bridgetown
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Barbados
       field.country-info: ''
+      field.capital: Bridgetown
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-barbados-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-barbados-png
@@ -631,11 +554,11 @@ notes:
   note.barents-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Barents Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-barents-sea-png
@@ -646,11 +569,11 @@ notes:
   note.bay-of-bengal:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Bay of Bengal
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-bay-of-bengal-png
@@ -661,11 +584,11 @@ notes:
   note.bay-of-biscay:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Bay of Biscay
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-bay-of-biscay-png
@@ -676,11 +599,11 @@ notes:
   note.belarus:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Minsk
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Belarus
       field.country-info: ''
+      field.capital: Minsk
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-belarus-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-belarus-png
@@ -692,11 +615,11 @@ notes:
   note.belgium:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Brussels
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Belgium
       field.country-info: ''
+      field.capital: Brussels
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-belgium-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-belgium-png
@@ -709,11 +632,11 @@ notes:
   note.belize:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Belmopan
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Belize
       field.country-info: ''
+      field.capital: Belmopan
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-belize-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-belize-png
@@ -725,11 +648,11 @@ notes:
   note.benin:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Porto-Novo
-      field.capital-hint: ''
-      field.capital-info: While Porto-Novo is the official capital, Cotonou is the de facto seat of government.
       field.country: Benin
       field.country-info: ''
+      field.capital: Porto-Novo
+      field.capital-info: While Porto-Novo is the official capital, Cotonou is the de facto seat of government.
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-benin-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-benin-png
@@ -742,11 +665,11 @@ notes:
   note.bering-strait:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Bering Strait
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-bering-strait-png
@@ -757,11 +680,11 @@ notes:
   note.bermuda:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Bermuda
       field.country-info: Overseas territory of the United Kingdom.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-bermuda-png
@@ -773,11 +696,11 @@ notes:
   note.bhutan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Thimphu
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Bhutan
       field.country-info: ''
+      field.capital: Thimphu
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-bhutan-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-bhutan-png
@@ -789,11 +712,11 @@ notes:
   note.black-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Black Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-black-sea-png
@@ -804,11 +727,11 @@ notes:
   note.bolivia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Sucre
-      field.capital-hint: ''
-      field.capital-info: While Sucre is the constitutional capital, La Paz is the seat of government.
       field.country: Bolivia
       field.country-info: ''
+      field.capital: Sucre
+      field.capital-info: While Sucre is the constitutional capital, La Paz is the seat of government.
+      field.capital-hint: ''
       field.flag:
         - !image media.ug-flag-bolivia-blur-svg
         - !image media.ug-flag-bolivia-svg
@@ -824,11 +747,11 @@ notes:
   note.bosnia-and-herzegovina:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Sarajevo
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Bosnia and Herzegovina
       field.country-info: ''
+      field.capital: Sarajevo
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-bosnia-and-herzegovina-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-bosnia-and-herzegovina-png
@@ -841,11 +764,11 @@ notes:
   note.botswana:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Gaborone
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Botswana
       field.country-info: ''
+      field.capital: Gaborone
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-botswana-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-botswana-png
@@ -857,11 +780,11 @@ notes:
   note.bougainville:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Bougainville
       field.country-info: Autonomous region of Papua New Guinea.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-bougainville-png
@@ -872,11 +795,11 @@ notes:
   note.brazil:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'Brasília'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Brazil
       field.country-info: ''
+      field.capital: 'Brasília'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-brazil-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-brazil-png
@@ -888,11 +811,11 @@ notes:
   note.british-virgin-islands:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: British Virgin Islands
       field.country-info: Overseas territory of the United Kingdom.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-british-virgin-islands-png
@@ -904,11 +827,11 @@ notes:
   note.brunei:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Bandar Seri Begawan
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Brunei
       field.country-info: ''
+      field.capital: Bandar Seri Begawan
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-brunei-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-brunei-png
@@ -921,11 +844,11 @@ notes:
   note.bulgaria:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Sofia
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Bulgaria
       field.country-info: ''
+      field.capital: Sofia
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-bulgaria-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-bulgaria-png
@@ -938,11 +861,11 @@ notes:
   note.burkina-faso:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Ouagadougou
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Burkina Faso
       field.country-info: ''
+      field.capital: Ouagadougou
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-burkina-faso-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-burkina-faso-png
@@ -955,11 +878,11 @@ notes:
   note.burundi:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Gitega
-      field.capital-hint: ''
-      field.capital-info: Official capital was moved from Bujumbura to Gitega in 2019.
       field.country: Burundi
       field.country-info: ''
+      field.capital: Gitega
+      field.capital-info: Official capital was moved from Bujumbura to Gitega in 2019.
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-burundi-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-burundi-png
@@ -972,11 +895,11 @@ notes:
   note.cambodia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Phnom Penh
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Cambodia
       field.country-info: ''
+      field.capital: Phnom Penh
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-cambodia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-cambodia-png
@@ -989,11 +912,11 @@ notes:
   note.cameroon:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'Yaoundé'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Cameroon
       field.country-info: ''
+      field.capital: 'Yaoundé'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-cameroon-svg
       field.flag-similarity:
         - country: note.senegal
@@ -1007,11 +930,11 @@ notes:
   note.canada:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Ottawa
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Canada
       field.country-info: ''
+      field.capital: Ottawa
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-canada-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-canada-png
@@ -1023,11 +946,11 @@ notes:
   note.canary-islands:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Canary Islands
       field.country-info: Autonomous community of Spain.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-canary-islands-png
@@ -1038,11 +961,11 @@ notes:
   note.cape-verde:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Praia
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Cape Verde
       field.country-info: Also known as Cabo Verde.
+      field.capital: Praia
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-cape-verde-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-cape-verde-png
@@ -1055,11 +978,11 @@ notes:
   note.caribbean-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Caribbean Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-caribbean-sea-png
@@ -1070,11 +993,11 @@ notes:
   note.caspian-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Caspian Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-caspian-sea-png
@@ -1085,11 +1008,11 @@ notes:
   note.cayman-islands:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Cayman Islands
       field.country-info: Overseas territory of the United Kingdom.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-cayman-islands-png
@@ -1101,11 +1024,11 @@ notes:
   note.celebes-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Celebes Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-celebes-sea-png
@@ -1116,11 +1039,11 @@ notes:
   note.celtic-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Celtic Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-celtic-sea-png
@@ -1131,11 +1054,11 @@ notes:
   note.central-african-republic:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Bangui
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Central African Republic
       field.country-info: ''
+      field.capital: Bangui
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-central-african-republic-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-central-african-republic-png
@@ -1147,11 +1070,11 @@ notes:
   note.chad:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'N''Djamena'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Chad
       field.country-info: ''
+      field.capital: 'N''Djamena'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-chad-svg
       field.flag-similarity:
         - country: note.romania
@@ -1165,11 +1088,11 @@ notes:
   note.chile:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Santiago
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Chile
       field.country-info: ''
+      field.capital: Santiago
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-chile-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-chile-png
@@ -1181,11 +1104,11 @@ notes:
   note.china:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Beijing
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: China
       field.country-info: ''
+      field.capital: Beijing
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-china-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-china-png
@@ -1197,11 +1120,11 @@ notes:
   note.colombia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'Bogotá'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Colombia
       field.country-info: ''
+      field.capital: 'Bogotá'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-colombia-svg
       field.flag-similarity:
         - country: note.ecuador
@@ -1215,11 +1138,11 @@ notes:
   note.comoros:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Moroni
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Comoros
       field.country-info: ''
+      field.capital: Moroni
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-comoros-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-comoros-png
@@ -1232,11 +1155,11 @@ notes:
   note.cook-islands:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Avarua
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Cook Islands
       field.country-info: ''
+      field.capital: Avarua
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-cook-islands-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-cook-islands-png
@@ -1248,11 +1171,11 @@ notes:
   note.coral-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Coral Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-coral-sea-png
@@ -1263,11 +1186,11 @@ notes:
   note.corsica:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Corsica
       field.country-info: Region of France.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-corsica-png
@@ -1278,11 +1201,11 @@ notes:
   note.costa-rica:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'San José'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Costa Rica
       field.country-info: ''
+      field.capital: 'San José'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag:
         - !image media.ug-flag-costa-rica-blur-svg
         - !image media.ug-flag-costa-rica-svg
@@ -1296,11 +1219,11 @@ notes:
   note.croatia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Zagreb
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Croatia
       field.country-info: ''
+      field.capital: Zagreb
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-croatia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-croatia-png
@@ -1314,11 +1237,11 @@ notes:
   note.cuba:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Havana
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Cuba
       field.country-info: ''
+      field.capital: Havana
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-cuba-svg
       field.flag-similarity:
         - country: note.puerto-rico
@@ -1333,11 +1256,11 @@ notes:
   note.cura-ao:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Willemstad
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: 'Curaçao'
       field.country-info: Constituent country of the Kingdom of the Netherlands.
+      field.capital: Willemstad
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-curacao-svg
       field.flag-similarity:
         - country: note.nauru
@@ -1351,11 +1274,11 @@ notes:
   note.cyprus:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Nicosia
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Cyprus
       field.country-info: ''
+      field.capital: Nicosia
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-cyprus-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-cyprus-png
@@ -1370,11 +1293,11 @@ notes:
   note.czech-republic:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Prague
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Czech Republic
       field.country-info: Also known as Czechia.
+      field.capital: Prague
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-czech-republic-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-czech-republic-png
@@ -1387,11 +1310,11 @@ notes:
   note.dead-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Dead Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-dead-sea-png
@@ -1402,11 +1325,11 @@ notes:
   note.democratic-republic-of-the-congo:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Kinshasa
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Democratic Republic of the Congo
       field.country-info: Formerly Zaire.
+      field.capital: Kinshasa
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-democratic-republic-of-the-congo-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-democratic-republic-of-the-congo-png
@@ -1418,11 +1341,11 @@ notes:
   note.denmark:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Copenhagen
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Denmark
       field.country-info: ''
+      field.capital: Copenhagen
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-denmark-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-denmark-png
@@ -1435,11 +1358,11 @@ notes:
   note.denmark-strait:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Denmark Strait
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-denmark-strait-png
@@ -1450,11 +1373,11 @@ notes:
   note.djibouti:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Djibouti
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Djibouti
       field.country-info: ''
+      field.capital: Djibouti
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-djibouti-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-djibouti-png
@@ -1467,11 +1390,11 @@ notes:
   note.dominica:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Roseau
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Dominica
       field.country-info: ''
+      field.capital: Roseau
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-dominica-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-dominica-png
@@ -1484,11 +1407,11 @@ notes:
   note.dominican-republic:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Santo Domingo
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Dominican Republic
       field.country-info: ''
+      field.capital: Santo Domingo
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-dominican-republic-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-dominican-republic-png
@@ -1501,11 +1424,11 @@ notes:
   note.east-china-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: East China Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-east-china-sea-png
@@ -1516,11 +1439,11 @@ notes:
   note.east-siberian-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: East Siberian Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-east-siberian-sea-png
@@ -1531,11 +1454,11 @@ notes:
   note.ecuador:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Quito
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Ecuador
       field.country-info: ''
+      field.capital: Quito
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-ecuador-svg
       field.flag-similarity:
         - country: note.colombia
@@ -1549,11 +1472,11 @@ notes:
   note.egypt:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Cairo
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Egypt
       field.country-info: ''
+      field.capital: Cairo
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-egypt-svg
       field.flag-similarity:
         - country: note.iraq
@@ -1571,11 +1494,11 @@ notes:
   note.el-salvador:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: San Salvador
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: El Salvador
       field.country-info: ''
+      field.capital: San Salvador
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag:
         - !image media.ug-flag-el-salvador-blur-svg
         - !image media.ug-flag-el-salvador-svg
@@ -1591,11 +1514,11 @@ notes:
   note.england:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: London
-      field.capital-hint: Not a sovereign country
-      field.capital-info: ''
       field.country: England
       field.country-info: Constituent country of the United Kingdom.
+      field.capital: London
+      field.capital-info: ''
+      field.capital-hint: Not a sovereign country
       field.flag: !image media.ug-flag-england-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-england-png
@@ -1606,11 +1529,11 @@ notes:
   note.english-channel:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: English Channel
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-english-channel-png
@@ -1621,11 +1544,11 @@ notes:
   note.equatorial-guinea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Ciudad de la Paz
-      field.capital-hint: ''
-      field.capital-info: Official capital was moved from Malabo to Ciudad de la Paz in 2026.
       field.country: Equatorial Guinea
       field.country-info: ''
+      field.capital: Ciudad de la Paz
+      field.capital-info: Official capital was moved from Malabo to Ciudad de la Paz in 2026.
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-equatorial-guinea-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-equatorial-guinea-png
@@ -1637,11 +1560,11 @@ notes:
   note.eritrea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Asmara
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Eritrea
       field.country-info: ''
+      field.capital: Asmara
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-eritrea-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-eritrea-png
@@ -1654,11 +1577,11 @@ notes:
   note.estonia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Tallinn
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Estonia
       field.country-info: ''
+      field.capital: Tallinn
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-estonia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-estonia-png
@@ -1671,11 +1594,11 @@ notes:
   note.eswatini:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Mbabane
-      field.capital-hint: ''
-      field.capital-info: While Mbabane is the official, executive capital, Lobamba is the traditional, spiritual and legislative capital.
       field.country: Eswatini
       field.country-info: Known as Swaziland until 2018.
+      field.capital: Mbabane
+      field.capital-info: While Mbabane is the official, executive capital, Lobamba is the traditional, spiritual and legislative capital.
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-eswatini-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-eswatini-png
@@ -1687,11 +1610,11 @@ notes:
   note.ethiopia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Addis Ababa
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Ethiopia
       field.country-info: ''
+      field.capital: Addis Ababa
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-ethiopia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-ethiopia-png
@@ -1704,11 +1627,11 @@ notes:
   note.europe:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Europe
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-europe-nobox-png
@@ -1719,11 +1642,11 @@ notes:
   note.european-union:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: European Union
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-european-union-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-european-union-png
@@ -1734,11 +1657,11 @@ notes:
   note.falkland-islands:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Falkland Islands
       field.country-info: Overseas territory of the United Kingdom.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-falkland-islands-png
@@ -1749,11 +1672,11 @@ notes:
   note.faroe-islands:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'Tórshavn'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Faroe Islands
       field.country-info: Constituent country in the Kingdom of Denmark.
+      field.capital: 'Tórshavn'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-faroe-islands-svg
       field.flag-similarity:
         - country: note.iceland
@@ -1768,11 +1691,11 @@ notes:
   note.federated-states-of-micronesia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Palikir
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Federated States of Micronesia
       field.country-info: ''
+      field.capital: Palikir
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-federated-states-of-micronesia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-federated-states-of-micronesia-png
@@ -1784,11 +1707,11 @@ notes:
   note.fiji:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Suva
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Fiji
       field.country-info: ''
+      field.capital: Suva
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-fiji-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-fiji-png
@@ -1800,11 +1723,11 @@ notes:
   note.finland:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Helsinki
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Finland
       field.country-info: ''
+      field.capital: Helsinki
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-finland-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-finland-png
@@ -1817,11 +1740,11 @@ notes:
   note.france:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Paris
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: France
       field.country-info: ''
+      field.capital: Paris
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-france-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-france-png
@@ -1835,11 +1758,11 @@ notes:
   note.french-guiana:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: French Guiana
       field.country-info: Overseas department of France.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-french-guiana-png
@@ -1850,11 +1773,11 @@ notes:
   note.french-polynesia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Papeete
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: French Polynesia
       field.country-info: Overseas territory of France.
+      field.capital: Papeete
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-french-polynesia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-french-polynesia-png
@@ -1865,11 +1788,11 @@ notes:
   note.gabon:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Libreville
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Gabon
       field.country-info: ''
+      field.capital: Libreville
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-gabon-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-gabon-png
@@ -1881,11 +1804,11 @@ notes:
   note.georgia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Tbilisi
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Georgia
       field.country-info: ''
+      field.capital: Tbilisi
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-georgia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-georgia-png
@@ -1897,11 +1820,11 @@ notes:
   note.germany:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Berlin
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Germany
       field.country-info: ''
+      field.capital: Berlin
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-germany-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-germany-png
@@ -1914,11 +1837,11 @@ notes:
   note.ghana:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Accra
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Ghana
       field.country-info: ''
+      field.capital: Accra
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-ghana-svg
       field.flag-similarity:
         - country: note.bolivia
@@ -1933,11 +1856,11 @@ notes:
   note.gibraltar:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Gibraltar
       field.country-info: Overseas territory of the United Kingdom.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-gibraltar-png
@@ -1949,11 +1872,11 @@ notes:
   note.greece:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Athens
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Greece
       field.country-info: ''
+      field.capital: Athens
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-greece-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-greece-png
@@ -1967,11 +1890,11 @@ notes:
   note.greenland:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Nuuk
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Greenland
       field.country-info: Constituent country in the Kingdom of Denmark.
+      field.capital: Nuuk
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-greenland-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-greenland-png
@@ -1982,11 +1905,11 @@ notes:
   note.grenada:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'St. George''s'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Grenada
       field.country-info: ''
+      field.capital: 'St. George''s'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-grenada-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-grenada-png
@@ -1999,11 +1922,11 @@ notes:
   note.guadeloupe:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Guadeloupe
       field.country-info: Overseas department of France.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-guadeloupe-png
@@ -2015,11 +1938,11 @@ notes:
   note.guam:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'Hagåtña'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Guam
       field.country-info: Unincorporated territory of the United States.
+      field.capital: 'Hagåtña'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag:
         - !image media.ug-flag-guam-blur-svg
         - !image media.ug-flag-guam-svg
@@ -2032,11 +1955,11 @@ notes:
   note.guatemala:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Guatemala City
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Guatemala
       field.country-info: ''
+      field.capital: Guatemala City
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-guatemala-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-guatemala-png
@@ -2048,11 +1971,11 @@ notes:
   note.guernsey:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Guernsey
       field.country-info: Crown dependency of the United Kingdom.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-guernsey-png
@@ -2063,11 +1986,11 @@ notes:
   note.guinea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Conakry
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Guinea
       field.country-info: ''
+      field.capital: Conakry
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-guinea-svg
       field.flag-similarity:
         - country: note.mali
@@ -2082,11 +2005,11 @@ notes:
   note.guinea-bissau:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Bissau
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Guinea-Bissau
       field.country-info: ''
+      field.capital: Bissau
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-guinea-bissau-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-guinea-bissau-png
@@ -2099,11 +2022,11 @@ notes:
   note.gulf-of-alaska:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Gulf of Alaska
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-gulf-of-alaska-png
@@ -2114,11 +2037,11 @@ notes:
   note.gulf-of-california:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Gulf of California
       field.country-info: Also known as the Sea of Cortez.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-gulf-of-california-png
@@ -2129,11 +2052,11 @@ notes:
   note.gulf-of-carpentaria:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Gulf of Carpentaria
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-gulf-of-carpentaria-png
@@ -2144,11 +2067,11 @@ notes:
   note.gulf-of-guinea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Gulf of Guinea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-gulf-of-guinea-png
@@ -2159,11 +2082,11 @@ notes:
   note.gulf-of-mexico:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Gulf of Mexico
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-gulf-of-mexico-png
@@ -2174,11 +2097,11 @@ notes:
   note.gulf-of-thailand:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Gulf of Thailand
       field.country-info: Also known as the Gulf of Siam.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-gulf-of-thailand-png
@@ -2189,11 +2112,11 @@ notes:
   note.guyana:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Georgetown
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Guyana
       field.country-info: ''
+      field.capital: Georgetown
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-guyana-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-guyana-png
@@ -2205,11 +2128,11 @@ notes:
   note.haiti:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Port-au-Prince
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Haiti
       field.country-info: ''
+      field.capital: Port-au-Prince
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-haiti-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-haiti-png
@@ -2222,11 +2145,11 @@ notes:
   note.hawaii:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Hawaii
       field.country-info: State of the United States.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-hawaii-png
@@ -2237,11 +2160,11 @@ notes:
   note.honduras:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Tegucigalpa
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Honduras
       field.country-info: ''
+      field.capital: Tegucigalpa
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-honduras-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-honduras-png
@@ -2253,11 +2176,11 @@ notes:
   note.hong-kong:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Hong Kong
       field.country-info: Special Administrative Region of China.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-hong-kong-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-hong-kong-png
@@ -2268,11 +2191,11 @@ notes:
   note.hudson-bay:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Hudson Bay
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-hudson-bay-png
@@ -2283,11 +2206,11 @@ notes:
   note.hungary:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Budapest
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Hungary
       field.country-info: ''
+      field.capital: Budapest
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-hungary-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-hungary-png
@@ -2300,11 +2223,11 @@ notes:
   note.iceland:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'Reykjavík'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Iceland
       field.country-info: ''
+      field.capital: 'Reykjavík'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-iceland-svg
       field.flag-similarity:
         - country: note.norway
@@ -2320,11 +2243,11 @@ notes:
   note.india:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: New Delhi
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: India
       field.country-info: ''
+      field.capital: New Delhi
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-india-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-india-png
@@ -2336,11 +2259,11 @@ notes:
   note.indian-ocean:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Indian Ocean
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-indian-ocean-nobox-png
@@ -2351,11 +2274,11 @@ notes:
   note.indonesia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Jakarta
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Indonesia
       field.country-info: ''
+      field.capital: Jakarta
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-indonesia-svg
       field.flag-similarity:
         - country: note.monaco
@@ -2372,11 +2295,11 @@ notes:
   note.iran:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Tehran
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Iran
       field.country-info: ''
+      field.capital: Tehran
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-iran-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-iran-png
@@ -2389,11 +2312,11 @@ notes:
   note.iraq:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Baghdad
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Iraq
       field.country-info: ''
+      field.capital: Baghdad
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-iraq-svg
       field.flag-similarity:
         - country: note.egypt
@@ -2410,11 +2333,11 @@ notes:
   note.ireland:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Dublin
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Ireland
       field.country-info: ''
+      field.capital: Dublin
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-ireland-svg
       field.flag-similarity:
         - country: note.ivory-coast
@@ -2429,11 +2352,11 @@ notes:
   note.isle-of-man:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Isle of Man
       field.country-info: Crown dependency of the United Kingdom.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-isle-of-man-png
@@ -2444,11 +2367,11 @@ notes:
   note.israel:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Jerusalem
-      field.capital-hint: Claimed and controlled
-      field.capital-info: 'Disputed; claimed by Palestine.'
       field.country: Israel
       field.country-info: ''
+      field.capital: Jerusalem
+      field.capital-info: 'Disputed; claimed by Palestine.'
+      field.capital-hint: Claimed and controlled
       field.flag: !image media.ug-flag-israel-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-israel-png
@@ -2462,11 +2385,11 @@ notes:
   note.italy:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Rome
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Italy
       field.country-info: ''
+      field.capital: Rome
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-italy-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-italy-png
@@ -2480,11 +2403,11 @@ notes:
   note.ivory-coast:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Yamoussoukro
-      field.capital-hint: ''
-      field.capital-info: While Yamoussoukro is the official capital, Abidjan is the de facto seat of government.
       field.country: Ivory Coast
       field.country-info: 'Officially Côte d''Ivoire.'
+      field.capital: Yamoussoukro
+      field.capital-info: While Yamoussoukro is the official capital, Abidjan is the de facto seat of government.
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-ivory-coast-svg
       field.flag-similarity:
         - country: note.ireland
@@ -2499,11 +2422,11 @@ notes:
   note.jamaica:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Kingston
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Jamaica
       field.country-info: ''
+      field.capital: Kingston
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-jamaica-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-jamaica-png
@@ -2516,11 +2439,11 @@ notes:
   note.japan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Tokyo
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Japan
       field.country-info: ''
+      field.capital: Tokyo
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-japan-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-japan-png
@@ -2532,11 +2455,11 @@ notes:
   note.java:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Java
       field.country-info: Island of Indonesia.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-java-png
@@ -2547,11 +2470,11 @@ notes:
   note.jeju:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Jeju
       field.country-info: Autonomous province of South Korea.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-jeju-png
@@ -2562,11 +2485,11 @@ notes:
   note.jersey:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Jersey
       field.country-info: Crown dependency of the United Kingdom.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-jersey-png
@@ -2577,11 +2500,11 @@ notes:
   note.jordan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Amman
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Jordan
       field.country-info: ''
+      field.capital: Amman
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-jordan-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-jordan-png
@@ -2594,11 +2517,11 @@ notes:
   note.kaliningrad-oblast:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Kaliningrad Oblast
       field.country-info: 'Oblast (administrative region) of the Russian Federation.'
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-kaliningrad-oblast-png
@@ -2609,11 +2532,11 @@ notes:
   note.kazakhstan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Astana
-      field.capital-hint: ''
-      field.capital-info: Known as Nur-Sultan between 2019 and 2022
       field.country: Kazakhstan
       field.country-info: ''
+      field.capital: Astana
+      field.capital-info: Known as Nur-Sultan between 2019 and 2022
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-kazakhstan-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-kazakhstan-png
@@ -2625,11 +2548,11 @@ notes:
   note.kenya:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Nairobi
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Kenya
       field.country-info: ''
+      field.capital: Nairobi
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-kenya-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-kenya-png
@@ -2642,11 +2565,11 @@ notes:
   note.kiribati:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: South Tarawa
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Kiribati
       field.country-info: ''
+      field.capital: South Tarawa
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-kiribati-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-kiribati-png
@@ -2658,11 +2581,11 @@ notes:
   note.kosovo:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Pristina
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Kosovo
       field.country-info: Partially recognised state claimed by Serbia.
+      field.capital: Pristina
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-kosovo-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-kosovo-png
@@ -2674,11 +2597,11 @@ notes:
   note.kuwait:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Kuwait City
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Kuwait
       field.country-info: ''
+      field.capital: Kuwait City
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-kuwait-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-kuwait-png
@@ -2691,11 +2614,11 @@ notes:
   note.kyrgyzstan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Bishkek
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Kyrgyzstan
       field.country-info: ''
+      field.capital: Bishkek
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-kyrgyzstan-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-kyrgyzstan-png
@@ -2707,11 +2630,11 @@ notes:
   note.labrador-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Labrador Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-labrador-sea-png
@@ -2722,11 +2645,11 @@ notes:
   note.land-islands:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Mariehamn
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: 'Åland Islands'
       field.country-info: Autonomous region of Finland.
+      field.capital: Mariehamn
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-aland-islands-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-aland-islands-png
@@ -2737,11 +2660,11 @@ notes:
   note.laos:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Vientiane
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Laos
       field.country-info: ''
+      field.capital: Vientiane
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-laos-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-laos-png
@@ -2754,11 +2677,11 @@ notes:
   note.latvia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Riga
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Latvia
       field.country-info: ''
+      field.capital: Riga
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-latvia-svg
       field.flag-similarity:
         - country: note.austria
@@ -2773,11 +2696,11 @@ notes:
   note.lebanon:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Beirut
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Lebanon
       field.country-info: ''
+      field.capital: Beirut
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-lebanon-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-lebanon-png
@@ -2791,11 +2714,11 @@ notes:
   note.lesotho:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Maseru
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Lesotho
       field.country-info: ''
+      field.capital: Maseru
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-lesotho-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-lesotho-png
@@ -2807,11 +2730,11 @@ notes:
   note.liberia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Monrovia
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Liberia
       field.country-info: ''
+      field.capital: Monrovia
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-liberia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-liberia-png
@@ -2824,11 +2747,11 @@ notes:
   note.libya:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Tripoli
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Libya
       field.country-info: ''
+      field.capital: Tripoli
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-libya-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-libya-png
@@ -2841,11 +2764,11 @@ notes:
   note.liechtenstein:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Vaduz
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Liechtenstein
       field.country-info: ''
+      field.capital: Vaduz
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-liechtenstein-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-liechtenstein-png
@@ -2857,11 +2780,11 @@ notes:
   note.lithuania:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Vilnius
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Lithuania
       field.country-info: ''
+      field.capital: Vilnius
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-lithuania-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-lithuania-png
@@ -2874,11 +2797,11 @@ notes:
   note.luxembourg:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Luxembourg City
-      field.capital-hint: ''
-      field.capital-info: Officially Luxembourg.
       field.country: Luxembourg
       field.country-info: ''
+      field.capital: Luxembourg City
+      field.capital-info: Officially Luxembourg.
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-luxembourg-svg
       field.flag-similarity:
         - country: note.netherlands
@@ -2893,11 +2816,11 @@ notes:
   note.macau:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Macau
       field.country-info: Special Administrative Region of China.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-macau-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-macau-png
@@ -2908,11 +2831,11 @@ notes:
   note.madagascar:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Antananarivo
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Madagascar
       field.country-info: ''
+      field.capital: Antananarivo
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-madagascar-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-madagascar-png
@@ -2925,11 +2848,11 @@ notes:
   note.madeira:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Madeira
       field.country-info: Autonomous region of Portugal.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-madeira-png
@@ -2940,11 +2863,11 @@ notes:
   note.malawi:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Lilongwe
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Malawi
       field.country-info: ''
+      field.capital: Lilongwe
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-malawi-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-malawi-png
@@ -2957,11 +2880,11 @@ notes:
   note.malaysia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Kuala Lumpur
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Malaysia
       field.country-info: ''
+      field.capital: Kuala Lumpur
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-malaysia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-malaysia-png
@@ -2974,11 +2897,11 @@ notes:
   note.maldives:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'Malé'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Maldives
       field.country-info: ''
+      field.capital: 'Malé'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-maldives-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-maldives-png
@@ -2990,11 +2913,11 @@ notes:
   note.mali:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Bamako
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Mali
       field.country-info: ''
+      field.capital: Bamako
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-mali-svg
       field.flag-similarity:
         - country: note.guinea
@@ -3009,11 +2932,11 @@ notes:
   note.malta:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Valletta
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Malta
       field.country-info: ''
+      field.capital: Valletta
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-malta-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-malta-png
@@ -3027,11 +2950,11 @@ notes:
   note.marshall-islands:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Majuro
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Marshall Islands
       field.country-info: ''
+      field.capital: Majuro
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-marshall-islands-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-marshall-islands-png
@@ -3043,11 +2966,11 @@ notes:
   note.martinique:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Martinique
       field.country-info: Overseas department of France.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-martinique-png
@@ -3059,11 +2982,11 @@ notes:
   note.mauritania:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Nouakchott
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Mauritania
       field.country-info: ''
+      field.capital: Nouakchott
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-mauritania-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-mauritania-png
@@ -3076,11 +2999,11 @@ notes:
   note.mauritius:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Port Louis
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Mauritius
       field.country-info: ''
+      field.capital: Port Louis
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-mauritius-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-mauritius-png
@@ -3093,11 +3016,11 @@ notes:
   note.mayotte:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Mayotte
       field.country-info: Overseas department of France.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-mayotte-png
@@ -3109,11 +3032,11 @@ notes:
   note.mediterranean-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Mediterranean Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-mediterranean-sea-png
@@ -3124,11 +3047,11 @@ notes:
   note.melanesia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Melanesia
       field.country-info: Subregion of Oceania, which includes Vanuatu, the Solomon Islands, Fiji, and Papua New Guinea.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-melanesia-png
@@ -3139,11 +3062,11 @@ notes:
   note.mexico:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Mexico City
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Mexico
       field.country-info: ''
+      field.capital: Mexico City
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-mexico-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-mexico-png
@@ -3155,11 +3078,11 @@ notes:
   note.micronesia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Micronesia
       field.country-info: Subregion of Oceania comprising thousands of small islands in the western Pacific Ocean.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-micronesia-png
@@ -3170,11 +3093,11 @@ notes:
   note.moldova:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'Chișinău'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Moldova
       field.country-info: ''
+      field.capital: 'Chișinău'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-moldova-svg
       field.flag-similarity:
         - country: note.andorra
@@ -3188,11 +3111,11 @@ notes:
   note.monaco:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Monaco
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Monaco
       field.country-info: ''
+      field.capital: Monaco
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-monaco-svg
       field.flag-similarity:
         - country: note.indonesia
@@ -3209,11 +3132,11 @@ notes:
   note.mongolia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Ulaanbaatar
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Mongolia
       field.country-info: ''
+      field.capital: Ulaanbaatar
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-mongolia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-mongolia-png
@@ -3225,11 +3148,11 @@ notes:
   note.montenegro:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Podgorica
-      field.capital-hint: ''
-      field.capital-info: Cetinje is an honorary capital.
       field.country: Montenegro
       field.country-info: ''
+      field.capital: Podgorica
+      field.capital-info: Cetinje is an honorary capital.
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-montenegro-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-montenegro-png
@@ -3242,11 +3165,11 @@ notes:
   note.morocco:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Rabat
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Morocco
       field.country-info: ''
+      field.capital: Rabat
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-morocco-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-morocco-png
@@ -3259,11 +3182,11 @@ notes:
   note.mozambique:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Maputo
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Mozambique
       field.country-info: ''
+      field.capital: Maputo
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-mozambique-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-mozambique-png
@@ -3276,11 +3199,11 @@ notes:
   note.myanmar:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Naypyidaw
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Myanmar
       field.country-info: Also known as Burma.
+      field.capital: Naypyidaw
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-myanmar-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-myanmar-png
@@ -3293,11 +3216,11 @@ notes:
   note.namibia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Windhoek
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Namibia
       field.country-info: ''
+      field.capital: Windhoek
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-namibia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-namibia-png
@@ -3309,11 +3232,11 @@ notes:
   note.nauru:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Yaren
-      field.capital-hint: ''
-      field.capital-info: 'Nauru has no official capital; the Yaren District is the de facto capital.'
       field.country: Nauru
       field.country-info: ''
+      field.capital: Yaren
+      field.capital-info: 'Nauru has no official capital; the Yaren District is the de facto capital.'
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-nauru-svg
       field.flag-similarity:
         - country: note.cura-ao
@@ -3327,11 +3250,11 @@ notes:
   note.nepal:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Kathmandu
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Nepal
       field.country-info: ''
+      field.capital: Kathmandu
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-nepal-nobox-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-nepal-png
@@ -3343,11 +3266,11 @@ notes:
   note.netherlands:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Amsterdam
-      field.capital-hint: ''
-      field.capital-info: While Amsterdam is the official capital, The Hague is the seat of the executive and legislative branches.
       field.country: Netherlands
       field.country-info: ''
+      field.capital: Amsterdam
+      field.capital-info: While Amsterdam is the official capital, The Hague is the seat of the executive and legislative branches.
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-netherlands-svg
       field.flag-similarity:
         - country: note.luxembourg
@@ -3362,11 +3285,11 @@ notes:
   note.new-caledonia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'Nouméa'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: New Caledonia
       field.country-info: Overseas territory of France.
+      field.capital: 'Nouméa'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-new-caledonia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-new-caledonia-png
@@ -3377,11 +3300,11 @@ notes:
   note.new-zealand:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Wellington
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: New Zealand
       field.country-info: ''
+      field.capital: Wellington
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-new-zealand-svg
       field.flag-similarity:
         - country: note.australia
@@ -3395,11 +3318,11 @@ notes:
   note.nicaragua:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Managua
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Nicaragua
       field.country-info: ''
+      field.capital: Managua
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag:
         - !image media.ug-flag-nicaragua-blur-svg
         - !image media.ug-flag-nicaragua-svg
@@ -3415,11 +3338,11 @@ notes:
   note.niger:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Niamey
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Niger
       field.country-info: ''
+      field.capital: Niamey
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-niger-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-niger-png
@@ -3432,11 +3355,11 @@ notes:
   note.nigeria:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Abuja
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Nigeria
       field.country-info: ''
+      field.capital: Abuja
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-nigeria-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-nigeria-png
@@ -3449,11 +3372,11 @@ notes:
   note.niue:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Alofi
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Niue
       field.country-info: ''
+      field.capital: Alofi
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-niue-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-niue-png
@@ -3465,11 +3388,11 @@ notes:
   note.north-america:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: North America
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-north-america-nobox-png
@@ -3480,11 +3403,11 @@ notes:
   note.north-korea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Pyongyang
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: North Korea
       field.country-info: ''
+      field.capital: Pyongyang
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-north-korea-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-north-korea-png
@@ -3496,11 +3419,11 @@ notes:
   note.north-macedonia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Skopje
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: North Macedonia
       field.country-info: Formerly known as Macedonia.
+      field.capital: Skopje
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-north-macedonia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-north-macedonia-png
@@ -3512,11 +3435,11 @@ notes:
   note.north-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: North Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-north-sea-png
@@ -3527,11 +3450,11 @@ notes:
   note.northern-cyprus:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: North Nicosia
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Northern Cyprus
       field.country-info: State recognised only by Turkey and claimed by Cyprus.
+      field.capital: North Nicosia
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-northern-cyprus-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-northern-cyprus-png
@@ -3545,11 +3468,11 @@ notes:
   note.northern-ireland:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Belfast
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Northern Ireland
       field.country-info: Constituent country of the United Kingdom.
+      field.capital: Belfast
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-northern-ireland-png
@@ -3560,11 +3483,11 @@ notes:
   note.northern-mariana-islands:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Northern Mariana Islands
       field.country-info: Unincorporated territory of the United States.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-northern-mariana-islands-png
@@ -3575,11 +3498,11 @@ notes:
   note.norway:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Oslo
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Norway
       field.country-info: ''
+      field.capital: Oslo
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-norway-svg
       field.flag-similarity:
         - country: note.iceland
@@ -3595,11 +3518,11 @@ notes:
   note.norwegian-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Norwegian Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-norwegian-sea-png
@@ -3610,11 +3533,11 @@ notes:
   note.oceania:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Oceania
       field.country-info: World region covering the Australian continent and most of the islands in the Pacific Ocean.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-oceania-nobox-png
@@ -3625,11 +3548,11 @@ notes:
   note.oman:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Muscat
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Oman
       field.country-info: ''
+      field.capital: Muscat
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-oman-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-oman-png
@@ -3642,11 +3565,11 @@ notes:
   note.pacific-ocean:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Pacific Ocean
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-pacific-ocean-nobox-png
@@ -3657,11 +3580,11 @@ notes:
   note.pakistan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Islamabad
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Pakistan
       field.country-info: ''
+      field.capital: Islamabad
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-pakistan-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-pakistan-png
@@ -3673,11 +3596,11 @@ notes:
   note.palau:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Ngerulmud
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Palau
       field.country-info: ''
+      field.capital: Ngerulmud
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-palau-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-palau-png
@@ -3689,11 +3612,11 @@ notes:
   note.palestine:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Jerusalem
-      field.capital-hint: Claimed but not controlled
-      field.capital-info: 'Disputed; claimed by Israel; Ramallah is the administrative centre.'
       field.country: Palestine
       field.country-info: ''
+      field.capital: Jerusalem
+      field.capital-info: 'Disputed; claimed by Israel; Ramallah is the administrative centre.'
+      field.capital-hint: Claimed but not controlled
       field.flag: !image media.ug-flag-palestine-svg
       field.flag-similarity:
         - country: note.sudan
@@ -3711,11 +3634,11 @@ notes:
   note.panama:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Panama City
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Panama
       field.country-info: ''
+      field.capital: Panama City
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-panama-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-panama-png
@@ -3727,11 +3650,11 @@ notes:
   note.papua-new-guinea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Port Moresby
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Papua New Guinea
       field.country-info: ''
+      field.capital: Port Moresby
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-papua-new-guinea-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-papua-new-guinea-png
@@ -3743,11 +3666,11 @@ notes:
   note.paraguay:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'Asunción'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Paraguay
       field.country-info: ''
+      field.capital: 'Asunción'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag:
         - !image media.ug-flag-paraguay-blur-svg
         - !image media.ug-flag-paraguay-svg
@@ -3761,11 +3684,11 @@ notes:
   note.persian-gulf:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Persian Gulf
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-persian-gulf-png
@@ -3776,11 +3699,11 @@ notes:
   note.peru:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Lima
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Peru
       field.country-info: ''
+      field.capital: Lima
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-peru-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-peru-png
@@ -3792,11 +3715,11 @@ notes:
   note.philippine-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Philippine Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-philippine-sea-png
@@ -3807,11 +3730,11 @@ notes:
   note.philippines:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Manila
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Philippines
       field.country-info: ''
+      field.capital: Manila
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-philippines-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-philippines-png
@@ -3824,11 +3747,11 @@ notes:
   note.poland:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Warsaw
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Poland
       field.country-info: ''
+      field.capital: Warsaw
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-poland-svg
       field.flag-similarity:
         - country: note.indonesia
@@ -3845,11 +3768,11 @@ notes:
   note.polynesia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Polynesia
       field.country-info: Subregion of Oceania comprising thousands of small islands in the central and southern Pacific Ocean.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-polynesia-png
@@ -3860,11 +3783,11 @@ notes:
   note.portugal:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Lisbon
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Portugal
       field.country-info: ''
+      field.capital: Lisbon
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-portugal-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-portugal-png
@@ -3877,11 +3800,11 @@ notes:
   note.puerto-rico:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: San Juan
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Puerto Rico
       field.country-info: Unincorporated territory of the United States.
+      field.capital: San Juan
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-puerto-rico-svg
       field.flag-similarity:
         - country: note.cuba
@@ -3895,11 +3818,11 @@ notes:
   note.qatar:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Doha
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Qatar
       field.country-info: ''
+      field.capital: Doha
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-qatar-svg
       field.flag-similarity:
         - country: note.bahrain
@@ -3914,11 +3837,11 @@ notes:
   note.r-union:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: 'Réunion'
       field.country-info: Overseas department of France.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-reunion-png
@@ -3930,11 +3853,11 @@ notes:
   note.red-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Red Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-red-sea-png
@@ -3945,11 +3868,11 @@ notes:
   note.republic-of-the-congo:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Brazzaville
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Republic of the Congo
       field.country-info: ''
+      field.capital: Brazzaville
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-republic-of-the-congo-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-republic-of-the-congo-png
@@ -3961,11 +3884,11 @@ notes:
   note.romania:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Bucharest
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Romania
       field.country-info: ''
+      field.capital: Bucharest
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-romania-svg
       field.flag-similarity:
         - country: note.chad
@@ -3980,11 +3903,11 @@ notes:
   note.russia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Moscow
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Russia
       field.country-info: ''
+      field.capital: Moscow
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-russia-svg
       field.flag-similarity:
         - country: note.slovakia
@@ -3998,11 +3921,11 @@ notes:
   note.rwanda:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Kigali
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Rwanda
       field.country-info: ''
+      field.capital: Kigali
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-rwanda-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-rwanda-png
@@ -4015,11 +3938,11 @@ notes:
   note.s-o-tom-and-pr-ncipe:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'São Tomé'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: 'São Tomé and Príncipe'
       field.country-info: ''
+      field.capital: 'São Tomé'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-sao-tome-and-principe-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-sao-tome-and-principe-png
@@ -4031,11 +3954,11 @@ notes:
   note.sahrawi-arab-democratic-republic:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Laayoune
-      field.capital-hint: ''
-      field.capital-info: 'While Laayoune, also known as El Aaiún, is the declared capital, Tifariti is the de facto seat of government.'
       field.country: Sahrawi Arab Democratic Republic
       field.country-info: Partially recognised state claimed by Morocco. Also known as Western Sahara.
+      field.capital: Laayoune
+      field.capital-info: 'While Laayoune, also known as El Aaiún, is the declared capital, Tifariti is the de facto seat of government.'
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-sahrawi-arab-democratic-republic-svg
       field.flag-similarity:
         - country: note.palestine
@@ -4049,11 +3972,11 @@ notes:
   note.saint-kitts-and-nevis:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Basseterre
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Saint Kitts and Nevis
       field.country-info: ''
+      field.capital: Basseterre
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-saint-kitts-and-nevis-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-saint-kitts-and-nevis-png
@@ -4066,11 +3989,11 @@ notes:
   note.saint-lucia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Castries
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Saint Lucia
       field.country-info: ''
+      field.capital: Castries
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-saint-lucia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-saint-lucia-png
@@ -4083,11 +4006,11 @@ notes:
   note.saint-martin:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Saint Martin
       field.country-info: Overseas territory of France.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-saint-martin-png
@@ -4099,11 +4022,11 @@ notes:
   note.saint-vincent-and-the-grenadines:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Kingstown
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Saint Vincent and the Grenadines
       field.country-info: ''
+      field.capital: Kingstown
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-saint-vincent-and-the-grenadines-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-saint-vincent-and-the-grenadines-png
@@ -4116,11 +4039,11 @@ notes:
   note.samoa:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Apia
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Samoa
       field.country-info: ''
+      field.capital: Apia
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-samoa-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-samoa-png
@@ -4132,11 +4055,11 @@ notes:
   note.san-marino:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: City of San Marino
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: San Marino
       field.country-info: ''
+      field.capital: City of San Marino
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-san-marino-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-san-marino-png
@@ -4148,11 +4071,11 @@ notes:
   note.sardinia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Sardinia
       field.country-info: Autonomous region of Italy.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-sardinia-png
@@ -4163,11 +4086,11 @@ notes:
   note.saudi-arabia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Riyadh
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Saudi Arabia
       field.country-info: ''
+      field.capital: Riyadh
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-saudi-arabia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-saudi-arabia-png
@@ -4180,11 +4103,11 @@ notes:
   note.scandinavia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Scandinavia
       field.country-info: Historical and cultural region in Northern Europe, which includes the countries of Denmark, Norway and Sweden, and sometimes Finland and Iceland.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-scandinavia-png
@@ -4195,11 +4118,11 @@ notes:
   note.scotland:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Edinburgh
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Scotland
       field.country-info: Constituent country of the United Kingdom.
+      field.capital: Edinburgh
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-scotland-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-scotland-png
@@ -4210,11 +4133,11 @@ notes:
   note.sea-of-galilee:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Sea of Galilee
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-sea-of-galilee-png
@@ -4225,11 +4148,11 @@ notes:
   note.sea-of-japan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Sea of Japan
       field.country-info: 'A naming dispute exists between the sea''s bordering countries, with South Korea notably supporting the name East Sea.'
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-sea-of-japan-png
@@ -4240,11 +4163,11 @@ notes:
   note.sea-of-okhotsk:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Sea of Okhotsk
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-sea-of-okhotsk-png
@@ -4255,11 +4178,11 @@ notes:
   note.senegal:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Dakar
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Senegal
       field.country-info: ''
+      field.capital: Dakar
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-senegal-svg
       field.flag-similarity:
         - country: note.cameroon
@@ -4274,11 +4197,11 @@ notes:
   note.serbia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Belgrade
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Serbia
       field.country-info: ''
+      field.capital: Belgrade
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-serbia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-serbia-png
@@ -4290,11 +4213,11 @@ notes:
   note.seychelles:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Victoria
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Seychelles
       field.country-info: ''
+      field.capital: Victoria
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-seychelles-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-seychelles-png
@@ -4307,11 +4230,11 @@ notes:
   note.sicily:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Sicily
       field.country-info: Autonomous region of Italy.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-sicily-png
@@ -4322,11 +4245,11 @@ notes:
   note.sierra-leone:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Freetown
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Sierra Leone
       field.country-info: ''
+      field.capital: Freetown
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-sierra-leone-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-sierra-leone-png
@@ -4339,11 +4262,11 @@ notes:
   note.singapore:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Singapore
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Singapore
       field.country-info: ''
+      field.capital: Singapore
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-singapore-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-singapore-png
@@ -4356,11 +4279,11 @@ notes:
   note.sint-maarten:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Sint Maarten
       field.country-info: Constituent country of the Kingdom of the Netherlands.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-sint-maarten-png
@@ -4372,11 +4295,11 @@ notes:
   note.slovakia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Bratislava
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Slovakia
       field.country-info: ''
+      field.capital: Bratislava
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-slovakia-svg
       field.flag-similarity:
         - country: note.russia
@@ -4393,11 +4316,11 @@ notes:
   note.slovenia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Ljubljana
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Slovenia
       field.country-info: ''
+      field.capital: Ljubljana
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-slovenia-svg
       field.flag-similarity:
         - country: note.slovakia
@@ -4413,11 +4336,11 @@ notes:
   note.solomon-islands:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Honiara
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Solomon Islands
       field.country-info: ''
+      field.capital: Honiara
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-solomon-islands-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-solomon-islands-png
@@ -4429,11 +4352,11 @@ notes:
   note.somalia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Mogadishu
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Somalia
       field.country-info: ''
+      field.capital: Mogadishu
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-somalia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-somalia-png
@@ -4446,11 +4369,11 @@ notes:
   note.somaliland:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Hargeisa
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Somaliland
       field.country-info: Independent state claimed by Somalia.
+      field.capital: Hargeisa
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-somaliland-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-somaliland-png
@@ -4463,11 +4386,11 @@ notes:
   note.south-africa:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Pretoria, Cape Town, Bloemfontein
-      field.capital-hint: ''
-      field.capital-info: 'South Africa has no legally defined capital: the branches of government are split over three cities: Pretoria (executive), Cape Town (legislative) and Bloemfontein (judicial).'
       field.country: South Africa
       field.country-info: ''
+      field.capital: Pretoria, Cape Town, Bloemfontein
+      field.capital-info: 'South Africa has no legally defined capital: the branches of government are split over three cities: Pretoria (executive), Cape Town (legislative) and Bloemfontein (judicial).'
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-south-africa-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-south-africa-png
@@ -4479,11 +4402,11 @@ notes:
   note.south-america:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: South America
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-south-america-nobox-png
@@ -4494,11 +4417,11 @@ notes:
   note.south-china-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: South China Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-south-china-sea-png
@@ -4509,11 +4432,11 @@ notes:
   note.south-korea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Seoul
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: South Korea
       field.country-info: ''
+      field.capital: Seoul
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-south-korea-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-south-korea-png
@@ -4525,11 +4448,11 @@ notes:
   note.south-ossetia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Tskhinvali
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: South Ossetia
       field.country-info: Independent state claimed by Georgia.
+      field.capital: Tskhinvali
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-south-ossetia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-south-ossetia-png
@@ -4541,11 +4464,11 @@ notes:
   note.south-sudan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Juba
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: South Sudan
       field.country-info: ''
+      field.capital: Juba
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-south-sudan-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-south-sudan-png
@@ -4558,11 +4481,11 @@ notes:
   note.southern-ocean:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Southern Ocean
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-southern-ocean-nobox-png
@@ -4573,11 +4496,11 @@ notes:
   note.spain:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Madrid
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Spain
       field.country-info: ''
+      field.capital: Madrid
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-spain-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-spain-png
@@ -4591,11 +4514,11 @@ notes:
   note.sri-lanka:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Sri Jayawardenepura Kotte
-      field.capital-hint: ''
-      field.capital-info: Colombo is often referred to as the capital but Sri Jayawardenepura Kotte, a suburb of Colombo, is the official, legislative capital.
       field.country: Sri Lanka
       field.country-info: ''
+      field.capital: Sri Jayawardenepura Kotte
+      field.capital-info: Colombo is often referred to as the capital but Sri Jayawardenepura Kotte, a suburb of Colombo, is the official, legislative capital.
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-sri-lanka-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-sri-lanka-png
@@ -4607,11 +4530,11 @@ notes:
   note.strait-of-hormuz:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Strait of Hormuz
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-strait-of-hormuz-png
@@ -4622,11 +4545,11 @@ notes:
   note.strait-of-malacca:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Strait of Malacca
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-strait-of-malacca-png
@@ -4637,11 +4560,11 @@ notes:
   note.sudan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Khartoum
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Sudan
       field.country-info: ''
+      field.capital: Khartoum
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-sudan-svg
       field.flag-similarity:
         - country: note.palestine
@@ -4655,11 +4578,11 @@ notes:
   note.sumatra:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Sumatra
       field.country-info: Island of Indonesia.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-sumatra-png
@@ -4670,11 +4593,11 @@ notes:
   note.suriname:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Paramaribo
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Suriname
       field.country-info: ''
+      field.capital: Paramaribo
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-suriname-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-suriname-png
@@ -4686,11 +4609,11 @@ notes:
   note.svalbard:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Svalbard
       field.country-info: Unincorporated internal area of Norway.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-svalbard-png
@@ -4701,11 +4624,11 @@ notes:
   note.sweden:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Stockholm
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Sweden
       field.country-info: ''
+      field.capital: Stockholm
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-sweden-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-sweden-png
@@ -4718,11 +4641,11 @@ notes:
   note.switzerland:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Bern
-      field.capital-hint: ''
-      field.capital-info: 'Switzerland has no official capital; Bern is the de facto capital.'
       field.country: Switzerland
       field.country-info: ''
+      field.capital: Bern
+      field.capital-info: 'Switzerland has no official capital; Bern is the de facto capital.'
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-switzerland-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-switzerland-png
@@ -4734,11 +4657,11 @@ notes:
   note.syria:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Damascus
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Syria
       field.country-info: ''
+      field.capital: Damascus
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-syria-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-syria-png
@@ -4752,11 +4675,11 @@ notes:
   note.taiwan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Taipei
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Taiwan
       field.country-info: Partially recognised state claimed by China.
+      field.capital: Taipei
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-taiwan-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-taiwan-png
@@ -4768,11 +4691,11 @@ notes:
   note.tajikistan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Dushanbe
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Tajikistan
       field.country-info: ''
+      field.capital: Dushanbe
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-tajikistan-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-tajikistan-png
@@ -4784,11 +4707,11 @@ notes:
   note.tanzania:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Dodoma
-      field.capital-hint: ''
-      field.capital-info: While Dodoma is the official capital, Dar es Salaam is the de facto seat of government.
       field.country: Tanzania
       field.country-info: ''
+      field.capital: Dodoma
+      field.capital-info: While Dodoma is the official capital, Dar es Salaam is the de facto seat of government.
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-tanzania-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-tanzania-png
@@ -4801,11 +4724,11 @@ notes:
   note.tasman-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Tasman Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-tasman-sea-png
@@ -4816,11 +4739,11 @@ notes:
   note.thailand:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Bangkok
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Thailand
       field.country-info: ''
+      field.capital: Bangkok
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-thailand-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-thailand-png
@@ -4833,11 +4756,11 @@ notes:
   note.the-bahamas:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Nassau
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: The Bahamas
       field.country-info: ''
+      field.capital: Nassau
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-the-bahamas-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-the-bahamas-png
@@ -4850,11 +4773,11 @@ notes:
   note.the-gambia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Banjul
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: The Gambia
       field.country-info: ''
+      field.capital: Banjul
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-the-gambia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-the-gambia-png
@@ -4867,11 +4790,11 @@ notes:
   note.timor-leste:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Dili
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Timor-Leste
       field.country-info: Also known as East Timor.
+      field.capital: Dili
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-timor-leste-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-timor-leste-png
@@ -4884,11 +4807,11 @@ notes:
   note.timor-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Timor Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-timor-sea-png
@@ -4899,11 +4822,11 @@ notes:
   note.togo:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'Lomé'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Togo
       field.country-info: ''
+      field.capital: 'Lomé'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-togo-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-togo-png
@@ -4916,11 +4839,11 @@ notes:
   note.tonga:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: 'Nukuʻalofa'
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Tonga
       field.country-info: ''
+      field.capital: 'Nukuʻalofa'
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-tonga-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-tonga-png
@@ -4932,11 +4855,11 @@ notes:
   note.transnistria:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Tiraspol
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Transnistria
       field.country-info: Independent state claimed by Moldova.
+      field.capital: Tiraspol
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-transnistria-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-transnistria-png
@@ -4948,11 +4871,11 @@ notes:
   note.trinidad-and-tobago:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Port of Spain
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Trinidad and Tobago
       field.country-info: ''
+      field.capital: Port of Spain
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-trinidad-and-tobago-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-trinidad-and-tobago-png
@@ -4965,11 +4888,11 @@ notes:
   note.tunisia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Tunis
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Tunisia
       field.country-info: ''
+      field.capital: Tunis
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-tunisia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-tunisia-png
@@ -4982,11 +4905,11 @@ notes:
   note.turkey:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Ankara
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Turkey
       field.country-info: 'Also known as Türkiye'
+      field.capital: Ankara
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-turkey-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-turkey-png
@@ -5000,11 +4923,11 @@ notes:
   note.turkmenistan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Ashgabat
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Turkmenistan
       field.country-info: ''
+      field.capital: Ashgabat
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-turkmenistan-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-turkmenistan-png
@@ -5016,11 +4939,11 @@ notes:
   note.turks-and-caicos-islands:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Turks and Caicos Islands
       field.country-info: Overseas territory of the United Kingdom.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-turks-and-caicos-islands-png
@@ -5032,11 +4955,11 @@ notes:
   note.tuvalu:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Funafuti
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Tuvalu
       field.country-info: ''
+      field.capital: Funafuti
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-tuvalu-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-tuvalu-png
@@ -5048,11 +4971,11 @@ notes:
   note.uganda:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Kampala
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Uganda
       field.country-info: ''
+      field.capital: Kampala
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-uganda-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-uganda-png
@@ -5065,11 +4988,11 @@ notes:
   note.ukraine:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Kyiv
-      field.capital-hint: ''
-      field.capital-info: Also known as Kiev.
       field.country: Ukraine
       field.country-info: ''
+      field.capital: Kyiv
+      field.capital-info: Also known as Kiev.
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-ukraine-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-ukraine-png
@@ -5081,11 +5004,11 @@ notes:
   note.united-arab-emirates:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Abu Dhabi
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: United Arab Emirates
       field.country-info: ''
+      field.capital: Abu Dhabi
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-united-arab-emirates-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-united-arab-emirates-png
@@ -5098,11 +5021,11 @@ notes:
   note.united-kingdom:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: London
-      field.capital-hint: Sovereign country
-      field.capital-info: ''
       field.country: United Kingdom
       field.country-info: ''
+      field.capital: London
+      field.capital-info: ''
+      field.capital-hint: Sovereign country
       field.flag: !image media.ug-flag-united-kingdom-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-united-kingdom-png
@@ -5114,11 +5037,11 @@ notes:
   note.united-states-of-america:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Washington, D.C.
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: United States of America
       field.country-info: ''
+      field.capital: Washington, D.C.
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-united-states-of-america-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-united-states-of-america-png
@@ -5130,11 +5053,11 @@ notes:
   note.united-states-virgin-islands:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Charlotte Amalie
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: United States Virgin Islands
       field.country-info: Unincorporated territory of the United States.
+      field.capital: Charlotte Amalie
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-united-states-virgin-islands-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-united-states-virgin-islands-png
@@ -5146,11 +5069,11 @@ notes:
   note.uruguay:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Montevideo
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Uruguay
       field.country-info: ''
+      field.capital: Montevideo
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-uruguay-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-uruguay-png
@@ -5162,11 +5085,11 @@ notes:
   note.uzbekistan:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Tashkent
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Uzbekistan
       field.country-info: ''
+      field.capital: Tashkent
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-uzbekistan-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-uzbekistan-png
@@ -5178,11 +5101,11 @@ notes:
   note.vanuatu:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Port Vila
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Vanuatu
       field.country-info: ''
+      field.capital: Port Vila
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-vanuatu-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-vanuatu-png
@@ -5194,11 +5117,11 @@ notes:
   note.vatican-city:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Vatican City
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Vatican City
       field.country-info: ''
+      field.capital: Vatican City
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-vatican-city-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-vatican-city-png
@@ -5210,11 +5133,11 @@ notes:
   note.venezuela:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Caracas
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Venezuela
       field.country-info: ''
+      field.capital: Caracas
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-venezuela-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-venezuela-png
@@ -5226,11 +5149,11 @@ notes:
   note.vietnam:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Hanoi
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Vietnam
       field.country-info: ''
+      field.capital: Hanoi
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-vietnam-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-vietnam-png
@@ -5243,11 +5166,11 @@ notes:
   note.wales:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Cardiff
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Wales
       field.country-info: Constituent country of the United Kingdom.
+      field.capital: Cardiff
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-wales-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-wales-png
@@ -5258,11 +5181,11 @@ notes:
   note.wallis-and-futuna:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Wallis and Futuna
       field.country-info: Overseas territory of France.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-wallis-and-futuna-png
@@ -5273,11 +5196,11 @@ notes:
   note.white-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: White Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-white-sea-png
@@ -5288,11 +5211,11 @@ notes:
   note.yellow-sea:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Yellow Sea
       field.country-info: ''
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-yellow-sea-png
@@ -5303,11 +5226,11 @@ notes:
   note.yemen:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Sanaa
-      field.capital-hint: ''
-      field.capital-info: 'Also spelled as Sana''a.'
       field.country: Yemen
       field.country-info: ''
+      field.capital: Sanaa
+      field.capital-info: 'Also spelled as Sana''a.'
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-yemen-svg
       field.flag-similarity:
         - country: note.egypt
@@ -5324,11 +5247,11 @@ notes:
   note.zambia:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Lusaka
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Zambia
       field.country-info: ''
+      field.capital: Lusaka
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-zambia-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-zambia-png
@@ -5341,11 +5264,11 @@ notes:
   note.zanzibar:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: ''
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Zanzibar
       field.country-info: Semi-autonomous region of Tanzania.
+      field.capital: ''
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: ''
       field.flag-similarity: ''
       field.map: !image media.ug-map-zanzibar-png
@@ -5356,11 +5279,11 @@ notes:
   note.zimbabwe:
     note_type_id: note-type.ultimate-geography
     fields:
-      field.capital: Harare
-      field.capital-hint: ''
-      field.capital-info: ''
       field.country: Zimbabwe
       field.country-info: ''
+      field.capital: Harare
+      field.capital-info: ''
+      field.capital-hint: ''
       field.flag: !image media.ug-flag-zimbabwe-svg
       field.flag-similarity: ''
       field.map: !image media.ug-map-zimbabwe-png

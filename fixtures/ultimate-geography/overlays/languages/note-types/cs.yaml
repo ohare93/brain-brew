@@ -1,10 +1,10 @@
-id: overlay.translation.hardcore.companion-note-type.cs
+id: overlay.translation.note-type.cs
 kind: translation
 translations:
   variables:
     label.capital:
       Capital: 'Hlavní město'
-    label.capital-hint.answer:
+    label.capital-hint:
       'Hint: {{Capital hint}}': 'Náznak: {{Capital hint}}'
     label.flag:
       Flag: Vlajka

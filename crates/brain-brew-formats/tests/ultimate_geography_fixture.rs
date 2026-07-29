@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use brain_brew_formats::canonical_source_document::CanonicalSourceDocument;
 use brain_brew_formats::core::{
     AdapterIdChange, AdapterIds, CanonicalDeck, CardTemplateChange, ChangeIntent, DeckChange,
     ExpectedBase, FieldChange, FieldDefinition, FieldDefinitionChange, MediaChange, MediaReference,
@@ -9,8 +10,9 @@ use brain_brew_formats::core::{
     TranslationDictionary, fingerprint_field_definition, fingerprint_media_reference,
     fingerprint_note,
 };
+use brain_brew_formats::source_document::{SourceFile, SourceProvenance};
 use brain_brew_formats::{
-    canonical_yaml, crowdanki, lockfile, manifest, media, media_map, source_includes,
+    canonical_yaml, crowdanki, lockfile, manifest, media, media_map, note_type_map, source_includes,
 };
 use sha2::{Digest, Sha256};
 use unicode_normalization::UnicodeNormalization;
@@ -21,22 +23,47 @@ fn import_approved(input: &str) -> Result<CanonicalDeck, crowdanki::CrowdAnkiErr
 }
 
 #[test]
-fn ultimate_geography_fixture_uses_file_includes_for_large_source_text() {
+fn ultimate_geography_fixture_uses_shared_structural_and_scalar_includes() {
     let root = fixture_root();
     let deck_source = fs::read_to_string(root.join("deck.yaml")).unwrap();
+    let hardcore_source = fs::read_to_string(root.join("deck-hardcore.yaml")).unwrap();
+    let note_types_source = fs::read_to_string(root.join("note-types.yaml")).unwrap();
     assert!(
         deck_source.contains("description: !include descriptions/ultimate-geography/en.html"),
         "deck description should live outside deck.yaml"
     );
-    assert!(
-        deck_source.contains(
-            "question_format: !include templates/ultimate-geography/capital-country/question.html"
-        ),
-        "standard template HTML should live outside deck.yaml"
+    for (relative_path, source) in [
+        ("deck.yaml", &deck_source),
+        ("deck-hardcore.yaml", &hardcore_source),
+    ] {
+        assert_eq!(
+            source
+                .lines()
+                .filter(|line| line.starts_with("note_types:"))
+                .collect::<Vec<_>>(),
+            ["note_types: !include note-types.yaml"],
+            "{relative_path} should use exactly the shared note-type map"
+        );
+    }
+    assert_eq!(
+        note_types_source
+            .lines()
+            .filter(|line| {
+                !line.chars().next().is_some_and(char::is_whitespace) && line.ends_with(':')
+            })
+            .collect::<Vec<_>>(),
+        ["note-type.ultimate-geography:"],
+        "the shared include should contain exactly the UG note type"
     );
     assert!(
-        deck_source.contains("styling: !include styles/ultimate-geography/card.css"),
-        "note type CSS should live outside deck.yaml"
+        note_types_source.contains(
+            "question_format: !include templates/ultimate-geography/capital-country/question.html"
+        ),
+        "standard template HTML should live outside note-types.yaml"
+    );
+    assert!(
+        note_types_source.contains("styling: !include styles/ultimate-geography/card.css"),
+        "note type CSS should live outside note-types.yaml"
     );
     assert!(
         root.join("descriptions/ultimate-geography/en.html")
@@ -92,17 +119,147 @@ fn ultimate_geography_fixture_uses_file_includes_for_large_source_text() {
 }
 
 #[test]
+fn ultimate_geography_fixture_guards_current_declarative_source_layout() {
+    let root = fixture_root();
+    let note_types_source = fs::read_to_string(root.join("note-types.yaml")).unwrap();
+    assert!(
+        note_types_source.contains(
+            "field_order:\n    - field.country\n    - field.country-info\n    - field.capital\n    - field.capital-info\n    - field.capital-hint\n    - field.flag\n    - field.flag-similarity\n    - field.map"
+        ),
+        "the shared note type should preserve declared CrowdAnki field ordering"
+    );
+    assert!(
+        note_types_source.contains(
+            "card_template_order:\n    - template.country-capital\n    - template.capital-country\n    - template.flag-country\n    - template.map-country"
+        ),
+        "the shared note type should preserve declared CrowdAnki card-template ordering"
+    );
+    assert_eq!(note_types_source.matches("label.capital-hint:").count(), 1);
+    assert!(!note_types_source.contains("label.capital-hint.question"));
+    assert!(!note_types_source.contains("label.capital-hint.answer"));
+    for template in [
+        "templates/ultimate-geography/capital-country/question.html",
+        "templates/ultimate-geography/capital-country/answer.html",
+    ] {
+        let source = fs::read_to_string(root.join(template)).unwrap();
+        assert!(source.contains("${label.capital-hint}"));
+        assert!(!source.contains("${label.capital-hint."));
+    }
+
+    let experimental =
+        fs::read_to_string(root.join("overlays/variants/experimental.yaml")).unwrap();
+    assert_eq!(
+        experimental.matches("field.region-code:").count(),
+        192,
+        "Experimental should declare one field and only its 191 non-empty values"
+    );
+    assert!(
+        !experimental.contains("field.region-code: ''"),
+        "blank region-code values should remain implicit"
+    );
+
+    let metadata_languages = [
+        "cs", "de", "es", "fr", "it", "nb", "nl", "pl", "pt", "ru", "sv", "zh",
+    ];
+    let main_manifest = fs::read_to_string(root.join("brainbrew.yaml")).unwrap();
+    let companion_manifest = fs::read_to_string(root.join("brainbrew-hardcore.yaml")).unwrap();
+    for language in metadata_languages {
+        let relative = format!("overlays/languages/note-types/{language}.yaml");
+        let source = fs::read_to_string(root.join(&relative)).unwrap();
+        assert!(source.starts_with(&format!(
+            "id: overlay.translation.note-type.{language}\nkind: translation\n"
+        )));
+        assert!(source.contains("note-type.name:"));
+        for manifest_source in [&main_manifest, &companion_manifest] {
+            assert!(manifest_source.contains(&format!("file: {relative}")));
+        }
+    }
+    assert!(!main_manifest.contains("companion-note-type-translations"));
+    assert!(!companion_manifest.contains("companion-note-type-translations"));
+
+    let mut overlay_files = Vec::new();
+    collect_yaml_files(&root.join("overlays"), &mut overlay_files);
+    let context =
+        "note_types.note-type.ultimate-geography.fields.field.flag-similarity.message_pattern:";
+    let mut parameter_context_files = BTreeSet::new();
+    let mut positional_country_contexts = Vec::new();
+    for path in overlay_files {
+        let source = fs::read_to_string(&path).unwrap();
+        let relative = path
+            .strip_prefix(&root)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        let lines = source.lines().collect::<Vec<_>>();
+        for (index, line) in lines.iter().enumerate() {
+            if line.trim() == context {
+                let has_parameters = lines[index + 1..]
+                    .iter()
+                    .take_while(|candidate| candidate.len() - candidate.trim_start().len() > 4)
+                    .any(|candidate| candidate.trim() == "parameters:");
+                if has_parameters {
+                    parameter_context_files.insert(relative.clone());
+                }
+            }
+            if line.contains(".fields.field.flag-similarity.message.items.")
+                && line.trim_end().ends_with(".country:")
+            {
+                positional_country_contexts.push(format!(
+                    "{relative}:{}:{}",
+                    index + 1,
+                    line.trim()
+                ));
+            }
+        }
+    }
+    assert_eq!(
+        parameter_context_files,
+        BTreeSet::from([
+            "overlays/extensions/hardcore/translations/zh.yaml".to_owned(),
+            "overlays/languages/de.yaml".to_owned(),
+            "overlays/languages/pt.yaml".to_owned(),
+            "overlays/languages/zh-tw.yaml".to_owned(),
+            "overlays/languages/zh.yaml".to_owned(),
+        ]),
+        "shared pattern-parameter contexts should replace positional country copies"
+    );
+    assert_eq!(
+        positional_country_contexts,
+        [
+            "overlays/languages/cs.yaml:488:poland.fields.field.flag-similarity.message.items.1.country:"
+        ],
+        "only the reviewed Monaco/Monako positional exception should remain"
+    );
+
+    let main_profile = main_manifest
+        .split_once("translation_profile:\n")
+        .expect("main manifest has translation profile")
+        .1;
+    let companion_profile = companion_manifest
+        .split_once("translation_profile:\n")
+        .expect("companion manifest has translation profile")
+        .1;
+    assert_eq!(main_profile, companion_profile);
+    for path in [
+        "'note_types.*.fields.*.message_pattern.item_format'",
+        "'note_types.*.fields.*.message_pattern.separator'",
+    ] {
+        assert_eq!(main_profile.matches(path).count(), 1);
+    }
+    assert!(!main_profile.contains("structured-message-format"));
+    assert!(!main_profile.contains("'notes.*.fields.*.message.format'"));
+}
+
+#[test]
 fn ultimate_geography_fixture_uses_list_patterns_for_flag_similarity() {
     let root = fixture_root();
-    for relative_path in ["deck.yaml", "deck-hardcore.yaml"] {
-        let source = fs::read_to_string(root.join(relative_path)).unwrap();
-        assert!(
-            source.contains(
-                "field.flag-similarity:\n        name: Flag similarity\n        message_pattern:"
-            ),
-            "{relative_path} should declare the shared flag-similarity message pattern"
-        );
-    }
+    let note_types_source = fs::read_to_string(root.join("note-types.yaml")).unwrap();
+    assert!(
+        note_types_source.contains(
+            "field.flag-similarity:\n      name: Flag similarity\n      message_pattern:"
+        ),
+        "the shared note type should declare the flag-similarity message pattern"
+    );
     for relative_path in ["deck.yaml", "overlays/extensions/hardcore.yaml"] {
         let source = fs::read_to_string(root.join(relative_path)).unwrap();
         assert!(
@@ -460,6 +617,31 @@ fn ultimate_geography_fixture_yaml_sources_are_checked_in_canonical() {
         } else if path.file_name().and_then(|name| name.to_str()) == Some("media.yaml") {
             media_map::format_str(&source)
                 .unwrap_or_else(|error| panic!("{} media map formats: {error}", path.display()))
+        } else if path.file_name().and_then(|name| name.to_str()) == Some("note-types.yaml") {
+            source_includes::format_preserving_file_includes(&source, note_type_map::format_str)
+                .unwrap_or_else(|error| panic!("{} note-type map formats: {error}", path.display()))
+        } else if matches!(
+            path.file_name().and_then(|name| name.to_str()),
+            Some("deck.yaml" | "deck-hardcore.yaml")
+        ) {
+            let provenance = SourceProvenance::new(path.display().to_string())
+                .with_source_root(root.display().to_string());
+            CanonicalSourceDocument::parse_with_includes(
+                SourceFile::new(provenance, source.clone()),
+                |request| {
+                    let include_path = root.join(request.target());
+                    let text = fs::read_to_string(&include_path)
+                        .map_err(|error| format!("{}: {error}", include_path.display()))?;
+                    Ok(SourceFile::new(
+                        SourceProvenance::new(include_path.display().to_string())
+                            .with_source_root(root.display().to_string()),
+                        text,
+                    ))
+                },
+            )
+            .and_then(|document| document.emit())
+            .map(|emission| emission.root().text().to_owned())
+            .unwrap_or_else(|error| panic!("{} deck document formats: {error}", path.display()))
         } else if path.starts_with(root.join("overlays")) {
             source_includes::format_preserving_file_includes(
                 &source,
@@ -690,12 +872,12 @@ fn ultimate_geography_translation_overlays_use_dictionaries_not_template_copies(
 
 #[test]
 fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media() {
-    const UG_REVISION: &str = "795853d49832ab550b5cb872da47413377ebec5e";
+    const UG_REVISION: &str = "54b32544a84d1746403ac8efaa3af0e2250ad4c0";
     const HARDCORE_REVISION: &str = "09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46";
-    const BRAINBREW_REVISION: &str = "77b092ddb82fb0dfdaf64713ed081a4ac9f2eb97";
-    const SOURCE_SHA256: &str = "167d69416951c06462c1a0f23411fa37470b0d12e2cd1d897a51ac29a0f7adf1";
+    const BRAINBREW_REVISION: &str = "68a828350de4bda46af85b5167bca807edd7d733";
+    const SOURCE_SHA256: &str = "e1251709feadd4d494b5dce862e4291a18e5d1ffb5b3dfe31b160ea498947cdd";
     const MEDIA_SHA256: &str = "ad8bd371b4837d639d76f3a56a11fd7437d0ca0d31022ff5022fe5d5ce03e761";
-    const GOLDENS_SHA256: &str = "383a2a9512888f874c314ae5b0bb69217da6ecf4f2a67cf4ec2a3528b99d84fc";
+    const GOLDENS_SHA256: &str = "6a2ec22f3a937e310e364d50eafb20a5fb73c17c27f6966ef07001c88d49704d";
     const ATTRIBUTION_SHA256: &str =
         "0f1d0c3c7b9d9465a7d0279050f54460ed4a31d5fa2703a140abe3da6e522151";
     const HARDCORE_ATTRIBUTION_SHA256: &str =
@@ -703,13 +885,13 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
     const ATTRIBUTION_COVERAGE_SHA256: &str =
         "13a1d5c1d04a8eacaae3dd3c1c952483128b8f089779dc622f2014055b72351d";
     const GENERATOR_EXECUTABLE_SHA256: &str =
-        "58782c88efedc3691be904bcf730f4314c4ce475c7ccb607ee4556ddb767c259";
+        "0a4963db7bf3e2e8ae019902e5aa98fabd165ba93687811db5ed7cbdd064421f";
     const GENERATOR_SOURCE_SHA256: &str =
-        "754018e336b8f5877460c4430be7809d703f34762439dc477441eebb10a3be61";
+        "53b7c7a31848035861115972881dfbd70e04ab27ddae11be88b945c7cabe7a27";
     const GENERATOR_IDENTITY_SHA256: &str =
-        "ed75f9aa6a5ebcef08549fa1f8f8429bb065ea500728227a37f263f5cbe9e89e";
+        "f377b4d27dac34df9b09046cb139f00e1efba570f2592b9b635aa9694963ce9e";
     const EXPECTED_SHA256: &str =
-        "f4ebfb8e20fe0f6d91a134eb3292832589902db81b1c87c75dc1a6c1bf79c119";
+        "9e6fa4baa2552722f3316bce886eb48e2706f71299acd48a03b4918b4e4f4e7c";
 
     let root = fixture_root();
     let lock_path = root.with_file_name("ultimate-geography.lock.json");
@@ -741,6 +923,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
         "goldens".to_owned(),
         "media".to_owned(),
         "media.yaml".to_owned(),
+        "note-types.yaml".to_owned(),
         "overlays".to_owned(),
         "sources.csv".to_owned(),
         "styles".to_owned(),
@@ -753,8 +936,8 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
     assert_eq!(actual_source_entries, required_source_entries);
 
     let source_metadata = tree_metadata(&root);
-    assert_eq!(source_metadata.file_count, 738);
-    assert_eq!(source_metadata.byte_count, 20_055_819);
+    assert_eq!(source_metadata.file_count, 739);
+    assert_eq!(source_metadata.byte_count, 20_031_852);
     assert_eq!(source_metadata.sha256, SOURCE_SHA256);
     assert_tree_lock(&lock["source"], &source_metadata, "source snapshot");
     assert_eq!(lock["source"]["sha256"], SOURCE_SHA256);
@@ -768,7 +951,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
 
     let goldens_metadata = tree_metadata(&root.join("goldens"));
     assert_eq!(goldens_metadata.file_count, 8);
-    assert_eq!(goldens_metadata.byte_count, 1_321_848);
+    assert_eq!(goldens_metadata.byte_count, 1_321_860);
     assert_eq!(goldens_metadata.sha256, GOLDENS_SHA256);
     assert_tree_lock(
         &lock["source"]["goldens"],
@@ -873,10 +1056,10 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
         generator["executable"]["sha256"],
         GENERATOR_EXECUTABLE_SHA256
     );
-    assert_eq!(generator["executable"]["byte_count"], 15_690_040);
+    assert_eq!(generator["executable"]["byte_count"], 15_777_528);
     assert_eq!(generator["source"]["sha256"], GENERATOR_SOURCE_SHA256);
-    assert_eq!(generator["source"]["file_count"], 68);
-    assert_eq!(generator["source"]["byte_count"], 2_944_523);
+    assert_eq!(generator["source"]["file_count"], 69);
+    assert_eq!(generator["source"]["byte_count"], 2_985_380);
     assert_eq!(
         generator["build"]["cargo_lock_sha256"],
         "ea2858def2a0528b781d992930a8f6067e71b4baa8ef6bf6b298f3b44a120cd1"
@@ -952,7 +1135,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
 
     let expected_metadata = canonical_json_tree_metadata(&expected_root);
     assert_eq!(expected_metadata.file_count, 100);
-    assert_eq!(expected_metadata.canonical_byte_count, 10_024_406);
+    assert_eq!(expected_metadata.canonical_byte_count, 10_024_794);
     assert_eq!(expected_metadata.sha256, EXPECTED_SHA256);
     assert_eq!(
         lock["expected"]["algorithm"],

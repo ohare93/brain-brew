@@ -19,30 +19,30 @@ class UltimateGeographyFixtureBoundaryTests(unittest.TestCase):
     def test_reviewed_generator_and_source_pins_are_independent_constants(self):
         self.assertEqual(
             ug_fixture.PINNED_UG_REVISION,
-            "795853d49832ab550b5cb872da47413377ebec5e",
+            "54b32544a84d1746403ac8efaa3af0e2250ad4c0",
         )
         self.assertEqual(
             ug_fixture.PINNED_BRAINBREW_REVISION,
-            "77b092ddb82fb0dfdaf64713ed081a4ac9f2eb97",
+            "68a828350de4bda46af85b5167bca807edd7d733",
         )
         self.assertEqual(
             ug_fixture.PINNED_BRAINBREW_EXECUTABLE_SHA256,
-            "58782c88efedc3691be904bcf730f4314c4ce475c7ccb607ee4556ddb767c259",
+            "0a4963db7bf3e2e8ae019902e5aa98fabd165ba93687811db5ed7cbdd064421f",
         )
-        self.assertEqual(ug_fixture.PINNED_BRAINBREW_EXECUTABLE_BYTES, 15_690_040)
+        self.assertEqual(ug_fixture.PINNED_BRAINBREW_EXECUTABLE_BYTES, 15_777_528)
         self.assertEqual(
             ug_fixture.PINNED_BRAINBREW_SOURCE_SHA256,
-            "754018e336b8f5877460c4430be7809d703f34762439dc477441eebb10a3be61",
+            "53b7c7a31848035861115972881dfbd70e04ab27ddae11be88b945c7cabe7a27",
         )
-        self.assertEqual(ug_fixture.PINNED_BRAINBREW_SOURCE_FILES, 68)
-        self.assertEqual(ug_fixture.PINNED_BRAINBREW_SOURCE_BYTES, 2_944_523)
+        self.assertEqual(ug_fixture.PINNED_BRAINBREW_SOURCE_FILES, 69)
+        self.assertEqual(ug_fixture.PINNED_BRAINBREW_SOURCE_BYTES, 2_985_380)
         self.assertEqual(
             ug_fixture.PINNED_BRAINBREW_CARGO_LOCK_SHA256,
             "ea2858def2a0528b781d992930a8f6067e71b4baa8ef6bf6b298f3b44a120cd1",
         )
         self.assertEqual(
             ug_fixture._reviewed_generator()["identity"]["sha256"],
-            "ed75f9aa6a5ebcef08549fa1f8f8429bb065ea500728227a37f263f5cbe9e89e",
+            "f377b4d27dac34df9b09046cb139f00e1efba570f2592b9b635aa9694963ce9e",
         )
 
     def test_tree_metadata_detects_source_drift(self):
@@ -108,7 +108,7 @@ class UltimateGeographyFixtureBoundaryTests(unittest.TestCase):
         lock = ug_fixture.validate_fixture_state(repo_root)
 
         self.assertEqual(lock["schema_version"], 3)
-        self.assertEqual(lock["source"]["file_count"], 738)
+        self.assertEqual(lock["source"]["file_count"], 739)
         self.assertEqual(lock["source"]["third_party_attribution"]["file_count"], 2)
         supplement = lock["attribution"]["supplements"]["hardcore_geography"]
         self.assertEqual(supplement["file_count"], 2)

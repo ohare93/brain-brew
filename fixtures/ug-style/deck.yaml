@@ -18,20 +18,20 @@ note_types:
       - field.flag
       - field.map
     fields:
-      field.capital:
-        name: Capital
-      field.capital-es:
-        name: Capital ES
-      field.capital-hint:
-        name: Capital hint
-      field.capital-sv:
-        name: Capital SV
       field.country:
         name: Country
+      field.capital:
+        name: Capital
       field.country-es:
         name: Country ES
+      field.capital-es:
+        name: Capital ES
       field.country-sv:
         name: Country SV
+      field.capital-sv:
+        name: Capital SV
+      field.capital-hint:
+        name: Capital hint
       field.flag:
         name: Flag
       field.map:
@@ -44,30 +44,30 @@ note_types:
       - template.country-map-extended
       - template.map-country-extended
     card_templates:
-      template.capital-country:
-        name: Capital - Country
-        question_format: '{{Capital}}'
-        answer_format: '{{FrontSide}}<hr id=answer>{{Country}}'
-        adapter_ids: {}
       template.country-capital:
         name: Country - Capital
         question_format: '{{Country}}'
         answer_format: '{{FrontSide}}<hr id=answer>{{Capital}}'
+        adapter_ids: {}
+      template.capital-country:
+        name: Capital - Country
+        question_format: '{{Capital}}'
+        answer_format: '{{FrontSide}}<hr id=answer>{{Country}}'
         adapter_ids: {}
       template.country-flag:
         name: Country - Flag
         question_format: '{{Country}}'
         answer_format: '{{FrontSide}}<hr id=answer>{{Flag}}'
         adapter_ids: {}
-      template.country-map-extended:
-        name: 'Country - Map [Extended]'
-        question_format: '{{Country}}'
-        answer_format: '{{FrontSide}}<hr id=answer>{{Map}}'
-        adapter_ids: {}
       template.flag-country:
         name: Flag - Country
         question_format: '{{Flag}}'
         answer_format: '{{FrontSide}}<hr id=answer>{{Country}}'
+        adapter_ids: {}
+      template.country-map-extended:
+        name: 'Country - Map [Extended]'
+        question_format: '{{Country}}'
+        answer_format: '{{FrontSide}}<hr id=answer>{{Map}}'
         adapter_ids: {}
       template.map-country-extended:
         name: 'Map - Country [Extended]'
@@ -83,13 +83,13 @@ notes:
   note.australia:
     note_type_id: note-type.country
     fields:
-      field.capital: Canberra
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Australia
+      field.capital: Canberra
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/au.png">'
       field.map: '<img src="maps/au.svg">'
     tags:
@@ -100,13 +100,13 @@ notes:
   note.austria:
     note_type_id: note-type.country
     fields:
-      field.capital: Vienna
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Austria
+      field.capital: Vienna
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/at.png">'
       field.map: '<img src="maps/at.svg">'
     tags:
@@ -117,13 +117,13 @@ notes:
   note.belgium:
     note_type_id: note-type.country
     fields:
-      field.capital: Brussels
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Belgium
+      field.capital: Brussels
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/be.png">'
       field.map: '<img src="maps/be.svg">'
     tags:
@@ -134,13 +134,13 @@ notes:
   note.canada:
     note_type_id: note-type.country
     fields:
-      field.capital: Ottawa
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Canada
+      field.capital: Ottawa
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/ca.png">'
       field.map: '<img src="maps/ca.svg">'
     tags:
@@ -151,13 +151,13 @@ notes:
   note.czechia:
     note_type_id: note-type.country
     fields:
-      field.capital: Prague
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Czechia
+      field.capital: Prague
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/cz.png">'
       field.map: '<img src="maps/cz.svg">'
     tags:
@@ -168,13 +168,13 @@ notes:
   note.denmark:
     note_type_id: note-type.country
     fields:
-      field.capital: Copenhagen
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Denmark
+      field.capital: Copenhagen
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/dk.png">'
       field.map: '<img src="maps/dk.svg">'
     tags:
@@ -185,13 +185,13 @@ notes:
   note.estonia:
     note_type_id: note-type.country
     fields:
-      field.capital: Tallinn
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Estonia
+      field.capital: Tallinn
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/ee.png">'
       field.map: '<img src="maps/ee.svg">'
     tags:
@@ -202,13 +202,13 @@ notes:
   note.finland:
     note_type_id: note-type.country
     fields:
-      field.capital: Helsinki
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Finland
+      field.capital: Helsinki
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/fi.png">'
       field.map: '<img src="maps/fi.svg">'
     tags:
@@ -219,13 +219,13 @@ notes:
   note.france:
     note_type_id: note-type.country
     fields:
-      field.capital: Paris
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: France
+      field.capital: Paris
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/fr.png">'
       field.map: '<img src="maps/fr.svg">'
     tags:
@@ -236,13 +236,13 @@ notes:
   note.germany:
     note_type_id: note-type.country
     fields:
-      field.capital: Berlin
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Germany
+      field.capital: Berlin
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/de.png">'
       field.map: '<img src="maps/de.svg">'
     tags:
@@ -253,13 +253,13 @@ notes:
   note.iceland:
     note_type_id: note-type.country
     fields:
-      field.capital: Reykjavik
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Iceland
+      field.capital: Reykjavik
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/is.png">'
       field.map: '<img src="maps/is.svg">'
     tags:
@@ -270,13 +270,13 @@ notes:
   note.ireland:
     note_type_id: note-type.country
     fields:
-      field.capital: Dublin
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Ireland
+      field.capital: Dublin
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/ie.png">'
       field.map: '<img src="maps/ie.svg">'
     tags:
@@ -287,13 +287,13 @@ notes:
   note.italy:
     note_type_id: note-type.country
     fields:
-      field.capital: Rome
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Italy
+      field.capital: Rome
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/it.png">'
       field.map: '<img src="maps/it.svg">'
     tags:
@@ -304,13 +304,13 @@ notes:
   note.japan:
     note_type_id: note-type.country
     fields:
-      field.capital: Tokyo
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Japan
+      field.capital: Tokyo
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/jp.png">'
       field.map: '<img src="maps/jp.svg">'
     tags:
@@ -321,13 +321,13 @@ notes:
   note.latvia:
     note_type_id: note-type.country
     fields:
-      field.capital: Riga
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Latvia
+      field.capital: Riga
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/lv.png">'
       field.map: '<img src="maps/lv.svg">'
     tags:
@@ -338,13 +338,13 @@ notes:
   note.lithuania:
     note_type_id: note-type.country
     fields:
-      field.capital: Vilnius
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Lithuania
+      field.capital: Vilnius
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/lt.png">'
       field.map: '<img src="maps/lt.svg">'
     tags:
@@ -355,13 +355,13 @@ notes:
   note.mexico:
     note_type_id: note-type.country
     fields:
-      field.capital: Mexico City
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Mexico
+      field.capital: Mexico City
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/mx.png">'
       field.map: '<img src="maps/mx.svg">'
     tags:
@@ -372,13 +372,13 @@ notes:
   note.netherlands:
     note_type_id: note-type.country
     fields:
-      field.capital: Amsterdam
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Netherlands
+      field.capital: Amsterdam
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/nl.png">'
       field.map: '<img src="maps/nl.svg">'
     tags:
@@ -389,13 +389,13 @@ notes:
   note.norway:
     note_type_id: note-type.country
     fields:
-      field.capital: Oslo
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Norway
+      field.capital: Oslo
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/no.png">'
       field.map: '<img src="maps/no.svg">'
     tags:
@@ -406,13 +406,13 @@ notes:
   note.poland:
     note_type_id: note-type.country
     fields:
-      field.capital: Warsaw
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Poland
+      field.capital: Warsaw
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/pl.png">'
       field.map: '<img src="maps/pl.svg">'
     tags:
@@ -423,13 +423,13 @@ notes:
   note.portugal:
     note_type_id: note-type.country
     fields:
-      field.capital: Lisbon
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Portugal
+      field.capital: Lisbon
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/pt.png">'
       field.map: '<img src="maps/pt.svg">'
     tags:
@@ -440,13 +440,13 @@ notes:
   note.spain:
     note_type_id: note-type.country
     fields:
-      field.capital: Madrid
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Spain
+      field.capital: Madrid
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/es.png">'
       field.map: '<img src="maps/es.svg">'
     tags:
@@ -457,13 +457,13 @@ notes:
   note.sweden:
     note_type_id: note-type.country
     fields:
-      field.capital: Stockholm
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Sweden
+      field.capital: Stockholm
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/se.png">'
       field.map: '<img src="maps/se.svg">'
     tags:
@@ -474,13 +474,13 @@ notes:
   note.switzerland:
     note_type_id: note-type.country
     fields:
-      field.capital: Bern
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: Switzerland
+      field.capital: Bern
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/ch.png">'
       field.map: '<img src="maps/ch.svg">'
     tags:
@@ -491,13 +491,13 @@ notes:
   note.united-kingdom:
     note_type_id: note-type.country
     fields:
-      field.capital: London
-      field.capital-es: ''
-      field.capital-hint: ''
-      field.capital-sv: ''
       field.country: United Kingdom
+      field.capital: London
       field.country-es: ''
+      field.capital-es: ''
       field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
       field.flag: '<img src="flags/gb.png">'
       field.map: '<img src="maps/gb.svg">'
     tags:

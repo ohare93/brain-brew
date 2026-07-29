@@ -1,10 +1,10 @@
-id: overlay.translation.hardcore.companion-note-type.de
+id: overlay.translation.note-type.de
 kind: translation
 translations:
   variables:
     label.capital:
       Capital: Hauptstadt
-    label.capital-hint.answer:
+    label.capital-hint:
       'Hint: {{Capital hint}}': 'Hinweis: {{Capital hint}}'
     label.flag:
       Flag: Flagge

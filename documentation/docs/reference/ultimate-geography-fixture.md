@@ -11,18 +11,21 @@ release cache.
 ## Contract
 
 The reviewed snapshot is Ultimate Geography `brainbrew-migration` revision
-`795853d49832ab550b5cb872da47413377ebec5e`, descending from the migration
+`54b32544a84d1746403ac8efaa3af0e2250ad4c0`, descending from the migration
 history rebased on upstream revision
 `e1fd85184e70f32650b67b750c44c4b0588c79dd`. Expected output was accepted with
 Brain Brew `1.0.0-alpha.3` revision
-`77b092ddb82fb0dfdaf64713ed081a4ac9f2eb97`. This snapshot includes the reviewed
-flag-similarity translation and separator corrections recorded by the UG source
-revision. Hardcore image attribution is
+`68a828350de4bda46af85b5167bca807edd7d733`. This snapshot includes declared
+field/card-template ordering, a shared note-type include and metadata overlays,
+a consolidated capital-hint variable, sparse Experimental region codes,
+pattern-parameter translation contexts, and the current translation-profile
+paths. Hardcore image attribution is
 separately pinned to Hardcore Geography revision
 `09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46`.
 
 - `fixtures/ultimate-geography/` is an exact whitelist of the two manifests,
-  canonical deck/overlay source, scalar includes, `media.yaml`, all 609 real
+  canonical deck/overlay source, shared `note-types.yaml`, scalar includes,
+  `media.yaml`, all 609 real
   media files, all eight UG-owned goldens referenced by the manifests, and
   upstream `LICENSE.md` plus the 548-row UG `sources.csv` attribution.
 - `fixtures/ultimate-geography-attribution/hardcore-geography/` preserves the
@@ -72,12 +75,15 @@ Serialization whitespace and object-key order are not regressions: the lock and
 tests digest parsed JSON in canonical key order. Any count-preserving value
 substitution is a regression and fails.
 
-The `795853d…` refresh deliberately corrects flag-similarity content in 28
-of the 100 targets. Against the preceding accepted snapshot, the complete parsed
-JSON delta is 74 occurrences of 17 reviewed `(GUID, field 6, old, new)` tuples;
-there are no changes at any other JSON path. The source-owned audit is excluded
-from the runtime fixture whitelist, while this repository retains the accepted
-all-target outputs and their changed semantic digest as the regression oracle.
+The `54b3254…` refresh deliberately corrects the capital-hint question label in
+83 of the 100 targets across 13 localized language families. Against the
+preceding accepted snapshot, the complete recursive parsed-JSON delta is exactly
+one `note_models[0].tmpls[1].qfmt` value per affected target; there are no
+changes at any other JSON path. All source-layout refactors render identically.
+The accepted source is 739 files and 20,031,852 bytes with tree SHA-256
+`e1251709feadd4d494b5dce862e4291a18e5d1ffb5b3dfe31b160ea498947cdd`;
+the canonical expected JSON is 10,024,794 bytes with semantic SHA-256
+`9e6fa4baa2552722f3316bce886eb48e2706f71299acd48a03b4918b4e4f4e7c`.
 
 ## Maintenance boundaries
 
@@ -89,10 +95,10 @@ all-target outputs and their changed semantic digest as the regression oracle.
 2. `--accept-expected` is the only operation that regenerates and blesses all
    100 expected JSON files. It requires the exact reviewed executable, explicit
    revision, and a source root matching the hard-coded alpha.3 source identity.
-   The current reviewed binary has SHA-256
-   `58782c88efedc3691be904bcf730f4314c4ce475c7ccb607ee4556ddb767c259`,
-   and its 68-file generator source identity is
-   `754018e336b8f5877460c4430be7809d703f34762439dc477441eebb10a3be61`.
+   The current reviewed binary is 15,777,528 bytes with SHA-256
+   `0a4963db7bf3e2e8ae019902e5aa98fabd165ba93687811db5ed7cbdd064421f`,
+   and its 69-file, 2,985,380-byte generator source identity is
+   `53b7c7a31848035861115972881dfbd70e04ab27ddae11be88b945c7cabe7a27`.
 3. `--check` is read-only. It authenticates the same executable/source/build
    identity, checks the lock/source/target/expected state, validates the pinned
    Hardcore supplement and attribution coverage, and regenerates all outputs in

@@ -4028,7 +4028,9 @@ fn ultimate_geography_language_overlays_have_no_actionable_missing_text() {
     let mut missing = Vec::new();
     for report in json["reports"].as_array().unwrap() {
         let file = report["file"].as_str().unwrap();
-        if !file.starts_with("overlays/languages/") {
+        if !file.starts_with("overlays/languages/")
+            || file.starts_with("overlays/languages/note-types/")
+        {
             continue;
         }
         let target = report["target"].as_str().unwrap();
@@ -7398,10 +7400,10 @@ note_types:
       - field.capital
       - field.flag
     fields:
-      field.capital:
-        name: Capital
       field.country:
         name: Country
+      field.capital:
+        name: Capital
       field.flag:
         name: Flag
     card_template_order:
@@ -7419,8 +7421,8 @@ notes:
   note.finland:
     note_type_id: note-type.country
     fields:
-      field.capital: Shared capital
       field.country: Finland
+      field.capital: Shared capital
       field.flag: '<img src="flags/fi.png">'
     tags:
       - Europe
@@ -7429,8 +7431,8 @@ notes:
   note.estonia:
     note_type_id: note-type.country
     fields:
-      field.capital: Shared capital
       field.country: Estonia
+      field.capital: Shared capital
       field.flag: '<img src="ee.png">'
     tags:
       - Europe
@@ -7652,8 +7654,8 @@ fn write_translation_workspace(dir: &Path) {
             r#"  note.sweden:
     note_type_id: note-type.country
     fields:
-      field.capital: Stockholm
       field.country: Sweden
+      field.capital: Stockholm
       field.flag: '<img src="se.png">'
     tags:
       - Europe
@@ -7758,8 +7760,8 @@ notes:
   note.finland:
     note_type_id: note-type.country
     fields:
-      field.capital: Helsinki
       field.country: Finland
+      field.capital: Helsinki
       field.flag: '<img src="flags/fi.png">'
       field.flag-similarity:
         message:
@@ -7776,8 +7778,8 @@ notes:
   note.iceland:
     note_type_id: note-type.country
     fields:
-      field.capital: Reykjavik
       field.country: Iceland
+      field.capital: Reykjavik
       field.flag: '<img src="is.png">'
       field.flag-similarity: ''
     tags: []
@@ -7785,8 +7787,8 @@ notes:
   note.norway:
     note_type_id: note-type.country
     fields:
-      field.capital: Oslo
       field.country: Norway
+      field.capital: Oslo
       field.flag: '<img src="no.png">'
       field.flag-similarity: ''
     tags: []
@@ -7879,10 +7881,10 @@ note_types:
       - field.country
       - field.capital
     fields:
-      field.capital:
-        name: Capital
       field.country:
         name: Country
+      field.capital:
+        name: Capital
     card_template_order:
       - template.country-capital
     card_templates:
@@ -7898,8 +7900,8 @@ notes:
   note.finland:
     note_type_id: note-type.country
     fields:
-      field.capital: Helsinki
       field.country: Finland
+      field.capital: Helsinki
     tags:
       - Europe
     adapter_ids:

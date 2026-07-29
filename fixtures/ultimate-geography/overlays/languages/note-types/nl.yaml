@@ -1,10 +1,10 @@
-id: overlay.translation.hardcore.companion-note-type.nl
+id: overlay.translation.note-type.nl
 kind: translation
 translations:
   variables:
     label.capital:
       Capital: Hoofdstad
-    label.capital-hint.answer:
+    label.capital-hint:
       'Hint: {{Capital hint}}': 'Aanwijzing: {{Capital hint}}'
     label.flag:
       Flag: Vlag

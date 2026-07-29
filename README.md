@@ -16,8 +16,8 @@ The repository includes two tested fixtures:
 - `fixtures/ultimate-geography/` — the complete pinned Ultimate Geography canonical input and real-media snapshot, including Hardcore Geography.
 
 The full fixture is bound by `fixtures/ultimate-geography.lock.json` to UG
-`795853d...` (descending from migration history rebased on UG `e1fd8518...`)
-and Brain Brew `77b092d...` / `1.0.0-alpha.3`.
+`54b3254...` (descending from migration history rebased on UG `e1fd8518...`)
+and Brain Brew `68a8283...` / `1.0.0-alpha.3`.
 `fixtures/ultimate-geography-expected/crowdanki/` contains exactly 100 parsed
 `deck.json` oracles (74 main and 26 companion) while media is stored only once.
 The default Rust tests compare every output offline and verify real media bytes

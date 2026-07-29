@@ -545,10 +545,10 @@ note_types:
       - field.country
       - field.capital
     fields:
-      field.capital:
-        name: Capital
       field.country:
         name: Country
+      field.capital:
+        name: Capital
     card_template_order:
       - template.capital
     card_templates:
@@ -563,8 +563,8 @@ notes:
   note.finland:
     note_type_id: note-type.country
     fields:
-      field.capital: {current_capital}
       field.country: Finland
+      field.capital: {current_capital}
     tags: []
     adapter_ids: {{}}
 media: {{}}
