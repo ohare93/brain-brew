@@ -8227,10 +8227,10 @@ note_types:
       - field.capital
       - field.flag
     fields:
-      field.capital:
-        name: Capital
       field.country:
         name: Country
+      field.capital:
+        name: Capital
       field.flag:
         name: Flag
     card_template_order:
@@ -8318,10 +8318,10 @@ note_types:
       - field.capital
       - field.flag
     fields:
-      field.capital:
-        name: Capital
       field.country:
         name: Country
+      field.capital:
+        name: Capital
       field.flag:
         name: Flag
     card_template_order:
@@ -8340,8 +8340,8 @@ notes:
   note.finland:
     note_type_id: note-type.country
     fields:
-      field.capital: Helsinki
       field.country: Finland
+      field.capital: Helsinki
       field.flag: '<img src="flags/fi.png">'
     tags:
       - Europe

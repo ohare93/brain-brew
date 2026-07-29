@@ -134,6 +134,28 @@ pub fn overlay_format_str(input: &str) -> Result<String, CanonicalYamlError> {
     overlay_to_string(&overlay)
 }
 
+fn ordered_note_fields<'a>(
+    note: &'a Note,
+    note_type: Option<&NoteType>,
+) -> Vec<(&'a StableId, &'a FieldValue)> {
+    let mut fields = Vec::with_capacity(note.fields.len());
+    if let Some(note_type) = note_type {
+        for field in &note_type.fields {
+            if let Some(entry) = note.fields.get_key_value(&field.id) {
+                fields.push(entry);
+            }
+        }
+    }
+    for entry in &note.fields {
+        if note_type
+            .is_none_or(|note_type| note_type.fields.iter().all(|field| &field.id != entry.0))
+        {
+            fields.push(entry);
+        }
+    }
+    fields
+}
+
 /// Emit a CanonicalDeck as deterministic canonical YAML.
 pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
     deck.validate().map_err(CanonicalYamlError::Validation)?;
@@ -158,13 +180,8 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
             writeln!(out, "      - {}", field.id).expect("writing to a string cannot fail");
         }
         writeln!(out, "    fields:").expect("writing to a string cannot fail");
-        let fields_by_id = note_type
-            .fields
-            .iter()
-            .map(|field| (&field.id, field))
-            .collect::<BTreeMap<_, _>>();
-        for (field_id, field) in fields_by_id {
-            writeln!(out, "      {}:", emitted_key(field_id.as_str()))
+        for field in &note_type.fields {
+            writeln!(out, "      {}:", emitted_key(field.id.as_str()))
                 .expect("writing to a string cannot fail");
             writeln!(out, "        name: {}", yaml_scalar(&field.name))
                 .expect("writing to a string cannot fail");
@@ -182,13 +199,8 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
             }
             writeln!(out, "    card_templates:").expect("writing to a string cannot fail");
         }
-        let templates_by_id = note_type
-            .card_templates
-            .iter()
-            .map(|template| (&template.id, template))
-            .collect::<BTreeMap<_, _>>();
-        for (template_id, template) in templates_by_id {
-            writeln!(out, "      {}:", emitted_key(template_id.as_str()))
+        for template in &note_type.card_templates {
+            writeln!(out, "      {}:", emitted_key(template.id.as_str()))
                 .expect("writing to a string cannot fail");
             writeln!(out, "        name: {}", yaml_scalar(&template.name))
                 .expect("writing to a string cannot fail");
@@ -222,7 +234,8 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
                 .expect("writing to a string cannot fail");
             write_variables(&mut out, "    ", &note.variables);
             writeln!(out, "    fields:").expect("writing to a string cannot fail");
-            for (field_id, value) in &note.fields {
+            let note_type = deck.note_types.get(&note.note_type_id);
+            for (field_id, value) in ordered_note_fields(note, note_type) {
                 match value {
                     FieldValue::Scalar(value) => writeln!(
                         out,

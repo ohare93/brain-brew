@@ -7,10 +7,33 @@ use brain_brew_core::{
 use brain_brew_formats::{canonical_yaml, crowdanki, source_includes};
 
 #[test]
-fn emits_canonical_deck_yaml_with_explicit_order_arrays() {
+fn emits_canonical_deck_yaml_in_declared_note_type_order() {
     let yaml = canonical_yaml::to_string(&ug_style_deck()).expect("deck emits");
 
     assert_eq!(yaml, EXPECTED_CANONICAL_YAML);
+}
+
+#[test]
+fn emits_card_templates_in_declared_order_instead_of_stable_id_order() {
+    let mut deck = ug_style_deck();
+    deck.note_types
+        .get_mut(&sid("note-type.country"))
+        .unwrap()
+        .card_templates
+        .push(CardTemplate {
+            id: sid("template.capital-to-country"),
+            name: "Capital - Country".to_owned(),
+            variables: BTreeMap::new(),
+            question_format: "{{Capital}}".to_owned(),
+            answer_format: "{{FrontSide}}<hr id=answer>{{Country}}".to_owned(),
+            adapter_ids: AdapterIds::new(),
+        });
+
+    let yaml = canonical_yaml::to_string(&deck).expect("deck emits");
+    let declared_first = yaml.find("      template.country-to-capital:\n").unwrap();
+    let declared_second = yaml.find("      template.capital-to-country:\n").unwrap();
+
+    assert!(declared_first < declared_second, "{yaml}");
 }
 
 #[test]
@@ -1007,10 +1030,10 @@ note_types:
       - field.capital
       - field.flag
     fields:
-      field.capital:
-        name: Capital
       field.country:
         name: Country
+      field.capital:
+        name: Capital
       field.flag:
         name: Flag
     card_template_order:
@@ -1029,8 +1052,8 @@ notes:
   note.finland:
     note_type_id: note-type.country
     fields:
-      field.capital: Helsinki
       field.country: Finland
+      field.capital: Helsinki
       field.flag: '<img src="fi.png">'
     tags:
       - Europe

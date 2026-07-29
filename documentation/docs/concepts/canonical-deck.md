@@ -65,6 +65,8 @@ Canonical YAML is deliberately strict:
 - formatting is deterministic;
 - comments are not part of the durable model.
 
+For a valid base Deck, formatting emits note-type field definitions and each note's field values in `field_order`, and emits card template definitions in `card_template_order`.
+
 Run the formatter before review:
 
 ```bash
