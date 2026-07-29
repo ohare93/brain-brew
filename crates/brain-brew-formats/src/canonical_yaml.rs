@@ -156,6 +156,78 @@ fn ordered_note_fields<'a>(
     fields
 }
 
+/// Parse the root mapping used by a base deck `note_types: !include` file.
+pub(crate) fn note_type_map_from_str(
+    input: &str,
+) -> Result<BTreeMap<StableId, NoteType>, CanonicalYamlError> {
+    crate::strict_yaml::reject_duplicate_keys(input).map_err(CanonicalYamlError::Parse)?;
+    let file: BTreeMap<String, NoteTypeYaml> =
+        serde_yaml::from_str(input).map_err(CanonicalYamlError::Parse)?;
+    crate::strict_yaml::reject_unintended_scalars(
+        input,
+        crate::strict_yaml::ScalarPolicy::CanonicalDeck,
+    )
+    .map_err(CanonicalYamlError::Parse)?;
+    let note_types = file
+        .into_iter()
+        .map(|(id, note_type)| {
+            let stable_id = sid(&id)?;
+            Ok((stable_id.clone(), note_type.into_note_type(stable_id)?))
+        })
+        .collect::<Result<BTreeMap<_, _>, CanonicalYamlError>>()?;
+    validate_note_type_map(&note_types)?;
+    Ok(note_types)
+}
+
+/// Emit the root mapping used by a base deck `note_types: !include` file.
+pub(crate) fn note_type_map_to_string(
+    note_types: &BTreeMap<StableId, NoteType>,
+) -> Result<String, CanonicalYamlError> {
+    if note_types.is_empty() {
+        return Ok("{}\n".to_owned());
+    }
+    validate_note_type_map(note_types)?;
+    let canonical = to_string(&note_type_validation_deck(note_types.clone()))?;
+    let section_start = crate::strict_yaml::top_level_mapping_key_offset(&canonical, "note_types")
+        .expect("canonical note-type validation deck has note_types");
+    let body_start = canonical[section_start..]
+        .find('\n')
+        .map(|offset| section_start + offset + 1)
+        .expect("canonical note_types section has a line ending");
+    let body_end =
+        crate::strict_yaml::top_level_mapping_key_offset(&canonical[body_start..], "notes")
+            .map(|offset| body_start + offset)
+            .expect("canonical note-type validation deck has notes after note_types");
+    let body = &canonical[body_start..body_end];
+    Ok(body
+        .lines()
+        .map(|line| format!("{}\n", line.strip_prefix("  ").unwrap_or(line)))
+        .collect())
+}
+
+fn validate_note_type_map(
+    note_types: &BTreeMap<StableId, NoteType>,
+) -> Result<(), CanonicalYamlError> {
+    let deck = note_type_validation_deck(note_types.clone());
+    deck.validate().map_err(CanonicalYamlError::Validation)?;
+    validate_deck_yaml_keys(&deck)
+}
+
+fn note_type_validation_deck(note_types: BTreeMap<StableId, NoteType>) -> CanonicalDeck {
+    CanonicalDeck {
+        id: StableId::new("deck.note-type-map-validation")
+            .expect("validation deck ID is statically valid"),
+        name: "Note type map validation".to_owned(),
+        description: String::new(),
+        variables: BTreeMap::new(),
+        note_types,
+        notes: BTreeMap::new(),
+        media: BTreeMap::new(),
+        tombstones: Tombstones::default(),
+        adapter_ids: AdapterIds::default(),
+    }
+}
+
 /// Emit a CanonicalDeck as deterministic canonical YAML.
 pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
     deck.validate().map_err(CanonicalYamlError::Validation)?;

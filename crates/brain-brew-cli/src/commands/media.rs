@@ -513,6 +513,7 @@ impl SourceKindName for SourceProvenance {
             PlanSourceKind::Overlay { .. } => "overlay",
             PlanSourceKind::ScalarInclude { .. } => "scalar include",
             PlanSourceKind::MediaInclude => "media include",
+            PlanSourceKind::NoteTypesInclude => "note-types include",
         }
     }
 }

@@ -4,7 +4,7 @@ use brain_brew_core::{
     AdapterIds, CanonicalDeck, CardTemplate, FieldDefinition, MediaReference, Note, NoteType,
     SemanticChangeKind, StableId, TombstoneAddress, Tombstones,
 };
-use brain_brew_formats::{canonical_yaml, crowdanki, source_includes};
+use brain_brew_formats::{canonical_yaml, crowdanki, note_type_map, source_includes};
 
 #[test]
 fn emits_canonical_deck_yaml_in_declared_note_type_order() {
@@ -866,6 +866,226 @@ fn include_resolver_passes_image_tags_through_when_includes_are_present() {
 }
 
 #[test]
+fn top_level_note_types_include_resolves_and_formats_like_inline_note_types() {
+    let dir = temp_fixture_dir("brain-brew-note-types-include-resolve");
+    let inline = image_deck_yaml("field.flag: !image media.flag.finland");
+    let inline_deck = canonical_yaml::from_str(&inline).expect("inline deck parses");
+    std::fs::create_dir_all(dir.join("schema")).unwrap();
+    std::fs::write(
+        dir.join("schema/note-types.yaml"),
+        note_type_map::to_string(&inline_deck.note_types).unwrap(),
+    )
+    .expect("write note-type include");
+    let mut value = serde_yaml::from_str::<serde_yaml::Value>(&inline).unwrap();
+    value.as_mapping_mut().unwrap().insert(
+        serde_yaml::Value::String("note_types".to_owned()),
+        serde_yaml::from_str("!include schema/note-types.yaml").unwrap(),
+    );
+    let source = serde_yaml::to_string(&value).unwrap();
+
+    let resolved =
+        source_includes::resolve_file_includes(&source, &dir.join("deck.yaml"), &dir, &[])
+            .expect("note-types include resolves");
+    assert_eq!(
+        canonical_yaml::from_str(&resolved).unwrap(),
+        inline_deck,
+        "materialized note types are semantically identical to inline authoring"
+    );
+
+    let formatted =
+        source_includes::format_preserving_file_includes(&source, canonical_yaml::format_str)
+            .expect("note-types include formats without materializing the file");
+    assert!(
+        formatted.contains("note_types: !include schema/note-types.yaml\n"),
+        "{formatted}"
+    );
+    assert_eq!(
+        source_includes::format_preserving_file_includes(&formatted, canonical_yaml::format_str)
+            .unwrap(),
+        formatted
+    );
+}
+
+#[test]
+fn structural_include_boundaries_ignore_hostile_variables_templates_and_styling() {
+    let dir = temp_fixture_dir("brain-brew-hostile-structural-boundaries");
+    std::fs::create_dir_all(dir.join("schema")).unwrap();
+    let mut deck =
+        canonical_yaml::from_str(&image_deck_yaml("field.flag: !image media.flag.finland"))
+            .expect("fixture parses");
+    deck.variables.insert(
+        "section_markers".to_owned(),
+        "note_types:\nnotes: {}\nmedia:\ntombstones:".to_owned(),
+    );
+    let note_type = deck.note_types.get_mut(&sid("note-type.country")).unwrap();
+    note_type.variables.insert(
+        "section_markers".to_owned(),
+        "note_types:\nnotes: {}\nmedia:\ntombstones:".to_owned(),
+    );
+    let template = note_type.card_templates.first_mut().unwrap();
+    template
+        .variables
+        .insert("section_markers".to_owned(), "notes:\nmedia:".to_owned());
+    template.question_format = "before\nnotes:\nafter".to_owned();
+    template.answer_format = "before\nnotes: {}\nafter".to_owned();
+    note_type.styling = "before\nmedia:\ntombstones:\nafter".to_owned();
+
+    let note_type_source = note_type_map::to_string(&deck.note_types).expect("map emits");
+    assert_eq!(
+        note_type_map::from_str(&note_type_source).expect("hostile map reparses"),
+        deck.note_types,
+        "standalone map extraction must use top-level section boundaries"
+    );
+    std::fs::write(dir.join("schema/note-types.yaml"), &note_type_source).unwrap();
+    std::fs::write(dir.join("media.yaml"), image_media_map_yaml()).unwrap();
+
+    let inline = canonical_yaml::to_string(&deck).expect("hostile deck emits");
+    let note_types_included = inline.replace(
+        &format!("note_types:\n{}", indent_source(&note_type_source, "  ")),
+        "note_types: !include schema/note-types.yaml\n",
+    );
+    let formatted_note_types = source_includes::format_preserving_file_includes(
+        &note_types_included,
+        canonical_yaml::format_str,
+    )
+    .expect("note-types include formats around hostile deck variables");
+    assert!(formatted_note_types.contains("note_types: !include schema/note-types.yaml\n"));
+    let resolved_note_types = source_includes::resolve_file_includes(
+        &formatted_note_types,
+        &dir.join("deck.yaml"),
+        &dir,
+        &[],
+    )
+    .expect("formatted note-types include resolves");
+    assert_eq!(
+        canonical_yaml::from_str(&resolved_note_types).unwrap(),
+        deck
+    );
+
+    let media_included = deck_with_media_include(&inline, "media.yaml");
+    let formatted_media = source_includes::format_preserving_file_includes(
+        &media_included,
+        canonical_yaml::format_str,
+    )
+    .expect("media include formats around hostile note-type scalars");
+    assert!(formatted_media.contains("media: !include media.yaml\n"));
+    let resolved_media =
+        source_includes::resolve_file_includes(&formatted_media, &dir.join("deck.yaml"), &dir, &[])
+            .expect("formatted media include resolves");
+    assert_eq!(canonical_yaml::from_str(&resolved_media).unwrap(), deck);
+}
+
+#[test]
+fn structural_includes_in_overlay_deck_changes_fail_closed() {
+    let dir = temp_fixture_dir("brain-brew-overlay-structural-include-reject");
+    std::fs::create_dir_all(dir.join("schema")).unwrap();
+    std::fs::write(dir.join("schema/note-types.yaml"), "{}\n").unwrap();
+    std::fs::write(dir.join("media.yaml"), "{}\n").unwrap();
+
+    for (structural_kind, declarations) in [
+        (
+            "note_types",
+            "note_types: !include schema/note-types.yaml\nmedia: {}\n",
+        ),
+        ("media", "note_types: {}\nmedia: !include media.yaml\n"),
+    ] {
+        let overlay = format!(
+            "id: overlay.hostile\nkind: patch\ndeck:\n  name:\n    intent: replace\n    value: Changed\n    expected_base:\n      value: Base\n{declarations}"
+        );
+        let error =
+            source_includes::resolve_file_includes(&overlay, &dir.join("overlay.yaml"), &dir, &[])
+                .expect_err("overlay structural include must be rejected before loading");
+        let message = error.to_string();
+        assert!(message.contains(structural_kind), "{message}");
+        assert!(
+            message.contains("valid only in Canonical Deck source"),
+            "{message}"
+        );
+    }
+}
+
+#[test]
+fn top_level_note_types_include_materializes_nested_scalar_includes_and_message_patterns() {
+    let dir = temp_fixture_dir("brain-brew-note-types-nested-includes");
+    std::fs::create_dir_all(dir.join("schema")).unwrap();
+    std::fs::create_dir_all(dir.join("templates")).unwrap();
+    std::fs::create_dir_all(dir.join("styles")).unwrap();
+    std::fs::write(dir.join("templates/question.html"), "Question {{Country}}")
+        .expect("write question include");
+    std::fs::write(
+        dir.join("templates/answer.html"),
+        "{{FrontSide}}<hr id=answer>{{Capital}}",
+    )
+    .expect("write answer include");
+    std::fs::write(dir.join("styles/card.css"), ".card { color: navy; }")
+        .expect("write styling include");
+    std::fs::write(
+        dir.join("schema/note-types.yaml"),
+        r#"note-type.country:
+  name: Country
+  field_order:
+    - field.country
+    - field.capital
+    - field.flag
+  fields:
+    field.country:
+      name: Country
+      message_pattern:
+        kind: list
+        item_format: '{item}'
+        separator: ', '
+        parameters:
+          item:
+            type: text
+    field.capital:
+      name: Capital
+    field.flag:
+      name: Flag
+  card_template_order:
+    - template.country
+  card_templates:
+    template.country:
+      name: Country
+      question_format: !include templates/question.html
+      answer_format: !include templates/answer.html
+      adapter_ids: {}
+  styling: !include styles/card.css
+  adapter_ids: {}
+"#,
+    )
+    .expect("write note-type map");
+
+    let inline = image_deck_yaml("field.flag: !image media.flag.finland")
+        .replace(
+            "      field.country:\n        name: Country\n",
+            "      field.country:\n        name: Country\n        message_pattern:\n          kind: list\n          item_format: '{item}'\n          separator: ', '\n          parameters:\n            item:\n              type: text\n",
+        )
+        .replace(
+            "        question_format: '{{Country}}'",
+            "        question_format: 'Question {{Country}}'",
+        )
+        .replace("    styling: ''", "    styling: '.card { color: navy; }'");
+    let inline_deck = canonical_yaml::from_str(&inline).expect("inline deck parses");
+    let mut value = serde_yaml::from_str::<serde_yaml::Value>(&inline).unwrap();
+    value.as_mapping_mut().unwrap().insert(
+        serde_yaml::Value::String("note_types".to_owned()),
+        serde_yaml::from_str("!include schema/note-types.yaml").unwrap(),
+    );
+    let source = serde_yaml::to_string(&value).unwrap();
+
+    let resolved =
+        source_includes::resolve_file_includes(&source, &dir.join("deck.yaml"), &dir, &[])
+            .expect("nested scalar includes in note-type map resolve");
+    let resolved_deck = canonical_yaml::from_str(&resolved).expect("resolved deck parses");
+    assert_eq!(resolved_deck, inline_deck);
+    assert!(
+        resolved_deck.note_types[&sid("note-type.country")].fields[0]
+            .message_pattern
+            .is_some()
+    );
+}
+
+#[test]
 fn top_level_media_include_resolves_to_the_same_deck_as_inline_media() {
     let dir = temp_fixture_dir("brain-brew-media-include-resolve");
     let inline = image_deck_yaml("field.flag: !image media.flag.finland");
@@ -1066,6 +1286,13 @@ media:
     sha256: 0123456789abcdef
 tombstones: []
 "#;
+
+fn indent_source(source: &str, indent: &str) -> String {
+    source
+        .lines()
+        .map(|line| format!("{indent}{line}\n"))
+        .collect()
+}
 
 fn temp_fixture_dir(prefix: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!(

@@ -5,7 +5,9 @@ use brain_brew_core::{
     CanonicalDeck, Overlay, TranslationCoverageCategory, TranslationStackCoverageStatus,
     validate_deck_content,
 };
-use brain_brew_formats::{crowdanki, manifest, media_map, strict_yaml};
+use brain_brew_formats::{
+    crowdanki, manifest, media_map, note_type_map, source_includes, strict_yaml,
+};
 
 use crate::args::parse_verify_args;
 use crate::help;
@@ -236,6 +238,21 @@ fn verify_plan_source_formats(plan: &TargetPlan) -> Result<(), String> {
                     .map_err(|error| format!("{}: {error}", source.path.display()))?;
                 let formatted = media_map::format_str(&input)
                     .map_err(|error| format!("{}: {error}", source.path.display()))?;
+                if formatted != input {
+                    return Err(format!(
+                        "{} is not in canonical format",
+                        source.path.display()
+                    ));
+                }
+            }
+            PlanSourceKind::NoteTypesInclude => {
+                let input = fs::read_to_string(&source.path)
+                    .map_err(|error| format!("{}: {error}", source.path.display()))?;
+                let formatted = source_includes::format_preserving_file_includes(
+                    &input,
+                    note_type_map::format_str,
+                )
+                .map_err(|error| format!("{}: {error}", source.path.display()))?;
                 if formatted != input {
                     return Err(format!(
                         "{} is not in canonical format",

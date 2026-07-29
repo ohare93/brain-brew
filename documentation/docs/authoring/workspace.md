@@ -17,6 +17,8 @@ my-deck/
     country-back.html
   styles/
     cards.css
+  schema/
+    note-types.yaml
   overlays/
     languages/de.yaml
     variants/extended.yaml
@@ -44,6 +46,14 @@ note_types:
 ```
 
 `!include` paths are resolved relative to the package root (the directory containing `brainbrew.yaml`) and the composed/resolved deck contains the final inlined text.
+
+A base deck may also move its complete note-type ID mapping into one structural include:
+
+```yaml
+note_types: !include schema/note-types.yaml
+```
+
+The included file starts with note-type IDs at its root; it does not repeat the `note_types:` key. `brainbrew fmt deck.yaml` preserves the marker, while `brainbrew fmt schema/note-types.yaml` canonicalizes the standalone map. This form is base-deck-only: overlay `note_types` changes remain inline and sparse.
 
 ## `overlays/`
 

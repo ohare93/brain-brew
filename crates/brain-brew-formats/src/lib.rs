@@ -11,6 +11,7 @@ pub mod lockfile;
 pub mod manifest;
 pub mod media;
 pub mod media_map;
+pub mod note_type_map;
 pub mod overlay_source_document;
 pub mod package_semver;
 pub mod safe_relative_path;

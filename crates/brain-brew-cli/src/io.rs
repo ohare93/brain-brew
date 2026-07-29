@@ -5,7 +5,9 @@ use brain_brew_core::{CanonicalDeck, Overlay};
 use brain_brew_formats::canonical_source_document::CanonicalSourceDocument;
 use brain_brew_formats::overlay_source_document::OverlaySourceDocument;
 use brain_brew_formats::source_document::{IncludeRequest, SourceFile, SourceProvenance};
-use brain_brew_formats::{canonical_yaml, lockfile, manifest, media_map, source_includes};
+use brain_brew_formats::{
+    canonical_yaml, lockfile, manifest, media_map, note_type_map, source_includes,
+};
 use serde_yaml::Value;
 
 use crate::path_authorization::PathAuthorizer;
@@ -35,13 +37,29 @@ pub(crate) fn format_source(input: &str) -> Result<String, String> {
         Ok(formatted) => return Ok(formatted),
         Err(error) => errors.push(format!("media map: {error}")),
     }
+    match source_includes::format_preserving_file_includes(input, note_type_map::format_str) {
+        Ok(formatted) => return Ok(formatted),
+        Err(error) => errors.push(format!("note-type map: {error}")),
+    }
     Err(format!(
         "unrecognized Brain Brew source file ({})",
         errors.join("; ")
     ))
 }
 
-pub(crate) fn format_source_at(_path: &Path, input: &str) -> Result<String, String> {
+pub(crate) fn format_source_at(path: &Path, input: &str) -> Result<String, String> {
+    if let Ok(document) = canonical_source_document(path, input) {
+        return document
+            .emit()
+            .map(|emission| emission.root().text().to_owned())
+            .map_err(|error| error.to_string());
+    }
+    if let Ok(document) = overlay_source_document(path, input) {
+        return document
+            .emit()
+            .map(|emission| emission.root().text().to_owned())
+            .map_err(|error| error.to_string());
+    }
     format_source(input)
 }
 
@@ -199,7 +217,17 @@ pub(crate) fn read_and_compose_deck(
 }
 
 pub(crate) fn verify_canonical_deck_format(path: &Path) -> Result<(), String> {
-    verify_format_with(path, canonical_yaml::format_str)
+    let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let formatted = canonical_source_document(path, &input)?
+        .emit()
+        .map_err(|error| error.to_string())?
+        .root()
+        .text()
+        .to_owned();
+    if formatted != input {
+        return Err(format!("{} is not in canonical format", path.display()));
+    }
+    Ok(())
 }
 
 pub(crate) fn verify_overlay_format(path: &Path) -> Result<(), String> {

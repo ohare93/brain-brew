@@ -7,10 +7,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use brain_brew_core::{MediaReference, StableId};
+use brain_brew_core::{MediaReference, NoteType, StableId};
 use serde_yaml::{Mapping, Value};
 
-use crate::{media_map, strict_yaml, yaml_scalar};
+use crate::{media_map, note_type_map, strict_yaml, yaml_scalar};
 
 /// Logical identity and diagnostic root for one source file.
 ///
@@ -105,6 +105,7 @@ impl IncludeRequest {
 pub enum IncludedSourceKind {
     Scalar { schema_path: String },
     MediaDeclarations,
+    NoteTypeDeclarations,
 }
 
 /// Provenance retained for one source loaded while parsing a document.
@@ -255,6 +256,7 @@ pub(crate) struct PreparedSource {
 pub(crate) struct IncludeState {
     scalar: BTreeMap<String, ScalarInclude>,
     media: Option<MediaInclude>,
+    note_types: Option<NoteTypesInclude>,
     loaded_sources: BTreeSet<IncludedSource>,
 }
 
@@ -274,6 +276,15 @@ struct MediaInclude {
     dirty: bool,
 }
 
+#[derive(Clone)]
+struct NoteTypesInclude {
+    directive: String,
+    source: SourceFile,
+    note_types: BTreeMap<StableId, NoteType>,
+    resolved_note_types: BTreeMap<StableId, NoteType>,
+    dirty: bool,
+}
+
 impl PreparedSource {
     pub(crate) fn original_sources(
         &self,
@@ -284,6 +295,9 @@ impl PreparedSource {
             insert_changed_source(&mut originals, &include.source)?;
         }
         if let Some(include) = &self.includes.media {
+            insert_changed_source(&mut originals, &include.source)?;
+        }
+        if let Some(include) = &self.includes.note_types {
             insert_changed_source(&mut originals, &include.source)?;
         }
         Ok(originals
@@ -300,6 +314,47 @@ impl IncludeState {
 
     pub(crate) fn media(&self) -> Option<&BTreeMap<StableId, MediaReference>> {
         self.media.as_ref().map(|include| &include.media)
+    }
+
+    pub(crate) fn note_types(&self) -> Option<&BTreeMap<StableId, NoteType>> {
+        self.note_types.as_ref().map(|include| &include.note_types)
+    }
+
+    pub(crate) fn resolved_note_types(&self) -> Option<&BTreeMap<StableId, NoteType>> {
+        self.note_types
+            .as_ref()
+            .map(|include| &include.resolved_note_types)
+    }
+
+    pub(crate) fn replace_note_types(
+        &mut self,
+        note_types: BTreeMap<StableId, NoteType>,
+        resolved_note_types: BTreeMap<StableId, NoteType>,
+    ) -> bool {
+        let Some(include) = self.note_types.as_mut() else {
+            return false;
+        };
+        include.note_types = note_types;
+        include.resolved_note_types = resolved_note_types;
+        include.dirty = true;
+        true
+    }
+
+    pub(crate) fn replace_resolved_note_types(
+        &mut self,
+        resolved_note_types: BTreeMap<StableId, NoteType>,
+    ) -> bool {
+        let Some(include) = self.note_types.as_mut() else {
+            return false;
+        };
+        include.resolved_note_types = resolved_note_types;
+        true
+    }
+
+    pub(crate) fn note_types_source(&self) -> Option<SourceProvenance> {
+        self.note_types
+            .as_ref()
+            .map(|include| include.source.provenance.clone())
     }
 
     pub(crate) fn media_mut(
@@ -378,15 +433,38 @@ impl IncludeState {
             }
             canonical = canonical.replace(&include.sentinel, &include.directive);
         }
+        if let Some(include) = &self.note_types {
+            let Some(start) = strict_yaml::top_level_mapping_key_offset(&canonical, "note_types")
+            else {
+                return Err(SourceDocumentError::at(
+                    &include.source.provenance,
+                    "note_types",
+                    "canonical emission omitted the note_types section",
+                ));
+            };
+            let Some(relative_end) =
+                strict_yaml::top_level_mapping_key_offset(&canonical[start..], "notes")
+            else {
+                return Err(SourceDocumentError::at(
+                    &include.source.provenance,
+                    "note_types",
+                    "canonical emission omitted notes after note_types",
+                ));
+            };
+            let end = start + relative_end;
+            canonical.replace_range(start..end, &format!("{}\n", include.directive));
+        }
         if let Some(include) = &self.media {
-            let Some(start) = canonical.find("media:") else {
+            let Some(start) = strict_yaml::top_level_mapping_key_offset(&canonical, "media") else {
                 return Err(SourceDocumentError::at(
                     &include.source.provenance,
                     "media",
                     "canonical emission omitted the media section",
                 ));
             };
-            let Some(relative_end) = canonical[start..].find("tombstones:") else {
+            let Some(relative_end) =
+                strict_yaml::top_level_mapping_key_offset(&canonical[start..], "tombstones")
+            else {
                 return Err(SourceDocumentError::at(
                     &include.source.provenance,
                     "media",
@@ -399,10 +477,48 @@ impl IncludeState {
         Ok(canonical)
     }
 
+    fn restore_note_type_scalar_directives(
+        &self,
+        mut canonical: String,
+    ) -> Result<String, SourceDocumentError> {
+        for (path, include) in self
+            .scalar
+            .iter()
+            .filter(|(path, _)| path.starts_with("note_types."))
+        {
+            let count = canonical.matches(&include.sentinel).count();
+            if count != 1 {
+                return Err(SourceDocumentError::at(
+                    &include.source.provenance,
+                    path,
+                    format!(
+                        "expected one scalar include sentinel in the note-type map, found {count}"
+                    ),
+                ));
+            }
+            canonical = canonical.replace(&include.sentinel, &include.directive);
+        }
+        Ok(canonical)
+    }
+
     pub(crate) fn changed_sources(&self) -> Result<Vec<SourceFile>, SourceDocumentError> {
         let mut changed = BTreeMap::<SourceProvenance, String>::new();
         for include in self.scalar.values().filter(|include| include.dirty) {
             insert_changed_source(&mut changed, &include.source)?;
+        }
+        if let Some(include) = &self.note_types
+            && include.dirty
+        {
+            let text = note_type_map::to_string(&include.note_types).map_err(|error| {
+                SourceDocumentError::at(
+                    &include.source.provenance,
+                    "note_types",
+                    format!("could not emit included note-type map: {error}"),
+                )
+            })?;
+            let text = self.restore_note_type_scalar_directives(text)?;
+            let source = SourceFile::new(include.source.provenance.clone(), text);
+            insert_changed_source(&mut changed, &source)?;
         }
         if let Some(include) = &self.media
             && include.dirty
@@ -523,6 +639,106 @@ fn prepare_value(
                 schema_path: schema_path.clone(),
                 target: target.clone(),
             };
+            if path.as_slice() == ["note_types"] {
+                if !allow_media_include {
+                    return Err(SourceDocumentError::at(
+                        root,
+                        schema_path,
+                        "structural note_types includes are valid only in Canonical Deck source",
+                    ));
+                }
+                let loaded = loader(&request).map_err(|message| {
+                    SourceDocumentError::at(
+                        root,
+                        "note_types",
+                        format!("could not load !include {target:?}: {message}"),
+                    )
+                })?;
+                strict_yaml::reject_duplicate_keys(&loaded.text).map_err(|error| {
+                    SourceDocumentError::at(
+                        root,
+                        "note_types",
+                        format!(
+                            "invalid included note-type map {}: {error}",
+                            loaded.provenance
+                        ),
+                    )
+                })?;
+                let mut raw_value =
+                    serde_yaml::from_str::<Value>(&loaded.text).map_err(|error| {
+                        SourceDocumentError::at(
+                            root,
+                            "note_types",
+                            format!(
+                                "invalid included note-type map {}: {error}",
+                                loaded.provenance
+                            ),
+                        )
+                    })?;
+                if !matches!(raw_value, Value::Mapping(_)) {
+                    return Err(SourceDocumentError::at(
+                        root,
+                        "note_types",
+                        format!(
+                            "included note-type map {} must have a mapping root",
+                            loaded.provenance
+                        ),
+                    ));
+                }
+                let mut included_path = vec!["note_types".to_owned()];
+                prepare_value(
+                    &mut raw_value,
+                    &mut included_path,
+                    &loaded.provenance,
+                    &loaded.text,
+                    false,
+                    loader,
+                    includes,
+                    stack,
+                )?;
+                let source_yaml = serde_yaml::to_string(&raw_value).map_err(|error| {
+                    SourceDocumentError::source(&loaded.provenance, error.to_string())
+                })?;
+                let note_types = note_type_map::from_str(&source_yaml).map_err(|error| {
+                    SourceDocumentError::at(
+                        root,
+                        "note_types",
+                        format!(
+                            "invalid included note-type map {}: {error}",
+                            loaded.provenance
+                        ),
+                    )
+                })?;
+                let mut resolved_value = raw_value;
+                materialize_scalar_includes(&mut resolved_value, includes);
+                let resolved_yaml = serde_yaml::to_string(&resolved_value).map_err(|error| {
+                    SourceDocumentError::source(&loaded.provenance, error.to_string())
+                })?;
+                let resolved_note_types =
+                    note_type_map::from_str(&resolved_yaml).map_err(|error| {
+                        SourceDocumentError::at(
+                            root,
+                            "note_types",
+                            format!(
+                                "invalid included note-type map {} after resolving scalar includes: {error}",
+                                loaded.provenance
+                            ),
+                        )
+                    })?;
+                includes.loaded_sources.insert(IncludedSource {
+                    kind: IncludedSourceKind::NoteTypeDeclarations,
+                    provenance: loaded.provenance.clone(),
+                });
+                includes.note_types = Some(NoteTypesInclude {
+                    directive: format!("note_types: !include {}", yaml_scalar::scalar(&target)),
+                    source: loaded,
+                    note_types,
+                    resolved_note_types,
+                    dirty: false,
+                });
+                *value = Value::Mapping(Mapping::new());
+                return Ok(());
+            }
             if path.as_slice() == ["media"] {
                 if !allow_media_include {
                     return Err(SourceDocumentError::at(

@@ -4334,6 +4334,7 @@ fn ensure_root_source_mutable(
                     crate::planner::PlanSourceKind::Overlay { .. } => "overlay",
                     crate::planner::PlanSourceKind::ScalarInclude { .. } => "scalar include",
                     crate::planner::PlanSourceKind::MediaInclude => "media include",
+                    crate::planner::PlanSourceKind::NoteTypesInclude => "note-types include",
                 },
                 source.path.display()
             ),

@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::Path;
 
-use brain_brew_formats::{canonical_yaml, lockfile, manifest, media_map};
+use brain_brew_formats::{
+    canonical_yaml, lockfile, manifest, media_map, note_type_map, source_includes,
+};
 
 use crate::help;
 use crate::io::{
@@ -17,6 +19,7 @@ enum SourceKind {
     Manifest,
     Lockfile,
     MediaMap,
+    NoteTypeMap,
 }
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
@@ -82,6 +85,10 @@ fn format_typed_source(path: &Path, input: &str) -> Result<(SourceKind, String),
         Ok(formatted) => return Ok((SourceKind::MediaMap, formatted)),
         Err(error) => errors.push(format!("media map: {error}")),
     }
+    match source_includes::format_preserving_file_includes(input, note_type_map::format_str) {
+        Ok(formatted) => return Ok((SourceKind::NoteTypeMap, formatted)),
+        Err(error) => errors.push(format!("note-type map: {error}")),
+    }
     Err(format!(
         "{}: unrecognized Brain Brew source file ({})",
         path.display(),
@@ -114,5 +121,9 @@ fn validate_typed_source(path: &Path, kind: SourceKind, bytes: &[u8]) -> Result<
         SourceKind::MediaMap => media_map::from_str(input)
             .map(|_| ())
             .map_err(|e| e.to_string()),
+        SourceKind::NoteTypeMap => {
+            source_includes::format_preserving_file_includes(input, note_type_map::format_str)
+                .map(|_| ())
+        }
     }
 }

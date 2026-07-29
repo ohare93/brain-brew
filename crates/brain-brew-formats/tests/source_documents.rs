@@ -32,13 +32,258 @@ fn load_include(target: &str) -> SourceFile {
     match target {
         "content/description.md" => source("content/description.md", "Included description\n"),
         "templates/front.html" => source("templates/front.html", "<b>{{Front}}</b>\n"),
+        "templates/back.html" => source("templates/back.html", "{{Front}}<hr>\n"),
+        "styles/card.css" => source("styles/card.css", ".card { color: navy; }\n"),
         "content/replacement.md" => source("content/replacement.md", "Replacement from file\n"),
         "media.yaml" => source(
             "media.yaml",
             "media.flag:\n  path: flag.svg\n  sha256: old-hash\n",
         ),
+        "schema/note-types.yaml" => source(
+            "schema/note-types.yaml",
+            "note-type.basic:\n  name: Basic\n  field_order:\n    - field.front\n    - field.image\n  fields:\n    field.front:\n      name: Front\n      message_pattern:\n        kind: list\n        item_format: '{item}'\n        separator: ', '\n        parameters:\n          item:\n            type: text\n    field.image:\n      name: Image\n  card_template_order:\n    - template.basic\n  card_templates:\n    template.basic:\n      name: Card\n      question_format: !include templates/front.html\n      answer_format: !include templates/back.html\n      adapter_ids: {}\n  styling: !include styles/card.css\n  adapter_ids: {}\n",
+        ),
         other => panic!("unexpected include {other}"),
     }
+}
+
+#[test]
+fn canonical_document_preserves_and_routes_base_note_type_structural_include() {
+    let inline = deck_source().replace(
+        "note_types:\n  note-type.basic:\n    name: Basic\n    field_order:\n      - field.front\n      - field.image\n    fields:\n      field.front:\n        name: Front\n      field.image:\n        name: Image\n    card_template_order:\n      - template.basic\n    card_templates:\n      template.basic:\n        name: Card\n        question_format: !include templates/front.html\n        answer_format: '{{Front}}'\n        adapter_ids: {}\n    styling: ''\n    adapter_ids: {}\n",
+        "note_types: !include schema/note-types.yaml\n",
+    );
+    let mut document = CanonicalSourceDocument::parse_with_includes(
+        source("deck.yaml", inline.clone()),
+        |request| Ok(load_include(request.target())),
+    )
+    .expect("included note-type map parses");
+
+    assert_eq!(document.resolved_deck().note_types.len(), 1);
+    let resolved_note_type = &document.resolved_deck().note_types[&sid("note-type.basic")];
+    assert_eq!(
+        resolved_note_type.card_templates[0].question_format,
+        "<b>{{Front}}</b>\n"
+    );
+    assert_eq!(
+        resolved_note_type.card_templates[0].answer_format,
+        "{{Front}}<hr>\n"
+    );
+    assert_eq!(resolved_note_type.styling, ".card { color: navy; }\n");
+    assert!(
+        resolved_note_type.fields[0].message_pattern.is_some(),
+        "field message_pattern survives structural note-type materialization"
+    );
+    let unchanged = document.emit().expect("unchanged includes emit");
+    assert_eq!(unchanged.root().text(), inline);
+    assert!(unchanged.included().is_empty());
+
+    let location = document
+        .set_scalar(
+            CanonicalScalarTarget::NoteTypeName {
+                note_type_id: sid("note-type.basic"),
+            },
+            "Basic",
+            "Edited Basic",
+        )
+        .expect("note-type edit routes to structural include");
+    assert_eq!(
+        location,
+        EditLocation::Included(
+            SourceProvenance::new("schema/note-types.yaml").with_source_root("fixture.workspace")
+        )
+    );
+
+    let emission = document.emit().expect("included note types emit");
+    assert!(
+        emission
+            .root()
+            .text()
+            .contains("note_types: !include schema/note-types.yaml\n")
+    );
+    assert_eq!(emission.included().len(), 1);
+    let emitted_map = emission
+        .included_source("schema/note-types.yaml")
+        .unwrap()
+        .text();
+    assert!(emitted_map.contains("  name: Edited Basic\n"));
+    assert!(
+        emitted_map.contains("question_format: !include templates/front.html\n"),
+        "question include remains owned by the note-type map: {emitted_map}"
+    );
+    assert!(emitted_map.contains("answer_format: !include templates/back.html\n"));
+    assert!(emitted_map.contains("styling: !include styles/card.css\n"));
+    assert!(emitted_map.contains("message_pattern:\n"));
+}
+
+#[test]
+fn canonical_document_materialization_ignores_structural_markers_in_included_scalars() {
+    let root = deck_source().replace(
+        "note_types:\n  note-type.basic:\n    name: Basic\n    field_order:\n      - field.front\n      - field.image\n    fields:\n      field.front:\n        name: Front\n      field.image:\n        name: Image\n    card_template_order:\n      - template.basic\n    card_templates:\n      template.basic:\n        name: Card\n        question_format: !include templates/front.html\n        answer_format: '{{Front}}'\n        adapter_ids: {}\n    styling: ''\n    adapter_ids: {}\n",
+        "note_types: !include schema/hostile-note-types.yaml\n",
+    );
+    let included_note_types = r#"note-type.basic:
+  name: Basic
+  variables:
+    section_markers: |-
+      note_types: {}
+      media: {}
+  field_order:
+    - field.front
+    - field.image
+  fields:
+    field.front:
+      name: Front
+    field.image:
+      name: Image
+  card_template_order:
+    - template.basic
+  card_templates:
+    template.basic:
+      name: Card
+      variables:
+        section_markers: |-
+          note_types: {}
+          media: {}
+      question_format: |-
+        note_types: {}
+        media: {}
+      answer_format: '{{Front}}'
+      adapter_ids: {}
+  styling: |-
+    note_types: {}
+    media: {}
+  adapter_ids: {}
+"#;
+    let document =
+        CanonicalSourceDocument::parse_with_includes(source("deck.yaml", root), |request| {
+            match request.target() {
+                "schema/hostile-note-types.yaml" => Ok(source(
+                    "schema/hostile-note-types.yaml",
+                    included_note_types,
+                )),
+                other => Ok(load_include(other)),
+            }
+        })
+        .expect("indented structural marker text does not shadow root placeholders");
+
+    let note_type = &document.resolved_deck().note_types[&sid("note-type.basic")];
+    let markers = "note_types: {}\nmedia: {}";
+    assert_eq!(note_type.variables["section_markers"], markers);
+    assert_eq!(
+        note_type.card_templates[0].variables["section_markers"],
+        markers
+    );
+    assert_eq!(note_type.card_templates[0].question_format, markers);
+    assert_eq!(note_type.styling, markers);
+
+    let emission = document.emit().expect("hostile included scalars emit");
+    let reparsed =
+        CanonicalSourceDocument::parse_with_includes(emission.root().clone(), |request| {
+            match request.target() {
+                "schema/hostile-note-types.yaml" => Ok(source(
+                    "schema/hostile-note-types.yaml",
+                    included_note_types,
+                )),
+                other => Ok(load_include(other)),
+            }
+        })
+        .expect("emitted structural include reparses");
+    assert_eq!(reparsed.resolved_deck(), document.resolved_deck());
+}
+
+#[test]
+fn canonical_document_restoration_ignores_hostile_section_markers_in_variables() {
+    let root = deck_source()
+        .replace(
+            "note_types:\n  note-type.basic:\n    name: Basic\n    field_order:\n      - field.front\n      - field.image\n    fields:\n      field.front:\n        name: Front\n      field.image:\n        name: Image\n    card_template_order:\n      - template.basic\n    card_templates:\n      template.basic:\n        name: Card\n        question_format: !include templates/front.html\n        answer_format: '{{Front}}'\n        adapter_ids: {}\n    styling: ''\n    adapter_ids: {}\n",
+            "note_types: !include schema/note-types.yaml\n",
+        )
+        .replace(
+            "  description: !include content/description.md\n  adapter_ids: {}\n",
+            "  description: !include content/description.md\n  variables:\n    section_markers: |-\n      note_types:\n      notes: {}\n      media:\n      tombstones:\n  adapter_ids: {}\n",
+        );
+    let document =
+        CanonicalSourceDocument::parse_with_includes(source("deck.yaml", root), |request| {
+            Ok(load_include(request.target()))
+        })
+        .expect("include-bearing deck with hostile variables parses");
+
+    let emission = document.emit().expect("structural directives restore");
+    let emitted = emission.root().text();
+    assert!(emitted.contains("note_types: !include schema/note-types.yaml\n"));
+    assert!(emitted.contains("media: !include media.yaml\n"));
+    let reparsed =
+        CanonicalSourceDocument::parse_with_includes(emission.root().clone(), |request| {
+            Ok(load_include(request.target()))
+        })
+        .expect("restored source reparses");
+    assert_eq!(
+        reparsed.deck().variables["section_markers"],
+        "note_types:\nnotes: {}\nmedia:\ntombstones:"
+    );
+}
+
+#[test]
+fn included_note_type_diagnostics_name_referring_and_included_sources() {
+    for (label, included, expected) in [
+        ("non-mapping", "- note-type.basic\n", "mapping root"),
+        (
+            "duplicate",
+            "note-type.basic:\n  name: One\nnote-type.basic:\n  name: Two\n",
+            "duplicate",
+        ),
+        (
+            "unknown",
+            "note-type.basic:\n  name: Basic\n  unknown: value\n",
+            "unknown field",
+        ),
+        (
+            "schema",
+            "note-type.basic:\n  name: Basic\n",
+            "missing field",
+        ),
+    ] {
+        let root = deck_source().replace(
+            "note_types:\n  note-type.basic:\n    name: Basic\n    field_order:\n      - field.front\n      - field.image\n    fields:\n      field.front:\n        name: Front\n      field.image:\n        name: Image\n    card_template_order:\n      - template.basic\n    card_templates:\n      template.basic:\n        name: Card\n        question_format: !include templates/front.html\n        answer_format: '{{Front}}'\n        adapter_ids: {}\n    styling: ''\n    adapter_ids: {}\n",
+            "note_types: !include schema/note-types.yaml\n",
+        );
+        let error =
+            CanonicalSourceDocument::parse_with_includes(source("deck.yaml", root), |request| {
+                if request.target() == "schema/note-types.yaml" {
+                    Ok(source("schema/note-types.yaml", included))
+                } else {
+                    Ok(load_include(request.target()))
+                }
+            })
+            .expect_err(label);
+        let message = error.to_string();
+        assert!(message.contains("deck.yaml"), "{label}: {message}");
+        assert!(message.contains(":note_types:"), "{label}: {message}");
+        assert!(
+            message.contains("schema/note-types.yaml"),
+            "{label}: {message}"
+        );
+        assert!(message.contains(expected), "{label}: {message}");
+    }
+}
+
+#[test]
+fn overlay_note_type_structural_include_is_rejected() {
+    let error = OverlaySourceDocument::parse_with_includes(
+        source(
+            "overlay.yaml",
+            "id: overlay.extension\nkind: extension\nnote_types: !include schema/note-types.yaml\n",
+        ),
+        |request| Ok(load_include(request.target())),
+    )
+    .expect_err("overlay structural note-type includes remain unsupported");
+    assert!(
+        error
+            .to_string()
+            .contains("valid only in Canonical Deck source"),
+        "{error}"
+    );
 }
 
 #[test]

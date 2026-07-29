@@ -15,6 +15,29 @@ pub fn reject_duplicate_keys(input: &str) -> Result<(), serde_yaml::Error> {
     .deserialize(serde_yaml::Deserializer::from_str(input))
 }
 
+/// Return the byte offset of an exact, unindented mapping key line.
+///
+/// Canonical emitters may put either a block value (`key:`) or an inline value
+/// (`key: {}`) on the line. Indented scalar content and longer key names do not
+/// match.
+pub(crate) fn top_level_mapping_key_offset(input: &str, key: &str) -> Option<usize> {
+    let marker = format!("{key}:");
+    let mut offset = 0;
+    for raw_line in input.split_inclusive('\n') {
+        let line = raw_line.strip_suffix('\n').unwrap_or(raw_line);
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        if line == marker
+            || line
+                .strip_prefix(&marker)
+                .is_some_and(|suffix| suffix.starts_with(' '))
+        {
+            return Some(offset);
+        }
+        offset += raw_line.len();
+    }
+    None
+}
+
 /// Maintainer-source schema whose intentionally typed scalar positions are
 /// exempt from the otherwise string-only YAML scalar rule.
 #[derive(Clone, Copy)]

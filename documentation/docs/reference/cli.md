@@ -73,7 +73,7 @@ brainbrew fmt brainbrew.yaml
 brainbrew fmt brainbrew.lock
 ```
 
-Canonicalizes supported source files. Standalone media-map files used by `media: !include media.yaml` are formatted as root media mappings; formatting a deck with a hoisted media map preserves the `media: !include ...` line.
+Canonicalizes supported source files. Standalone note-type maps used by `note_types: !include schema/note-types.yaml` and media maps used by `media: !include media.yaml` are formatted as root mappings. Formatting a deck preserves both structural include markers.
 
 ## `validate`
 

@@ -146,8 +146,9 @@ impl CanonicalSourceDocument {
         mut loader: impl FnMut(&IncludeRequest) -> Result<SourceFile, String>,
     ) -> Result<Self, SourceDocumentError> {
         let prepared = prepare_source(source, true, &mut loader)?;
-        let root_yaml = yaml_with_included_media_for_validation(
+        let root_yaml = yaml_with_included_structures_for_validation(
             &prepared.yaml_without_directives,
+            prepared.includes.note_types(),
             prepared.includes.media(),
         )?;
         let mut deck = canonical_yaml::from_str(&root_yaml).map_err(|error| {
@@ -156,8 +157,9 @@ impl CanonicalSourceDocument {
         if let Some(media) = prepared.includes.media() {
             deck.media = media.clone();
         }
-        let materialized_yaml = yaml_with_included_media_for_validation(
+        let materialized_yaml = yaml_with_included_structures_for_validation(
             &prepared.materialized_yaml,
+            prepared.includes.resolved_note_types(),
             prepared.includes.media(),
         )?;
         let mut resolved_deck = canonical_yaml::from_str(&materialized_yaml).map_err(|error| {
@@ -227,6 +229,18 @@ impl CanonicalSourceDocument {
             next.includes
                 .edit_scalar(&path, expected, replacement, &next.provenance)?
         {
+            let value = scalar_mut(&mut next.resolved_deck, &target).ok_or_else(|| {
+                SourceDocumentError::at(
+                    &next.provenance,
+                    &path,
+                    "typed scalar target is not present in the resolved Canonical Deck",
+                )
+            })?;
+            *value = replacement.to_owned();
+            if path.starts_with("note_types.") && next.includes.note_types().is_some() {
+                next.includes
+                    .replace_resolved_note_types(next.resolved_deck.note_types.clone());
+            }
             next.validate()?;
             *self = next;
             return Ok(location);
@@ -246,6 +260,28 @@ impl CanonicalSourceDocument {
             ));
         }
         *value = replacement.to_owned();
+        if path.starts_with("note_types.") && next.includes.note_types().is_some() {
+            let resolved_value = scalar_mut(&mut next.resolved_deck, &target).ok_or_else(|| {
+                SourceDocumentError::at(
+                    &next.provenance,
+                    &path,
+                    "typed scalar target is not present in the resolved Canonical Deck",
+                )
+            })?;
+            *resolved_value = replacement.to_owned();
+            next.includes.replace_note_types(
+                next.deck.note_types.clone(),
+                next.resolved_deck.note_types.clone(),
+            );
+            let location = next
+                .includes
+                .note_types_source()
+                .map(EditLocation::Included)
+                .expect("note-types include source exists");
+            next.validate()?;
+            *self = next;
+            return Ok(location);
+        }
         next.validate()?;
         *self = next;
         Ok(EditLocation::Root)
@@ -354,28 +390,66 @@ impl CanonicalSourceDocument {
     }
 }
 
-fn yaml_with_included_media_for_validation(
+fn yaml_with_included_structures_for_validation(
     yaml: &str,
+    note_types: Option<&BTreeMap<StableId, brain_brew_core::NoteType>>,
     media: Option<&BTreeMap<StableId, brain_brew_core::MediaReference>>,
 ) -> Result<String, SourceDocumentError> {
-    let Some(media) = media else {
-        return Ok(yaml.to_owned());
-    };
-    if media.is_empty() {
-        return Ok(yaml.to_owned());
+    let mut yaml = yaml.to_owned();
+    if let Some(note_types) = note_types
+        && !note_types.is_empty()
+    {
+        let body = crate::note_type_map::to_string(note_types)
+            .map_err(|error| {
+                SourceDocumentError::source(
+                    &SourceProvenance::new("canonical deck"),
+                    format!("could not materialize included note types: {error}"),
+                )
+            })?
+            .lines()
+            .map(|line| format!("  {line}\n"))
+            .collect::<String>();
+        yaml = replace_structural_placeholder(&yaml, "note_types", &body)?;
     }
-    let placeholder = "media: {}\n";
-    if yaml.matches(placeholder).count() != 1 {
-        return Err(SourceDocumentError::source(
+    if let Some(media) = media
+        && !media.is_empty()
+    {
+        let body = crate::media_map::to_string(media)
+            .lines()
+            .map(|line| format!("  {line}\n"))
+            .collect::<String>();
+        yaml = replace_structural_placeholder(&yaml, "media", &body)?;
+    }
+    Ok(yaml)
+}
+
+fn replace_structural_placeholder(
+    yaml: &str,
+    key: &str,
+    body: &str,
+) -> Result<String, SourceDocumentError> {
+    let invalid_placeholder = || {
+        SourceDocumentError::source(
             &SourceProvenance::new("canonical deck"),
-            "expected one empty media placeholder while loading media include",
-        ));
+            format!("expected one empty {key} placeholder while loading structural include"),
+        )
+    };
+    let start = crate::strict_yaml::top_level_mapping_key_offset(yaml, key)
+        .ok_or_else(invalid_placeholder)?;
+    let line_end = yaml[start..]
+        .find('\n')
+        .map_or(yaml.len(), |offset| start + offset + 1);
+    let line = yaml[start..line_end]
+        .strip_suffix('\n')
+        .unwrap_or(&yaml[start..line_end]);
+    let line = line.strip_suffix('\r').unwrap_or(line);
+    if line != format!("{key}: {{}}") {
+        return Err(invalid_placeholder());
     }
-    let body = crate::media_map::to_string(media)
-        .lines()
-        .map(|line| format!("  {line}\n"))
-        .collect::<String>();
-    Ok(yaml.replacen(placeholder, &format!("media:\n{body}"), 1))
+
+    let mut materialized = yaml.to_owned();
+    materialized.replace_range(start..line_end, &format!("{key}:\n{body}"));
+    Ok(materialized)
 }
 
 fn scalar_mut<'a>(

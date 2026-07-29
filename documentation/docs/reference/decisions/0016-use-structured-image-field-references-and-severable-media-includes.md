@@ -118,6 +118,8 @@ Canonical Deck YAML will support structured image field references with the tag 
 
    The structural `media:` include work is severable from structured `!image` fields. If the include-preserving formatter, media hash writeback, or new media-map file kind expands the implementation, it should ship in a later focused run instead of delaying `!image` field references. Stable-ID field references make this severable media block more valuable: field references do not care whether media declarations live inline or in an included media map, because they resolve through the composed declaration ID set either way.
 
+   The same narrow mechanism now also whitelists `note_types: !include schema/note-types.yaml` for base deck source. Its included file root is exactly the note-type ID mapping normally nested under `note_types:`. It has standalone canonical formatting, schema-aware diagnostics, and include-local writeback. This extension does not permit arbitrary mapping includes, nested structural includes, or structural includes in overlays.
+
 ## Rationale
 
 **Pros:**
@@ -128,7 +130,7 @@ Canonical Deck YAML will support structured image field references with the tag 
 - The parallel-map model is a small, precedent-backed extension of `field_messages` and avoids a broad field-value enum refactor across validation, compose, semantic diff, translation, YAML, and adapters.
 - Strict import reverse-mapping avoids false positives: unsupported image HTML remains raw HTML and continues to work.
 - Keeping raw HTML valid everywhere preserves current card template and styling behavior.
-- Whitelisting only `media:` as a structural include keeps include semantics understandable and avoids opening arbitrary YAML AST splicing.
+- Whitelisting only the top-level base-deck `media:` and `note_types:` sections as structural includes keeps include semantics understandable and avoids opening arbitrary YAML AST splicing.
 
 **Cons:**
 
@@ -145,7 +147,7 @@ Canonical Deck YAML will support structured image field references with the tag 
 - **Replace note fields with a core field-value enum**: rejected for this phase. It is semantically tidy, but it is a broad model migration. A parallel `field_images` map matches the existing `field_messages` approach and localizes the change.
 - **Allow structured image components inside `StructuredMessage`**: rejected for now because no audited UG field needs mixed text+image, and image references are media-verification concerns rather than translation components.
 - **Convert all raw `<img>` HTML everywhere to `!image`**: rejected. Card templates and styling remain raw HTML surfaces; only note field-value positions get structured refs.
-- **Allow arbitrary mapping-position `!include`**: rejected. It would make include resolution context-sensitive across the whole schema and would complicate formatting, diagnostics, and writeback. Only top-level `media:` is approved initially.
+- **Allow arbitrary mapping-position `!include`**: rejected. It would make include resolution context-sensitive across the whole schema and would complicate formatting, diagnostics, and writeback. The whitelist began with top-level `media:` and later added only top-level base-deck `note_types:`.
 - **Block `media:` includes until all include-preserving formatting is redesigned**: rejected as a design outcome but accepted as an implementation sequencing option. The ADR designs the feature, while recommending that implementation be severed if it grows beyond the `!image` work.
 
 ## Implications
@@ -156,4 +158,4 @@ Canonical Deck YAML will support structured image field references with the tag 
 - `render_variables()` becomes the single lowering point for both structured messages and structured image fields before adapter export; for images, it resolves media stable IDs to declaration paths before rendering raw HTML.
 - CrowdAnki import should prefer structured images only for strict whole-field image HTML whose paths uniquely map to declared media IDs, and keep all other field HTML unchanged.
 - Media verification must check structured image references by media ID existence and continue checking raw HTML by regex-extracted path references.
-- `media: !include media.yaml` should be implemented as a separate structural-include slice if it conflicts with the scalar include-preservation machinery or media hash writeback.
+- `media: !include media.yaml` and `note_types: !include schema/note-types.yaml` remain explicit base-deck structural-include slices if they conflict with scalar include-preservation machinery or writeback; overlays do not gain structural includes.

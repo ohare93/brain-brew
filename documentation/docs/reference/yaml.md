@@ -26,7 +26,7 @@ Important rules:
 - note type field/template order is explicit;
 - `adapter_ids` preserve external identities;
 - scalar content fields may use `!include package/relative/path` as an authoring convenience;
-- deck files may use the single structural include `media: !include <media-map.yaml>` for the top-level media map.
+- base deck files may structurally include the top-level note-type map with `note_types: !include <note-type-map.yaml>` or the top-level media map with `media: !include <media-map.yaml>`.
 
 ### Typed tombstones
 
@@ -317,13 +317,30 @@ deck:
       value: !include content/base-description.md
 ```
 
-Deck files also support one structural include form for large media declarations:
+Base deck files also support two structural include forms for large declarations:
 
 ```yaml
+note_types: !include schema/note-types.yaml
 media: !include media.yaml
 ```
 
-The included file is a standalone media map whose root is the normal `media:` mapping contents, with stable IDs at column 0:
+Each included file root is the mapping normally nested under that key, with stable IDs at column 0. For example, a note-type map starts directly with note-type IDs:
+
+```yaml
+note-type.country:
+  name: Country
+  field_order:
+    - field.country
+  fields:
+    field.country:
+      name: Country
+  card_template_order: []
+  card_templates: {}
+  styling: ''
+  adapter_ids: {}
+```
+
+A media map similarly starts directly with media IDs:
 
 ```yaml
 media.flag.france:
@@ -331,7 +348,7 @@ media.flag.france:
   sha256: 7b2b...
 ```
 
-This whitelist applies only to top-level `media:` in deck files. It is not supported in overlay files or any other mapping position. Formatting a deck that uses the structural include preserves `media: !include media.yaml`; format the included file itself with `brainbrew fmt media.yaml`. `brainbrew media hash` follows the include and writes hashes into the media-map file. A CrowdAnki bootstrap import emits a new deck and re-inlines `media:` instead of preserving the include.
+This is a narrow whitelist for top-level `note_types:` and `media:` in base deck files. Structural includes are not supported in overlay files or any other mapping position. The included root must be a mapping; duplicate IDs, unknown properties, and schema errors identify both the referring deck and included source. Formatting a deck preserves the include marker. Format the included map itself with `brainbrew fmt schema/note-types.yaml` or `brainbrew fmt media.yaml`; edits owned by an included map are written back there by include-aware source-document operations. `brainbrew media hash` follows a media include and writes hashes into the media-map file. A CrowdAnki bootstrap import emits a new deck and re-inlines structural sections instead of preserving includes.
 
 Include paths use one portable safe-relative syntax and are authorized beneath a selected canonical root. Under a manifest workflow, the package root is selected first; optional `include_roots` may name additional existing directories inside that package. Empty, absolute/rooted, Windows drive/UNC, backslash-separated, repeated-separator, `.` component, and `..` component forms are rejected before target I/O. Existing targets and the deepest existing ancestor of new targets must resolve canonically beneath the selected root, so escaping symlinks fail.
 

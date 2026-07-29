@@ -62,6 +62,7 @@ pub(crate) enum PlanSourceKind {
     Overlay { kind: OverlayKind },
     ScalarInclude { schema_path: String },
     MediaInclude,
+    NoteTypesInclude,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -963,6 +964,7 @@ fn included_provenance(
                     schema_path: schema_path.clone(),
                 },
                 IncludedSourceKind::MediaDeclarations => PlanSourceKind::MediaInclude,
+                IncludedSourceKind::NoteTypeDeclarations => PlanSourceKind::NoteTypesInclude,
             };
             source_provenance(loaded, provenance_path(source.provenance())?, kind)
         })

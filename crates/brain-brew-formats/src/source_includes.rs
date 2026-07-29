@@ -7,7 +7,7 @@ use crate::safe_relative_path::SafeRelativePath;
 
 use serde_yaml::Value;
 
-use crate::{strict_yaml, yaml_scalar};
+use crate::{note_type_map, strict_yaml, yaml_scalar};
 
 /// Resolve `!include path` tagged scalar authoring conveniences in a Canonical Deck or overlay YAML file.
 ///
@@ -36,7 +36,14 @@ pub fn resolve_file_includes(
         include_path: String::new(),
         kind: Box::new(IncludeErrorKind::Parse(error.to_string())),
     })?;
+    let allow_deck_structural_includes = value.as_mapping().is_some_and(|mapping| {
+        let key = |name: &str| Value::String(name.to_owned());
+        mapping.contains_key(key("deck"))
+            && !mapping.contains_key(key("id"))
+            && !mapping.contains_key(key("kind"))
+    });
     let mut resolver = IncludeResolver::new(source_path, package_root, safe_include_roots)?;
+    resolver.allow_deck_structural_includes = allow_deck_structural_includes;
     resolver.resolve_value(&mut value, &mut Vec::new(), &mut Vec::new())?;
     serde_yaml::to_string(&value).map_err(|error| IncludeError {
         source_path: source_path.to_path_buf(),
@@ -76,14 +83,16 @@ where
     }
 
     let mut value = serde_yaml::from_str::<Value>(input).map_err(|error| error.to_string())?;
-    // ADR-0016 §7 deliberately whitelists only top-level `media: !include` as a
-    // structural include. The formatter strips that key so CanonicalDeckYaml's
-    // default empty media map can parse, then restores the directive after emit.
+    // Structural includes are an explicit top-level base-deck whitelist, not
+    // general YAML AST splicing. Replace them with schema-valid synthetic maps
+    // while formatting, then restore the directives after canonical emission.
+    let note_types_include = strip_top_level_note_types_include(&mut value)?;
     let media_include = strip_top_level_media_include(&mut value)?;
     let mut replacements = Vec::new();
     replace_includes_with_sentinels(input, &mut value, &mut replacements)?;
     let source_with_sentinels = serde_yaml::to_string(&value).map_err(|error| error.to_string())?;
     let mut formatted = format(&source_with_sentinels).map_err(|error| error.to_string())?;
+    formatted = restore_top_level_note_types_include(formatted, note_types_include)?;
     formatted = restore_top_level_media_include(formatted, media_include)?;
     for replacement in replacements {
         formatted = formatted.replace(&replacement.sentinel, &replacement.directive);
@@ -98,6 +107,132 @@ struct IncludeReplacement {
 
 struct MediaIncludeReplacement {
     directive: String,
+}
+
+struct NoteTypesIncludeReplacement {
+    directive: String,
+}
+
+fn strip_top_level_note_types_include(
+    value: &mut Value,
+) -> Result<Option<NoteTypesIncludeReplacement>, String> {
+    let synthetic = synthetic_note_types_for_format(value);
+    let Value::Mapping(mapping) = value else {
+        return Ok(None);
+    };
+    let key = Value::String("note_types".to_owned());
+    let Some(note_types_value) = mapping.get(&key) else {
+        return Ok(None);
+    };
+    let Value::Tagged(tagged) = note_types_value else {
+        return Ok(None);
+    };
+    if tagged.tag != "include" {
+        return Ok(None);
+    }
+    let Value::String(path) = &tagged.value else {
+        return Err("!include path must be a scalar string".to_owned());
+    };
+    let directive = format!("note_types: !include {}", yaml_scalar::scalar(path));
+    mapping.insert(key, Value::Mapping(synthetic));
+    Ok(Some(NoteTypesIncludeReplacement { directive }))
+}
+
+fn synthetic_note_types_for_format(value: &Value) -> serde_yaml::Mapping {
+    let mut by_type = std::collections::BTreeMap::<String, BTreeSet<String>>::new();
+    let Some(notes) = value
+        .as_mapping()
+        .and_then(|root| root.get(Value::String("notes".to_owned())))
+        .and_then(Value::as_mapping)
+    else {
+        return serde_yaml::Mapping::new();
+    };
+    for note in notes.values().filter_map(Value::as_mapping) {
+        let Some(note_type_id) = note
+            .get(Value::String("note_type_id".to_owned()))
+            .and_then(Value::as_str)
+        else {
+            continue;
+        };
+        let fields = note
+            .get(Value::String("fields".to_owned()))
+            .and_then(Value::as_mapping)
+            .into_iter()
+            .flatten()
+            .filter_map(|(id, _)| id.as_str().map(str::to_owned));
+        by_type
+            .entry(note_type_id.to_owned())
+            .or_default()
+            .extend(fields);
+    }
+    by_type
+        .into_iter()
+        .map(|(note_type_id, field_ids)| {
+            let fields = field_ids
+                .iter()
+                .map(|field_id| {
+                    let mut field = serde_yaml::Mapping::new();
+                    field.insert(
+                        Value::String("name".to_owned()),
+                        Value::String(field_id.clone()),
+                    );
+                    (Value::String(field_id.clone()), Value::Mapping(field))
+                })
+                .collect();
+            let mut note_type = serde_yaml::Mapping::new();
+            note_type.insert(
+                Value::String("name".to_owned()),
+                Value::String(note_type_id.clone()),
+            );
+            note_type.insert(
+                Value::String("field_order".to_owned()),
+                Value::Sequence(field_ids.into_iter().map(Value::String).collect()),
+            );
+            note_type.insert(Value::String("fields".to_owned()), Value::Mapping(fields));
+            note_type.insert(
+                Value::String("card_template_order".to_owned()),
+                Value::Sequence(Vec::new()),
+            );
+            note_type.insert(
+                Value::String("card_templates".to_owned()),
+                Value::Mapping(serde_yaml::Mapping::new()),
+            );
+            note_type.insert(
+                Value::String("styling".to_owned()),
+                Value::String(String::new()),
+            );
+            note_type.insert(
+                Value::String("adapter_ids".to_owned()),
+                Value::Mapping(serde_yaml::Mapping::new()),
+            );
+            (Value::String(note_type_id), Value::Mapping(note_type))
+        })
+        .collect()
+}
+
+fn restore_top_level_note_types_include(
+    formatted: String,
+    include: Option<NoteTypesIncludeReplacement>,
+) -> Result<String, String> {
+    let Some(include) = include else {
+        return Ok(formatted);
+    };
+    let start =
+        strict_yaml::top_level_mapping_key_offset(&formatted, "note_types").ok_or_else(|| {
+            format!(
+                "missing top-level note_types section for `{}`",
+                include.directive
+            )
+        })?;
+    let end = strict_yaml::top_level_mapping_key_offset(&formatted[start..], "notes")
+        .map(|offset| start + offset)
+        .ok_or_else(|| "missing notes section after top-level note_types".to_owned())?;
+    let mut restored = String::with_capacity(formatted.len() + include.directive.len());
+    restored.push_str(&formatted[..start]);
+    restored.push_str(&include.directive);
+    restored.push('\n');
+    restored.push_str(&formatted[end..]);
+    Ok(restored)
 }
 
 fn strip_top_level_media_include(
@@ -147,17 +282,14 @@ fn restore_top_level_media_include(
     let Some(media_include) = media_include else {
         return Ok(formatted);
     };
-    let start = formatted.find("media:").ok_or_else(|| {
-        format!(
-            "missing top-level media section for `{}`",
-            media_include.directive
-        )
-    })?;
-    if start > 0 && !formatted[..start].ends_with('\n') {
-        return Err("top-level media section was not line aligned".to_owned());
-    }
-    let end = formatted[start..]
-        .find("tombstones:")
+    let start =
+        strict_yaml::top_level_mapping_key_offset(&formatted, "media").ok_or_else(|| {
+            format!(
+                "missing top-level media section for `{}`",
+                media_include.directive
+            )
+        })?;
+    let end = strict_yaml::top_level_mapping_key_offset(&formatted[start..], "tombstones")
         .map(|offset| start + offset)
         .ok_or_else(|| "missing tombstones section after top-level media".to_owned())?;
     let mut restored = String::with_capacity(formatted.len() + media_include.directive.len());
@@ -272,8 +404,16 @@ enum IncludeErrorKind {
     },
     InvalidNestedDirective(String),
     StructuralIncludeRootNotMapping {
+        structural_kind: &'static str,
         resolved_path: PathBuf,
         found: &'static str,
+    },
+    InvalidIncludedNoteTypeMap {
+        resolved_path: PathBuf,
+        message: String,
+    },
+    StructuralIncludeOutsideCanonicalDeck {
+        structural_kind: &'static str,
     },
 }
 
@@ -356,13 +496,27 @@ impl fmt::Display for IncludeError {
                 self.include_path
             ),
             IncludeErrorKind::StructuralIncludeRootNotMapping {
+                structural_kind,
                 resolved_path,
                 found,
             } => write!(
                 f,
-                "{location}: structural media include {} ({}) must have a mapping root, found {found}",
+                "{location}: structural {structural_kind} include {} ({}) must have a mapping root, found {found}",
                 self.include_path,
                 resolved_path.display()
+            ),
+            IncludeErrorKind::InvalidIncludedNoteTypeMap {
+                resolved_path,
+                message,
+            } => write!(
+                f,
+                "{location}: included note-type map {} ({}) is invalid: {message}",
+                self.include_path,
+                resolved_path.display()
+            ),
+            IncludeErrorKind::StructuralIncludeOutsideCanonicalDeck { structural_kind } => write!(
+                f,
+                "{location}: structural {structural_kind} includes are valid only in Canonical Deck source"
             ),
         }
     }
@@ -370,14 +524,17 @@ impl fmt::Display for IncludeError {
 
 impl std::error::Error for IncludeError {}
 
+#[derive(Clone, Copy)]
 enum StructuralIncludeKind {
     MediaMap,
+    NoteTypeMap,
 }
 
 fn structural_include_kind(path: &[String]) -> Option<StructuralIncludeKind> {
-    // ADR-0016 §7 makes this a deliberate whitelist, not general YAML AST splicing.
+    // This is a deliberate base-deck whitelist, not general YAML AST splicing.
     match path {
         [segment] if segment == "media" => Some(StructuralIncludeKind::MediaMap),
+        [segment] if segment == "note_types" => Some(StructuralIncludeKind::NoteTypeMap),
         _ => None,
     }
 }
@@ -386,6 +543,7 @@ struct IncludeResolver {
     source_path: PathBuf,
     package_root: PathBuf,
     allowed_roots: Vec<PathBuf>,
+    allow_deck_structural_includes: bool,
 }
 
 impl IncludeResolver {
@@ -413,6 +571,7 @@ impl IncludeResolver {
             source_path: source_path.to_path_buf(),
             package_root,
             allowed_roots,
+            allow_deck_structural_includes: false,
         })
     }
 
@@ -435,10 +594,48 @@ impl IncludeResolver {
                         ));
                     }
                 };
-                if let Some(StructuralIncludeKind::MediaMap) = structural_include_kind(yaml_path) {
-                    let included = self.read_media_map_include(&include_path, yaml_path)?;
-                    *value = included;
-                    return Ok(());
+                match structural_include_kind(yaml_path) {
+                    Some(StructuralIncludeKind::MediaMap) => {
+                        if !self.allow_deck_structural_includes {
+                            return Err(IncludeError::new(
+                                &self.source_path,
+                                yaml_path,
+                                include_path,
+                                IncludeErrorKind::StructuralIncludeOutsideCanonicalDeck {
+                                    structural_kind: "media",
+                                },
+                            ));
+                        }
+                        let included = self.read_structural_map_include(
+                            &include_path,
+                            yaml_path,
+                            StructuralIncludeKind::MediaMap,
+                            include_stack,
+                        )?;
+                        *value = included;
+                        return Ok(());
+                    }
+                    Some(StructuralIncludeKind::NoteTypeMap) => {
+                        if !self.allow_deck_structural_includes {
+                            return Err(IncludeError::new(
+                                &self.source_path,
+                                yaml_path,
+                                include_path,
+                                IncludeErrorKind::StructuralIncludeOutsideCanonicalDeck {
+                                    structural_kind: "note_types",
+                                },
+                            ));
+                        }
+                        let included = self.read_structural_map_include(
+                            &include_path,
+                            yaml_path,
+                            StructuralIncludeKind::NoteTypeMap,
+                            include_stack,
+                        )?;
+                        *value = included;
+                        return Ok(());
+                    }
+                    None => {}
                 }
                 if !is_scalar_content_path(yaml_path) {
                     return Err(IncludeError::new(
@@ -479,10 +676,12 @@ impl IncludeResolver {
         Ok(())
     }
 
-    fn read_media_map_include(
-        &self,
+    fn read_structural_map_include(
+        &mut self,
         include_path: &str,
-        yaml_path: &[String],
+        yaml_path: &mut Vec<String>,
+        structural_kind: StructuralIncludeKind,
+        include_stack: &mut Vec<IncludeStackEntry>,
     ) -> Result<Value, IncludeError> {
         let resolved = self.resolve_include_path(include_path, yaml_path)?;
         let content = fs::read_to_string(&resolved).map_err(|error| {
@@ -496,31 +695,84 @@ impl IncludeResolver {
                 },
             )
         })?;
-        strict_yaml::reject_duplicate_keys(&content).map_err(|error| IncludeError {
-            source_path: resolved.clone(),
-            yaml_path: String::new(),
-            include_path: include_path.to_owned(),
-            kind: Box::new(IncludeErrorKind::Parse(error.to_string())),
+        let structural_name = match structural_kind {
+            StructuralIncludeKind::MediaMap => "media",
+            StructuralIncludeKind::NoteTypeMap => "note_types",
+        };
+        strict_yaml::reject_duplicate_keys(&content).map_err(|error| {
+            IncludeError::new(
+                &self.source_path,
+                yaml_path,
+                include_path,
+                match structural_kind {
+                    StructuralIncludeKind::MediaMap => {
+                        IncludeErrorKind::Parse(format!("{}: {error}", resolved.display()))
+                    }
+                    StructuralIncludeKind::NoteTypeMap => {
+                        IncludeErrorKind::InvalidIncludedNoteTypeMap {
+                            resolved_path: resolved.clone(),
+                            message: error.to_string(),
+                        }
+                    }
+                },
+            )
         })?;
-        let value = serde_yaml::from_str::<Value>(&content).map_err(|error| IncludeError {
-            source_path: resolved.clone(),
-            yaml_path: String::new(),
-            include_path: include_path.to_owned(),
-            kind: Box::new(IncludeErrorKind::Parse(error.to_string())),
+        let mut value = serde_yaml::from_str::<Value>(&content).map_err(|error| {
+            IncludeError::new(
+                &self.source_path,
+                yaml_path,
+                include_path,
+                IncludeErrorKind::Parse(format!("{}: {error}", resolved.display())),
+            )
         })?;
-        reject_yaml_tags_in_included_media(&value, &mut Vec::new(), &resolved, include_path)?;
-        match value {
-            Value::Mapping(_) => Ok(value),
-            other => Err(IncludeError::new(
+        if !matches!(value, Value::Mapping(_)) {
+            return Err(IncludeError::new(
                 &self.source_path,
                 yaml_path,
                 include_path,
                 IncludeErrorKind::StructuralIncludeRootNotMapping {
+                    structural_kind: structural_name,
                     resolved_path: resolved,
-                    found: value_kind(&other),
+                    found: value_kind(&value),
                 },
-            )),
+            ));
         }
+        match structural_kind {
+            StructuralIncludeKind::MediaMap => {
+                reject_yaml_tags_in_structural_include(
+                    &value,
+                    &mut Vec::new(),
+                    &resolved,
+                    include_path,
+                )?;
+            }
+            StructuralIncludeKind::NoteTypeMap => {
+                let referring_source = std::mem::replace(&mut self.source_path, resolved.clone());
+                let resolution = self.resolve_value(&mut value, yaml_path, include_stack);
+                self.source_path = referring_source;
+                resolution?;
+                let materialized = serde_yaml::to_string(&value).map_err(|error| {
+                    IncludeError::new(
+                        &self.source_path,
+                        yaml_path,
+                        include_path,
+                        IncludeErrorKind::Parse(error.to_string()),
+                    )
+                })?;
+                note_type_map::from_str(&materialized).map_err(|error| {
+                    IncludeError::new(
+                        &self.source_path,
+                        yaml_path,
+                        include_path,
+                        IncludeErrorKind::InvalidIncludedNoteTypeMap {
+                            resolved_path: resolved,
+                            message: error.to_string(),
+                        },
+                    )
+                })?;
+            }
+        }
+        Ok(value)
     }
 
     fn read_include(
@@ -619,7 +871,7 @@ struct IncludeStackEntry {
     resolved_path: PathBuf,
 }
 
-fn reject_yaml_tags_in_included_media(
+fn reject_yaml_tags_in_structural_include(
     value: &Value,
     yaml_path: &mut Vec<String>,
     source_path: &Path,
@@ -634,9 +886,9 @@ fn reject_yaml_tags_in_included_media(
         )),
         Value::Mapping(mapping) => {
             for (key, item) in mapping {
-                reject_yaml_tags_in_included_media(key, yaml_path, source_path, include_path)?;
+                reject_yaml_tags_in_structural_include(key, yaml_path, source_path, include_path)?;
                 yaml_path.push(path_segment(key));
-                reject_yaml_tags_in_included_media(item, yaml_path, source_path, include_path)?;
+                reject_yaml_tags_in_structural_include(item, yaml_path, source_path, include_path)?;
                 yaml_path.pop();
             }
             Ok(())
@@ -644,7 +896,7 @@ fn reject_yaml_tags_in_included_media(
         Value::Sequence(sequence) => {
             for (index, item) in sequence.iter().enumerate() {
                 yaml_path.push(format!("[{index}]"));
-                reject_yaml_tags_in_included_media(item, yaml_path, source_path, include_path)?;
+                reject_yaml_tags_in_structural_include(item, yaml_path, source_path, include_path)?;
                 yaml_path.pop();
             }
             Ok(())
