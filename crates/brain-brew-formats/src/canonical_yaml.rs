@@ -1037,6 +1037,30 @@ fn contextual_format_tree(
                 );
                 continue;
             }
+            Ok(DeckPath::NoteTypeFieldMessagePatternParameter {
+                note_type_id,
+                field_id,
+                parameter,
+            }) => {
+                nodes
+                    .entry(
+                        DeckPath::NoteTypeFieldMessagePattern {
+                            note_type_id,
+                            field_id,
+                        }
+                        .to_string(),
+                    )
+                    .or_default()
+                    .children
+                    .entry("parameters".to_owned())
+                    .or_default()
+                    .children
+                    .entry(parameter)
+                    .or_default()
+                    .translations
+                    .extend(replacements.clone());
+                continue;
+            }
             Ok(DeckPath::NoteFieldMessageSeparator { note_id, field_id }) => {
                 insert_contextual_format_node(
                     &mut nodes,

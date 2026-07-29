@@ -170,7 +170,24 @@ Each `text` item parameter remains a translatable unit at a stable path such as:
 notes.note.yemen.fields.field.flag-similarity.message.items.0.description
 ```
 
-A `note_field_ref` parameter reuses the referenced field's normal translation. A consuming-path contextual translation may intentionally specialize that one occurrence. It is materialized even when its target equals the source, so an explicit decision such as `Puerto Rico: Puerto Rico` at `notes.note.cuba.fields.field.flag-similarity.message.items.0.country` wins over a reusable direct `Puerto Rico: Portoriko` translation.
+When the same parameter values should use one contextual dictionary across every invocation, scope translations to the pattern parameter:
+
+```yaml
+translations:
+  contextual:
+    note_types.note-type.ultimate-geography.fields.field.flag-similarity.message_pattern:
+      parameters:
+        country:
+          Egypt: Ägypten
+          Iraq: Irak
+        description:
+          with emblem: mit Emblem
+          with text: mit Schriftzug
+```
+
+The flattened typed contexts are `note_types.<note-type-id>.fields.<field-id>.message_pattern.parameters.<parameter-name>`. Coverage still reports each occurrence at its consuming `notes...message.items.<index>.<parameter>` path, while identifying the shared parameter context that resolved it. Unused or source-stale parameter entries receive the same stale-context diagnostics as other contextual translations.
+
+A `note_field_ref` parameter reuses the referenced field's normal translation. Pattern-parameter context can specialize all labels for that role without replacing the typed references; it also applies to the explicit `{text: ...}` escape hatch. An exact consuming-item decision may intentionally specialize one occurrence. Live contextual translations and contextual stale records use the same scope precedence: exact consuming item, pattern parameter, broader consuming ancestor, then reusable direct/no-change/contextless-stale fallback. A winning contextual stale target remains materialized while coverage reports it as stale. A consuming decision is also materialized when its target equals the source, so an explicit decision such as `Puerto Rico: Puerto Rico` at `notes.note.cuba.fields.field.flag-similarity.message.items.0.country` wins over both the pattern-parameter context and a reusable direct `Puerto Rico: Portoriko` translation.
 
 When a target composition does not contain the referenced note, a `note_field_ref` argument can instead carry explicit translatable text without creating a graph dependency:
 

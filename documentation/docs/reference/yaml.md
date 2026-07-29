@@ -181,6 +181,22 @@ field.flag-similarity: ''
 
 Inline structured messages remain available for irregular composites that do not share a field-level pattern. Overlay note changes, field fills, and semantic expected bases accept the same direct sequence shape when the composed field definition declares the pattern.
 
+A translation overlay can reuse one contextual dictionary for a parameter across every invocation. The canonical typed path is `note_types.<note-type-id>.fields.<field-id>.message_pattern.parameters.<parameter-name>`; nested contextual YAML is accepted and emitted as:
+
+```yaml
+translations:
+  contextual:
+    note_types.note-type.country.fields.field.flag-similarity.message_pattern:
+      parameters:
+        country:
+          Egypt: Ägypten
+          Iraq: Irak
+        description:
+          with emblem: mit Emblem
+```
+
+This scope applies to resolved `note_field_ref` labels, explicit `{text: ...}` arguments for a reference parameter, and scalar `text` arguments. Live and stale decisions use the same precedence: an exact consuming item context wins over the pattern-parameter context, which wins over broader consuming ancestors, then direct, no-change, contextless stale, and source fallback. A winning stale target still renders while coverage remains stale. Coverage and stale-entry validation keep the consuming item paths; the parameter path is translation context, not a replacement for the typed reference or item identity.
+
 ### Message reference scope and graph resolution
 
 A `ref` is always a complete canonical `notes.<note-id>.fields.<field-id>` path. References may cross notes in the same composed deck; aliases and display names are not reference keys. Brain Brew builds one deck-wide graph from the final semantic `FieldValue` map after the ordered overlay/translation stack. Scalar fields are terminal nodes, messages depend on every referenced field, and structured images are terminal semantic nodes lowered by the rendering adapter. A message may therefore reference a scalar, another message, or an image field. Image lowering keeps the exact deterministic `<img src="..." />` adapter form documented above.

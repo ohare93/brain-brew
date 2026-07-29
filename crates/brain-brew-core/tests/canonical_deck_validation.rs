@@ -184,6 +184,7 @@ fn validation_rejects_stable_ids_with_each_reserved_container_marker() {
         ".adapter_ids.",
         ".tags.",
         ".message.",
+        ".message_pattern.",
     ] {
         let invalid_id = format!("field{marker}country");
         let mut deck = ug_style_deck();

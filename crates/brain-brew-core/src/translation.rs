@@ -519,7 +519,13 @@ fn translation_coverage_report(
                         })
                         .and_then(|field| field.message_pattern.as_ref())
                         .expect("list message patterns were validated by the field graph");
-                    builder.record_list_message(note_id, field_id, message, pattern);
+                    builder.record_list_message(
+                        &note.note_type_id,
+                        note_id,
+                        field_id,
+                        message,
+                        pattern,
+                    );
                 }
                 FieldValue::Images(_) => {}
             }
@@ -623,6 +629,14 @@ struct TranslationRecordOptions {
     record_ignored: bool,
 }
 
+#[derive(Clone, Copy)]
+struct TranslationApplyOptions<'a> {
+    include_target_adaptation: bool,
+    include_variable: bool,
+    record_missing: bool,
+    fallback_context: Option<&'a str>,
+}
+
 enum TranslationOutcome<'a> {
     TargetAdaptation {
         adaptation: &'a TargetAdaptation,
@@ -643,6 +657,8 @@ enum TranslationOutcome<'a> {
     Stale {
         index: usize,
         record: &'a StaleTranslation,
+        direct: Option<&'a str>,
+        matches: Vec<ContextualTranslationMatch<'a>>,
     },
     Missing,
     Ignored,
@@ -653,14 +669,14 @@ impl<'a> TranslationOutcome<'a> {
     fn direct_translation(&self) -> Option<&'a str> {
         match self {
             Self::Direct { translated } => Some(translated),
-            Self::Contextual { direct, .. } => *direct,
+            Self::Contextual { direct, .. } | Self::Stale { direct, .. } => *direct,
             _ => None,
         }
     }
 
     fn contextual_matches(&self) -> &[ContextualTranslationMatch<'a>] {
         match self {
-            Self::Contextual { matches, .. } => matches,
+            Self::Contextual { matches, .. } | Self::Stale { matches, .. } => matches,
             _ => &[],
         }
     }
@@ -732,9 +748,153 @@ fn resolve_translation<'a>(
     }
 
     if let Some((index, record)) = matching_stale_translation(translations, source, options.path) {
-        return TranslationOutcome::Stale { index, record };
+        return TranslationOutcome::Stale {
+            index,
+            record,
+            direct,
+            matches: contextual_matches,
+        };
     }
 
+    TranslationOutcome::Missing
+}
+
+fn resolve_translation_with_context_fallback<'a>(
+    translations: &'a TranslationDictionary,
+    source: &str,
+    options: TranslationResolveOptions<'_>,
+    fallback_context: &str,
+) -> TranslationOutcome<'a> {
+    if options.include_target_adaptation
+        && let Some(adaptation) = translations.target_adaptations.get(options.path)
+    {
+        return TranslationOutcome::TargetAdaptation { adaptation };
+    }
+    if source.is_empty() {
+        return TranslationOutcome::Empty;
+    }
+    if options.include_ignored && is_ignored_translation_path(translations, options.path) {
+        return TranslationOutcome::Ignored;
+    }
+    if options.include_variable
+        && let Some(variable_key) = options.variable_key
+        && let Some(replacements) = translations.variables.get(variable_key)
+        && let Some(translated) = replacements.get(source)
+    {
+        return TranslationOutcome::Variable { translated };
+    }
+
+    let direct = translations.direct.get(source).map(String::as_str);
+    let consuming_matches =
+        translations
+            .contextual
+            .iter()
+            .filter_map(|(context_path, replacements)| {
+                (context_matches_path(context_path, options.path))
+                    .then(|| replacements.get(source))
+                    .flatten()
+                    .map(|translated| ContextualTranslationMatch {
+                        context_path,
+                        translated,
+                    })
+            });
+    let parameter_match = translations
+        .contextual
+        .get_key_value(fallback_context)
+        .and_then(|(context_path, replacements)| {
+            replacements
+                .get(source)
+                .map(|translated| ContextualTranslationMatch {
+                    context_path,
+                    translated,
+                })
+        });
+    let mut matches = consuming_matches.collect::<Vec<_>>();
+    if let Some(parameter_match) = parameter_match
+        && !matches
+            .iter()
+            .any(|candidate| candidate.context_path == parameter_match.context_path)
+    {
+        matches.push(parameter_match);
+    }
+
+    let contextual_outcome =
+        |candidate: ContextualTranslationMatch<'a>| TranslationOutcome::Contextual {
+            translated: candidate.translated,
+            context_path: candidate.context_path,
+            direct,
+            matches: matches.clone(),
+        };
+    let stale_outcome = |(index, record)| TranslationOutcome::Stale {
+        index,
+        record,
+        direct,
+        matches: matches.clone(),
+    };
+    let exact_live = matches
+        .iter()
+        .copied()
+        .find(|candidate| candidate.context_path == options.path);
+    let exact_stale =
+        matching_stale_translation_at_context(translations, source, Some(options.path));
+    if let Some(candidate) = exact_live {
+        return contextual_outcome(candidate);
+    }
+    if let Some(candidate) = exact_stale {
+        return stale_outcome(candidate);
+    }
+
+    if let Some(candidate) = parameter_match {
+        return contextual_outcome(candidate);
+    }
+    if let Some(candidate) =
+        matching_stale_translation_at_context(translations, source, Some(fallback_context))
+    {
+        return stale_outcome(candidate);
+    }
+
+    let broader_live = matches
+        .iter()
+        .copied()
+        .filter(|candidate| {
+            candidate.context_path != options.path
+                && candidate.context_path != fallback_context
+                && context_matches_path(candidate.context_path, options.path)
+        })
+        .max_by_key(|candidate| candidate.context_path.len());
+    let broader_stale = translations
+        .stale_translations
+        .iter()
+        .enumerate()
+        .filter(|(_, record)| {
+            record.new_source == source
+                && record.context.as_deref().is_some_and(|context| {
+                    context != options.path
+                        && context != fallback_context
+                        && context_matches_path(context, options.path)
+                })
+        })
+        .max_by_key(|(_, record)| record.context.as_ref().map_or(0, String::len));
+    match (broader_live, broader_stale) {
+        (Some(live), Some(stale))
+            if stale.1.context.as_ref().map_or(0, String::len) > live.context_path.len() =>
+        {
+            return stale_outcome(stale);
+        }
+        (Some(live), _) => return contextual_outcome(live),
+        (None, Some(stale)) => return stale_outcome(stale),
+        (None, None) => {}
+    }
+
+    if let Some(translated) = direct {
+        return TranslationOutcome::Direct { translated };
+    }
+    if translations.no_change.contains(source) {
+        return TranslationOutcome::NoChange;
+    }
+    if let Some(candidate) = matching_stale_translation_at_context(translations, source, None) {
+        return stale_outcome(candidate);
+    }
     TranslationOutcome::Missing
 }
 
@@ -769,6 +929,7 @@ impl TranslationCoverageBuilder<'_> {
 
     fn record_list_message(
         &mut self,
+        note_type_id: &StableId,
         note_id: &StableId,
         field_id: &StableId,
         message: &ListMessageItems,
@@ -804,12 +965,18 @@ impl TranslationCoverageBuilder<'_> {
                     parameter: parameter.clone(),
                 }
                 .to_string();
+                let parameter_context = DeckPath::NoteTypeFieldMessagePatternParameter {
+                    note_type_id: note_type_id.clone(),
+                    field_id: field_id.clone(),
+                    parameter: parameter.clone(),
+                }
+                .to_string();
                 match (definition, &item[parameter]) {
                     (ListMessageParameter::Text, ListMessageArgument::Scalar(value))
                     | (
                         ListMessageParameter::NoteFieldRef { .. },
                         ListMessageArgument::Text(value),
-                    ) => self.record_string(value, path, None),
+                    ) => self.record_string_with_context_fallback(value, path, &parameter_context),
                     (
                         ListMessageParameter::NoteFieldRef { field_id },
                         ListMessageArgument::Scalar(note_id),
@@ -825,7 +992,7 @@ impl TranslationCoverageBuilder<'_> {
                             .resolved
                             .get(&reference)
                             .expect("list message references were graph-validated");
-                        self.record_string(value, path, None);
+                        self.record_string_with_context_fallback(value, path, &parameter_context);
                     }
                     (ListMessageParameter::Text, ListMessageArgument::Text(_)) => {
                         unreachable!("list message argument kinds were graph-validated")
@@ -911,6 +1078,27 @@ impl TranslationCoverageBuilder<'_> {
                 record_missing: true,
                 record_ignored: true,
             },
+            None,
+        );
+    }
+
+    fn record_string_with_context_fallback(
+        &mut self,
+        value: &str,
+        path: String,
+        fallback_context: &str,
+    ) {
+        self.record_string_with_options(
+            value,
+            path,
+            None,
+            TranslationRecordOptions {
+                include_target_adaptation: true,
+                include_variable: true,
+                record_missing: true,
+                record_ignored: true,
+            },
+            Some(fallback_context),
         );
     }
 
@@ -925,6 +1113,7 @@ impl TranslationCoverageBuilder<'_> {
                 record_missing: true,
                 record_ignored: false,
             },
+            None,
         );
     }
 
@@ -934,16 +1123,24 @@ impl TranslationCoverageBuilder<'_> {
         path: String,
         variable_key: Option<&str>,
         record_options: TranslationRecordOptions,
+        fallback_context: Option<&str>,
     ) {
-        let outcome = resolve_translation(
-            self.translations,
-            value,
-            TranslationResolveOptions {
-                path: &path,
-                variable_key,
-                include_target_adaptation: record_options.include_target_adaptation,
-                include_variable: record_options.include_variable,
-                include_ignored: true,
+        let resolve_options = TranslationResolveOptions {
+            path: &path,
+            variable_key,
+            include_target_adaptation: record_options.include_target_adaptation,
+            include_variable: record_options.include_variable,
+            include_ignored: true,
+        };
+        let outcome = fallback_context.map_or_else(
+            || resolve_translation(self.translations, value, resolve_options),
+            |fallback_context| {
+                resolve_translation_with_context_fallback(
+                    self.translations,
+                    value,
+                    resolve_options,
+                    fallback_context,
+                )
             },
         );
 
@@ -1033,7 +1230,7 @@ impl TranslationCoverageBuilder<'_> {
                     context: None,
                 });
             }
-            TranslationOutcome::Stale { index, record } => {
+            TranslationOutcome::Stale { index, record, .. } => {
                 let source = self.record_seen_source(value, &path, &outcome);
                 self.seen_stale_translations.insert(*index);
                 self.entries.push(TranslationCoverageEntry {
@@ -1438,6 +1635,7 @@ fn note_type_id_from_translation_path(path: &str) -> Option<StableId> {
         | DeckPath::NoteTypeFieldMessagePattern { note_type_id, .. }
         | DeckPath::NoteTypeFieldMessagePatternItemFormat { note_type_id, .. }
         | DeckPath::NoteTypeFieldMessagePatternSeparator { note_type_id, .. }
+        | DeckPath::NoteTypeFieldMessagePatternParameter { note_type_id, .. }
         | DeckPath::NoteTypeCardTemplates { note_type_id }
         | DeckPath::NoteTypeCardTemplate { note_type_id, .. }
         | DeckPath::NoteTypeCardTemplateName { note_type_id, .. }
@@ -1466,7 +1664,8 @@ fn field_id_from_translation_path(path: &str) -> Option<StableId> {
         | DeckPath::NoteTypeFieldName { field_id, .. }
         | DeckPath::NoteTypeFieldMessagePattern { field_id, .. }
         | DeckPath::NoteTypeFieldMessagePatternItemFormat { field_id, .. }
-        | DeckPath::NoteTypeFieldMessagePatternSeparator { field_id, .. } => Some(field_id),
+        | DeckPath::NoteTypeFieldMessagePatternSeparator { field_id, .. }
+        | DeckPath::NoteTypeFieldMessagePatternParameter { field_id, .. } => Some(field_id),
         _ => None,
     }
 }
@@ -2075,6 +2274,7 @@ pub(crate) fn apply_translation_dictionary(
                             &source_graph,
                             &source,
                             path,
+                            &note.note_type_id,
                             note_id,
                             &field_id,
                             message,
@@ -2269,6 +2469,7 @@ impl TranslationApplyContext<'_, '_> {
         source_graph: &ResolvedFieldGraph,
         resolved_source: &str,
         path: String,
+        note_type_id: &StableId,
         note_id: &StableId,
         field_id: &StableId,
         message: &mut ListMessageItems,
@@ -2335,6 +2536,12 @@ impl TranslationApplyContext<'_, '_> {
                     parameter: parameter.clone(),
                 }
                 .to_string();
+                let parameter_context = DeckPath::NoteTypeFieldMessagePatternParameter {
+                    note_type_id: note_type_id.clone(),
+                    field_id: field_id.clone(),
+                    parameter: parameter.clone(),
+                }
+                .to_string();
                 match (
                     definition,
                     item.get_mut(parameter).expect("validated parameter"),
@@ -2343,7 +2550,9 @@ impl TranslationApplyContext<'_, '_> {
                     | (
                         ListMessageParameter::NoteFieldRef { .. },
                         ListMessageArgument::Text(value),
-                    ) => self.translate_string(value, path, None),
+                    ) => {
+                        self.translate_string_with_context_fallback(value, path, &parameter_context)
+                    }
                     (
                         ListMessageParameter::NoteFieldRef {
                             field_id: target_field_id,
@@ -2360,7 +2569,7 @@ impl TranslationApplyContext<'_, '_> {
                         let source = source_graph
                             .get(&reference)
                             .expect("list message references were graph-validated");
-                        let outcome = resolve_translation(
+                        let outcome = resolve_translation_with_context_fallback(
                             self.translations,
                             source,
                             TranslationResolveOptions {
@@ -2370,11 +2579,21 @@ impl TranslationApplyContext<'_, '_> {
                                 include_variable: false,
                                 include_ignored: false,
                             },
+                            &parameter_context,
                         );
-                        if let TranslationOutcome::Contextual { translated, .. } = &outcome {
-                            // Materialize every consuming-path decision, including an explicit
-                            // source-equal target that intentionally overrides a conflicting
-                            // reusable direct translation on the referenced field.
+                        let translated = match &outcome {
+                            TranslationOutcome::Contextual { translated, .. } => Some(*translated),
+                            TranslationOutcome::Stale { record, .. }
+                                if record.context.is_some() =>
+                            {
+                                Some(record.target.as_str())
+                            }
+                            _ => None,
+                        };
+                        if let Some(translated) = translated {
+                            // Materialize every consuming-path decision, including stale targets
+                            // and explicit source-equal choices that override reusable decisions
+                            // on the referenced field.
                             self.record_apply_source(source, &path, &outcome);
                             let mut materialized = source.to_owned();
                             self.apply_translated_value(&mut materialized, &path, translated);
@@ -2533,11 +2752,50 @@ impl TranslationApplyContext<'_, '_> {
     }
 
     fn translate_string(&mut self, value: &mut String, path: String, variable_key: Option<&str>) {
-        self.translate_string_with_options(value, path, variable_key, true, true, true);
+        self.translate_string_with_options(
+            value,
+            path,
+            variable_key,
+            TranslationApplyOptions {
+                include_target_adaptation: true,
+                include_variable: true,
+                record_missing: true,
+                fallback_context: None,
+            },
+        );
+    }
+
+    fn translate_string_with_context_fallback(
+        &mut self,
+        value: &mut String,
+        path: String,
+        fallback_context: &str,
+    ) {
+        self.translate_string_with_options(
+            value,
+            path,
+            None,
+            TranslationApplyOptions {
+                include_target_adaptation: true,
+                include_variable: true,
+                record_missing: true,
+                fallback_context: Some(fallback_context),
+            },
+        );
     }
 
     fn translate_string_without_missing(&mut self, value: &mut String, path: String) {
-        self.translate_string_with_options(value, path, None, false, false, false);
+        self.translate_string_with_options(
+            value,
+            path,
+            None,
+            TranslationApplyOptions {
+                include_target_adaptation: false,
+                include_variable: false,
+                record_missing: false,
+                fallback_context: None,
+            },
+        );
     }
 
     fn translate_string_with_options(
@@ -2545,24 +2803,29 @@ impl TranslationApplyContext<'_, '_> {
         value: &mut String,
         path: String,
         variable_key: Option<&str>,
-        include_target_adaptation: bool,
-        include_variable: bool,
-        record_missing: bool,
+        apply_options: TranslationApplyOptions<'_>,
     ) {
         let tombstone = path
             .parse::<DeckPath>()
             .ok()
             .and_then(|deck_path| TombstoneAddress::try_from(deck_path).ok())
             .and_then(|address| self.tombstones.blocking(&address));
-        let outcome = resolve_translation(
-            self.translations,
-            value,
-            TranslationResolveOptions {
-                path: &path,
-                variable_key,
-                include_target_adaptation,
-                include_variable,
-                include_ignored: true,
+        let resolve_options = TranslationResolveOptions {
+            path: &path,
+            variable_key,
+            include_target_adaptation: apply_options.include_target_adaptation,
+            include_variable: apply_options.include_variable,
+            include_ignored: true,
+        };
+        let outcome = apply_options.fallback_context.map_or_else(
+            || resolve_translation(self.translations, value, resolve_options),
+            |fallback_context| {
+                resolve_translation_with_context_fallback(
+                    self.translations,
+                    value,
+                    resolve_options,
+                    fallback_context,
+                )
             },
         );
 
@@ -2650,7 +2913,7 @@ impl TranslationApplyContext<'_, '_> {
             }
             TranslationOutcome::Missing => {
                 self.record_apply_source(value, &path, &outcome);
-                if record_missing && self.translations.require_complete {
+                if apply_options.record_missing && self.translations.require_complete {
                     self.errors.push(ComposeError::new(
                         ComposeErrorKind::MissingTranslation,
                         path.clone(),
@@ -2931,6 +3194,19 @@ fn map_entry_path(path_prefix: &str, key: &str) -> String {
         _ => panic!("unsupported deck path collection {path_prefix:?}"),
     }
     .to_string()
+}
+
+fn matching_stale_translation_at_context<'a>(
+    translations: &'a TranslationDictionary,
+    source: &str,
+    context: Option<&str>,
+) -> Option<(usize, &'a StaleTranslation)> {
+    translations
+        .stale_translations
+        .iter()
+        .enumerate()
+        .filter(|(_, record)| record.new_source == source && record.context.as_deref() == context)
+        .max_by_key(|(index, _)| *index)
 }
 
 fn matching_stale_translation<'a>(

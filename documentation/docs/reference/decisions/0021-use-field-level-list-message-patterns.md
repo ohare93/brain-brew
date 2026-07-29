@@ -23,11 +23,11 @@ A note invokes its field's pattern with a non-empty ordered YAML sequence of par
 
 List patterns and invocations are semantic core values. Validation checks pattern placeholders, declared and supplied parameters, typed references, missing values, and dependency cycles. Rendering uses the same field dependency graph as inline structured messages and lowers the result to plain adapter text.
 
-Pattern glue is translated once at field-definition paths. Invocation text and references retain stable item/parameter paths, and a contextual translation may override the separator at one consuming note path. A consuming-path contextual reference decision is materialized even when its target equals the source, so it can intentionally override a conflicting reusable direct translation on the referenced field. Nested contextual YAML remains an ergonomic grouping of the same flattened stable paths.
+Pattern glue is translated once at field-definition paths. Invocation text and references retain stable item/parameter paths, and a contextual translation may override the separator at one consuming note path. Reusable parameter-role translations use the typed context `note_types.<note-type-id>.fields.<field-id>.message_pattern.parameters.<parameter-name>` across every invocation. Resolution precedence is consuming-item context, then pattern-parameter context, then reusable direct/no-change/stale fallback. This applies to resolved `note_field_ref` labels, their explicit-text escape hatch, and `text` arguments without replacing the typed reference or consuming item identity. A consuming-path contextual reference decision is materialized even when its target equals the source, so it can intentionally override both the parameter context and a conflicting reusable direct translation on the referenced field. Nested contextual YAML remains an ergonomic grouping of the same flattened stable paths.
 
 ## Rationale
 
-- Shared glue is authored and translated once.
+- Shared glue and repeated parameter-role vocabulary are authored and translated once.
 - Ordered items replace numbered variables and naturally support more than two entries.
 - `country: note.moldova` is concise while retaining a typed reference to the declared `field.country`; `country: {text: Sierra Leone}` is an explicit translatable escape hatch when no dependency exists.
 - A direct item sequence removes a redundant `items` wrapper while remaining unambiguous from tagged structured-image sequences.
@@ -46,5 +46,6 @@ Pattern glue is translated once at field-definition paths. Invocation text and r
 - `FieldDefinition` and `FieldValue` gain semantic list-pattern structures.
 - Complete field-definition and note fingerprints include the new structures without changing fingerprints for definitions that have no pattern.
 - Overlay field values can carry list invocations where the composed field definition supplies the pattern.
-- Translators review shared `item_format`/`separator` glue once and per-item text/reference units at their consuming note paths.
+- Translators review shared `item_format`/`separator` glue once, may reuse contextual dictionaries by pattern parameter, and still review text/reference units at their consuming note paths.
+- Coverage and stale/invalid contextual validation attribute parameter-scope decisions to the shared typed context while preserving each consuming item path.
 - Ultimate Geography source migration happens in its own repository and is then synced into Brain Brew's provenance-locked fixture; the vendored fixture is not edited directly.

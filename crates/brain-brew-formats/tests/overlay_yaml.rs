@@ -88,6 +88,11 @@ translations:
         '{country} ({description})': '{country}（{description}）'
       separator:
         ', ': '、'
+      parameters:
+        country:
+          Egypt: 埃及
+        description:
+          with emblem: 带徽章
     notes.note.yemen.fields.field.flag-similarity.message:
       separator:
         ', ': ', e '
@@ -98,6 +103,16 @@ translations:
         formatted.contains(
             "note_types.note-type.country.fields.field.flag-similarity.message_pattern:\n      item_format:"
         ),
+        "{formatted}"
+    );
+    assert!(
+        formatted.contains(
+            "note_types.note-type.country.fields.field.flag-similarity.message_pattern:\n      item_format:"
+        ),
+        "{formatted}"
+    );
+    assert!(
+        formatted.contains("      parameters:\n        country:\n          Egypt: '埃及'"),
         "{formatted}"
     );
     assert!(
@@ -116,6 +131,16 @@ translations:
         contextual["note_types.note-type.country.fields.field.flag-similarity.message_pattern.separator"]
             [", "],
         "、"
+    );
+    assert_eq!(
+        contextual["note_types.note-type.country.fields.field.flag-similarity.message_pattern.parameters.country"]
+            ["Egypt"],
+        "埃及"
+    );
+    assert_eq!(
+        contextual["note_types.note-type.country.fields.field.flag-similarity.message_pattern.parameters.description"]
+            ["with emblem"],
+        "带徽章"
     );
     assert_eq!(
         contextual["notes.note.yemen.fields.field.flag-similarity.message.separator"][", "],

@@ -134,6 +134,11 @@ pub enum DeckPath {
         note_type_id: StableId,
         field_id: StableId,
     },
+    NoteTypeFieldMessagePatternParameter {
+        note_type_id: StableId,
+        field_id: StableId,
+        parameter: String,
+    },
     NoteTypeCardTemplates {
         note_type_id: StableId,
     },
@@ -321,6 +326,14 @@ impl fmt::Display for DeckPath {
             } => write!(
                 f,
                 "note_types.{note_type_id}.fields.{field_id}.message_pattern.separator"
+            ),
+            Self::NoteTypeFieldMessagePatternParameter {
+                note_type_id,
+                field_id,
+                parameter,
+            } => write!(
+                f,
+                "note_types.{note_type_id}.fields.{field_id}.message_pattern.parameters.{parameter}"
             ),
             Self::NoteTypeCardTemplates { note_type_id } => {
                 write!(f, "note_types.{note_type_id}.card_templates")
@@ -560,6 +573,13 @@ fn parse_note_type_path(rest: &str) -> Option<DeckPath> {
 }
 
 fn parse_note_type_field_path(note_type_id: StableId, rest: &str) -> Option<DeckPath> {
+    if let Some((field_text, parameter)) = rest.split_once(".message_pattern.parameters.") {
+        return Some(DeckPath::NoteTypeFieldMessagePatternParameter {
+            note_type_id,
+            field_id: stable_id(field_text)?,
+            parameter: non_empty_string(parameter)?,
+        });
+    }
     if let Some(field_text) = rest.strip_suffix(".message_pattern.item_format") {
         return stable_id(field_text).map(|field_id| {
             DeckPath::NoteTypeFieldMessagePatternItemFormat {

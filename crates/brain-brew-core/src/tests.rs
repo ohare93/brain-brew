@@ -105,6 +105,14 @@ fn deck_path_display_and_parse_round_trip_current_grammar() {
             "note_types.note-type.country.fields.field.capital.name",
         ),
         (
+            DeckPath::NoteTypeFieldMessagePatternParameter {
+                note_type_id: note_type_id.clone(),
+                field_id: field_id.clone(),
+                parameter: "country.label".to_owned(),
+            },
+            "note_types.note-type.country.fields.field.capital.message_pattern.parameters.country.label",
+        ),
+        (
             DeckPath::NoteTypeCardTemplates {
                 note_type_id: note_type_id.clone(),
             },
