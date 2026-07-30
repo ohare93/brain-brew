@@ -267,6 +267,8 @@ def build_extracted(label: str, package: str, version: str, extracted: Path, *, 
 
 def test_extracted(label: str, package: str, version: str, extracted: Path) -> None:
     manifest = extracted / f"{package}-{version}" / "Cargo.toml"
+    env = os.environ.copy()
+    env["BRAINBREW_COLOR"] = "never"
     run(
         [
             "cargo",
@@ -278,6 +280,7 @@ def test_extracted(label: str, package: str, version: str, extracted: Path) -> N
             "--offline",
         ],
         cwd=manifest.parent,
+        env=env,
     )
 
 

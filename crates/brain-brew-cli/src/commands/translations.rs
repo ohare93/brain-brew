@@ -596,6 +596,7 @@ struct TerminalUi<'a, R: Read, W: Write> {
     reader: &'a mut R,
     writer: &'a mut W,
     raw_mode: bool,
+    color: bool,
     max_option_rows: Option<usize>,
     terminal_cols: Option<usize>,
 }
@@ -619,6 +620,7 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
             reader,
             writer,
             raw_mode,
+            color: color_enabled(raw_mode),
             max_option_rows,
             terminal_cols,
         })
@@ -626,7 +628,7 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
 
     fn message(&mut self, message: &str) -> Result<(), String> {
         self.clear_if_raw()?;
-        self.write_line(&color_stdout(message, "1;36"))?;
+        self.write_line(&color_text(message, "1;36", self.color))?;
         self.blank_line()?;
         self.writer.flush().map_err(|error| error.to_string())
     }
@@ -744,7 +746,7 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
         selected: usize,
     ) -> Result<(), String> {
         self.clear_if_raw()?;
-        self.write_line(&color_stdout(label, "1;36"))?;
+        self.write_line(&color_text(label, "1;36", self.color))?;
         self.blank_line()?;
         let (start, end, scrolled) = self.option_window(options.len(), selected);
         if scrolled {
@@ -761,7 +763,7 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
             let marker = if index == selected { "›" } else { " " };
             let option = self.truncate_option(option, 4);
             let option = if index == selected {
-                color_stdout(&option, "1;32")
+                color_text(&option, "1;32", self.color)
             } else {
                 option
             };
@@ -780,7 +782,7 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
         cursor: usize,
     ) -> Result<(), String> {
         self.clear_if_raw()?;
-        self.write_line(&color_stdout(label, "1;36"))?;
+        self.write_line(&color_text(label, "1;36", self.color))?;
         self.blank_line()?;
         let (start, end, scrolled) = self.option_window(options.len(), cursor);
         if scrolled {
@@ -799,7 +801,7 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
             let option = self.truncate_option(option, 8);
             let line = format!("{selected_marker} {option}");
             let line = if index == cursor {
-                color_stdout(&line, "1;32")
+                color_text(&line, "1;32", self.color)
             } else {
                 line
             };
@@ -819,7 +821,7 @@ impl<'a, R: Read, W: Write> TerminalUi<'a, R, W> {
         input: &str,
     ) -> Result<(), String> {
         self.clear_if_raw()?;
-        self.write_line(&color_stdout(label, "1;36"))?;
+        self.write_line(&color_text(label, "1;36", self.color))?;
         self.blank_line()?;
         for line in body {
             self.write_line(line)?;
@@ -3068,7 +3070,11 @@ fn color_category(category: TranslationCoverageCategory, text: &str) -> String {
 }
 
 fn color_stdout(text: &str, code: &str) -> String {
-    if color_enabled(io::stdout().is_terminal()) {
+    color_text(text, code, color_enabled(io::stdout().is_terminal()))
+}
+
+fn color_text(text: &str, code: &str, enabled: bool) -> String {
+    if enabled {
         format!("\x1b[{code}m{text}\x1b[0m")
     } else {
         text.to_owned()
@@ -3102,6 +3108,7 @@ mod tests {
                 reader: &mut input,
                 writer: &mut output,
                 raw_mode: true,
+                color: false,
                 max_option_rows: None,
                 terminal_cols: None,
             };
@@ -3123,6 +3130,7 @@ mod tests {
                 reader: &mut input,
                 writer: &mut output,
                 raw_mode: true,
+                color: false,
                 max_option_rows: Some(3),
                 terminal_cols: Some(40),
             };
@@ -3147,6 +3155,7 @@ mod tests {
                 reader: &mut input,
                 writer: &mut output,
                 raw_mode: true,
+                color: false,
                 max_option_rows: None,
                 terminal_cols: Some(14),
             };

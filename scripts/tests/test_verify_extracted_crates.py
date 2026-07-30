@@ -32,6 +32,7 @@ class ExtractedCrateVerificationTests(unittest.TestCase):
             command = run.call_args.args[0]
             self.assertEqual(command[0:2], ["cargo", "test"])
             self.assertIn("--offline", command)
+            self.assertEqual(run.call_args.kwargs["env"]["BRAINBREW_COLOR"], "never")
 
     def test_translation_json_documentation_matches_source_schema(self) -> None:
         root = Path(__file__).resolve().parents[2]
