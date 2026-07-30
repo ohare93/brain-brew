@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-The next preview is `1.0.0-alpha.3`; it is pending the documented release gates and manual crates.io publication.
+The next preview is `1.0.0-alpha.4`; it is pending the documented release gates and manual crates.io publication.
 
 - Distributed Workbench binaries now include the write implementation by default while retaining the explicit runtime `--enable-write` opt-in; release smoke tests reject artifacts that omit the capability.
 - Recursive package-root discovery is now deterministic, no-follow, and registry-owned, with exact built-in VCS/build/output/cache pruning, authorized component-glob ignores, explicit depth/entry/manifest budgets, structured actionable errors, and JSON visit/prune statistics shared by every package-root command.

@@ -17,7 +17,7 @@ The repository includes two tested fixtures:
 
 The full fixture is bound by `fixtures/ultimate-geography.lock.json` to UG
 `54b3254...` (descending from migration history rebased on UG `e1fd8518...`)
-and Brain Brew `68a8283...` / `1.0.0-alpha.3`.
+and Brain Brew `68a8283...`.
 `fixtures/ultimate-geography-expected/crowdanki/` contains exactly 100 parsed
 `deck.json` oracles (74 main and 26 companion) while media is stored only once.
 The default Rust tests compare every output offline and verify real media bytes
@@ -57,10 +57,10 @@ See the dedicated documentation site in [`documentation/`](documentation/) for m
 
 For normal deck users and contributors, install the released `brainbrew` CLI from crates.io or a GitHub Release. You do not need Nix to edit or verify a Federated Deck workspace, and downstream projects such as Ultimate Geography can link to the release version they recommend.
 
-After the alpha.3 release gates pass and the maintainer manually publishes it to crates.io, Rust users can install the current preview crate:
+After the alpha.4 release gates pass and the maintainer manually publishes it to crates.io, Rust users can install the current preview crate:
 
 ```bash
-cargo install brainbrew --version 1.0.0-alpha.3 --locked
+cargo install brainbrew --version 1.0.0-alpha.4 --locked
 brainbrew --version
 ```
 
@@ -72,7 +72,7 @@ for the checksum-verified commands.
 To test the exact GitHub tag instead of the crates.io package, install directly from the pinned release tag:
 
 ```bash
-cargo install --git https://github.com/jeprecated/brain-brew --tag v1.0.0-alpha.3 brainbrew --locked
+cargo install --git https://github.com/jeprecated/brain-brew --tag v1.0.0-alpha.4 brainbrew --locked
 ```
 
 Nix remains available as an optional reproducible build/install path for contributors and CI. Pin the same release tag for a reproducible external Nix channel:
@@ -80,7 +80,7 @@ Nix remains available as an optional reproducible build/install path for contrib
 ```bash
 nix run . -- --help
 nix build .#brainbrew
-nix run github:jeprecated/brain-brew/v1.0.0-alpha.3 -- --help
+nix run github:jeprecated/brain-brew/v1.0.0-alpha.4 -- --help
 ```
 
 See [`documentation/docs/getting-started/install.md`](documentation/docs/getting-started/install.md) for all install options and an edit/export loop for trying changes against a Federated Deck workspace.

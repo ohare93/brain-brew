@@ -10,8 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PUBLISHABLE = {"brain-brew-core", "brain-brew-formats", "brainbrew"}
 INTERNAL = {"brain-brew-core", "brain-brew-formats"}
-CURRENT = "1.0.0-alpha.3"
-STALE = "1.0.0-alpha.2"
+CURRENT = "1.0.0-alpha.4"
+STALE = "1.0.0-alpha.3"
 CURRENT_DOCS = [
     Path("README.md"),
     Path("documentation/docs/getting-started/install.md"),
@@ -25,7 +25,13 @@ ALLOWED_STALE_REFERENCES = {
     Path("audit/16-synthesis.md"),
     Path("crates/brain-brew-cli/tests/registry_planner.rs"),
     Path("crates/brain-brew-formats/src/package_semver.rs"),
+    Path("crates/brain-brew-formats/tests/ultimate_geography_fixture.rs"),
     Path("documentation/docs/authoring/packages-locking.md"),
+    Path("documentation/docs/reference/ultimate-geography-fixture.md"),
+    Path("fixtures/ultimate-geography.lock.json"),
+    Path("scripts/tests/test_ug_fixture.py"),
+    Path("scripts/ug-fixture-sync/README.md"),
+    Path("scripts/ug_fixture.py"),
 }
 IGNORED_DIRECTORIES = {
     ".agentleman",
