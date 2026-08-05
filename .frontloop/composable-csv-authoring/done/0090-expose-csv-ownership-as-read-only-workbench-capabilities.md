@@ -27,3 +27,27 @@ Let Workbench browse, compare, report, and preview CSV-backed notes and translat
 ## Implementation Notes
 
 Depends on provenance plus mixed note/translation ownership. Coordinate with workbench-hardening tasks, especially typed contracts, fingerprints, immutable preview, and canonical transactions. Do not broaden this task into general Workbench refactoring.
+
+
+## Completion Summary
+
+- Exposed per-unit note-source and translation capabilities with declaration, descriptor, CSV cell, and canonical-path provenance across Workbench pivots and metadata views.
+- Added shared server-side preview/apply guards with typed `csv_source_read_only` and dependency-aware `csv_dependency_read_only` errors; mixed writes fail before mutation.
+- Kept migrated inline units writable while separating source ownership from effective editability when a CSV translation dependency would be invalidated.
+- Covered global Direct/NoChange, source AllOccurrences, metadata controls, fail-closed mixed apply, migrated inline writes, and CSV freshness/fingerprints with API/UI regressions.
+- Rebuilt embedded Workbench assets and passed fresh Grok re-review, focused/full tests, fmt, clippy, UI build/embed, and browser E2E.
+
+### Files Changed
+
+- crates/brain-brew-cli/assets/workbench/index.html
+- crates/brain-brew-cli/assets/workbench/brain_brew_workbench_ui-7d9ff9c13dedd3de.js
+- crates/brain-brew-cli/assets/workbench/brain_brew_workbench_ui-7d9ff9c13dedd3de_bg.wasm
+- crates/brain-brew-cli/src/commands/translations.rs
+- crates/brain-brew-cli/src/commands/workbench.rs
+- crates/brain-brew-cli/src/planner.rs
+- crates/brain-brew-cli/tests/cli.rs
+- crates/brain-brew-formats/src/csv_note_source.rs
+- crates/brain-brew-formats/tests/csv_translation_sources.rs
+- crates/brain-brew-workbench-ui/src/lib.rs
+- documentation/docs/reference/workbench.md
+- .frontloop/composable-csv-authoring/done/0090-expose-csv-ownership-as-read-only-workbench-capabilities.md

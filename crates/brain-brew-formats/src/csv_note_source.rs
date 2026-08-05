@@ -1429,6 +1429,7 @@ impl CsvTranslationAuthoringCategory {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CsvTranslationAuthoringUnit {
     declaration: String,
+    descriptor: SourceProvenance,
     location: CsvTranslationAuthoringLocation,
     category: CsvTranslationAuthoringCategory,
     source: String,
@@ -1438,6 +1439,10 @@ pub struct CsvTranslationAuthoringUnit {
 impl CsvTranslationAuthoringUnit {
     pub fn declaration(&self) -> &str {
         &self.declaration
+    }
+
+    pub fn descriptor(&self) -> &SourceProvenance {
+        &self.descriptor
     }
 
     pub fn file(&self) -> &SourceProvenance {
@@ -1535,6 +1540,7 @@ pub(crate) struct CsvTranslationMaterialization {
     pub owned_text: Vec<CsvTranslationPair>,
     owned_adapters: Vec<CsvAdapterTranslationPair>,
     global_paths: BTreeMap<String, BTreeSet<String>>,
+    descriptor: SourceProvenance,
 }
 
 impl CsvTranslationMaterialization {
@@ -1698,6 +1704,7 @@ impl CsvTranslationMaterialization {
             };
             self.provenance.units.push(CsvTranslationAuthoringUnit {
                 declaration: declaration_path.to_owned(),
+                descriptor: self.descriptor.clone(),
                 location: pair.location.clone(),
                 category,
                 source: pair.source.clone(),
@@ -1707,6 +1714,7 @@ impl CsvTranslationMaterialization {
         for (path, adaptation) in &self.translations.target_adaptations {
             self.provenance.units.push(CsvTranslationAuthoringUnit {
                 declaration: declaration_path.to_owned(),
+                descriptor: self.descriptor.clone(),
                 location: self.provenance.adaptations[path].clone(),
                 category: if adaptation.intent == TargetAdaptationIntent::Delete {
                     CsvTranslationAuthoringCategory::Deletion
@@ -1720,6 +1728,7 @@ impl CsvTranslationMaterialization {
         for pair in &self.owned_adapters {
             self.provenance.units.push(CsvTranslationAuthoringUnit {
                 declaration: declaration_path.to_owned(),
+                descriptor: self.descriptor.clone(),
                 location: pair.location.clone(),
                 category: CsvTranslationAuthoringCategory::AdapterId,
                 source: pair.source.clone(),
@@ -2065,6 +2074,7 @@ impl CsvTranslationSourceMaterializer {
             owned_text,
             owned_adapters,
             global_paths,
+            descriptor: self.descriptor.provenance.clone(),
         })
     }
 }

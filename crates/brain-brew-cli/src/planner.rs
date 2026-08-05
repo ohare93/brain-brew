@@ -9,6 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use brain_brew_core::{CanonicalDeck, ChangeIntent, FieldValue, Overlay, OverlayKind};
+use brain_brew_formats::canonical_source_document::NoteAuthoringProvenance;
 use brain_brew_formats::csv_note_source::CsvTranslationAuthoringProvenance;
 use brain_brew_formats::manifest::{self, FederatedDeckManifest};
 use brain_brew_formats::media;
@@ -162,6 +163,7 @@ pub(crate) struct TargetPlan {
     pub(crate) target_manifest: FederatedDeckManifest,
     pub(crate) base_label: String,
     pub(crate) base: CanonicalDeck,
+    pub(crate) base_note_authoring_provenance: NoteAuthoringProvenance,
     pub(crate) base_source: SourceProvenance,
     pub(crate) base_includes: Vec<SourceProvenance>,
     pub(crate) overlays: Vec<(PlannedOverlay, Overlay)>,
@@ -485,6 +487,7 @@ impl ManifestRegistry {
             &base_loaded.include_roots,
         )?;
         let base = base_document.resolved_deck().clone();
+        let base_note_authoring_provenance = base_document.authoring_provenance().clone();
         let base_source = source_provenance(base_loaded, base_path, PlanSourceKind::Base)?;
         let mut base_includes = included_provenance(base_loaded, base_document.included_sources())?;
         base_includes.extend(csv_source_provenance(
@@ -635,6 +638,7 @@ impl ManifestRegistry {
             target_manifest: selected.manifest.clone(),
             base_label: blueprint.base_label,
             base,
+            base_note_authoring_provenance,
             base_source,
             base_includes,
             overlays,

@@ -18,7 +18,10 @@ use brain_brew_core::{
     TranslationCoverageCategory, TranslationCoverageEntry, TranslationDictionary,
     TranslationStackCoverageReport, validate_deck_content,
 };
-use brain_brew_formats::canonical_source_document::CanonicalScalarTarget;
+use brain_brew_formats::canonical_source_document::{
+    CanonicalScalarTarget, NoteAuthoringLocation, NoteAuthoringProvenance, NoteAuthoringSourceKind,
+};
+use brain_brew_formats::csv_note_source::CsvTranslationAuthoringUnit;
 use brain_brew_formats::manifest::{
     self, BuildTarget, FederatedDeckManifest, LanguageManifestEntry, MetadataCategory,
     OverlayManifestEntry, TargetExports,
@@ -260,6 +263,8 @@ enum WorkbenchErrorKind {
     NotFound,
     Conflict,
     ReadOnly,
+    CsvSourceReadOnly,
+    CsvDependencyReadOnly,
     Domain,
     Adapter,
     Internal,
@@ -271,7 +276,9 @@ impl WorkbenchErrorKind {
             Self::InvalidRequest => StatusCode::BAD_REQUEST,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Conflict => StatusCode::CONFLICT,
-            Self::ReadOnly => StatusCode::FORBIDDEN,
+            Self::ReadOnly | Self::CsvSourceReadOnly | Self::CsvDependencyReadOnly => {
+                StatusCode::FORBIDDEN
+            }
             Self::Domain => StatusCode::UNPROCESSABLE_ENTITY,
             Self::Adapter | Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -283,6 +290,8 @@ impl WorkbenchErrorKind {
             Self::NotFound => "not_found",
             Self::Conflict => "workspace_conflict",
             Self::ReadOnly => "workbench_read_only",
+            Self::CsvSourceReadOnly => "csv_source_read_only",
+            Self::CsvDependencyReadOnly => "csv_dependency_read_only",
             Self::Domain => "domain_failed",
             Self::Adapter => "adapter_error",
             Self::Internal => "workbench_internal_error",
@@ -294,7 +303,9 @@ impl WorkbenchErrorKind {
             Self::InvalidRequest => "request",
             Self::NotFound => "not_found",
             Self::Conflict => "conflict",
-            Self::ReadOnly => "authorization",
+            Self::ReadOnly | Self::CsvSourceReadOnly | Self::CsvDependencyReadOnly => {
+                "authorization"
+            }
             Self::Domain => "domain",
             Self::Adapter => "adapter",
             Self::Internal => "internal",
@@ -329,6 +340,22 @@ impl WorkbenchError {
     }
     fn conflict(message: impl Into<String>) -> Self {
         Self::new(WorkbenchErrorKind::Conflict, message)
+    }
+    fn csv_source_read_only(path: &str, owner: &str) -> Self {
+        Self::new(
+            WorkbenchErrorKind::CsvSourceReadOnly,
+            format!(
+                "{path} is owned by read-only CSV source {owner}; transfer this unit to inline YAML before editing it"
+            ),
+        )
+    }
+    fn csv_dependency_read_only(path: &str, owner: &str) -> Self {
+        Self::new(
+            WorkbenchErrorKind::CsvDependencyReadOnly,
+            format!(
+                "inline source field {path} cannot be edited while its translation decision is owned by read-only CSV source {owner}; transfer the translation occurrence to inline YAML before changing the source"
+            ),
+        )
     }
     fn adapter(message: impl Into<String>) -> Self {
         Self::new(WorkbenchErrorKind::Adapter, message)
@@ -1138,6 +1165,11 @@ impl WorkspaceMetadata {
                 .push(edit.clone());
         }
 
+        ensure_csv_source_edits_writable(&context, &source_edits)?;
+        for (group_context, edits) in translation_groups.values() {
+            ensure_csv_translation_edits_writable(group_context, edits)?;
+        }
+
         let primary_planned = planned_overlay_for_path(&context, &context.selection.overlay_file)?;
         ensure_root_source_mutable("Workbench translation edit", &primary_planned.source)?;
         for include in &primary_planned.includes {
@@ -1598,6 +1630,7 @@ impl WorkspaceMetadata {
                 ..selection
             },
             base_deck: plan.base,
+            base_note_authoring_provenance: plan.base_note_authoring_provenance,
             base_source: plan.base_source,
             base_includes: plan.base_includes,
             plan_overlays: plan.overlays,
@@ -2109,6 +2142,7 @@ struct OverlayBadge {
 struct SelectedTranslationContext {
     selection: WorkbenchSelection,
     base_deck: CanonicalDeck,
+    base_note_authoring_provenance: NoteAuthoringProvenance,
     base_source: PlannedSourceProvenance,
     base_includes: Vec<PlannedSourceProvenance>,
     plan_overlays: Vec<(PlannedOverlay, Overlay)>,
@@ -2678,7 +2712,7 @@ fn source_string_list_json_from_context(
     let total = grouped.len();
     let summaries = grouped
         .iter()
-        .map(|group| source_string_summary_json(group, &source_counts))
+        .map(|group| source_string_summary_json(context, group, &source_counts))
         .collect::<Vec<_>>();
     let (page, has_more) = paginate(&summaries, pagination);
     json!({
@@ -2733,7 +2767,7 @@ fn optional_metadata_list_json_from_context(
     let total = items.len();
     let summaries = items
         .iter()
-        .map(optional_metadata_summary_json)
+        .map(|row| optional_metadata_summary_json(context, row))
         .collect::<Vec<_>>();
     let (page, has_more) = paginate(&summaries, pagination);
     json!({
@@ -2885,7 +2919,7 @@ fn optional_metadata_json_from_context(
         },
         "main_progress": main_progress(&context.source_deck, context, &entries_by_path),
         "metadata_progress": metadata_progress,
-        "items": items.iter().map(optional_metadata_item_json).collect::<Vec<_>>(),
+        "items": items.iter().map(|row| optional_metadata_item_json(context, row)).collect::<Vec<_>>(),
         "profile_metadata_categories": manifest.translation_profile.metadata_categories.iter().map(metadata_category_json).collect::<Vec<_>>(),
         "profile_metadata_paths": manifest.translation_profile.metadata_paths,
         "profile_metadata_exclude_paths": manifest.translation_profile.metadata_exclude_paths,
@@ -2931,6 +2965,11 @@ fn source_string_pivot_json_from_context(
     let strings = filtered_groups
         .iter()
         .map(|group| {
+            let editable = !context.plan_overlays.iter().any(|(planned, _)| {
+                (planned.id == context.selection.overlay_id
+                    || planned.qualified_id == context.selection.overlay_id)
+                    && planned.csv_translation_provenance.units().any(|unit| unit.source() == group.source)
+            });
             json!({
                 "source": group.source,
                 "status": group.status,
@@ -2943,6 +2982,7 @@ fn source_string_pivot_json_from_context(
                 "content_group_badges": group.content_group_badges,
                 "direct_recommended": true,
                 "direct_applies_to": source_counts.get(&group.source).copied().unwrap_or(group.occurrence_count),
+                "editable": editable,
                 "selected": selected_source.as_deref() == Some(group.source.as_str()),
             })
         })
@@ -3192,6 +3232,8 @@ fn card_detail_json(context: &SelectedTranslationContext, card: &ProducedCardRow
                     resolved_field_text_or_diagnostic(&target_fields, &note.id, &row.field_id)
                 })
                 .unwrap_or_else(|| row.translated.clone());
+            let source_capability = note_source_capability_json(context, &row.path);
+            let translation_capability = translation_capability_json(context, &row.path);
             json!({
                 "path": row.path,
                 "note_id": row.note_id.to_string(),
@@ -3202,8 +3244,10 @@ fn card_detail_json(context: &SelectedTranslationContext, card: &ProducedCardRow
                 "target": target,
                 "status": row.category.as_str(),
                 "structural": row.structural,
-                "editable": !row.structural,
-                "source_editable": true,
+                "editable": !row.structural && translation_capability["writable"].as_bool() == Some(true),
+                "source_editable": source_capability["edit_writable"].as_bool() == Some(true),
+                "source_capability": source_capability,
+                "translation_capability": translation_capability,
                 "context_path": contextual_path_for_row(row, &context.report.entries),
                 "controls": ["direct", "contextual", "no_change"],
             })
@@ -3361,6 +3405,8 @@ fn source_string_occurrence_json(
     let target_note_type = target_note
         .and_then(|note| context.target_deck.note_types.get(&note.note_type_id))
         .or(source_note_type);
+    let source_capability = note_source_capability_json(context, &row.path);
+    let translation_capability = translation_capability_json(context, &row.path);
     json!({
         "path": row.path,
         "source": row.source,
@@ -3380,6 +3426,10 @@ fn source_string_occurrence_json(
         "context_path": contextual_path_for_row(row, &context.report.entries),
         "content_group_badges": content_group_badges_for_note(&context.source_deck, &row.note_id),
         "direct_recommended": true,
+        "editable": translation_capability["writable"].as_bool() == Some(true),
+        "source_editable": source_capability["edit_writable"].as_bool() == Some(true),
+        "source_capability": source_capability,
+        "translation_capability": translation_capability,
         "controls": ["direct", "contextual", "no_change"],
         "source_preview": note.and_then(|note| source_note_type.map(|note_type| render_note_cards(&context.source_deck, note, note_type))),
         "target_preview": target_note.and_then(|note| target_note_type.map(|note_type| render_note_cards(&context.target_deck, note, note_type))),
@@ -3540,6 +3590,110 @@ struct MainFieldRow {
     structural: bool,
     category: TranslationCoverageCategory,
     translated: String,
+}
+
+fn note_field_authoring_location<'a>(
+    context: &'a SelectedTranslationContext,
+    path: &str,
+) -> Option<&'a NoteAuthoringLocation> {
+    let rest = path.strip_prefix("notes.")?;
+    let (note_id, field_id) = rest.split_once(".fields.")?;
+    let note_id = StableId::new(note_id).ok()?;
+    let field_id = StableId::new(field_id).ok()?;
+    context
+        .base_note_authoring_provenance
+        .field(&note_id, &field_id)
+}
+
+fn selected_csv_translation_unit<'a>(
+    context: &'a SelectedTranslationContext,
+    path: &str,
+) -> Option<&'a CsvTranslationAuthoringUnit> {
+    context
+        .plan_overlays
+        .iter()
+        .find(|(planned, _)| {
+            planned.id == context.selection.overlay_id
+                || planned.qualified_id == context.selection.overlay_id
+        })?
+        .0
+        .csv_translation_provenance
+        .units()
+        .find(|unit| unit.canonical_path() == path)
+}
+
+fn note_source_capability_json(context: &SelectedTranslationContext, path: &str) -> Value {
+    let location = note_field_authoring_location(context, path);
+    let csv_owned =
+        location.is_some_and(|location| location.source_kind() == NoteAuthoringSourceKind::Csv);
+    let csv_translation_dependency = selected_csv_translation_unit(context, path);
+    let edit_writable = !csv_owned && csv_translation_dependency.is_none();
+    json!({
+        // `writable` describes ownership of the source field itself. A separate
+        // effective edit capability accounts for translation dependencies.
+        "writable": !csv_owned,
+        "edit_writable": edit_writable,
+        "source_kind": if csv_owned { "csv" } else { "inline" },
+        "reason": if csv_owned {
+            Some("CSV-backed source fields are read-only; transfer the note to inline YAML before editing it")
+        } else if csv_translation_dependency.is_some() {
+            Some("This inline source field is writable, but changing it would invalidate a CSV-owned translation pairing; transfer that translation occurrence to inline YAML first")
+        } else {
+            None
+        },
+        "blocking_dependency": csv_translation_dependency.map(|unit| json!({
+            "kind": "csv_translation",
+            "declaration": unit.declaration(),
+            "descriptor": unit.descriptor().source_name(),
+            "file": unit.file().source_name(),
+            "row": unit.logical_row(),
+            "header": unit.header(),
+            "column": unit.column(),
+            "path": unit.canonical_path(),
+        })),
+        "provenance": location.map(|location| json!({
+            "root_declaration": location.root_declaration().source_name(),
+            "declaration": location.declaration_path(),
+            "descriptor": location.descriptor().map(|value| value.source_name()),
+            "table": location.table(),
+            "file": location.file().map(|value| value.source_name()),
+            "row": location.logical_row(),
+            "header": location.header(),
+            "column": location.column(),
+            "path": location.canonical_path(),
+        })),
+    })
+}
+
+fn translation_capability_json(context: &SelectedTranslationContext, path: &str) -> Value {
+    let Some(unit) = selected_csv_translation_unit(context, path) else {
+        return json!({
+            "writable": true,
+            "source_kind": "inline",
+            "provenance": {
+                "root_declaration": context.selection.overlay_file.display().to_string(),
+                "path": path,
+            },
+        });
+    };
+    json!({
+        "writable": false,
+        "source_kind": "csv",
+        "reason": "CSV-backed translation decisions are read-only; exclude this unit from translations.from_csv and add the equivalent inline YAML decision before editing it",
+        "provenance": {
+            "root_declaration": context.selection.overlay_file.display().to_string(),
+            "declaration": unit.declaration(),
+            "descriptor": unit.descriptor().source_name(),
+            "file": unit.file().source_name(),
+            "row": unit.logical_row(),
+            "header": unit.header(),
+            "column": unit.column(),
+            "path": unit.canonical_path(),
+            "category": unit.category().as_str(),
+            "source": unit.source(),
+            "target": unit.target(),
+        },
+    })
 }
 
 fn resolved_field_text_or_diagnostic(
@@ -3763,7 +3917,11 @@ fn optional_metadata_progress(rows: &[OptionalMetadataRow]) -> Value {
     })
 }
 
-fn optional_metadata_item_json(row: &OptionalMetadataRow) -> Value {
+fn optional_metadata_item_json(
+    context: &SelectedTranslationContext,
+    row: &OptionalMetadataRow,
+) -> Value {
+    let capability = translation_capability_json(context, &row.path);
     json!({
         "path": row.path,
         "source": row.source,
@@ -3774,7 +3932,8 @@ fn optional_metadata_item_json(row: &OptionalMetadataRow) -> Value {
         "metadata_category_key": row.metadata_category_key,
         "profile_metadata": row.profile_metadata,
         "warning": row.warning,
-        "editable": true,
+        "editable": capability["writable"].as_bool() == Some(true),
+        "translation_capability": capability,
     })
 }
 
@@ -3925,9 +4084,18 @@ fn note_navigation_rows(context: &SelectedTranslationContext, filter: Option<&st
 }
 
 fn source_string_summary_json(
+    context: &SelectedTranslationContext,
     group: &SourceStringGroup,
     source_counts: &BTreeMap<String, usize>,
 ) -> Value {
+    let editable = !context.plan_overlays.iter().any(|(planned, _)| {
+        (planned.id == context.selection.overlay_id
+            || planned.qualified_id == context.selection.overlay_id)
+            && planned
+                .csv_translation_provenance
+                .units()
+                .any(|unit| unit.source() == group.source)
+    });
     json!({
         "source": group.source,
         "status": group.status,
@@ -3940,10 +4108,15 @@ fn source_string_summary_json(
         "content_group_badges": group.content_group_badges,
         "direct_recommended": true,
         "direct_applies_to": source_counts.get(&group.source).copied().unwrap_or(group.occurrence_count),
+        "editable": editable,
     })
 }
 
-fn optional_metadata_summary_json(row: &OptionalMetadataRow) -> Value {
+fn optional_metadata_summary_json(
+    context: &SelectedTranslationContext,
+    row: &OptionalMetadataRow,
+) -> Value {
+    let capability = translation_capability_json(context, &row.path);
     json!({
         "path": row.path,
         "source": row.source,
@@ -3953,7 +4126,8 @@ fn optional_metadata_summary_json(row: &OptionalMetadataRow) -> Value {
         "metadata_category_key": row.metadata_category_key,
         "profile_metadata": row.profile_metadata,
         "warning": row.warning,
-        "editable": true,
+        "editable": capability["writable"].as_bool() == Some(true),
+        "translation_capability": capability,
     })
 }
 
@@ -4005,6 +4179,8 @@ fn note_pivot_notes_json(
             .map(|row| {
                 let target =
                     resolved_field_text_or_diagnostic(&target_fields, note_id, &row.field_id);
+                let source_capability = note_source_capability_json(context, &row.path);
+                let translation_capability = translation_capability_json(context, &row.path);
                 json!({
                     "path": row.path,
                     "note_id": row.note_id.to_string(),
@@ -4016,8 +4192,10 @@ fn note_pivot_notes_json(
                     "status": row.category.as_str(),
                     "occurrence_count": source_counts.get(&row.source).copied().unwrap_or(1),
                     "structural": row.structural,
-                    "editable": !row.structural,
-                    "source_editable": true,
+                    "editable": !row.structural && translation_capability["writable"].as_bool() == Some(true),
+                    "source_editable": source_capability["edit_writable"].as_bool() == Some(true),
+                    "source_capability": source_capability,
+                    "translation_capability": translation_capability,
                     "context_path": contextual_path_for_row(row, &context.report.entries),
                     "controls": ["direct", "contextual", "no_change"],
                 })
@@ -4365,6 +4543,83 @@ enum OriginalSourceSnapshot {
 struct PlannedSourceOutput {
     original: OriginalSourceSnapshot,
     replacement: Vec<u8>,
+}
+
+fn ensure_csv_source_edits_writable(
+    context: &SelectedTranslationContext,
+    edits: &[StagedWorkbenchEdit],
+) -> WorkbenchCoreResult<()> {
+    let rows = main_field_rows(
+        &context.source_deck,
+        &context.selection,
+        &context.report.entries,
+    );
+    for edit in edits {
+        let paths = match edit.scope {
+            SourceEditScope::Field => rows
+                .iter()
+                .filter(|row| row.path == edit.path)
+                .map(|row| row.path.as_str())
+                .collect::<Vec<_>>(),
+            SourceEditScope::AllOccurrences => rows
+                .iter()
+                .filter(|row| row.source == edit.source)
+                .map(|row| row.path.as_str())
+                .collect::<Vec<_>>(),
+        };
+        for path in paths {
+            if let Some(location) = note_field_authoring_location(context, path)
+                && location.source_kind() == NoteAuthoringSourceKind::Csv
+            {
+                let owner = location
+                    .descriptor()
+                    .map(|descriptor| descriptor.source_name())
+                    .unwrap_or_else(|| location.root_declaration().source_name());
+                return Err(WorkbenchError::csv_source_read_only(path, owner));
+            }
+            if let Some(unit) = selected_csv_translation_unit(context, path) {
+                return Err(WorkbenchError::csv_dependency_read_only(
+                    path,
+                    unit.descriptor().source_name(),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn ensure_csv_translation_edits_writable(
+    context: &SelectedTranslationContext,
+    edits: &[StagedWorkbenchEdit],
+) -> WorkbenchCoreResult<()> {
+    let Some(provenance) = context
+        .plan_overlays
+        .iter()
+        .find(|(planned, _)| {
+            planned.id == context.selection.overlay_id
+                || planned.qualified_id == context.selection.overlay_id
+        })
+        .map(|(planned, _)| &planned.csv_translation_provenance)
+    else {
+        return Ok(());
+    };
+    for edit in edits {
+        let unit = match edit.mode {
+            EditMode::Contextual => provenance
+                .units()
+                .find(|unit| unit.canonical_path() == edit.path),
+            EditMode::Direct | EditMode::NoChange => {
+                provenance.units().find(|unit| unit.source() == edit.source)
+            }
+        };
+        if let Some(unit) = unit {
+            return Err(WorkbenchError::csv_source_read_only(
+                unit.canonical_path(),
+                unit.descriptor().source_name(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[derive(Default)]
@@ -5202,6 +5457,7 @@ fn context_with_modified_base_and_overlay(
     Ok(SelectedTranslationContext {
         selection: context.selection.clone(),
         base_deck: modified_base,
+        base_note_authoring_provenance: context.base_note_authoring_provenance.clone(),
         base_source: context.base_source.clone(),
         base_includes: context.base_includes.clone(),
         plan_overlays: context.plan_overlays.clone(),

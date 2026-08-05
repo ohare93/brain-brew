@@ -727,6 +727,10 @@ fn NoteFieldRow(detail: Value, note: Value, field: Value) -> impl IntoView {
     let field_name = field["field_name"].as_str().unwrap_or("field").to_owned();
     let editable = field["editable"].as_bool().unwrap_or(false);
     let source_editable = field["source_editable"].as_bool().unwrap_or(false);
+    let source_edit_reason = field["source_capability"]["reason"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
     let staged = staging::staged_translation_for_parts(&prefix, &path, &source);
     let staged_source = staging::staged_source_for_parts(&prefix, &path, &source);
     let target_initial = staged
@@ -852,6 +856,7 @@ fn NoteFieldRow(detail: Value, note: Value, field: Value) -> impl IntoView {
                         id=source_toggle_id
                         type="button"
                         disabled=!source_editable
+                        title=source_edit_reason.clone()
                         on:click=move |_| {
                             source_readonly.set(false);
                             focus_input(&source_input_id_for_toggle);
@@ -866,6 +871,7 @@ fn NoteFieldRow(detail: Value, note: Value, field: Value) -> impl IntoView {
                         data-field-id=field_id.clone()
                         readonly=move || source_readonly.get()
                         disabled=!source_editable
+                        title=source_edit_reason.clone()
                         on:input=move |event| {
                             let value = event_input_value(&event);
                             stage_source_for_input(value, source_scope.get_untracked(), source_impact.get_untracked());
@@ -1144,6 +1150,10 @@ fn CardFieldRow(pivot: Value, field: Value) -> impl IntoView {
     let field_name = field["field_name"].as_str().unwrap_or("field").to_owned();
     let editable = field["editable"].as_bool().unwrap_or(false);
     let source_editable = field["source_editable"].as_bool().unwrap_or(false);
+    let source_edit_reason = field["source_capability"]["reason"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
     let staged = staging::staged_translation_for_parts(&prefix, &path, &source);
     let staged_source = staging::staged_source_for_parts(&prefix, &path, &source);
     let source_initial = staged_source
@@ -1252,8 +1262,8 @@ fn CardFieldRow(pivot: Value, field: Value) -> impl IntoView {
             <td>{field_name}</td>
             <td>
                 <span id=source_text_id.clone()>{move || source_value.get()}</span><br/>
-                <button id=source_toggle_id type="button" disabled=!source_editable on:click={let source_input_id = source_input_id.clone(); move |_| { source_readonly.set(false); focus_input(&source_input_id); }}>Edit source</button> " "
-                <input id=source_input_id.clone() value=source_initial readonly=move || source_readonly.get() disabled=!source_editable on:input={let stage_source = stage_source.clone(); move |event| stage_source(event_input_value(&event), source_scope.get_untracked(), source_impact.get_untracked())} />
+                <button id=source_toggle_id type="button" disabled=!source_editable title=source_edit_reason.clone() on:click={let source_input_id = source_input_id.clone(); move |_| { source_readonly.set(false); focus_input(&source_input_id); }}>Edit source</button> " "
+                <input id=source_input_id.clone() value=source_initial readonly=move || source_readonly.get() disabled=!source_editable title=source_edit_reason.clone() on:input={let stage_source = stage_source.clone(); move |event| stage_source(event_input_value(&event), source_scope.get_untracked(), source_impact.get_untracked())} />
                 <br/>
                 <select id=source_scope_id disabled=!source_editable on:change={let stage_source = stage_source.clone(); move |event| { let value = event_select_value(&event); source_scope.set(value.clone()); stage_source(source_value.get_untracked(), value, source_impact.get_untracked()); }}>
                     <option value="field" selected=source_scope_initial == "field">This field only</option>
@@ -1385,12 +1395,23 @@ fn SourceStringDetailPanel(detail: RwSignal<DetailValueState>) -> impl IntoView 
     }
 }
 
+#[cfg(any(test, target_arch = "wasm32"))]
+fn api_row_editable(row: &Value) -> bool {
+    row["editable"].as_bool().unwrap_or(false)
+}
+
+#[cfg(any(test, target_arch = "wasm32"))]
+fn source_string_direct_editable(occurrences: &[Value]) -> bool {
+    !occurrences.is_empty() && occurrences.iter().all(api_row_editable)
+}
+
 #[cfg(target_arch = "wasm32")]
 #[component]
 fn LoadedSourceStringDetail(pivot: Value) -> impl IntoView {
     let selected_source = pivot["selected_source"].as_str().unwrap_or("").to_owned();
     let occurrences = pivot["occurrences"].as_array().cloned().unwrap_or_default();
     let first = occurrences.first().cloned();
+    let direct_editable = source_string_direct_editable(&occurrences);
     let direct_value = first
         .as_ref()
         .map(|occurrence| {
@@ -1438,10 +1459,11 @@ fn LoadedSourceStringDetail(pivot: Value) -> impl IntoView {
         <>
             <h4>{selected_source.clone()}</h4>
             {if first.is_some() { view! {
-                <div class="source-string-global-edit">
-                    <label>Reusable translation " "<input id="source-string-direct-input" value=direct_value on:input={let stage_direct = stage_direct.clone(); move |event| stage_direct(event_input_value(&event), "direct".to_owned())} /></label> " "
-                    <button id="source-string-direct-stage" type="button" on:click={let stage_direct = stage_direct.clone(); let direct_source = selected_source.clone(); move |_| stage_direct(current_input_value("source-string-direct-input").unwrap_or_else(|| direct_source.clone()), "direct".to_owned())}> {format!("Stage direct translation for {} occurrence(s)", occurrences.len())}</button> " "
-                    <button id="source-string-no-change" type="button" on:click={let stage_direct = stage_direct.clone(); let no_change_source = selected_source.clone(); move |_| stage_direct(no_change_source.clone(), "no_change".to_owned())}>{"Stage global no-change"}</button>
+                <div class="source-string-global-edit" data-editable=direct_editable.to_string()>
+                    <label>Reusable translation " "<input id="source-string-direct-input" value=direct_value disabled=!direct_editable on:input={let stage_direct = stage_direct.clone(); move |event| stage_direct(event_input_value(&event), "direct".to_owned())} /></label> " "
+                    <button id="source-string-direct-stage" type="button" disabled=!direct_editable on:click={let stage_direct = stage_direct.clone(); let direct_source = selected_source.clone(); move |_| stage_direct(current_input_value("source-string-direct-input").unwrap_or_else(|| direct_source.clone()), "direct".to_owned())}> {format!("Stage direct translation for {} occurrence(s)", occurrences.len())}</button> " "
+                    <button id="source-string-no-change" type="button" disabled=!direct_editable on:click={let stage_direct = stage_direct.clone(); let no_change_source = selected_source.clone(); move |_| stage_direct(no_change_source.clone(), "no_change".to_owned())}>{"Stage global no-change"}</button>
+                    {(!direct_editable).then(|| view! { <p class="read-only-source">CSV-owned translation occurrences are read-only. Transfer ownership to inline YAML to edit them.</p> })}
                 </div>
             }.into_any() } else { "".into_any() }}
             <table class="source-string-occurrences"><thead><tr><th>Context</th><th>Source</th><th>Target / contextual override</th><th>Status</th></tr></thead>
@@ -1471,6 +1493,7 @@ fn SourceStringOccurrenceRow(
         .as_str()
         .unwrap_or(&selected_source)
         .to_owned();
+    let editable = api_row_editable(&occurrence);
     let initial =
         staging::staged_translation_for_parts(&storage_prefix(&pivot), &path, &selected_source)
             .and_then(|edit| edit["value"].as_str().map(str::to_owned))
@@ -1501,21 +1524,21 @@ fn SourceStringOccurrenceRow(
         }
     });
     view! {
-        <tr class="source-string-occurrence" data-source=selected_source.clone() data-path=path.clone()>
+        <tr class="source-string-occurrence" data-source=selected_source.clone() data-path=path.clone() data-editable=editable.to_string()>
             <td>{occurrence["friendly_context"].as_str().unwrap_or(&path).to_owned()}<br/><small>{path.clone()}</small></td>
             <td>{selected_source.clone()}</td>
             <td>
                 <div
                     id=input_id.clone()
                     class="source-string-contextual-input"
-                    contenteditable="true"
+                    contenteditable=editable.to_string()
                     role="textbox"
-                    tabindex="0"
+                    tabindex=if editable { "0" } else { "-1" }
                     data-path=path.clone()
                     data-source=selected_source.clone()
                     on:input={let stage_contextual = stage_contextual.clone(); move |event| stage_contextual(event_text_content(&event))}
                 >{initial}</div> " "
-                <button id=stage_id type="button" on:click={let stage_contextual = stage_contextual.clone(); let input_id = input_id.clone(); move |_| stage_contextual(current_text_content(&input_id).unwrap_or_default())}>Contextual override</button>
+                <button id=stage_id type="button" disabled=!editable on:click={let stage_contextual = stage_contextual.clone(); let input_id = input_id.clone(); move |_| stage_contextual(current_text_content(&input_id).unwrap_or_default())}>Contextual override</button>
                 <div class="source-string-target-text">{move || target_value.get()}</div>
             </td>
             <td>{occurrence["status"].as_str().unwrap_or("unknown").to_owned()}</td>
@@ -1614,6 +1637,11 @@ fn OptionalMetadataRow(
         .unwrap_or_else(|| item["status"].as_str().unwrap_or("unknown").to_owned());
     let status_value = RwSignal::new(status_initial);
     let warning = item["warning"].as_str().unwrap_or("").to_owned();
+    let editable = api_row_editable(&item);
+    let edit_reason = item["translation_capability"]["reason"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
     let input_id = format!("optional-translation-input-{id}");
     let status_id = format!("optional-status-{id}");
     let stage_prefix = prefix.clone();
@@ -1623,11 +1651,11 @@ fn OptionalMetadataRow(
     let stage_path = path.clone();
     let stage_source = source.clone();
     view! {
-        <tr class="optional-metadata-row" data-path=path.clone() data-source=source.clone()>
+        <tr class="optional-metadata-row" data-path=path.clone() data-source=source.clone() data-editable=editable.to_string()>
             <td>{item["metadata_category"].as_str().unwrap_or("metadata").to_owned()}</td>
             <td>{path.clone()}</td>
             <td>{source.clone()}</td>
-            <td><input id=input_id value=initial data-path=path.clone() data-source=source.clone() on:input=move |event| {
+            <td><input id=input_id value=initial data-path=path.clone() data-source=source.clone() disabled=!editable title=edit_reason on:input=move |event| {
                 stage_metadata_translation(&stage_prefix, &stage_language, &stage_target, &stage_overlay, &stage_path, &stage_source, &event_input_value(&event));
                 status_value.set("staged_direct".to_owned());
                 update_staged_count(&stage_prefix);
@@ -4386,6 +4414,25 @@ fn encode_query_component(input: &str) -> String {
 #[cfg(test)]
 mod typed_apply_validation_tests {
     use super::*;
+
+    #[test]
+    fn csv_owned_occurrence_disables_global_source_string_staging() {
+        let csv_owned = serde_json::json!([
+            {"path": "notes.note.csv.fields.field.country", "editable": false},
+            {"path": "notes.note.native.fields.field.country", "editable": true}
+        ]);
+        assert!(!source_string_direct_editable(
+            csv_owned.as_array().unwrap()
+        ));
+
+        let migrated = serde_json::json!([
+            {"path": "notes.note.native.fields.field.country", "editable": true}
+        ]);
+        assert!(source_string_direct_editable(migrated.as_array().unwrap()));
+        assert!(!source_string_direct_editable(&[]));
+        assert!(!api_row_editable(&csv_owned[0]));
+        assert!(api_row_editable(&migrated[0]));
+    }
 
     #[test]
     fn apply_preview_renders_structured_diagnostics_without_legacy_error_strings() {

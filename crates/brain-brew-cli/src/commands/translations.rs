@@ -2059,6 +2059,7 @@ fn print_json_reports(reports: &[ScopedTranslationReport], applied: &BTreeMap<St
                 "entries": report.report.entries.iter().map(entry_json).collect::<Vec<_>>(),
                 "csv_owned": report.csv_translation_provenance.units().map(|unit| json!({
                     "declaration": unit.declaration(),
+                    "descriptor": unit.descriptor().source_name(),
                     "file": unit.file().source_name(),
                     "row": unit.logical_row(),
                     "header": unit.header(),

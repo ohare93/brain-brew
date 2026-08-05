@@ -232,6 +232,11 @@ fn blank_pairs_materialize_adaptation_deletion_ignore_and_provenance() {
         .units()
         .collect::<Vec<_>>();
     assert_eq!(units.len(), 2);
+    assert!(
+        units
+            .iter()
+            .all(|unit| unit.descriptor().source_name() == "sources/descriptor.yaml")
+    );
     assert!(units.iter().any(|unit| {
         unit.category().as_str() == "adaptation"
             && unit.source().is_empty()

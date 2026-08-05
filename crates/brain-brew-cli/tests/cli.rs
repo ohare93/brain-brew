@@ -898,6 +898,348 @@ fn workbench_note_pivot_exposes_target_translation_data_and_media() {
     );
 }
 
+#[cfg(feature = "workbench-write-dev")]
+#[test]
+fn workbench_csv_units_are_read_only_per_unit_and_refresh_from_all_csv_inputs() {
+    let dir = temp_dir("workbench-csv-capabilities");
+    write_workbench_csv_capability_workspace(&dir);
+    let overlay_path = dir.join("de.yaml");
+    let original_overlay = fs::read(&overlay_path).unwrap();
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+        "--enable-write",
+    ]);
+
+    for endpoint in [
+        "/api/workbench/note-list?language=de",
+        "/api/workbench/card-list?language=de",
+        "/api/workbench/source-string-list?language=de",
+        "/api/workbench/metadata-list?language=de",
+        "/api/workbench/comparison-pane?language=de",
+    ] {
+        let value = get_json(&server.url(endpoint));
+        assert!(value.is_object(), "CSV-backed read path failed: {endpoint}");
+    }
+
+    let workspace = get_json(&server.url("/api/workspace"));
+    let fingerprint_paths = workspace["fingerprints"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|entry| entry["path"].as_str())
+        .collect::<BTreeSet<_>>();
+    assert!(fingerprint_paths.contains("sources/descriptor.yaml"));
+    assert!(fingerprint_paths.contains("sources/data/notes.csv"));
+
+    let pivot = get_json(&server.url("/api/workbench/note-pivot?language=de"));
+    let csv_field = pivot["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|note| note["note_id"] == "note.csv")
+        .unwrap()["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["field_id"] == "field.country")
+        .unwrap();
+    assert_eq!(csv_field["source"], "CSV Country");
+    assert_eq!(csv_field["target"], "CSV-Land");
+    assert_eq!(csv_field["source_editable"], false);
+    assert_eq!(csv_field["editable"], false);
+    assert_eq!(csv_field["source_capability"]["source_kind"], "csv");
+    assert_eq!(csv_field["source_capability"]["writable"], false);
+    assert_eq!(csv_field["source_capability"]["edit_writable"], false);
+    assert_eq!(
+        csv_field["source_capability"]["provenance"]["descriptor"],
+        dir.join("sources/descriptor.yaml").display().to_string()
+    );
+    assert_eq!(
+        csv_field["source_capability"]["provenance"]["file"],
+        dir.join("sources/data/notes.csv").display().to_string()
+    );
+    assert_eq!(csv_field["source_capability"]["provenance"]["row"], 2);
+    assert_eq!(csv_field["source_capability"]["provenance"]["column"], 2);
+    assert_eq!(
+        csv_field["translation_capability"]["provenance"]["declaration"],
+        "translations.from_csv[0]"
+    );
+    assert_eq!(
+        csv_field["translation_capability"]["provenance"]["descriptor"],
+        dir.join("sources/descriptor.yaml").display().to_string()
+    );
+
+    let native_field = pivot["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|note| note["note_id"] == "note.native")
+        .unwrap()["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["field_id"] == "field.country")
+        .unwrap();
+    assert_eq!(native_field["source_editable"], true);
+    assert_eq!(native_field["editable"], true);
+    assert_eq!(native_field["source_capability"]["source_kind"], "inline");
+    assert_eq!(native_field["source_capability"]["writable"], true);
+    assert_eq!(native_field["source_capability"]["edit_writable"], true);
+    assert_eq!(
+        native_field["translation_capability"]["source_kind"],
+        "inline"
+    );
+
+    let dependent_field = pivot["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|note| note["note_id"] == "note.inline-csv-translation")
+        .unwrap()["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["field_id"] == "field.country")
+        .unwrap();
+    assert_eq!(
+        dependent_field["source_capability"]["source_kind"],
+        "inline"
+    );
+    assert_eq!(dependent_field["source_capability"]["writable"], true);
+    assert_eq!(dependent_field["source_capability"]["edit_writable"], false);
+    assert_eq!(dependent_field["source_editable"], false);
+    assert_eq!(
+        dependent_field["translation_capability"]["source_kind"],
+        "csv"
+    );
+    assert_eq!(
+        dependent_field["source_capability"]["blocking_dependency"]["kind"],
+        "csv_translation"
+    );
+    assert!(
+        dependent_field["source_capability"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("inline source field is writable")
+    );
+
+    let metadata = get_json(&server.url("/api/workbench/metadata?language=de"));
+    let csv_metadata = metadata["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["path"] == "notes.note.csv.fields.field.capital")
+        .unwrap();
+    assert_eq!(csv_metadata["editable"], false);
+    assert_eq!(csv_metadata["translation_capability"]["source_kind"], "csv");
+    let native_metadata = metadata["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["path"] == "notes.note.native.fields.field.capital")
+        .unwrap();
+    assert_eq!(native_metadata["editable"], true);
+    assert_eq!(
+        native_metadata["translation_capability"]["source_kind"],
+        "inline"
+    );
+    let metadata_list = get_json(&server.url("/api/workbench/metadata-list?language=de"));
+    let csv_metadata_summary = metadata_list["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["path"] == "notes.note.csv.fields.field.capital")
+        .unwrap();
+    assert_eq!(csv_metadata_summary["editable"], false);
+    assert_eq!(
+        csv_metadata_summary["translation_capability"]["source_kind"],
+        "csv"
+    );
+
+    let csv_translation = serde_json::json!({
+        "language": "de",
+        "edits": [{
+            "kind": "translation",
+            "path": "notes.note.csv.fields.field.country",
+            "source": "CSV Country",
+            "value": "Verboten",
+            "mode": "contextual"
+        }]
+    });
+    for endpoint in ["/api/workbench/apply-preview", "/api/workbench/apply"] {
+        let (status, body) = post_json_error(&server.url(endpoint), csv_translation.clone());
+        assert_eq!(status, 403);
+        let error: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(error["error"]["code"], "csv_source_read_only");
+        assert!(
+            error["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("transfer this unit to inline YAML")
+        );
+    }
+
+    let csv_source = serde_json::json!({
+        "language": "de",
+        "edits": [{
+            "kind": "source",
+            "path": "notes.note.csv.fields.field.country",
+            "source": "CSV Country",
+            "value": "Forbidden source edit",
+            "mode": "direct"
+        }]
+    });
+    let (status, body) = post_json_error(&server.url("/api/workbench/apply-preview"), csv_source);
+    assert_eq!(status, 403);
+    let error: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(error["error"]["code"], "csv_source_read_only");
+
+    let csv_translation_dependency = serde_json::json!({
+        "language": "de",
+        "edits": [{
+            "kind": "source",
+            "path": "notes.note.inline-csv-translation.fields.field.country",
+            "source": "CSV-dependent Source",
+            "value": "Changed inline source",
+            "mode": "direct",
+            "scope": "field"
+        }]
+    });
+    for endpoint in ["/api/workbench/apply-preview", "/api/workbench/apply"] {
+        let (status, body) =
+            post_json_error(&server.url(endpoint), csv_translation_dependency.clone());
+        assert_eq!(status, 403);
+        let error: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(error["error"]["code"], "csv_dependency_read_only");
+        assert!(
+            error["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("translation occurrence to inline YAML")
+        );
+    }
+
+    for mode in ["direct", "no_change"] {
+        let global_translation = serde_json::json!({
+            "language": "de",
+            "edits": [{
+                "kind": "translation",
+                "path": "notes.note.native.fields.field.capital",
+                "source": "Shared Capital",
+                "value": "Native Hauptstadt",
+                "mode": mode
+            }]
+        });
+        for endpoint in ["/api/workbench/apply-preview", "/api/workbench/apply"] {
+            let (status, body) = post_json_error(&server.url(endpoint), global_translation.clone());
+            assert_eq!(status, 403, "{mode} must reject through {endpoint}");
+            let error: serde_json::Value = serde_json::from_str(&body).unwrap();
+            assert_eq!(error["error"]["code"], "csv_source_read_only");
+        }
+    }
+
+    let all_occurrences = serde_json::json!({
+        "language": "de",
+        "edits": [{
+            "kind": "source",
+            "path": "notes.note.native.fields.field.capital",
+            "source": "Shared Capital",
+            "value": "Changed everywhere",
+            "mode": "direct",
+            "scope": "all_occurrences"
+        }]
+    });
+    for endpoint in ["/api/workbench/apply-preview", "/api/workbench/apply"] {
+        let (status, body) = post_json_error(&server.url(endpoint), all_occurrences.clone());
+        assert_eq!(status, 403);
+        let error: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(error["error"]["code"], "csv_source_read_only");
+    }
+
+    let inline_source_only = serde_json::json!({
+        "language": "de",
+        "edits": [{
+            "kind": "source",
+            "path": "notes.note.native.fields.field.capital",
+            "source": "Shared Capital",
+            "value": "Changed native capital source",
+            "mode": "direct",
+            "scope": "field"
+        }]
+    });
+    let inline_source_preview = post_json(
+        &server.url("/api/workbench/apply-preview"),
+        inline_source_only,
+    );
+    assert_eq!(inline_source_preview["validation"]["ok"], true);
+
+    let mixed = serde_json::json!({
+        "language": "de",
+        "edits": [
+            {
+                "kind": "translation",
+                "path": "notes.note.native.fields.field.country",
+                "source": "Native Country",
+                "value": "Einheimisches Land",
+                "mode": "contextual"
+            },
+            {
+                "kind": "translation",
+                "path": "notes.note.csv.fields.field.country",
+                "source": "CSV Country",
+                "value": "Verboten",
+                "mode": "contextual"
+            }
+        ]
+    });
+    let (status, _) = post_json_error(&server.url("/api/workbench/apply"), mixed);
+    assert_eq!(status, 403);
+    assert_eq!(fs::read(&overlay_path).unwrap(), original_overlay);
+
+    let native = serde_json::json!({
+        "language": "de",
+        "edits": [{
+            "kind": "translation",
+            "path": "notes.note.native.fields.field.country",
+            "source": "Native Country",
+            "value": "Einheimisches Land",
+            "mode": "contextual"
+        }]
+    });
+    let preview = post_json(&server.url("/api/workbench/apply-preview"), native.clone());
+    assert_eq!(preview["validation"]["ok"], true);
+    let applied = post_json(&server.url("/api/workbench/apply"), native);
+    assert_eq!(applied["applied"], true);
+
+    std::thread::sleep(Duration::from_millis(20));
+    let table_path = dir.join("sources/data/notes.csv");
+    let table = fs::read_to_string(&table_path)
+        .unwrap()
+        .replace("CSV-Land", "Aktualisiertes CSV-Land");
+    fs::write(&table_path, table).unwrap();
+    let refreshed = get_json(&server.url("/api/workbench/note-pivot?language=de"));
+    let refreshed_target = refreshed["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|note| note["note_id"] == "note.csv")
+        .unwrap()["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["field_id"] == "field.country")
+        .unwrap()["target"]
+        .as_str()
+        .unwrap();
+    assert_eq!(refreshed_target, "Aktualisiertes CSV-Land");
+}
+
 #[test]
 fn workbench_media_cache_refreshes_after_workspace_edit_and_rejects_undeclared_paths() {
     let dir = temp_dir("workbench-media-cache-refresh");
@@ -7163,6 +7505,167 @@ translations:
     Finland: Finland
 "#,
     );
+}
+
+#[cfg(feature = "workbench-write-dev")]
+fn write_workbench_csv_capability_workspace(dir: &Path) {
+    fs::create_dir_all(dir.join("sources/data")).unwrap();
+    fs::write(
+        dir.join("deck.yaml"),
+        r#"deck:
+  id: deck.csv-capability
+  name: CSV capability
+  description: CSV Workbench capability fixture.
+  adapter_ids: {}
+note_types:
+  note-type.country:
+    name: Country
+    field_order:
+      - field.country
+      - field.capital
+    fields:
+      field.country:
+        name: Country
+      field.capital:
+        name: Capital
+    card_template_order:
+      - template.country
+    card_templates:
+      template.country:
+        name: Country
+        question_format: '{{Country}}'
+        answer_format: '{{FrontSide}}<hr id=answer>{{Capital}}'
+        adapter_ids: {}
+    styling: ''
+    adapter_ids: {}
+notes:
+  - !csv
+    descriptor: sources/descriptor.yaml
+    parameters:
+      language: ''
+    exclude:
+      note_ids:
+        - note.native
+        - note.inline-csv-translation
+  - !inline
+    note.native:
+      note_type_id: note-type.country
+      fields:
+        field.country: Native Country
+        field.capital: Shared Capital
+      tags: []
+      adapter_ids: {}
+    note.inline-csv-translation:
+      note_type_id: note-type.country
+      fields:
+        field.country: CSV-dependent Source
+        field.capital: Dependent Capital
+      tags: []
+      adapter_ids: {}
+media: {}
+tombstones: []
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("sources/descriptor.yaml"),
+        r#"version: 1
+primary_table: main
+tables:
+  main:
+    path: data/notes.csv
+parameters:
+  language:
+    type: localized_column
+    default: ''
+    separator: ':'
+joins: []
+note:
+  id: main.stable_id
+  note_type_id: note-type.country
+  fields:
+    field.country:
+      column: main.country
+      localized_by: language
+      type: scalar
+    field.capital:
+      column: main.capital
+      localized_by: language
+      type: scalar
+  tags:
+    column: main.tags
+    delimiter: '|'
+  adapter_ids: {}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("sources/data/notes.csv"),
+        "stable_id,country,country:de,capital,capital:de,tags\nnote.csv,CSV Country,CSV-Land,Shared Capital,CSV-Hauptstadt,source\nnote.native,Native Country,Natives Land,Shared Capital,Native Hauptstadt,native\nnote.inline-csv-translation,CSV-dependent Source,CSV-abhängige Quelle,Dependent Capital,Abhängiges Kapital,dependent\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("de.yaml"),
+        r#"id: overlay.translation.de
+kind: translation
+translations:
+  from_csv:
+    - descriptor: sources/descriptor.yaml
+      parameters:
+        language: de
+      exclude:
+        source_texts: []
+        note_ids:
+          - note.native
+        paths: []
+  contextual:
+    notes.note.native.fields.field.country:
+      Native Country: Natives Land
+    notes.note.native.fields.field.capital:
+      Shared Capital: Native Hauptstadt
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("brainbrew.yaml"),
+        r#"base: deck.yaml
+overlays:
+  overlay.translation.de:
+    file: de.yaml
+    kind: translation
+targets:
+  de-standard:
+    overlays:
+      - overlay.translation.de
+  source:
+    overlays: []
+languages:
+  de:
+    display_name: German
+    translation_overlays:
+      base: overlay.translation.de
+    primary_target: standard
+    targets:
+      standard: de-standard
+  en:
+    display_name: English
+    source: true
+    primary_target: standard
+    targets:
+      standard: source
+translation_profile:
+  structural_fields:
+    - field.capital
+  metadata_categories:
+    - key: capital-metadata
+      label: Capital metadata
+      paths:
+        - notes.*.fields.field.capital
+  metadata_paths:
+    - notes.*.fields.field.capital
+"#,
+    )
+    .unwrap();
 }
 
 fn write_ug_media_diagnostics_root(media_root: &Path) {
