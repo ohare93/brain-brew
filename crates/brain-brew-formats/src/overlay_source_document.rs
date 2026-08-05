@@ -11,7 +11,7 @@ use serde_yaml::Value;
 use crate::csv_note_source::{
     CsvNoteSourceDescriptor, CsvSourceFile, CsvSourceRequest, CsvSourceRequestKind,
     CsvTranslationAuthoringProvenance, CsvTranslationPair, CsvTranslationSourceDeclaration,
-    CsvTranslationSourceMaterializer,
+    CsvTranslationSourceMaterializer, ExcludedCsvTranslationOccurrence,
 };
 
 use crate::canonical_yaml;
@@ -650,6 +650,9 @@ fn load_csv_translation_sources(
 > {
     let mut provenance = CsvTranslationAuthoringProvenance::default();
     let mut loaded_sources = Vec::new();
+    let inline_translations = resolved_overlay.translations.clone().unwrap_or_default();
+    let mut csv_path_owners = BTreeMap::<String, String>::new();
+    let mut excluded_paths = BTreeMap::<String, String>::new();
     for (index, declaration) in declarations.iter().enumerate() {
         let declaration_path = format!("translations.from_csv[{index}]");
         let descriptor_path = format!("{declaration_path}.descriptor");
@@ -714,17 +717,47 @@ fn load_csv_translation_sources(
             tables.insert(alias, table);
         }
         if let Some(source_deck) = source_deck {
-            let materialized = materializer
-                .materialize(&tables, source_deck)
-                .map_err(|error| {
-                    SourceDocumentError::at(root, &declaration_path, error.to_string())
-                })?;
-            if declaration.has_nonempty_exclusions() {
-                return Err(SourceDocumentError::at(
-                    root,
-                    &declaration_path,
-                    "non-empty translations.from_csv exclusions require ownership-transfer task 0080",
-                ));
+            let mut materialized =
+                materializer
+                    .materialize(&tables, source_deck)
+                    .map_err(|error| {
+                        SourceDocumentError::at(root, &declaration_path, error.to_string())
+                    })?;
+            let excluded = materialized
+                .apply_exclusions(declaration, &declaration_path)
+                .map_err(|message| SourceDocumentError::at(root, &declaration_path, message))?;
+            validate_excluded_csv_translations(&inline_translations, &excluded)
+                .map_err(|message| SourceDocumentError::at(root, &declaration_path, message))?;
+            for occurrence in &excluded {
+                let path = excluded_occurrence_path(occurrence);
+                if let Some(owner) = csv_path_owners.get(path) {
+                    return Err(SourceDocumentError::at(
+                        root,
+                        &declaration_path,
+                        format!("excluded path {path} is still CSV-owned by {owner}"),
+                    ));
+                }
+                excluded_paths.insert(path.to_owned(), declaration_path.clone());
+            }
+            for path in materialized.owned_paths() {
+                if let Some(owner) = excluded_paths.get(path) {
+                    return Err(SourceDocumentError::at(
+                        root,
+                        &declaration_path,
+                        format!(
+                            "CSV-owned path {path} conflicts with native ownership transferred by {owner}"
+                        ),
+                    ));
+                }
+                if let Some(owner) =
+                    csv_path_owners.insert(path.to_owned(), declaration_path.clone())
+                {
+                    return Err(SourceDocumentError::at(
+                        root,
+                        &declaration_path,
+                        format!("CSV-owned path {path} is already owned by {owner}"),
+                    ));
+                }
             }
             merge_csv_translations(
                 resolved_overlay
@@ -735,15 +768,79 @@ fn load_csv_translation_sources(
             )
             .map_err(|message| SourceDocumentError::at(root, &declaration_path, message))?;
             provenance.merge(materialized.provenance);
-        } else if declaration.has_nonempty_exclusions() {
-            return Err(SourceDocumentError::at(
-                root,
-                &declaration_path,
-                "non-empty translations.from_csv exclusions require ownership-transfer task 0080",
-            ));
         }
     }
     Ok((provenance, loaded_sources))
+}
+
+fn excluded_occurrence_path(occurrence: &ExcludedCsvTranslationOccurrence) -> &str {
+    match occurrence {
+        ExcludedCsvTranslationOccurrence::Text(pair) => &pair.path,
+        ExcludedCsvTranslationOccurrence::Adaptation { path, .. } => path,
+        ExcludedCsvTranslationOccurrence::Adapter(pair) => &pair.path,
+    }
+}
+
+fn validate_excluded_csv_translations(
+    inline: &TranslationDictionary,
+    excluded: &[ExcludedCsvTranslationOccurrence],
+) -> Result<(), String> {
+    for occurrence in excluded {
+        match occurrence {
+            ExcludedCsvTranslationOccurrence::Text(pair) => {
+                let covered = match effective_translation(inline, &pair.path, &pair.source) {
+                    Some(EffectiveTranslation::Text(target)) => target == pair.target,
+                    Some(EffectiveTranslation::Adaptation(adaptation)) => {
+                        adaptation.ownership
+                            == brain_brew_core::TargetAdaptationOwnership::Translation
+                            && adaptation.expected_source == pair.source
+                            && adaptation.target == pair.target
+                    }
+                    None => false,
+                };
+                if !covered {
+                    return Err(format!(
+                        "excluded CSV translation at {} for source {:?} has missing or conflicting inline ownership",
+                        pair.path, pair.source
+                    ));
+                }
+            }
+            ExcludedCsvTranslationOccurrence::Adaptation {
+                path, adaptation, ..
+            } => {
+                let covered = match effective_translation(inline, path, &adaptation.expected_source)
+                {
+                    Some(EffectiveTranslation::Text(target)) => target == adaptation.target,
+                    Some(EffectiveTranslation::Adaptation(current)) => {
+                        current.intent == adaptation.intent
+                            && current.ownership == adaptation.ownership
+                            && current.expected_source == adaptation.expected_source
+                            && current.target == adaptation.target
+                    }
+                    None => false,
+                };
+                if !covered {
+                    return Err(format!(
+                        "excluded CSV adaptation/deletion at {path} has missing or conflicting inline ownership"
+                    ));
+                }
+            }
+            ExcludedCsvTranslationOccurrence::Adapter(pair) => {
+                let covered = inline
+                    .adapter_ids
+                    .get(&pair.namespace)
+                    .and_then(|replacements| replacements.get(&pair.source))
+                    == Some(&pair.target);
+                if !covered {
+                    return Err(format!(
+                        "excluded CSV adapter-ID translation at {} has missing or conflicting inline ownership",
+                        pair.path
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 #[derive(Eq, PartialEq)]

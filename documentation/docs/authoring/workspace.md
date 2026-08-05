@@ -68,7 +68,29 @@ Sparse changes to the base deck. Keep overlays small and purpose-shaped:
 
 A translation overlay may keep `translations.from_csv` beside ordinary inline dictionary entries. The declaration reads the note descriptor's exact unsuffixed and localized columns and materializes the existing translation dictionary; it does not replace notes or infer a language from the target name.
 
-CSV-owned pairs are regenerated from the current CSV bytes. Source fingerprints detect input changes, but historical stale-translation review is unavailable because the old source key is not retained. To regain native stale detection, transfer the affected source text, note, or path to inline YAML by excluding it from `from_csv` and adding the equivalent inline decision in the same change. Non-empty transfer exclusions are reserved for the ownership-transfer workflow and are rejected until that workflow is enabled.
+CSV-owned pairs are regenerated from the current CSV bytes. Source fingerprints detect input changes, but historical stale-translation review is unavailable because the old source key is not retained. To regain native stale detection, transfer the affected source text, note, or path to inline YAML by excluding it from `from_csv` and adding the equivalent inline decision in the same change:
+
+```yaml
+translations:
+  from_csv:
+    - descriptor: sources/countries.csv.yaml
+      parameters:
+        language: de
+      exclude:
+        source_texts:
+          - Reusable source text
+        note_ids:
+          - note.france
+        paths:
+          - notes.note.germany.fields.field.capital
+  direct:
+    Reusable source text: Wiederverwendbarer Ausgangstext
+  contextual:
+    notes.note.germany.fields.field.capital:
+      Berlin: Berlin
+```
+
+The three selectors are literal: exact non-empty source text, stable note ID, and exact canonical occurrence path. They do not support globs, regular expressions, or predicates. Every selector must match a CSV unit, and every excluded field or adapter-ID occurrence must have an equivalent inline decision. When only some occurrences of reusable text move, remaining CSV-owned occurrences become contextual so an imported global decision cannot cross the ownership boundary. `brainbrew translations` reports the remaining CSV-owned units and `--json` includes their declaration, CSV cell, canonical path, category, source, and target provenance.
 
 ## `brainbrew.yaml`
 

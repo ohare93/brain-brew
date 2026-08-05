@@ -1,4 +1,7 @@
-use brain_brew_core::{FieldValue, StableId, TargetAdaptationIntent, TranslationCoverageCategory};
+use brain_brew_core::{
+    FieldValue, SourceTranslationImpact, StableId, TargetAdaptationIntent,
+    TranslationCoverageCategory,
+};
 use brain_brew_formats::canonical_yaml;
 use brain_brew_formats::crowdanki;
 use brain_brew_formats::csv_note_source::{CsvSourceFile, CsvSourceRequestKind};
@@ -61,8 +64,15 @@ note:
 ";
 
 fn overlay_source(inline: &str) -> String {
+    overlay_source_with_exclusions(
+        "source_texts: []\n        note_ids: []\n        paths: []",
+        inline,
+    )
+}
+
+fn overlay_source_with_exclusions(exclusions: &str, inline: &str) -> String {
     format!(
-        "id: overlay.translation.de\nkind: translation\ntranslations:\n  from_csv:\n    - descriptor: sources/descriptor.yaml\n      parameters:\n        language: de\n      exclude:\n        source_texts: []\n        note_ids: []\n        paths: []\n{inline}"
+        "id: overlay.translation.de\nkind: translation\ntranslations:\n  from_csv:\n    - descriptor: sources/descriptor.yaml\n      parameters:\n        language: de\n      exclude:\n        {exclusions}\n{inline}"
     )
 }
 
@@ -217,6 +227,22 @@ fn blank_pairs_materialize_adaptation_deletion_ignore_and_provenance() {
         provenance.canonical_path(),
         "notes.note.delete.fields.field.front"
     );
+    let units = document
+        .csv_translation_provenance()
+        .units()
+        .collect::<Vec<_>>();
+    assert_eq!(units.len(), 2);
+    assert!(units.iter().any(|unit| {
+        unit.category().as_str() == "adaptation"
+            && unit.source().is_empty()
+            && unit.target() == "Added"
+            && unit.declaration() == "translations.from_csv[0]"
+    }));
+    assert!(units.iter().any(|unit| {
+        unit.category().as_str() == "deletion"
+            && unit.source() == "Remove"
+            && unit.target().is_empty()
+    }));
 }
 
 #[test]
@@ -237,11 +263,355 @@ fn adapter_blank_policy_parameter_and_exclusion_boundaries_fail_explicitly() {
     let error = parse(&source_deck, &excluded, csv)
         .expect_err("adapter validation precedes exclusion behavior");
     assert!(error.contains("exactly one blank"), "{error}");
+}
 
-    let valid =
+#[test]
+fn maintained_transfer_fixture_preserves_deck_coverage_and_crowdanki_bytes() {
+    let source_deck = deck(&[
+        ("note.france", "Capital", "guid-france"),
+        ("note.germany", "Capital", "guid-germany"),
+    ]);
+    let csv = include_bytes!("fixtures/csv_translation_transfer/notes.csv");
+    let before = parse(
+        &source_deck,
+        include_str!("fixtures/csv_translation_transfer/before.yaml"),
+        csv,
+    )
+    .unwrap();
+    let after = parse(
+        &source_deck,
+        include_str!("fixtures/csv_translation_transfer/after.yaml"),
+        csv,
+    )
+    .unwrap();
+    assert_eq!(
+        before.emit().unwrap().root().text(),
+        include_str!("fixtures/csv_translation_transfer/before.yaml")
+    );
+    assert_eq!(
+        after.emit().unwrap().root().text(),
+        include_str!("fixtures/csv_translation_transfer/after.yaml")
+    );
+    let before_coverage = source_deck
+        .translation_coverage(before.resolved_overlay())
+        .unwrap();
+    let after_coverage = source_deck
+        .translation_coverage(after.resolved_overlay())
+        .unwrap();
+    assert!(!before_coverage.has_untranslated_fallbacks());
+    assert!(!after_coverage.has_untranslated_fallbacks());
+    assert_eq!(
+        before_coverage
+            .entries
+            .iter()
+            .map(|entry| (entry.path.clone(), entry.category))
+            .collect::<Vec<_>>(),
+        after_coverage
+            .entries
+            .iter()
+            .map(|entry| (entry.path.clone(), entry.category))
+            .collect::<Vec<_>>()
+    );
+    let before_deck = source_deck
+        .compose(&[before.resolved_overlay().clone()])
+        .unwrap();
+    let after_deck = source_deck
+        .compose(&[after.resolved_overlay().clone()])
+        .unwrap();
+    assert_eq!(after_deck, before_deck);
+    assert_eq!(
+        crowdanki::export_deck(&after_deck).unwrap().deck_json,
+        crowdanki::export_deck(&before_deck).unwrap().deck_json
+    );
+    let remaining = after
+        .csv_translation_provenance()
+        .units()
+        .collect::<Vec<_>>();
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(
+        remaining[0].canonical_path(),
+        "notes.note.germany.adapter_ids.crowdanki"
+    );
+}
+
+#[test]
+fn path_transfer_prevents_global_leakage_and_preserves_composed_output() {
+    let source_deck = deck(&[
+        ("note.one", "Hello", "guid-one"),
+        ("note.two", "Hello", "guid-two"),
+    ]);
+    let csv = b"stable_id,front,front:de,tags,guid,guid:de\nnote.one,Hello,Hallo,,guid-one,guid-one-de\nnote.two,Hello,Hallo,,guid-two,guid-two-de\n";
+    let before = parse(&source_deck, &overlay_source(""), csv).unwrap();
+    let transferred = parse(
+        &source_deck,
+        &overlay_source_with_exclusions(
+            "source_texts: []\n        note_ids: []\n        paths:\n          - notes.note.one.fields.field.front",
+            "  contextual:\n    notes.note.one.fields.field.front:\n      Hello: Hallo\n",
+        ),
+        csv,
+    )
+    .unwrap();
+    let translations = transferred
+        .resolved_overlay()
+        .translations
+        .as_ref()
+        .unwrap();
+    assert!(!translations.direct.contains_key("Hello"));
+    assert!(!translations.no_change.contains("Hello"));
+    assert_eq!(
+        translations.contextual["notes.note.two.fields.field.front"]["Hello"],
+        "Hallo"
+    );
+    assert_eq!(
+        translations.contextual["notes.note.one.fields.field.front"]["Hello"],
+        "Hallo"
+    );
+
+    let before_deck = source_deck
+        .compose(&[before.resolved_overlay().clone()])
+        .unwrap();
+    let after_deck = source_deck
+        .compose(&[transferred.resolved_overlay().clone()])
+        .unwrap();
+    assert_eq!(after_deck, before_deck);
+    assert_eq!(
+        crowdanki::export_deck(&after_deck).unwrap().deck_json,
+        crowdanki::export_deck(&before_deck).unwrap().deck_json
+    );
+    let coverage = source_deck
+        .translation_coverage(transferred.resolved_overlay())
+        .unwrap();
+    assert_eq!(
+        coverage
+            .entries
+            .iter()
+            .filter(|entry| entry.category == TranslationCoverageCategory::ContextualTranslation)
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn path_transfer_contextualizes_remaining_csv_owned_no_change() {
+    let source_deck = deck(&[
+        ("note.one", "Same", "guid-one"),
+        ("note.two", "Same", "guid-two"),
+    ]);
+    let csv = b"stable_id,front,front:de,tags,guid,guid:de\nnote.one,Same,Same,,guid-one,guid-one\nnote.two,Same,Same,,guid-two,guid-two\n";
+    let document = parse(
+        &source_deck,
+        &overlay_source_with_exclusions(
+            "source_texts: []\n        note_ids: []\n        paths:\n          - notes.note.one.fields.field.front",
+            "  contextual:\n    notes.note.one.fields.field.front:\n      Same: Same\n",
+        ),
+        csv,
+    )
+    .unwrap();
+    let translations = document.resolved_overlay().translations.as_ref().unwrap();
+    assert!(!translations.no_change.contains("Same"));
+    assert_eq!(
+        translations.contextual["notes.note.two.fields.field.front"]["Same"],
+        "Same"
+    );
+}
+
+#[test]
+fn moved_native_entry_becomes_stale_while_csv_pair_regenerates_current() {
+    let source_deck = deck(&[("note.one", "Hello", "guid-one")]);
+    let csv =
         b"stable_id,front,front:de,tags,guid,guid:de\nnote.one,Hello,Hallo,,guid-one,guid-one-de\n";
-    let error = parse(&source_deck, &excluded, valid).expect_err("task 0080 boundary fails");
-    assert!(error.contains("ownership-transfer task 0080"), "{error}");
+    let mut moved = parse(
+        &source_deck,
+        &overlay_source_with_exclusions(
+            "source_texts: [Hello]\n        note_ids: []\n        paths: []",
+            "  direct:\n    Hello: Hallo\n",
+        ),
+        csv,
+    )
+    .unwrap();
+    moved
+        .apply_source_translation_impact(
+            "notes.note.one.fields.field.front",
+            "Hello",
+            "Hello updated",
+            SourceTranslationImpact::MarkStale {
+                target: "Hallo".to_owned(),
+                context: None,
+            },
+        )
+        .unwrap();
+    let edited_deck = deck(&[("note.one", "Hello updated", "guid-one")]);
+    let moved_coverage = edited_deck
+        .translation_coverage(moved.resolved_overlay())
+        .unwrap();
+    assert!(moved_coverage.entries.iter().any(|entry| {
+        entry.category == TranslationCoverageCategory::StaleTranslation
+            && entry.path == "notes.note.one.fields.field.front"
+    }));
+
+    let updated_csv = b"stable_id,front,front:de,tags,guid,guid:de\nnote.one,Hello updated,Hallo,,guid-one,guid-one-de\n";
+    let regenerated = parse(&edited_deck, &overlay_source(""), updated_csv).unwrap();
+    let csv_coverage = edited_deck
+        .translation_coverage(regenerated.resolved_overlay())
+        .unwrap();
+    assert!(csv_coverage.entries.iter().all(|entry| {
+        entry.category != TranslationCoverageCategory::StaleTranslation
+            && entry.category != TranslationCoverageCategory::StaleDirectKey
+    }));
+    assert_eq!(
+        regenerated
+            .resolved_overlay()
+            .translations
+            .as_ref()
+            .unwrap()
+            .direct["Hello updated"],
+        "Hallo"
+    );
+}
+
+#[test]
+fn selector_union_transfers_text_adaptation_and_adapter_units() {
+    let source_deck = deck(&[
+        ("note.text", "Reusable", "guid-text"),
+        ("note.delete", "Remove", "guid-delete"),
+        ("note.adapter", "Keep", "guid-adapter"),
+    ]);
+    let csv = b"stable_id,front,front:de,tags,guid,guid:de\nnote.text,Reusable,Wiederverwendbar,,guid-text,guid-text-de\nnote.delete,Remove,,,guid-delete,guid-delete-de\nnote.adapter,Keep,Keep,,guid-adapter,guid-adapter-de\n";
+    let input = overlay_source_with_exclusions(
+        "source_texts:\n          - Reusable\n          - Remove\n        note_ids:\n          - note.delete\n        paths:\n          - notes.note.adapter.adapter_ids.crowdanki",
+        "  direct:\n    Reusable: Wiederverwendbar\n  target_adaptations:\n    notes.note.delete.fields.field.front:\n      intent: delete\n      ownership: translation\n      expected_source: Remove\n      target: ''\n      reason: moved to native YAML\n  adapter_ids:\n    crowdanki:\n      guid-adapter: guid-adapter-de\n      guid-delete: guid-delete-de\n",
+    );
+    let document = parse(&source_deck, &input, csv).unwrap();
+    let translations = document.resolved_overlay().translations.as_ref().unwrap();
+    assert_eq!(translations.direct["Reusable"], "Wiederverwendbar");
+    assert_eq!(
+        translations.target_adaptations["notes.note.delete.fields.field.front"].reason,
+        "moved to native YAML"
+    );
+    assert_eq!(
+        translations.adapter_ids["crowdanki"]["guid-adapter"],
+        "guid-adapter-de"
+    );
+
+    let units = document
+        .csv_translation_provenance()
+        .units()
+        .collect::<Vec<_>>();
+    assert!(
+        units
+            .iter()
+            .all(|unit| unit.canonical_path() != "notes.note.text.fields.field.front")
+    );
+    assert!(
+        units
+            .iter()
+            .all(|unit| unit.canonical_path() != "notes.note.delete.fields.field.front")
+    );
+    assert!(
+        units
+            .iter()
+            .all(|unit| unit.canonical_path() != "notes.note.delete.adapter_ids.crowdanki")
+    );
+    assert!(
+        units
+            .iter()
+            .all(|unit| unit.canonical_path() != "notes.note.adapter.adapter_ids.crowdanki")
+    );
+    assert!(
+        units
+            .iter()
+            .any(|unit| unit.canonical_path() == "notes.note.text.adapter_ids.crowdanki")
+    );
+}
+
+#[test]
+fn invalid_duplicate_unmatched_and_incomplete_selectors_fail() {
+    let source_deck = deck(&[("note.one", "Hello", "guid-one")]);
+    let csv =
+        b"stable_id,front,front:de,tags,guid,guid:de\nnote.one,Hello,Hallo,,guid-one,guid-one-de\n";
+    for (exclusions, expected) in [
+        (
+            "source_texts: ['']\n        note_ids: []\n        paths: []",
+            "must not be empty",
+        ),
+        (
+            "source_texts: [Hello, Hello]\n        note_ids: []\n        paths: []",
+            "duplicate",
+        ),
+        (
+            "source_texts: []\n        note_ids: [note.one, note.one]\n        paths: []",
+            "duplicate",
+        ),
+        (
+            "source_texts: []\n        note_ids: []\n        paths: [notes.note.one.fields.field.front, notes.note.one.fields.field.front]",
+            "duplicate",
+        ),
+        (
+            "source_texts: []\n        note_ids: ['bad id']\n        paths: []",
+            "invalid stable id",
+        ),
+        (
+            "source_texts: []\n        note_ids: []\n        paths: [not-a-path]",
+            "invalid canonical import occurrence path",
+        ),
+        (
+            "source_texts: [Unknown]\n        note_ids: []\n        paths: []",
+            "matched no otherwise-importable occurrence",
+        ),
+        (
+            "source_texts: []\n        note_ids: [note.missing]\n        paths: []",
+            "matched no otherwise-importable occurrence",
+        ),
+        (
+            "source_texts: []\n        note_ids: []\n        paths: [notes.note.missing.fields.field.front]",
+            "matched no otherwise-importable occurrence",
+        ),
+    ] {
+        let input = overlay_source_with_exclusions(exclusions, "");
+        let error = parse(&source_deck, &input, csv).expect_err(expected);
+        assert!(error.contains(expected), "{error}");
+    }
+
+    let incomplete = overlay_source_with_exclusions(
+        "source_texts: [Hello]\n        note_ids: []\n        paths: []",
+        "",
+    );
+    let error = parse(&source_deck, &incomplete, csv).expect_err("missing inline transfer");
+    assert!(error.contains("inline"), "{error}");
+
+    let conflict = overlay_source_with_exclusions(
+        "source_texts: [Hello]\n        note_ids: []\n        paths: []",
+        "  direct:\n    Hello: Servus\n",
+    );
+    let error = parse(&source_deck, &conflict, csv).expect_err("conflicting transfer");
+    assert!(error.contains("conflict"), "{error}");
+
+    let incomplete_note = overlay_source_with_exclusions(
+        "source_texts: []\n        note_ids: [note.one]\n        paths: []",
+        "  direct:\n    Hello: Hallo\n",
+    );
+    let error = parse(&source_deck, &incomplete_note, csv)
+        .expect_err("whole-note transfer must cover its adapter ID");
+    assert!(
+        error.contains("adapter-ID") && error.contains("inline"),
+        "{error}"
+    );
+}
+
+#[test]
+fn selectors_emit_canonically_in_declared_source_order() {
+    let source_deck = deck(&[("note.one", "Hello", "guid-one")]);
+    let csv =
+        b"stable_id,front,front:de,tags,guid,guid:de\nnote.one,Hello,Hallo,,guid-one,guid-one-de\n";
+    let input = overlay_source_with_exclusions(
+        "source_texts: [Hello]\n        note_ids: [note.one]\n        paths: [notes.note.one.fields.field.front]",
+        "  direct:\n    Hello: Hallo\n  adapter_ids:\n    crowdanki:\n      guid-one: guid-one-de\n",
+    );
+    let document = parse(&source_deck, &input, csv).unwrap();
+    let emitted = document.emit().unwrap().root().text().to_owned();
+    assert!(emitted.contains("source_texts:\n          - Hello\n        note_ids:\n          - note.one\n        paths:\n          - notes.note.one.fields.field.front\n"), "{emitted}");
+    let reparsed = parse(&source_deck, &emitted, csv).unwrap();
+    assert_eq!(reparsed.emit().unwrap().root().text(), emitted);
 }
 
 #[test]

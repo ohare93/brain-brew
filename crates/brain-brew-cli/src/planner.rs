@@ -9,6 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use brain_brew_core::{CanonicalDeck, ChangeIntent, FieldValue, Overlay, OverlayKind};
+use brain_brew_formats::csv_note_source::CsvTranslationAuthoringProvenance;
 use brain_brew_formats::manifest::{self, FederatedDeckManifest};
 use brain_brew_formats::media;
 use brain_brew_formats::source_document::{
@@ -118,6 +119,7 @@ pub(crate) struct PlannedOverlay {
     pub(crate) declared_kind: Option<String>,
     pub(crate) source: SourceProvenance,
     pub(crate) includes: Vec<SourceProvenance>,
+    pub(crate) csv_translation_provenance: CsvTranslationAuthoringProvenance,
     pub(crate) origin: OverlayExpansionOrigin,
 }
 
@@ -614,6 +616,7 @@ impl ManifestRegistry {
                     declared_kind: entry.kind.clone(),
                     source,
                     includes,
+                    csv_translation_provenance: document.csv_translation_provenance().clone(),
                     origin: overlay_blueprint.origin,
                 },
                 overlay,

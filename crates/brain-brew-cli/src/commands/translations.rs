@@ -9,6 +9,7 @@ use brain_brew_core::{
     TranslationCoverageCategory, TranslationCoverageEntry, TranslationCoverageReport,
     TranslationMessageContext,
 };
+use brain_brew_formats::csv_note_source::CsvTranslationAuthoringProvenance;
 use brain_brew_formats::manifest::FederatedDeckManifest;
 use brain_brew_formats::overlay_source_document::{OverlaySourceDocument, TranslationStubs};
 use brain_brew_formats::yaml_scalar::scalar as yaml_scalar;
@@ -1000,6 +1001,7 @@ struct ScopedTranslationReport {
     overlay_path: PathBuf,
     report: TranslationCoverageReport,
     context: TranslationContextView,
+    csv_translation_provenance: CsvTranslationAuthoringProvenance,
 }
 
 fn collect_translation_reports(
@@ -1048,6 +1050,7 @@ fn collect_translation_reports(
                         overlay_path: planned.file.clone(),
                         report: scoped_report,
                         context,
+                        csv_translation_provenance: planned.csv_translation_provenance.clone(),
                     });
                 }
                 current = compose_lenient_translation_overlay(&current, overlay)?;
@@ -1803,6 +1806,30 @@ fn print_human_reports(reports: &[ScopedTranslationReport], full: bool) {
                 .filter(|entry| is_stale_or_invalid(entry.category))
                 .count()
         );
+        let csv_owned = report
+            .csv_translation_provenance
+            .units()
+            .collect::<Vec<_>>();
+        if !csv_owned.is_empty() {
+            println!(
+                "  {}: {}",
+                color_stdout("CSV-owned units", "33"),
+                csv_owned.len()
+            );
+            for unit in csv_owned {
+                println!(
+                    "  - csv_owned {} {} source={} target={} {}:{}:{}",
+                    unit.category().as_str(),
+                    unit.canonical_path(),
+                    yaml_scalar(unit.source()),
+                    yaml_scalar(unit.target()),
+                    unit.file().source_name(),
+                    unit.logical_row()
+                        .map_or_else(|| "-".to_owned(), |row| row.to_string()),
+                    unit.column(),
+                );
+            }
+        }
         if hidden_untranslated > 0 && !full {
             println!("  hint: use --full to include structural/media/tag fallbacks");
         }
@@ -2030,6 +2057,17 @@ fn print_json_reports(reports: &[ScopedTranslationReport], applied: &BTreeMap<St
                 "file": report.overlay_file,
                 "summary": category_counts(&report.report.entries),
                 "entries": report.report.entries.iter().map(entry_json).collect::<Vec<_>>(),
+                "csv_owned": report.csv_translation_provenance.units().map(|unit| json!({
+                    "declaration": unit.declaration(),
+                    "file": unit.file().source_name(),
+                    "row": unit.logical_row(),
+                    "header": unit.header(),
+                    "column": unit.column(),
+                    "path": unit.canonical_path(),
+                    "category": unit.category().as_str(),
+                    "source": unit.source(),
+                    "target": unit.target(),
+                })).collect::<Vec<_>>(),
             })
         })
         .collect::<Vec<_>>();

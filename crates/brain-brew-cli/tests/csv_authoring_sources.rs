@@ -616,6 +616,57 @@ fn translation_csv_sources_are_materialized_authorized_planned_and_fresh() {
         .unwrap()["sha256"]
         .clone();
 
+    let translations = run(
+        workspace.path(),
+        &[
+            "translations",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "de",
+            "--json",
+        ],
+    );
+    assert!(translations.status.success(), "{}", stderr(&translations));
+    let translations: serde_json::Value = serde_json::from_slice(&translations.stdout).unwrap();
+    let csv_owned = translations["reports"][0]["csv_owned"].as_array().unwrap();
+    assert_eq!(csv_owned.len(), 2);
+    assert!(
+        csv_owned
+            .iter()
+            .all(|unit| unit["declaration"] == "translations.from_csv[0]")
+    );
+    assert!(csv_owned.iter().any(|unit| {
+        unit["path"] == "notes.note.one.fields.field.front"
+            && unit["category"] == "contextual"
+            && unit["header"] == "front:de"
+            && unit["row"] == 2
+            && unit["column"] == 3
+    }));
+    assert!(csv_owned.iter().any(|unit| {
+        unit["path"] == "notes.note.one.adapter_ids.crowdanki"
+            && unit["category"] == "adapter_id"
+            && unit["header"] == "guid:de"
+            && unit["column"] == 6
+    }));
+    let human = run(
+        workspace.path(),
+        &[
+            "translations",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "de",
+        ],
+    );
+    assert!(human.status.success(), "{}", stderr(&human));
+    let human = String::from_utf8_lossy(&human.stdout);
+    assert!(human.contains("CSV-owned units: 2"), "{human}");
+    assert!(
+        human.contains("csv_owned contextual notes.note.one.fields.field.front"),
+        "{human}"
+    );
+
     fs::write(
         workspace.path().join("overlays/sources/data/notes.csv"),
         "stable_id,front,front:de,tags,guid,guid:de\nnote.one,Hello,Servus,,guid-one,guid-one-de\n",
