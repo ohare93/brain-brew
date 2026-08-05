@@ -11,6 +11,10 @@ use std::collections::BTreeMap;
 use brain_brew_core::{CanonicalDeck, FieldValue, StableId};
 
 use crate::canonical_yaml;
+use crate::csv_note_source::{
+    CsvNoteSourceDeclaration, CsvNoteSourceDescriptor, CsvNoteSourceMaterializer, CsvSourceFile,
+    CsvSourceRequest,
+};
 use crate::source_document::{
     EditLocation, ImageConversionReport, IncludeRequest, IncludeState, IncludedSource,
     SourceDocumentEmission, SourceDocumentError, SourceFile, SourceProvenance,
@@ -113,6 +117,7 @@ pub struct CanonicalSourceDocument {
     deck: CanonicalDeck,
     resolved_deck: CanonicalDeck,
     includes: IncludeState,
+    csv_notes: Option<CsvNoteSourceDeclaration>,
     original_sources: BTreeMap<SourceProvenance, SourceFile>,
 }
 
@@ -122,6 +127,7 @@ impl std::fmt::Debug for CanonicalSourceDocument {
             .debug_struct("CanonicalSourceDocument")
             .field("provenance", &self.provenance)
             .field("deck", &self.deck)
+            .field("csv_notes", &self.csv_notes)
             .finish_non_exhaustive()
     }
 }
@@ -145,12 +151,39 @@ impl CanonicalSourceDocument {
         source: SourceFile,
         mut loader: impl FnMut(&IncludeRequest) -> Result<SourceFile, String>,
     ) -> Result<Self, SourceDocumentError> {
-        let prepared = prepare_source(source, true, &mut loader)?;
+        Self::parse_with_loaders(source, &mut loader, &mut |request| {
+            Err(format!(
+                "no CSV source loader was provided for {:?}",
+                request.target()
+            ))
+        })
+    }
+
+    /// Parse source with caller-owned include and CSV Authoring Source loading.
+    ///
+    /// Both loaders authorize and inject bytes. This formats crate never opens a
+    /// path. The CSV loader receives explicit descriptor/table request kinds.
+    pub fn parse_with_csv_sources(
+        source: SourceFile,
+        mut include_loader: impl FnMut(&IncludeRequest) -> Result<SourceFile, String>,
+        mut csv_loader: impl FnMut(&CsvSourceRequest) -> Result<CsvSourceFile, String>,
+    ) -> Result<Self, SourceDocumentError> {
+        Self::parse_with_loaders(source, &mut include_loader, &mut csv_loader)
+    }
+
+    fn parse_with_loaders(
+        source: SourceFile,
+        include_loader: &mut impl FnMut(&IncludeRequest) -> Result<SourceFile, String>,
+        csv_loader: &mut impl FnMut(&CsvSourceRequest) -> Result<CsvSourceFile, String>,
+    ) -> Result<Self, SourceDocumentError> {
+        let prepared = prepare_source(source, true, include_loader)?;
         let root_yaml = yaml_with_included_structures_for_validation(
             &prepared.yaml_without_directives,
             prepared.includes.note_types(),
             prepared.includes.media(),
         )?;
+        let (root_yaml, csv_notes) =
+            strip_csv_note_declaration(&root_yaml, prepared.root.provenance())?;
         let mut deck = canonical_yaml::from_str(&root_yaml).map_err(|error| {
             SourceDocumentError::source(prepared.root.provenance(), error.to_string())
         })?;
@@ -162,11 +195,84 @@ impl CanonicalSourceDocument {
             prepared.includes.resolved_note_types(),
             prepared.includes.media(),
         )?;
+        let (materialized_yaml, materialized_csv_notes) =
+            strip_csv_note_declaration(&materialized_yaml, prepared.root.provenance())?;
+        if materialized_csv_notes != csv_notes {
+            return Err(SourceDocumentError::at(
+                prepared.root.provenance(),
+                "notes",
+                "scalar include materialization changed the notes !csv declaration",
+            ));
+        }
         let mut resolved_deck = canonical_yaml::from_str(&materialized_yaml).map_err(|error| {
             SourceDocumentError::source(prepared.root.provenance(), error.to_string())
         })?;
         if let Some(media) = prepared.includes.media() {
             resolved_deck.media = media.clone();
+        }
+        if let Some(declaration) = &csv_notes {
+            let descriptor_request = CsvSourceRequest::descriptor(
+                prepared.root.provenance().clone(),
+                declaration.descriptor().to_owned(),
+            );
+            let descriptor_bytes = csv_loader(&descriptor_request).map_err(|message| {
+                SourceDocumentError::at(
+                    prepared.root.provenance(),
+                    "notes.descriptor",
+                    format!(
+                        "could not load CSV note descriptor {:?}: {message}",
+                        declaration.descriptor()
+                    ),
+                )
+            })?;
+            let descriptor_text =
+                std::str::from_utf8(descriptor_bytes.bytes()).map_err(|error| {
+                    SourceDocumentError::at(
+                        descriptor_bytes.provenance(),
+                        "notes.descriptor",
+                        format!("descriptor is not valid UTF-8: {error}"),
+                    )
+                })?;
+            let descriptor = CsvNoteSourceDescriptor::parse(SourceFile::new(
+                descriptor_bytes.provenance().clone(),
+                descriptor_text,
+            ))
+            .map_err(|error| {
+                SourceDocumentError::at(prepared.root.provenance(), "notes", error.to_string())
+            })?;
+            let table_requests = descriptor
+                .table_paths()
+                .map(|(alias, target)| {
+                    CsvSourceRequest::table(
+                        descriptor.provenance().clone(),
+                        alias.to_owned(),
+                        target.to_owned(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let mut tables = BTreeMap::new();
+            for request in table_requests {
+                let alias = match request.kind() {
+                    crate::csv_note_source::CsvSourceRequestKind::Table { alias } => alias.clone(),
+                    crate::csv_note_source::CsvSourceRequestKind::Descriptor => unreachable!(),
+                };
+                let table = csv_loader(&request).map_err(|message| {
+                    SourceDocumentError::at(
+                        prepared.root.provenance(),
+                        "notes",
+                        format!("could not load CSV table {:?}: {message}", request.target()),
+                    )
+                })?;
+                tables.insert(alias, table);
+            }
+            resolved_deck.notes = CsvNoteSourceMaterializer::new(descriptor)
+                .materialize(&tables, &resolved_deck.note_types)
+                .map_err(|error| {
+                    SourceDocumentError::at(prepared.root.provenance(), "notes", error.to_string())
+                })?;
+            canonical_yaml::to_string(&resolved_deck).map_err(|error| {
+                SourceDocumentError::source(prepared.root.provenance(), error.to_string())
+            })?;
         }
         canonical_yaml::to_string(&deck).map_err(|error| {
             SourceDocumentError::source(prepared.root.provenance(), error.to_string())
@@ -177,6 +283,7 @@ impl CanonicalSourceDocument {
             deck,
             resolved_deck,
             includes: prepared.includes,
+            csv_notes,
             original_sources,
         })
     }
@@ -193,12 +300,18 @@ impl CanonicalSourceDocument {
             resolved_deck: deck.clone(),
             deck,
             includes: IncludeState::default(),
+            csv_notes: None,
             original_sources: BTreeMap::new(),
         })
     }
 
     pub fn provenance(&self) -> &SourceProvenance {
         &self.provenance
+    }
+
+    /// Source-preserved CSV note declaration, when notes are externally owned.
+    pub fn csv_note_source(&self) -> Option<&CsvNoteSourceDeclaration> {
+        self.csv_notes.as_ref()
     }
 
     /// Every scalar or structural media source loaded by this document.
@@ -371,6 +484,13 @@ impl CanonicalSourceDocument {
         let canonical = canonical_yaml::to_string(&self.deck)
             .map_err(|error| SourceDocumentError::source(&self.provenance, error.to_string()))?;
         let canonical = self.includes.restore_directives(canonical)?;
+        let canonical = if let Some(declaration) = &self.csv_notes {
+            declaration
+                .restore(canonical)
+                .map_err(|message| SourceDocumentError::at(&self.provenance, "notes", message))?
+        } else {
+            canonical
+        };
         // The codec generated every schema value; this final strict pass protects
         // directive restoration from introducing a duplicate mapping key.
         crate::strict_yaml::reject_duplicate_keys(&canonical)
@@ -385,9 +505,26 @@ impl CanonicalSourceDocument {
 
     fn validate(&self) -> Result<(), SourceDocumentError> {
         canonical_yaml::to_string(&self.deck)
+            .and_then(|_| canonical_yaml::to_string(&self.resolved_deck))
             .map(|_| ())
             .map_err(|error| SourceDocumentError::source(&self.provenance, error.to_string()))
     }
+}
+
+fn strip_csv_note_declaration(
+    yaml: &str,
+    provenance: &SourceProvenance,
+) -> Result<(String, Option<CsvNoteSourceDeclaration>), SourceDocumentError> {
+    let mut value = serde_yaml::from_str::<serde_yaml::Value>(yaml)
+        .map_err(|error| SourceDocumentError::source(provenance, error.to_string()))?;
+    let declaration = CsvNoteSourceDeclaration::take_from_root(&mut value, provenance)
+        .map_err(|error| SourceDocumentError::at(provenance, "notes", error.to_string()))?;
+    let Some(declaration) = declaration else {
+        return Ok((yaml.to_owned(), None));
+    };
+    let yaml = serde_yaml::to_string(&value)
+        .map_err(|error| SourceDocumentError::source(provenance, error.to_string()))?;
+    Ok((yaml, Some(declaration)))
 }
 
 fn yaml_with_included_structures_for_validation(
@@ -540,5 +677,20 @@ fn ensure_media_path(
             schema_path,
             format!("expected media path {expected:?}, found {actual:?}"),
         ))
+    }
+}
+
+#[cfg(test)]
+mod csv_note_declaration_tests {
+    use super::*;
+
+    #[test]
+    fn ordinary_yaml_is_not_reserialized_when_no_csv_declaration_exists() {
+        let yaml = "deck: {id: deck.test, name: Test}\nnotes: {}\n";
+        let (stripped, declaration) =
+            strip_csv_note_declaration(yaml, &SourceProvenance::new("deck.yaml")).unwrap();
+
+        assert!(declaration.is_none());
+        assert_eq!(stripped, yaml);
     }
 }

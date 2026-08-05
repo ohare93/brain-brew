@@ -7,6 +7,7 @@
 pub mod canonical_source_document;
 pub mod canonical_yaml;
 pub mod crowdanki;
+pub mod csv_note_source;
 pub mod lockfile;
 pub mod manifest;
 pub mod media;

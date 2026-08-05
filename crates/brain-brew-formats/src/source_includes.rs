@@ -78,11 +78,25 @@ where
     E: ToString,
 {
     strict_yaml::reject_duplicate_keys(input).map_err(|error| error.to_string())?;
-    if !input.contains("!include") {
+    if !input.contains("!include") && !input.contains("!csv") {
         return format(input).map_err(|error| error.to_string());
     }
 
     let mut value = serde_yaml::from_str::<Value>(input).map_err(|error| error.to_string())?;
+    let csv_notes = if value.as_mapping().is_some_and(|mapping| {
+        let key = |name: &str| Value::String(name.to_owned());
+        mapping.contains_key(key("deck"))
+            && !mapping.contains_key(key("id"))
+            && !mapping.contains_key(key("kind"))
+    }) {
+        crate::csv_note_source::CsvNoteSourceDeclaration::take_from_root(
+            &mut value,
+            &crate::source_document::SourceProvenance::new("<source>"),
+        )
+        .map_err(|error| error.to_string())?
+    } else {
+        None
+    };
     // Structural includes are an explicit top-level base-deck whitelist, not
     // general YAML AST splicing. Replace them with schema-valid synthetic maps
     // while formatting, then restore the directives after canonical emission.
@@ -94,6 +108,9 @@ where
     let mut formatted = format(&source_with_sentinels).map_err(|error| error.to_string())?;
     formatted = restore_top_level_note_types_include(formatted, note_types_include)?;
     formatted = restore_top_level_media_include(formatted, media_include)?;
+    if let Some(declaration) = csv_notes {
+        formatted = declaration.restore(formatted)?;
+    }
     for replacement in replacements {
         formatted = formatted.replace(&replacement.sentinel, &replacement.directive);
     }

@@ -28,3 +28,23 @@ Allow the canonical `notes` property to contain either its existing direct note 
 ## Implementation Notes
 
 Depends on the ADR. Primary seams: crates/brain-brew-formats/src/canonical_source_document.rs, canonical_yaml.rs, source_document.rs, source_includes.rs, and new focused tests under crates/brain-brew-formats/tests. Do not add joins, language suffixes, translation generation, or write-back in this slice.
+
+
+## Completion Summary
+
+- Added a strict filesystem-free CSV note descriptor/materializer in brain-brew-formats using the maintained csv crate.
+- Preserved `notes: !csv` declarations through parse, emit, formatting, and existing structural/scalar include restoration while keeping direct note maps unchanged.
+- Materialized deterministic scalar notes with stable IDs, complete fields, tags, and adapter IDs plus source/row/column-aware fail-closed diagnostics.
+- Added focused RGR coverage for RFC CSV behavior, strict descriptor/declaration failures, deterministic ordering, and include/source-preservation regressions.
+- Passed independent Grok review, focused/formats/source-document suites, full repository tests, formatting, and clippy.
+
+### Files Changed
+
+- Cargo.lock
+- crates/brain-brew-formats/Cargo.toml
+- crates/brain-brew-formats/src/canonical_source_document.rs
+- crates/brain-brew-formats/src/csv_note_source.rs
+- crates/brain-brew-formats/src/lib.rs
+- crates/brain-brew-formats/src/source_includes.rs
+- crates/brain-brew-formats/tests/csv_note_sources.rs
+- .frontloop/composable-csv-authoring/done/0020-implement-source-preserving-csv-note-materialization.md
