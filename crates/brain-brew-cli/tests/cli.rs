@@ -936,6 +936,8 @@ fn workbench_csv_units_are_read_only_per_unit_and_refresh_from_all_csv_inputs() 
         .collect::<BTreeSet<_>>();
     assert!(fingerprint_paths.contains("sources/descriptor.yaml"));
     assert!(fingerprint_paths.contains("sources/data/notes.csv"));
+    assert!(fingerprint_paths.contains("sources/sparse-descriptor.yaml"));
+    assert!(fingerprint_paths.contains("sources/data/regions.csv"));
 
     let pivot = get_json(&server.url("/api/workbench/note-pivot?language=de"));
     let csv_field = pivot["notes"]
@@ -972,7 +974,9 @@ fn workbench_csv_units_are_read_only_per_unit_and_refresh_from_all_csv_inputs() 
     );
     assert_eq!(
         csv_field["translation_capability"]["provenance"]["descriptor"],
-        dir.join("sources/descriptor.yaml").display().to_string()
+        dir.join("sources/translation-descriptor.yaml")
+            .display()
+            .to_string()
     );
 
     let native_field = pivot["notes"]
@@ -995,6 +999,56 @@ fn workbench_csv_units_are_read_only_per_unit_and_refresh_from_all_csv_inputs() 
         native_field["translation_capability"]["source_kind"],
         "inline"
     );
+
+    let csv_sparse_field = pivot["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|note| note["note_id"] == "note.csv")
+        .unwrap()["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["field_id"] == "field.region-code")
+        .unwrap();
+    assert_eq!(csv_sparse_field["source"], "CSV-REGION");
+    assert_eq!(csv_sparse_field["source_editable"], false);
+    assert_eq!(csv_sparse_field["source_capability"]["source_kind"], "csv");
+    assert_eq!(
+        csv_sparse_field["source_capability"]["provenance"]["declaration"],
+        "field_additions.note-type.country.values.from_csv[0]"
+    );
+    assert_eq!(
+        csv_sparse_field["source_capability"]["provenance"]["descriptor"],
+        dir.join("sources/sparse-descriptor.yaml")
+            .display()
+            .to_string()
+    );
+    assert_eq!(
+        csv_sparse_field["source_capability"]["provenance"]["row"],
+        2
+    );
+    assert_eq!(
+        csv_sparse_field["source_capability"]["provenance"]["column"],
+        2
+    );
+    let inline_sparse_field = pivot["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|note| note["note_id"] == "note.native")
+        .unwrap()["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["field_id"] == "field.region-code")
+        .unwrap();
+    assert_eq!(inline_sparse_field["source"], "NATIVE-REGION");
+    assert_eq!(
+        inline_sparse_field["source_capability"]["source_kind"],
+        "inline"
+    );
+    assert_eq!(inline_sparse_field["source_capability"]["writable"], true);
 
     let dependent_field = pivot["notes"]
         .as_array()
@@ -1099,6 +1153,24 @@ fn workbench_csv_units_are_read_only_per_unit_and_refresh_from_all_csv_inputs() 
     assert_eq!(status, 403);
     let error: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(error["error"]["code"], "csv_source_read_only");
+
+    let csv_sparse_source = serde_json::json!({
+        "language": "de",
+        "edits": [{
+            "kind": "source",
+            "path": "notes.note.csv.fields.field.region-code",
+            "source": "CSV-REGION",
+            "value": "FORBIDDEN",
+            "mode": "direct",
+            "scope": "field"
+        }]
+    });
+    for endpoint in ["/api/workbench/apply-preview", "/api/workbench/apply"] {
+        let (status, body) = post_json_error(&server.url(endpoint), csv_sparse_source.clone());
+        assert_eq!(status, 403);
+        let error: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(error["error"]["code"], "csv_source_read_only");
+    }
 
     let csv_translation_dependency = serde_json::json!({
         "language": "de",
@@ -1238,6 +1310,37 @@ fn workbench_csv_units_are_read_only_per_unit_and_refresh_from_all_csv_inputs() 
         .as_str()
         .unwrap();
     assert_eq!(refreshed_target, "Aktualisiertes CSV-Land");
+
+    let inline_sparse_source = serde_json::json!({
+        "language": "fr",
+        "edits": [{
+            "kind": "source",
+            "path": "notes.note.native.fields.field.region-code",
+            "source": "NATIVE-REGION",
+            "value": "NATIVE-REGION-EDITED",
+            "mode": "direct",
+            "scope": "field",
+            "impact_action": "migrate_key"
+        }]
+    });
+    let inline_sparse_preview = post_json(
+        &server.url("/api/workbench/apply-preview"),
+        inline_sparse_source.clone(),
+    );
+    assert_eq!(inline_sparse_preview["validation"]["ok"], true);
+    assert!(
+        inline_sparse_preview["affected_files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|file| file["path"] == "experimental.yaml")
+    );
+    assert!(
+        !fs::read_to_string(dir.join("experimental.yaml"))
+            .unwrap()
+            .contains("field.region-code: NATIVE-REGION-EDITED"),
+        "preview must not write the migrated inline owner"
+    );
 }
 
 #[test]
@@ -7600,8 +7703,92 @@ note:
     )
     .unwrap();
     fs::write(
+        dir.join("sources/translation-descriptor.yaml"),
+        r#"version: 1
+primary_table: main
+tables:
+  main:
+    path: data/notes.csv
+parameters:
+  language:
+    type: localized_column
+    default: ''
+    separator: ':'
+joins: []
+note:
+  id: main.stable_id
+  note_type_id: note-type.country
+  fields:
+    field.country:
+      column: main.country
+      localized_by: language
+      type: scalar
+    field.capital:
+      column: main.capital
+      localized_by: language
+      type: scalar
+    field.region-code:
+      column: main.region_code
+      localized_by: language
+      type: scalar
+  tags:
+    column: main.tags
+    delimiter: '|'
+  adapter_ids: {}
+"#,
+    )
+    .unwrap();
+    fs::write(
         dir.join("sources/data/notes.csv"),
-        "stable_id,country,country:de,capital,capital:de,tags\nnote.csv,CSV Country,CSV-Land,Shared Capital,CSV-Hauptstadt,source\nnote.native,Native Country,Natives Land,Shared Capital,Native Hauptstadt,native\nnote.inline-csv-translation,CSV-dependent Source,CSV-abhängige Quelle,Dependent Capital,Abhängiges Kapital,dependent\n",
+        "stable_id,country,country:de,capital,capital:de,region_code,region_code:de,tags\nnote.csv,CSV Country,CSV-Land,Shared Capital,CSV-Hauptstadt,CSV-REGION,CSV-REGION,source\nnote.native,Native Country,Natives Land,Shared Capital,Native Hauptstadt,NATIVE-REGION,NATIVE-REGION,native\nnote.inline-csv-translation,CSV-dependent Source,CSV-abhängige Quelle,Dependent Capital,Abhängiges Kapital,,,dependent\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("sources/sparse-descriptor.yaml"),
+        r#"version: 1
+primary_table: main
+tables:
+  main:
+    path: data/regions.csv
+parameters: {}
+joins: []
+note:
+  id: main.stable_id
+  note_type_id: note-type.country
+  fields:
+    field.region-code:
+      column: main.region_code
+      type: scalar
+  tags:
+    column: main.tags
+    delimiter: '|'
+  adapter_ids: {}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("sources/data/regions.csv"),
+        "stable_id,region_code,tags\nnote.csv,CSV-REGION,\nnote.native,NATIVE-REGION,\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("experimental.yaml"),
+        r#"id: overlay.extension.experimental
+kind: extension
+field_additions:
+  note-type.country:
+    fields:
+      field.region-code: Region code
+    values:
+      from_csv:
+        - descriptor: sources/sparse-descriptor.yaml
+          parameters: {}
+          exclude:
+            note_ids:
+              - note.native
+      note.native:
+        field.region-code: NATIVE-REGION
+"#,
     )
     .unwrap();
     fs::write(
@@ -7610,7 +7797,7 @@ note:
 kind: translation
 translations:
   from_csv:
-    - descriptor: sources/descriptor.yaml
+    - descriptor: sources/translation-descriptor.yaml
       parameters:
         language: de
       exclude:
@@ -7623,6 +7810,23 @@ translations:
       Native Country: Natives Land
     notes.note.native.fields.field.capital:
       Shared Capital: Native Hauptstadt
+  no_change:
+    - NATIVE-REGION
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("fr.yaml"),
+        r#"id: overlay.translation.fr
+kind: translation
+translations:
+  no_change:
+    - CSV Country
+    - Shared Capital
+    - Native Country
+    - Dependent Capital
+    - CSV-dependent Source
+    - CSV-REGION
 "#,
     )
     .unwrap();
@@ -7633,12 +7837,24 @@ overlays:
   overlay.translation.de:
     file: de.yaml
     kind: translation
+  overlay.extension.experimental:
+    file: experimental.yaml
+    kind: extension
+  overlay.translation.fr:
+    file: fr.yaml
+    kind: translation
 targets:
   de-standard:
     overlays:
+      - overlay.extension.experimental
       - overlay.translation.de
+  fr-standard:
+    overlays:
+      - overlay.extension.experimental
+      - overlay.translation.fr
   source:
-    overlays: []
+    overlays:
+      - overlay.extension.experimental
 languages:
   de:
     display_name: German
@@ -7647,6 +7863,13 @@ languages:
     primary_target: standard
     targets:
       standard: de-standard
+  fr:
+    display_name: French
+    translation_overlays:
+      base: overlay.translation.fr
+    primary_target: standard
+    targets:
+      standard: fr-standard
   en:
     display_name: English
     source: true

@@ -13,10 +13,10 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use brain_brew_core::{
-    CanonicalDeck, CardTemplate, ContentKind, ContentValidationReport, DiagnosticCategory,
-    DomainDiagnostic, FieldGraphReport, FieldValue, Note, NoteType, Overlay, OverlayKind, StableId,
-    TranslationCoverageCategory, TranslationCoverageEntry, TranslationDictionary,
-    TranslationStackCoverageReport, validate_deck_content,
+    CanonicalDeck, CardTemplate, ChangeIntent, ContentKind, ContentValidationReport,
+    DiagnosticCategory, DomainDiagnostic, FieldGraphReport, FieldValue, Note, NoteType, Overlay,
+    OverlayKind, StableId, TranslationCoverageCategory, TranslationCoverageEntry,
+    TranslationDictionary, TranslationStackCoverageReport, validate_deck_content,
 };
 use brain_brew_formats::canonical_source_document::{
     CanonicalScalarTarget, NoteAuthoringLocation, NoteAuthoringProvenance, NoteAuthoringSourceKind,
@@ -1192,11 +1192,17 @@ impl WorkspaceMetadata {
         let mut validation_contexts = vec![context.clone()];
         let mut changes = Vec::new();
         for change in std::mem::take(&mut source_plan.changed_entries) {
-            let file = if change["mode"] == "source" {
-                workspace_path(&self.manifest_root, &base_file)
-            } else {
-                context.selection.overlay_display_file.clone()
-            };
+            let file = change
+                .get("source_file")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+                .unwrap_or_else(|| {
+                    if change["mode"] == "source" {
+                        workspace_path(&self.manifest_root, &base_file)
+                    } else {
+                        context.selection.overlay_display_file.clone()
+                    }
+                });
             changes.push(annotated_apply_change(
                 change,
                 &file,
@@ -1207,8 +1213,16 @@ impl WorkspaceMetadata {
 
         let mut validation =
             validate_modified_base_and_overlay(&context, &modified_base, &primary_overlay)?;
-        let mut overlay_writes =
-            BTreeMap::<PathBuf, (String, OverlaySourceDocument, Overlay, bool)>::new();
+        let mut overlay_writes = source_plan
+            .overlay_writes
+            .iter()
+            .map(|(path, (display, document, overlay))| {
+                (
+                    path.clone(),
+                    (display.clone(), document.clone(), overlay.clone(), true),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
         if source_plan.overlay_changed {
             overlay_writes.insert(
                 context.selection.overlay_file.clone(),
@@ -3601,8 +3615,18 @@ fn note_field_authoring_location<'a>(
     let note_id = StableId::new(note_id).ok()?;
     let field_id = StableId::new(field_id).ok()?;
     context
-        .base_note_authoring_provenance
-        .field(&note_id, &field_id)
+        .plan_overlays
+        .iter()
+        .find_map(|(planned, _)| {
+            planned
+                .csv_sparse_field_provenance
+                .field(&note_id, &field_id)
+        })
+        .or_else(|| {
+            context
+                .base_note_authoring_provenance
+                .field(&note_id, &field_id)
+        })
 }
 
 fn selected_csv_translation_unit<'a>(
@@ -4545,6 +4569,66 @@ struct PlannedSourceOutput {
     replacement: Vec<u8>,
 }
 
+fn inline_overlay_field_owner<'a>(
+    context: &'a SelectedTranslationContext,
+    note_id: &StableId,
+    field_id: &StableId,
+) -> Option<(&'a PlannedOverlay, &'a Overlay)> {
+    context
+        .plan_overlays
+        .iter()
+        .filter(|(planned, _)| {
+            planned.has_csv_sparse_field_sources
+                && planned
+                    .csv_sparse_field_provenance
+                    .field(note_id, field_id)
+                    .is_none()
+        })
+        .find_map(|(planned, overlay)| {
+            overlay
+                .note_changes
+                .get(note_id)
+                .and_then(|note| note.fields.get(field_id))
+                .is_some_and(|change| {
+                    change.intent == ChangeIntent::Add
+                        && change
+                            .value
+                            .as_ref()
+                            .and_then(FieldValue::as_scalar)
+                            .is_some()
+                })
+                .then_some((planned, overlay))
+        })
+}
+
+fn set_overlay_note_field(
+    overlay: &mut Overlay,
+    note_id: &StableId,
+    field_id: &StableId,
+    expected: &str,
+    replacement: &str,
+) -> WorkbenchCoreResult<()> {
+    let path = format!("notes.{note_id}.fields.{field_id}");
+    let current = overlay
+        .note_changes
+        .get_mut(note_id)
+        .and_then(|note| note.fields.get_mut(field_id))
+        .and_then(|change| change.value.as_mut())
+        .and_then(FieldValue::as_scalar_mut)
+        .ok_or_else(|| {
+            WorkbenchError::request(format!(
+                "inline sparse field-addition value {path} is not editable scalar text"
+            ))
+        })?;
+    if current != expected {
+        return Err(WorkbenchError::conflict(format!(
+            "inline sparse field-addition value at {path} changed; expected {expected:?}, found {current:?}"
+        )));
+    }
+    *current = replacement.to_owned();
+    Ok(())
+}
+
 fn ensure_csv_source_edits_writable(
     context: &SelectedTranslationContext,
     edits: &[StagedWorkbenchEdit],
@@ -4626,6 +4710,7 @@ fn ensure_csv_translation_edits_writable(
 struct SourceApplyPlan {
     changed_entries: Vec<Value>,
     overlay_changed: bool,
+    overlay_writes: BTreeMap<PathBuf, (String, OverlaySourceDocument, Overlay)>,
     outputs: BTreeMap<PathBuf, PlannedSourceOutput>,
     affected_files: BTreeMap<PathBuf, String>,
 }
@@ -4718,25 +4803,64 @@ fn apply_staged_source_edits(
 
         for row in &target_rows {
             let (note_id, field_id) = note_field_path(&row.path)?;
-            let location = document
-                .set_scalar(
-                    CanonicalScalarTarget::NoteField {
-                        note_id: StableId::new(note_id).map_err(|error| error.to_string())?,
-                        field_id: StableId::new(field_id).map_err(|error| error.to_string())?,
-                    },
+            let note_id = StableId::new(note_id).map_err(|error| error.to_string())?;
+            let field_id = StableId::new(field_id).map_err(|error| error.to_string())?;
+            let owner_file = if let Some((planned, planned_overlay)) =
+                inline_overlay_field_owner(context, &note_id, &field_id)
+            {
+                ensure_root_source_mutable(
+                    "Workbench sparse overlay source edit",
+                    &planned.source,
+                )?;
+                for include in &planned.includes {
+                    ensure_root_source_mutable("Workbench included sparse overlay edit", include)?;
+                }
+                if !plan.overlay_writes.contains_key(&planned.file) {
+                    let owner_document = read_overlay_document(&planned.file)?;
+                    plan.overlay_writes.insert(
+                        planned.file.clone(),
+                        (
+                            planned.display_file.clone(),
+                            owner_document,
+                            planned_overlay.clone(),
+                        ),
+                    );
+                }
+                let (_, owner_document, owner_overlay) =
+                    plan.overlay_writes.get_mut(&planned.file).unwrap();
+                owner_document
+                    .set_note_field_text(&note_id, &field_id, &edit.source, &edit.value)
+                    .map_err(|error| error.to_string())?;
+                set_overlay_note_field(
+                    owner_overlay,
+                    &note_id,
+                    &field_id,
                     &edit.source,
                     &edit.value,
-                )
-                .map_err(|error| error.to_string())?;
-            set_deck_note_field(modified_base, &row.path, &edit.source, &edit.value)?;
-            let changed_path = match location {
-                EditLocation::Root => base_file.to_path_buf(),
-                EditLocation::Included(provenance) => PathBuf::from(provenance.source_name()),
+                )?;
+                planned.display_file.clone()
+            } else {
+                let location = document
+                    .set_scalar(
+                        CanonicalScalarTarget::NoteField {
+                            note_id: note_id.clone(),
+                            field_id: field_id.clone(),
+                        },
+                        &edit.source,
+                        &edit.value,
+                    )
+                    .map_err(|error| error.to_string())?;
+                set_deck_note_field(modified_base, &row.path, &edit.source, &edit.value)?;
+                let changed_path = match location {
+                    EditLocation::Root => base_file.to_path_buf(),
+                    EditLocation::Included(provenance) => PathBuf::from(provenance.source_name()),
+                };
+                plan.affected_files.insert(
+                    changed_path.clone(),
+                    workspace_path(manifest_root, &changed_path),
+                );
+                workspace_path(manifest_root, &changed_path)
             };
-            plan.affected_files.insert(
-                changed_path.clone(),
-                workspace_path(manifest_root, &changed_path),
-            );
             plan.changed_entries.push(json!({
                 "mode": "source",
                 "path": row.path,
@@ -4744,6 +4868,7 @@ fn apply_staged_source_edits(
                 "old": edit.source,
                 "new": edit.value,
                 "scope": edit.scope,
+                "source_file": owner_file,
             }));
         }
 

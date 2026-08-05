@@ -194,6 +194,26 @@ pub(crate) fn overlay_document_from_package_with_source_deck(
     overlay_document_from_package_inner(path, package_root, include_roots, Some(source_deck))
 }
 
+pub(crate) fn overlay_document_from_package_with_sparse_source_deck(
+    path: &Path,
+    package_root: &Path,
+    include_roots: &[PathBuf],
+    source_deck: &CanonicalDeck,
+) -> Result<OverlaySourceDocument, String> {
+    let context = SourceContext {
+        root: package_root.to_path_buf(),
+        include_roots: include_roots.to_vec(),
+    };
+    let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    OverlaySourceDocument::parse_with_csv_sparse_fields(
+        source_file(path, &input, &context)?,
+        source_deck,
+        |request| load_source_include(request, &context),
+        |request| load_csv_source(request, &context),
+    )
+    .map_err(|error| error.to_string())
+}
+
 fn overlay_document_from_package_inner(
     path: &Path,
     package_root: &Path,
@@ -221,6 +241,22 @@ fn overlay_document_from_package_inner(
         )
     };
     result.map_err(|error| error.to_string())
+}
+
+fn read_overlay_with_sparse_fields_context(
+    path: &Path,
+    context: &SourceContext,
+    source_deck: &CanonicalDeck,
+) -> Result<Overlay, String> {
+    let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    OverlaySourceDocument::parse_with_csv_sparse_fields(
+        source_file(path, &input, context)?,
+        source_deck,
+        |request| load_source_include(request, context),
+        |request| load_csv_source(request, context),
+    )
+    .map(|document| document.resolved_overlay().clone())
+    .map_err(|error| error.to_string())
 }
 
 fn read_overlay_with_context(
@@ -306,10 +342,13 @@ pub(crate) fn read_deck_and_overlays(
             ))
         })
         .collect::<Result<Vec<_>, String>>()?;
-    if inventory
+    let has_csv_sparse_fields = inventory
         .iter()
-        .all(|(_, document)| document.csv_translation_sources().is_empty())
-    {
+        .any(|(_, document)| !document.csv_sparse_field_sources().is_empty());
+    let has_csv_translations = inventory
+        .iter()
+        .any(|(_, document)| !document.csv_translation_sources().is_empty());
+    if !has_csv_sparse_fields && !has_csv_translations {
         return Ok((
             deck,
             inventory
@@ -318,22 +357,49 @@ pub(crate) fn read_deck_and_overlays(
                 .collect(),
         ));
     }
-    let source_deck = compose_translation_free_source(
+
+    let inventory_source_deck = compose_translation_free_source(
         &deck,
         &inventory
             .iter()
             .map(|(_, document)| document.resolved_overlay().clone())
             .collect::<Vec<_>>(),
     )?;
-    let overlays = overlay_paths
-        .iter()
-        .map(|path| {
-            Ok((
-                path.clone(),
-                read_overlay_with_context(Path::new(path), &context, &source_deck)?,
-            ))
-        })
-        .collect::<Result<Vec<_>, String>>()?;
+    let sparse_overlays = if has_csv_sparse_fields {
+        overlay_paths
+            .iter()
+            .map(|path| {
+                read_overlay_with_sparse_fields_context(
+                    Path::new(path),
+                    &context,
+                    &inventory_source_deck,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        inventory
+            .iter()
+            .map(|(_, document)| document.resolved_overlay().clone())
+            .collect()
+    };
+    let complete_translation_free_deck = compose_translation_free_source(&deck, &sparse_overlays)?;
+    let overlays = if has_csv_translations {
+        overlay_paths
+            .iter()
+            .map(|path| {
+                Ok((
+                    path.clone(),
+                    read_overlay_with_context(
+                        Path::new(path),
+                        &context,
+                        &complete_translation_free_deck,
+                    )?,
+                ))
+            })
+            .collect::<Result<Vec<_>, String>>()?
+    } else {
+        overlay_paths.iter().cloned().zip(sparse_overlays).collect()
+    };
     Ok((deck, overlays))
 }
 

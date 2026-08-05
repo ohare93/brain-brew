@@ -92,6 +92,30 @@ translations:
 
 The three selectors are literal: exact non-empty source text, stable note ID, and exact canonical occurrence path. They do not support globs, regular expressions, or predicates. Every selector must match a CSV unit, and every excluded field or adapter-ID occurrence must have an equivalent inline decision. When only some occurrences of reusable text move, remaining CSV-owned occurrences become contextual so an imported global decision cannot cross the ownership boundary. `brainbrew translations` reports the remaining CSV-owned units and `--json` includes their declaration, CSV cell, canonical path, category, source, and target provenance.
 
+## CSV-backed sparse field additions
+
+An extension may source values only for fields that it adds at `field_additions.<note-type>.values.from_csv`:
+
+```yaml
+field_additions:
+  note-type.country:
+    fields:
+      field.region-code: Region code
+    values:
+      from_csv:
+        - descriptor: sources/regions.yaml
+          parameters: {}
+          exclude:
+            note_ids:
+              - note.france
+      note.france:
+        field.region-code: WE
+```
+
+The descriptor must map the same note type and only fields added by this `field_additions` block. Non-empty mapped scalar or image cells become ordinary field-addition values; empty cells and missing optional-join cells claim no ownership, so sparse rows are allowed. Unknown non-empty note rows, duplicate ownership, inline collisions, and unmatched exclusions fail the whole materialization. An excluded note must provide identical inline values in the same block, as shown above.
+
+Formatting preserves the declaration and never rewrites CSV. Descriptor and table files participate in plans, locks, verification, and Workbench freshness. Workbench reports CSV-backed sparse cells as read-only with descriptor/file/row/column provenance; excluded inline values use normal YAML capabilities.
+
 ## `brainbrew.yaml`
 
 The manifest declares package metadata, named overlays, dependencies, and build targets. It also defines the package root used for file includes.

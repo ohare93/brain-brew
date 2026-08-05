@@ -134,6 +134,27 @@ pub struct NoteAuthoringLocation {
 }
 
 impl NoteAuthoringLocation {
+    pub(crate) fn csv_field(
+        root_declaration: SourceProvenance,
+        declaration_path: String,
+        descriptor: SourceProvenance,
+        cell: &CsvCellProvenance,
+        canonical_path: String,
+    ) -> Self {
+        Self {
+            source_kind: NoteAuthoringSourceKind::Csv,
+            root_declaration,
+            declaration_path,
+            descriptor: Some(descriptor),
+            table: Some(cell.table_alias.clone()),
+            file: Some(cell.source.clone()),
+            logical_row: cell.logical_row,
+            header: Some(cell.header.clone()),
+            column: Some(cell.column),
+            canonical_path,
+        }
+    }
+
     pub fn source_kind(&self) -> NoteAuthoringSourceKind {
         self.source_kind
     }
@@ -184,6 +205,15 @@ pub struct NoteAuthoringProvenance {
 }
 
 impl NoteAuthoringProvenance {
+    pub(crate) fn insert_field(
+        &mut self,
+        note_id: StableId,
+        field_id: StableId,
+        location: NoteAuthoringLocation,
+    ) -> Option<NoteAuthoringLocation> {
+        self.fields.insert((note_id, field_id), location)
+    }
+
     pub fn note(&self, note_id: &StableId) -> Option<&NoteAuthoringLocation> {
         self.notes.get(note_id)
     }

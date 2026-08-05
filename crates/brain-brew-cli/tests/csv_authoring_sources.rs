@@ -702,3 +702,165 @@ fn translation_csv_sources_are_materialized_authorized_planned_and_fresh() {
         .clone();
     assert_ne!(refreshed_table_hash, original_table_hash);
 }
+
+#[test]
+fn sparse_overlay_csv_values_compose_format_and_register_authoritative_inputs() {
+    let workspace = TempDir::new().unwrap();
+    fs::create_dir_all(workspace.path().join("overlays/sources")).unwrap();
+    fs::write(
+        workspace.path().join("deck.yaml"),
+        "deck:\n  id: deck.sparse-cli\n  name: Sparse CLI\n  description: ''\n  adapter_ids:\n    crowdanki:uuid: 11111111-1111-1111-1111-111111111111\nnote_types:\n  note-type.country:\n    name: Country\n    field_order: [field.country-name]\n    fields:\n      field.country-name:\n        name: Country\n    card_template_order: []\n    card_templates: {}\n    styling: ''\n    adapter_ids:\n      crowdanki:uuid: 22222222-2222-2222-2222-222222222222\nnotes:\n  note.france:\n    note_type_id: note-type.country\n    fields:\n      field.country-name: France\n    tags: []\n    adapter_ids:\n      crowdanki: guid-france\nmedia: {}\ntombstones: []\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/experimental.yaml"),
+        "id: overlay.extension.experimental\nkind: extension\nfield_additions:\n  note-type.country:\n    fields:\n      field.region-code: Region code\n    values:\n      from_csv:\n        - descriptor: sources/descriptor.yaml\n          parameters: {}\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/sources/descriptor.yaml"),
+        "version: 1\nprimary_table: main\ntables:\n  main:\n    path: regions.csv\nparameters: {}\njoins: []\nnote:\n  id: main.stable_id\n  note_type_id: note-type.country\n  fields:\n    field.region-code:\n      column: main.region_code\n      type: scalar\n  tags:\n    column: main.tags\n    delimiter: '|'\n  adapter_ids: {}\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/sources/regions.csv"),
+        "stable_id,region_code,tags\nnote.france,WE,\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("brainbrew.yaml"),
+        "base: deck.yaml\noverlays:\n  overlay.extension.experimental:\n    file: overlays/experimental.yaml\n    kind: extension\ntargets:\n  experimental:\n    overlays: [overlay.extension.experimental]\n",
+    )
+    .unwrap();
+
+    let composed = run(
+        workspace.path(),
+        &[
+            "compose",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "experimental",
+        ],
+    );
+    assert!(composed.status.success(), "{}", stderr(&composed));
+    assert!(String::from_utf8_lossy(&composed.stdout).contains("field.region-code: WE"));
+
+    let direct = run(
+        workspace.path(),
+        &[
+            "compose",
+            "deck.yaml",
+            "--overlay",
+            "overlays/experimental.yaml",
+        ],
+    );
+    assert!(direct.status.success(), "{}", stderr(&direct));
+    assert!(String::from_utf8_lossy(&direct.stdout).contains("field.region-code: WE"));
+    let validated = run(
+        workspace.path(),
+        &[
+            "validate",
+            "deck.yaml",
+            "--overlay",
+            "overlays/experimental.yaml",
+        ],
+    );
+    assert!(validated.status.success(), "{}", stderr(&validated));
+    let exported = run(
+        workspace.path(),
+        &[
+            "export",
+            "crowdanki",
+            "deck.yaml",
+            "--overlay",
+            "overlays/experimental.yaml",
+            "--out",
+            "adhoc-export",
+            "--media-mode",
+            "reference-only",
+        ],
+    );
+    assert!(exported.status.success(), "{}", stderr(&exported));
+
+    let explain = run(
+        workspace.path(),
+        &[
+            "explain",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "experimental",
+            "--json",
+        ],
+    );
+    assert!(explain.status.success(), "{}", stderr(&explain));
+    let explain: serde_json::Value = serde_json::from_slice(&explain.stdout).unwrap();
+    assert_eq!(
+        explain["sources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|source| source["kind"] == "csv_descriptor")
+            .count(),
+        1
+    );
+    assert_eq!(
+        explain["sources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|source| source["kind"] == "csv_table")
+            .count(),
+        1
+    );
+
+    let overlay_path = workspace.path().join("overlays/experimental.yaml");
+    let before_csv = fs::read(workspace.path().join("overlays/sources/regions.csv")).unwrap();
+    let formatted = run(workspace.path(), &["fmt", "overlays/experimental.yaml"]);
+    assert!(formatted.status.success(), "{}", stderr(&formatted));
+    assert!(
+        fs::read_to_string(&overlay_path)
+            .unwrap()
+            .contains("values:\n      from_csv:")
+    );
+    assert_eq!(
+        fs::read(workspace.path().join("overlays/sources/regions.csv")).unwrap(),
+        before_csv
+    );
+
+    fs::write(
+        workspace
+            .path()
+            .join("overlays/sources/translation-descriptor.yaml"),
+        "version: 1\nprimary_table: main\ntables:\n  main:\n    path: translations.csv\nparameters:\n  language:\n    type: localized_column\n    default: ''\n    separator: ':'\njoins: []\nnote:\n  id: main.stable_id\n  note_type_id: note-type.country\n  fields:\n    field.country-name:\n      column: main.country\n      localized_by: language\n      type: scalar\n    field.region-code:\n      column: main.region\n      localized_by: language\n      type: scalar\n  tags:\n    column: main.tags\n    delimiter: '|'\n  adapter_ids: {}\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace
+            .path()
+            .join("overlays/sources/translations.csv"),
+        "stable_id,country,country:de,region,region:de,tags\nnote.france,France,Frankreich,WE,WE,\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/de.yaml"),
+        "id: overlay.translation.de\nkind: translation\ntranslations:\n  from_csv:\n    - descriptor: sources/translation-descriptor.yaml\n      parameters:\n        language: de\n      exclude:\n        source_texts: []\n        note_ids: []\n        paths: []\n",
+    )
+    .unwrap();
+    let mixed = run(
+        workspace.path(),
+        &[
+            "compose",
+            "deck.yaml",
+            "--overlay",
+            "overlays/experimental.yaml",
+            "--overlay",
+            "overlays/de.yaml",
+        ],
+    );
+    assert!(mixed.status.success(), "{}", stderr(&mixed));
+    let mixed = String::from_utf8_lossy(&mixed.stdout);
+    assert!(mixed.contains("field.country-name: Frankreich"), "{mixed}");
+    assert!(mixed.contains("field.region-code: WE"), "{mixed}");
+}

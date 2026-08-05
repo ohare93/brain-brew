@@ -22,7 +22,7 @@ use crate::commands::lock::locked_package_manifest_paths;
 use crate::io::{
     canonical_document_from_package, compose_translation_free_source, include_roots_from_manifest,
     manifest_root, overlay_document_from_package, overlay_document_from_package_with_source_deck,
-    read_manifest,
+    overlay_document_from_package_with_sparse_source_deck, read_manifest,
 };
 use crate::package_resolver::{
     DiscoveryPolicy, DiscoveryResult, DiscoveryStats, discover_package_manifests,
@@ -121,6 +121,8 @@ pub(crate) struct PlannedOverlay {
     pub(crate) source: SourceProvenance,
     pub(crate) includes: Vec<SourceProvenance>,
     pub(crate) csv_translation_provenance: CsvTranslationAuthoringProvenance,
+    pub(crate) csv_sparse_field_provenance: NoteAuthoringProvenance,
+    pub(crate) has_csv_sparse_field_sources: bool,
     pub(crate) origin: OverlayExpansionOrigin,
 }
 
@@ -511,7 +513,10 @@ impl ManifestRegistry {
         let has_csv_translations = inventory
             .iter()
             .any(|(_, _, document)| !document.csv_translation_sources().is_empty());
-        let source_deck = has_csv_translations
+        let has_csv_sparse_fields = inventory
+            .iter()
+            .any(|(_, _, document)| !document.csv_sparse_field_sources().is_empty());
+        let inventory_source_deck = (has_csv_translations || has_csv_sparse_fields)
             .then(|| {
                 compose_translation_free_source(
                     &base,
@@ -522,6 +527,27 @@ impl ManifestRegistry {
                 )
             })
             .transpose()?;
+        let translation_source_deck = if has_csv_translations && has_csv_sparse_fields {
+            let source_deck = inventory_source_deck
+                .as_ref()
+                .expect("CSV inventory source deck was composed");
+            let sparse_overlays = inventory
+                .iter()
+                .map(|(blueprint, file, _)| {
+                    let loaded = &self.manifests[blueprint.manifest_index];
+                    overlay_document_from_package_with_sparse_source_deck(
+                        file,
+                        &loaded.root,
+                        &loaded.include_roots,
+                        source_deck,
+                    )
+                    .map(|document| document.resolved_overlay().clone())
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            Some(compose_translation_free_source(&base, &sparse_overlays)?)
+        } else {
+            inventory_source_deck.clone()
+        };
 
         let mut overlays = Vec::new();
         let media_declaration_source = base_includes
@@ -547,12 +573,23 @@ impl ManifestRegistry {
         for (overlay_blueprint, file, inventory_document) in inventory {
             let loaded = &self.manifests[overlay_blueprint.manifest_index];
             let entry = &loaded.manifest.overlays[&overlay_blueprint.overlay_id];
-            let document = if let Some(source_deck) = &source_deck {
+            let document = if has_csv_translations {
                 overlay_document_from_package_with_source_deck(
                     &file,
                     &loaded.root,
                     &loaded.include_roots,
-                    source_deck,
+                    translation_source_deck
+                        .as_ref()
+                        .expect("CSV translation source deck was composed"),
+                )?
+            } else if has_csv_sparse_fields {
+                overlay_document_from_package_with_sparse_source_deck(
+                    &file,
+                    &loaded.root,
+                    &loaded.include_roots,
+                    inventory_source_deck
+                        .as_ref()
+                        .expect("CSV sparse source deck was composed"),
                 )?
             } else {
                 inventory_document
@@ -620,6 +657,8 @@ impl ManifestRegistry {
                     source,
                     includes,
                     csv_translation_provenance: document.csv_translation_provenance().clone(),
+                    csv_sparse_field_provenance: document.csv_sparse_field_provenance().clone(),
+                    has_csv_sparse_field_sources: !document.csv_sparse_field_sources().is_empty(),
                     origin: overlay_blueprint.origin,
                 },
                 overlay,

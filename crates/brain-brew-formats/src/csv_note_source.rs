@@ -213,6 +213,92 @@ impl CsvNoteSourceDeclaration {
     }
 }
 
+/// Source-preserved declaration stored at a sparse field-addition values boundary.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CsvSparseFieldSourceDeclaration {
+    descriptor: String,
+    parameters: BTreeMap<String, String>,
+    exclude_note_ids: Vec<StableId>,
+}
+
+impl CsvSparseFieldSourceDeclaration {
+    pub(crate) fn parse(
+        value: Value,
+        provenance: &SourceProvenance,
+    ) -> Result<Self, CsvNoteSourceError> {
+        let raw: RawDeclaration = serde_yaml::from_value(value).map_err(|error| {
+            CsvNoteSourceError::descriptor(
+                provenance,
+                format!("invalid sparse field CSV declaration: {error}"),
+            )
+        })?;
+        if raw.descriptor.is_empty() {
+            return Err(CsvNoteSourceError::descriptor(
+                provenance,
+                "sparse field CSV descriptor path must not be empty",
+            ));
+        }
+        let mut seen = BTreeSet::new();
+        let mut exclude_note_ids = Vec::new();
+        for value in raw.exclude.note_ids {
+            let id = StableId::new(value)
+                .map_err(|error| CsvNoteSourceError::descriptor(provenance, error.to_string()))?;
+            if !seen.insert(id.clone()) {
+                return Err(CsvNoteSourceError::descriptor(
+                    provenance,
+                    format!("duplicate excluded note ID {id}"),
+                ));
+            }
+            exclude_note_ids.push(id);
+        }
+        Ok(Self {
+            descriptor: raw.descriptor,
+            parameters: raw.parameters,
+            exclude_note_ids,
+        })
+    }
+
+    pub fn descriptor(&self) -> &str {
+        &self.descriptor
+    }
+
+    pub fn parameters(&self) -> &BTreeMap<String, String> {
+        &self.parameters
+    }
+
+    pub fn excluded_note_ids(&self) -> &[StableId] {
+        &self.exclude_note_ids
+    }
+
+    pub(crate) fn emit(&self, indent: &str) -> Result<String, String> {
+        let mut output = format!(
+            "{indent}- descriptor: {}\n",
+            crate::yaml_scalar::scalar(&self.descriptor)
+        );
+        if self.parameters.is_empty() {
+            output.push_str(&format!("{indent}  parameters: {{}}\n"));
+        } else {
+            output.push_str(&format!("{indent}  parameters:\n"));
+            for (name, value) in &self.parameters {
+                let name = crate::yaml_scalar::key(name)
+                    .ok_or_else(|| format!("parameter name {name:?} cannot be emitted"))?;
+                output.push_str(&format!(
+                    "{indent}    {name}: {}\n",
+                    crate::yaml_scalar::scalar(value)
+                ));
+            }
+        }
+        if !self.exclude_note_ids.is_empty() {
+            output.push_str(&format!("{indent}  exclude:\n"));
+            output.push_str(&format!("{indent}    note_ids:\n"));
+            for id in &self.exclude_note_ids {
+                output.push_str(&format!("{indent}      - {id}\n"));
+            }
+        }
+        Ok(output)
+    }
+}
+
 /// Strict `translations.from_csv` declaration.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CsvTranslationSourceDeclaration {
@@ -861,6 +947,17 @@ impl CsvNoteSourceDescriptor {
         self.tables
             .iter()
             .map(|(alias, table)| (alias.as_str(), table.path.as_str()))
+    }
+
+    pub(crate) fn note_type_id(&self) -> StableId {
+        StableId::new(self.note.note_type_id.clone()).expect("descriptor note type ID validated")
+    }
+
+    pub(crate) fn mapped_field_ids(&self) -> impl Iterator<Item = StableId> + '_ {
+        self.note
+            .fields
+            .keys()
+            .map(|id| StableId::new(id.clone()).expect("descriptor field IDs validated"))
     }
 
     fn parameter_values(

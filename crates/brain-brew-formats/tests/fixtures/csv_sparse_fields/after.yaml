@@ -1,0 +1,15 @@
+id: overlay.extension.experimental
+kind: extension
+field_additions:
+  note-type.country:
+    fields:
+      field.region-code: Region code
+    values:
+      from_csv:
+        - descriptor: descriptor.yaml
+          parameters: {}
+          exclude:
+            note_ids:
+              - note.france
+      note.france:
+        field.region-code: WE
