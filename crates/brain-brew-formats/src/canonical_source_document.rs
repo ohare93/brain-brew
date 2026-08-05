@@ -12,8 +12,9 @@ use brain_brew_core::{CanonicalDeck, FieldValue, StableId};
 
 use crate::canonical_yaml;
 use crate::csv_note_source::{
-    CsvNoteSourceDeclaration, CsvNoteSourceDescriptor, CsvNoteSourceMaterializer, CsvSourceFile,
-    CsvSourceRequest,
+    CsvCellProvenance, CsvNoteSourceDeclaration, CsvNoteSourceDescriptor,
+    CsvNoteSourceMaterializer, CsvSourceFile, CsvSourceRequest, NoteSourceExpression,
+    NoteSourceItem,
 };
 use crate::source_document::{
     EditLocation, ImageConversionReport, IncludeRequest, IncludeState, IncludedSource,
@@ -110,6 +111,96 @@ impl CanonicalScalarTarget {
     }
 }
 
+/// The authoring representation that owns a materialized canonical note path.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NoteAuthoringSourceKind {
+    Inline,
+    Csv,
+}
+
+/// Read-only authoring location for one materialized note or note field.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NoteAuthoringLocation {
+    source_kind: NoteAuthoringSourceKind,
+    root_declaration: SourceProvenance,
+    declaration_path: String,
+    descriptor: Option<SourceProvenance>,
+    table: Option<String>,
+    file: Option<SourceProvenance>,
+    logical_row: Option<u64>,
+    header: Option<String>,
+    column: Option<usize>,
+    canonical_path: String,
+}
+
+impl NoteAuthoringLocation {
+    pub fn source_kind(&self) -> NoteAuthoringSourceKind {
+        self.source_kind
+    }
+
+    pub fn root_declaration(&self) -> &SourceProvenance {
+        &self.root_declaration
+    }
+
+    pub fn declaration_path(&self) -> &str {
+        &self.declaration_path
+    }
+
+    pub fn descriptor(&self) -> Option<&SourceProvenance> {
+        self.descriptor.as_ref()
+    }
+
+    pub fn table(&self) -> Option<&str> {
+        self.table.as_deref()
+    }
+
+    pub fn file(&self) -> Option<&SourceProvenance> {
+        self.file.as_ref()
+    }
+
+    pub fn logical_row(&self) -> Option<u64> {
+        self.logical_row
+    }
+
+    pub fn header(&self) -> Option<&str> {
+        self.header.as_deref()
+    }
+
+    /// One-based CSV column number, when the owned value came from a CSV cell.
+    pub fn column(&self) -> Option<usize> {
+        self.column
+    }
+
+    pub fn canonical_path(&self) -> &str {
+        &self.canonical_path
+    }
+}
+
+/// Deterministically ordered note and field authoring provenance sidecar.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct NoteAuthoringProvenance {
+    notes: BTreeMap<StableId, NoteAuthoringLocation>,
+    fields: BTreeMap<(StableId, StableId), NoteAuthoringLocation>,
+}
+
+impl NoteAuthoringProvenance {
+    pub fn note(&self, note_id: &StableId) -> Option<&NoteAuthoringLocation> {
+        self.notes.get(note_id)
+    }
+
+    pub fn field(&self, note_id: &StableId, field_id: &StableId) -> Option<&NoteAuthoringLocation> {
+        self.fields.get(&(note_id.clone(), field_id.clone()))
+    }
+
+    pub fn notes(&self) -> impl Iterator<Item = (&StableId, &NoteAuthoringLocation)> {
+        self.notes.iter()
+    }
+
+    pub fn fields(&self) -> impl Iterator<Item = (&(StableId, StableId), &NoteAuthoringLocation)> {
+        self.fields.iter()
+    }
+}
+
 /// Deep source module for one Canonical Deck file and its loaded includes.
 #[derive(Clone)]
 pub struct CanonicalSourceDocument {
@@ -117,7 +208,8 @@ pub struct CanonicalSourceDocument {
     deck: CanonicalDeck,
     resolved_deck: CanonicalDeck,
     includes: IncludeState,
-    csv_notes: Option<CsvNoteSourceDeclaration>,
+    note_sources: Option<NoteSourceExpression>,
+    authoring_provenance: NoteAuthoringProvenance,
     original_sources: BTreeMap<SourceProvenance, SourceFile>,
 }
 
@@ -127,7 +219,7 @@ impl std::fmt::Debug for CanonicalSourceDocument {
             .debug_struct("CanonicalSourceDocument")
             .field("provenance", &self.provenance)
             .field("deck", &self.deck)
-            .field("csv_notes", &self.csv_notes)
+            .field("note_sources", &self.note_sources)
             .finish_non_exhaustive()
     }
 }
@@ -182,8 +274,8 @@ impl CanonicalSourceDocument {
             prepared.includes.note_types(),
             prepared.includes.media(),
         )?;
-        let (root_yaml, csv_notes) =
-            strip_csv_note_declaration(&root_yaml, prepared.root.provenance())?;
+        let (root_yaml, note_sources) =
+            strip_note_source_expression(&root_yaml, prepared.root.provenance())?;
         let mut deck = canonical_yaml::from_str(&root_yaml).map_err(|error| {
             SourceDocumentError::source(prepared.root.provenance(), error.to_string())
         })?;
@@ -195,13 +287,13 @@ impl CanonicalSourceDocument {
             prepared.includes.resolved_note_types(),
             prepared.includes.media(),
         )?;
-        let (materialized_yaml, materialized_csv_notes) =
-            strip_csv_note_declaration(&materialized_yaml, prepared.root.provenance())?;
-        if materialized_csv_notes != csv_notes {
+        let (materialized_yaml, materialized_note_sources) =
+            strip_note_source_expression(&materialized_yaml, prepared.root.provenance())?;
+        if materialized_note_sources != note_sources {
             return Err(SourceDocumentError::at(
                 prepared.root.provenance(),
                 "notes",
-                "scalar include materialization changed the notes !csv declaration",
+                "scalar include materialization changed the notes source declarations",
             ));
         }
         let mut resolved_deck = canonical_yaml::from_str(&materialized_yaml).map_err(|error| {
@@ -210,76 +302,15 @@ impl CanonicalSourceDocument {
         if let Some(media) = prepared.includes.media() {
             resolved_deck.media = media.clone();
         }
-        if let Some(declaration) = &csv_notes {
-            let descriptor_request = CsvSourceRequest::descriptor(
-                prepared.root.provenance().clone(),
-                declaration.descriptor().to_owned(),
-            );
-            let descriptor_bytes = csv_loader(&descriptor_request).map_err(|message| {
-                SourceDocumentError::at(
-                    prepared.root.provenance(),
-                    "notes.descriptor",
-                    format!(
-                        "could not load CSV note descriptor {:?}: {message}",
-                        declaration.descriptor()
-                    ),
-                )
-            })?;
-            let descriptor_text =
-                std::str::from_utf8(descriptor_bytes.bytes()).map_err(|error| {
-                    SourceDocumentError::at(
-                        descriptor_bytes.provenance(),
-                        "notes.descriptor",
-                        format!("descriptor is not valid UTF-8: {error}"),
-                    )
-                })?;
-            let descriptor = CsvNoteSourceDescriptor::parse(SourceFile::new(
-                descriptor_bytes.provenance().clone(),
-                descriptor_text,
-            ))
-            .map_err(|error| {
-                SourceDocumentError::at(prepared.root.provenance(), "notes", error.to_string())
-            })?;
-            let descriptor_provenance = descriptor.provenance().clone();
-            let materializer = CsvNoteSourceMaterializer::new(descriptor)
-                .with_parameters(declaration.parameters())
-                .map_err(|error| {
-                    SourceDocumentError::at(prepared.root.provenance(), "notes", error.to_string())
-                })?;
-            let table_requests = materializer
-                .table_paths()
-                .map(|(alias, target)| {
-                    CsvSourceRequest::table(
-                        descriptor_provenance.clone(),
-                        alias.to_owned(),
-                        target.to_owned(),
-                    )
-                })
-                .collect::<Vec<_>>();
-            let mut tables = BTreeMap::new();
-            for request in table_requests {
-                let alias = match request.kind() {
-                    crate::csv_note_source::CsvSourceRequestKind::Table { alias } => alias.clone(),
-                    crate::csv_note_source::CsvSourceRequestKind::Descriptor => unreachable!(),
-                };
-                let table = csv_loader(&request).map_err(|message| {
-                    SourceDocumentError::at(
-                        prepared.root.provenance(),
-                        "notes",
-                        format!("could not load CSV table {:?}: {message}", request.target()),
-                    )
-                })?;
-                tables.insert(alias, table);
-            }
-            resolved_deck.notes = materializer
-                .materialize(&tables, &resolved_deck.note_types)
-                .map_err(|error| {
-                    SourceDocumentError::at(prepared.root.provenance(), "notes", error.to_string())
-                })?;
-            canonical_yaml::to_string(&resolved_deck).map_err(|error| {
-                SourceDocumentError::source(prepared.root.provenance(), error.to_string())
-            })?;
-        }
+        let authoring_provenance = materialize_note_sources(
+            &mut resolved_deck,
+            note_sources.as_ref(),
+            prepared.root.provenance(),
+            csv_loader,
+        )?;
+        canonical_yaml::to_string(&resolved_deck).map_err(|error| {
+            SourceDocumentError::source(prepared.root.provenance(), error.to_string())
+        })?;
         canonical_yaml::to_string(&deck).map_err(|error| {
             SourceDocumentError::source(prepared.root.provenance(), error.to_string())
         })?;
@@ -289,7 +320,8 @@ impl CanonicalSourceDocument {
             deck,
             resolved_deck,
             includes: prepared.includes,
-            csv_notes,
+            note_sources,
+            authoring_provenance,
             original_sources,
         })
     }
@@ -301,12 +333,14 @@ impl CanonicalSourceDocument {
     ) -> Result<Self, SourceDocumentError> {
         canonical_yaml::to_string(&deck)
             .map_err(|error| SourceDocumentError::source(&provenance, error.to_string()))?;
+        let authoring_provenance = inline_provenance(&deck, &provenance, "notes");
         Ok(Self {
             provenance,
             resolved_deck: deck.clone(),
             deck,
             includes: IncludeState::default(),
-            csv_notes: None,
+            note_sources: None,
+            authoring_provenance,
             original_sources: BTreeMap::new(),
         })
     }
@@ -315,9 +349,16 @@ impl CanonicalSourceDocument {
         &self.provenance
     }
 
-    /// Source-preserved CSV note declaration, when notes are externally owned.
+    /// Source-preserved direct CSV note declaration, when `notes: !csv` is used.
     pub fn csv_note_source(&self) -> Option<&CsvNoteSourceDeclaration> {
-        self.csv_notes.as_ref()
+        self.note_sources
+            .as_ref()
+            .and_then(NoteSourceExpression::direct_csv)
+    }
+
+    /// Per-note and per-field authoring ownership for the materialized deck.
+    pub fn authoring_provenance(&self) -> &NoteAuthoringProvenance {
+        &self.authoring_provenance
     }
 
     /// Every scalar or structural media source loaded by this document.
@@ -489,14 +530,14 @@ impl CanonicalSourceDocument {
         self.validate()?;
         let canonical = canonical_yaml::to_string(&self.deck)
             .map_err(|error| SourceDocumentError::source(&self.provenance, error.to_string()))?;
-        let canonical = self.includes.restore_directives(canonical)?;
-        let canonical = if let Some(declaration) = &self.csv_notes {
-            declaration
-                .restore(canonical)
+        let canonical = if let Some(expression) = &self.note_sources {
+            expression
+                .restore(canonical, &self.deck)
                 .map_err(|message| SourceDocumentError::at(&self.provenance, "notes", message))?
         } else {
             canonical
         };
+        let canonical = self.includes.restore_directives(canonical)?;
         // The codec generated every schema value; this final strict pass protects
         // directive restoration from introducing a duplicate mapping key.
         crate::strict_yaml::reject_duplicate_keys(&canonical)
@@ -517,20 +558,284 @@ impl CanonicalSourceDocument {
     }
 }
 
-fn strip_csv_note_declaration(
+fn materialize_note_sources(
+    resolved_deck: &mut CanonicalDeck,
+    expression: Option<&NoteSourceExpression>,
+    root: &SourceProvenance,
+    csv_loader: &mut impl FnMut(&CsvSourceRequest) -> Result<CsvSourceFile, String>,
+) -> Result<NoteAuthoringProvenance, SourceDocumentError> {
+    let mut provenance = NoteAuthoringProvenance::default();
+    let mut owners = BTreeMap::<StableId, String>::new();
+    let mut csv_sources = Vec::new();
+
+    match expression {
+        None => {
+            provenance = inline_provenance(resolved_deck, root, "notes");
+            owners.extend(
+                resolved_deck
+                    .notes
+                    .keys()
+                    .cloned()
+                    .map(|id| (id, "notes".to_owned())),
+            );
+        }
+        Some(NoteSourceExpression::Csv(declaration)) => {
+            resolved_deck.notes.clear();
+            csv_sources.push(("notes".to_owned(), declaration));
+        }
+        Some(NoteSourceExpression::Sequence(sources)) => {
+            for (index, source) in sources.iter().enumerate() {
+                let declaration_path = format!("notes[{index}]");
+                match source {
+                    NoteSourceItem::Csv(declaration) => {
+                        csv_sources.push((declaration_path, declaration));
+                    }
+                    NoteSourceItem::Inline { note_ids } => {
+                        for note_id in note_ids {
+                            let note = resolved_deck.notes.get(note_id).ok_or_else(|| {
+                                SourceDocumentError::at(
+                                    root,
+                                    &declaration_path,
+                                    format!("inline-owned note {note_id} did not materialize"),
+                                )
+                            })?;
+                            insert_inline_provenance(
+                                &mut provenance,
+                                note,
+                                root,
+                                &declaration_path,
+                            );
+                            owners.insert(note_id.clone(), declaration_path.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut exclusions = Vec::<(StableId, String)>::new();
+    for (declaration_path, declaration) in csv_sources {
+        let descriptor_path = format!("{declaration_path}.descriptor");
+        let descriptor_request = CsvSourceRequest::descriptor(
+            root.clone(),
+            descriptor_path.clone(),
+            declaration.descriptor().to_owned(),
+        );
+        let descriptor_bytes = csv_loader(&descriptor_request).map_err(|message| {
+            SourceDocumentError::at(
+                root,
+                &descriptor_path,
+                format!(
+                    "could not load CSV note descriptor {:?}: {message}",
+                    declaration.descriptor()
+                ),
+            )
+        })?;
+        let descriptor_text = std::str::from_utf8(descriptor_bytes.bytes()).map_err(|error| {
+            SourceDocumentError::at(
+                descriptor_bytes.provenance(),
+                &descriptor_path,
+                format!("descriptor is not valid UTF-8: {error}"),
+            )
+        })?;
+        let descriptor = CsvNoteSourceDescriptor::parse(SourceFile::new(
+            descriptor_bytes.provenance().clone(),
+            descriptor_text,
+        ))
+        .map_err(|error| SourceDocumentError::at(root, &declaration_path, error.to_string()))?;
+        let descriptor_provenance = descriptor.provenance().clone();
+        let materializer = CsvNoteSourceMaterializer::new(descriptor)
+            .with_parameters(declaration.parameters())
+            .map_err(|error| SourceDocumentError::at(root, &declaration_path, error.to_string()))?;
+        let table_requests = materializer
+            .table_paths()
+            .map(|(alias, target)| {
+                CsvSourceRequest::table(
+                    descriptor_provenance.clone(),
+                    format!("{declaration_path}.tables.{alias}"),
+                    alias.to_owned(),
+                    target.to_owned(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut tables = BTreeMap::new();
+        for request in table_requests {
+            let alias = match request.kind() {
+                crate::csv_note_source::CsvSourceRequestKind::Table { alias } => alias.clone(),
+                crate::csv_note_source::CsvSourceRequestKind::Descriptor => unreachable!(),
+            };
+            let table = csv_loader(&request).map_err(|message| {
+                SourceDocumentError::at(
+                    root,
+                    &declaration_path,
+                    format!("could not load CSV table {:?}: {message}", request.target()),
+                )
+            })?;
+            tables.insert(alias, table);
+        }
+        let mut materialized = materializer
+            .materialize_with_provenance(&tables, &resolved_deck.note_types)
+            .map_err(|error| SourceDocumentError::at(root, &declaration_path, error.to_string()))?;
+
+        for note_id in declaration.excluded_note_ids() {
+            if materialized.notes.remove(note_id).is_none() {
+                return Err(SourceDocumentError::at(
+                    root,
+                    &declaration_path,
+                    format!(
+                        "unknown excluded note ID {note_id}; this CSV source does not materialize it"
+                    ),
+                ));
+            }
+            materialized.note_provenance.remove(note_id);
+            materialized
+                .field_provenance
+                .retain(|(owned_note_id, _), _| owned_note_id != note_id);
+            exclusions.push((note_id.clone(), declaration_path.clone()));
+        }
+
+        for (note_id, note) in materialized.notes {
+            if let Some(previous) = owners.get(&note_id) {
+                return Err(SourceDocumentError::at(
+                    root,
+                    "notes",
+                    format!(
+                        "duplicate ownership of note ID {note_id} by {previous} and {declaration_path}; source order never overrides"
+                    ),
+                ));
+            }
+            let cell = &materialized.note_provenance[&note_id];
+            provenance.notes.insert(
+                note_id.clone(),
+                csv_authoring_location(
+                    root,
+                    &declaration_path,
+                    &descriptor_provenance,
+                    cell,
+                    format!("notes.{note_id}"),
+                ),
+            );
+            for ((owned_note_id, field_id), cell) in &materialized.field_provenance {
+                if owned_note_id == &note_id {
+                    provenance.fields.insert(
+                        (note_id.clone(), field_id.clone()),
+                        csv_authoring_location(
+                            root,
+                            &declaration_path,
+                            &descriptor_provenance,
+                            cell,
+                            format!("notes.{note_id}.fields.{field_id}"),
+                        ),
+                    );
+                }
+            }
+            owners.insert(note_id.clone(), declaration_path.clone());
+            resolved_deck.notes.insert(note_id, note);
+        }
+    }
+
+    for (note_id, declaration_path) in exclusions {
+        if !owners.contains_key(&note_id) {
+            return Err(SourceDocumentError::at(
+                root,
+                declaration_path,
+                format!(
+                    "excluded note ID {note_id} is not owned by another source; ownership transfer is missing"
+                ),
+            ));
+        }
+    }
+    Ok(provenance)
+}
+
+fn inline_provenance(
+    deck: &CanonicalDeck,
+    root: &SourceProvenance,
+    declaration_path: &str,
+) -> NoteAuthoringProvenance {
+    let mut provenance = NoteAuthoringProvenance::default();
+    for note in deck.notes.values() {
+        insert_inline_provenance(&mut provenance, note, root, declaration_path);
+    }
+    provenance
+}
+
+fn insert_inline_provenance(
+    provenance: &mut NoteAuthoringProvenance,
+    note: &brain_brew_core::Note,
+    root: &SourceProvenance,
+    declaration_path: &str,
+) {
+    provenance.notes.insert(
+        note.id.clone(),
+        inline_authoring_location(root, declaration_path, format!("notes.{}", note.id)),
+    );
+    for field_id in note.fields.keys() {
+        provenance.fields.insert(
+            (note.id.clone(), field_id.clone()),
+            inline_authoring_location(
+                root,
+                declaration_path,
+                format!("notes.{}.fields.{field_id}", note.id),
+            ),
+        );
+    }
+}
+
+fn inline_authoring_location(
+    root: &SourceProvenance,
+    declaration_path: &str,
+    canonical_path: String,
+) -> NoteAuthoringLocation {
+    NoteAuthoringLocation {
+        source_kind: NoteAuthoringSourceKind::Inline,
+        root_declaration: root.clone(),
+        declaration_path: declaration_path.to_owned(),
+        descriptor: None,
+        table: None,
+        file: None,
+        logical_row: None,
+        header: None,
+        column: None,
+        canonical_path,
+    }
+}
+
+fn csv_authoring_location(
+    root: &SourceProvenance,
+    declaration_path: &str,
+    descriptor: &SourceProvenance,
+    cell: &CsvCellProvenance,
+    canonical_path: String,
+) -> NoteAuthoringLocation {
+    NoteAuthoringLocation {
+        source_kind: NoteAuthoringSourceKind::Csv,
+        root_declaration: root.clone(),
+        declaration_path: declaration_path.to_owned(),
+        descriptor: Some(descriptor.clone()),
+        table: Some(cell.table_alias.clone()),
+        file: Some(cell.source.clone()),
+        logical_row: cell.logical_row,
+        header: Some(cell.header.clone()),
+        column: Some(cell.column),
+        canonical_path,
+    }
+}
+
+fn strip_note_source_expression(
     yaml: &str,
     provenance: &SourceProvenance,
-) -> Result<(String, Option<CsvNoteSourceDeclaration>), SourceDocumentError> {
+) -> Result<(String, Option<NoteSourceExpression>), SourceDocumentError> {
     let mut value = serde_yaml::from_str::<serde_yaml::Value>(yaml)
         .map_err(|error| SourceDocumentError::source(provenance, error.to_string()))?;
-    let declaration = CsvNoteSourceDeclaration::take_from_root(&mut value, provenance)
+    let expression = NoteSourceExpression::take_from_root(&mut value, provenance)
         .map_err(|error| SourceDocumentError::at(provenance, "notes", error.to_string()))?;
-    let Some(declaration) = declaration else {
+    let Some(expression) = expression else {
         return Ok((yaml.to_owned(), None));
     };
     let yaml = serde_yaml::to_string(&value)
         .map_err(|error| SourceDocumentError::source(provenance, error.to_string()))?;
-    Ok((yaml, Some(declaration)))
+    Ok((yaml, Some(expression)))
 }
 
 fn yaml_with_included_structures_for_validation(
@@ -694,7 +999,7 @@ mod csv_note_declaration_tests {
     fn ordinary_yaml_is_not_reserialized_when_no_csv_declaration_exists() {
         let yaml = "deck: {id: deck.test, name: Test}\nnotes: {}\n";
         let (stripped, declaration) =
-            strip_csv_note_declaration(yaml, &SourceProvenance::new("deck.yaml")).unwrap();
+            strip_note_source_expression(yaml, &SourceProvenance::new("deck.yaml")).unwrap();
 
         assert!(declaration.is_none());
         assert_eq!(stripped, yaml);

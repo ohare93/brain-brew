@@ -7,7 +7,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use brain_brew_core::{AdapterIds, FieldImageReference, FieldValue, Note, NoteType, StableId};
+use brain_brew_core::{
+    AdapterIds, CanonicalDeck, FieldImageReference, FieldValue, Note, NoteType, StableId,
+};
 use serde::Deserialize;
 use serde_yaml::Value;
 
@@ -54,19 +56,28 @@ pub struct CsvSourceRequest {
 }
 
 impl CsvSourceRequest {
-    pub(crate) fn descriptor(referring_source: SourceProvenance, target: String) -> Self {
+    pub(crate) fn descriptor(
+        referring_source: SourceProvenance,
+        schema_path: String,
+        target: String,
+    ) -> Self {
         Self {
             referring_source,
-            schema_path: "notes.descriptor".to_owned(),
+            schema_path,
             target,
             kind: CsvSourceRequestKind::Descriptor,
         }
     }
 
-    pub(crate) fn table(referring_source: SourceProvenance, alias: String, target: String) -> Self {
+    pub(crate) fn table(
+        referring_source: SourceProvenance,
+        schema_path: String,
+        alias: String,
+        target: String,
+    ) -> Self {
         Self {
             referring_source,
-            schema_path: format!("notes.tables.{alias}"),
+            schema_path,
             target,
             kind: CsvSourceRequestKind::Table { alias },
         }
@@ -89,11 +100,12 @@ impl CsvSourceRequest {
     }
 }
 
-/// Source-preserved declaration stored at the root `notes: !csv` boundary.
+/// Source-preserved declaration stored at a `!csv` notes source boundary.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CsvNoteSourceDeclaration {
     descriptor: String,
     parameters: BTreeMap<String, String>,
+    exclude_note_ids: Vec<StableId>,
 }
 
 #[derive(Deserialize)]
@@ -101,6 +113,27 @@ pub struct CsvNoteSourceDeclaration {
 struct RawDeclaration {
     descriptor: String,
     parameters: BTreeMap<String, String>,
+    #[serde(default)]
+    exclude: RawExclusions,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawExclusions {
+    #[serde(default)]
+    note_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum NoteSourceExpression {
+    Csv(CsvNoteSourceDeclaration),
+    Sequence(Vec<NoteSourceItem>),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum NoteSourceItem {
+    Csv(CsvNoteSourceDeclaration),
+    Inline { note_ids: Vec<StableId> },
 }
 
 impl CsvNoteSourceDeclaration {
@@ -112,6 +145,73 @@ impl CsvNoteSourceDeclaration {
         &self.parameters
     }
 
+    pub fn excluded_note_ids(&self) -> &[StableId] {
+        &self.exclude_note_ids
+    }
+
+    fn parse(value: Value, provenance: &SourceProvenance) -> Result<Self, CsvNoteSourceError> {
+        let raw: RawDeclaration = serde_yaml::from_value(value).map_err(|error| {
+            CsvNoteSourceError::descriptor(
+                provenance,
+                format!("invalid notes !csv declaration: {error}"),
+            )
+        })?;
+        if raw.descriptor.is_empty() {
+            return Err(CsvNoteSourceError::descriptor(
+                provenance,
+                "notes !csv descriptor path must not be empty",
+            ));
+        }
+        let mut seen = BTreeSet::new();
+        let mut exclude_note_ids = Vec::new();
+        for value in raw.exclude.note_ids {
+            let id = StableId::new(value)
+                .map_err(|error| CsvNoteSourceError::descriptor(provenance, error.to_string()))?;
+            if !seen.insert(id.clone()) {
+                return Err(CsvNoteSourceError::descriptor(
+                    provenance,
+                    format!("duplicate excluded note ID {id}"),
+                ));
+            }
+            exclude_note_ids.push(id);
+        }
+        Ok(Self {
+            descriptor: raw.descriptor,
+            parameters: raw.parameters,
+            exclude_note_ids,
+        })
+    }
+
+    fn emit(&self, item_indent: &str, property_indent: &str) -> Result<String, String> {
+        let mut output = format!(
+            "{item_indent}!csv\n{property_indent}descriptor: {}\n",
+            crate::yaml_scalar::scalar(&self.descriptor)
+        );
+        if self.parameters.is_empty() {
+            output.push_str(&format!("{property_indent}parameters: {{}}\n"));
+        } else {
+            output.push_str(&format!("{property_indent}parameters:\n"));
+            for (name, value) in &self.parameters {
+                let name = crate::yaml_scalar::key(name)
+                    .ok_or_else(|| format!("parameter name {name:?} cannot be emitted"))?;
+                output.push_str(&format!(
+                    "{property_indent}  {name}: {}\n",
+                    crate::yaml_scalar::scalar(value)
+                ));
+            }
+        }
+        if !self.exclude_note_ids.is_empty() {
+            output.push_str(&format!("{property_indent}exclude:\n"));
+            output.push_str(&format!("{property_indent}  note_ids:\n"));
+            for id in &self.exclude_note_ids {
+                output.push_str(&format!("{property_indent}    - {id}\n"));
+            }
+        }
+        Ok(output)
+    }
+}
+
+impl NoteSourceExpression {
     pub(crate) fn take_from_root(
         root: &mut Value,
         provenance: &SourceProvenance,
@@ -123,65 +223,172 @@ impl CsvNoteSourceDeclaration {
         let Some(notes) = mapping.get_mut(&notes_key) else {
             return Ok(None);
         };
-        let Value::Tagged(tagged) = notes else {
-            return Ok(None);
-        };
-        if tagged.tag != "csv" {
-            return Ok(None);
+        match notes {
+            Value::Tagged(tagged) if tagged.tag == "csv" => {
+                let declaration = CsvNoteSourceDeclaration::parse(
+                    std::mem::replace(&mut tagged.value, Value::Null),
+                    provenance,
+                )?;
+                *notes = Value::Mapping(serde_yaml::Mapping::new());
+                Ok(Some(Self::Csv(declaration)))
+            }
+            Value::Tagged(tagged) => Err(CsvNoteSourceError::descriptor(
+                provenance,
+                format!(
+                    "unsupported direct notes tag {}; expected !csv or an ordinary note map",
+                    tagged.tag
+                ),
+            )),
+            Value::Sequence(sequence) => {
+                if sequence.is_empty() {
+                    return Err(CsvNoteSourceError::descriptor(
+                        provenance,
+                        "notes source sequence must not be empty",
+                    ));
+                }
+                let mut combined = serde_yaml::Mapping::new();
+                let mut sources = Vec::new();
+                for (index, item) in std::mem::take(sequence).into_iter().enumerate() {
+                    let Value::Tagged(tagged) = item else {
+                        return Err(CsvNoteSourceError::descriptor(
+                            provenance,
+                            format!(
+                                "notes source item {index} must be explicitly tagged !csv or !inline"
+                            ),
+                        ));
+                    };
+                    if tagged.tag == "csv" {
+                        sources.push(NoteSourceItem::Csv(CsvNoteSourceDeclaration::parse(
+                            tagged.value,
+                            provenance,
+                        )?));
+                    } else if tagged.tag == "inline" {
+                        let Value::Mapping(inline) = tagged.value else {
+                            return Err(CsvNoteSourceError::descriptor(
+                                provenance,
+                                format!(
+                                    "notes !inline source item {index} must contain a note map"
+                                ),
+                            ));
+                        };
+                        let mut note_ids = Vec::new();
+                        for (key, value) in inline {
+                            let Some(id) = key.as_str() else {
+                                return Err(CsvNoteSourceError::descriptor(
+                                    provenance,
+                                    format!(
+                                        "notes !inline source item {index} has a non-string note ID"
+                                    ),
+                                ));
+                            };
+                            let id = StableId::new(id.to_owned()).map_err(|error| {
+                                CsvNoteSourceError::descriptor(provenance, error.to_string())
+                            })?;
+                            if combined
+                                .insert(Value::String(id.to_string()), value)
+                                .is_some()
+                            {
+                                return Err(CsvNoteSourceError::descriptor(
+                                    provenance,
+                                    format!("duplicate inline ownership of note ID {id}"),
+                                ));
+                            }
+                            note_ids.push(id);
+                        }
+                        sources.push(NoteSourceItem::Inline { note_ids });
+                    } else {
+                        return Err(CsvNoteSourceError::descriptor(
+                            provenance,
+                            format!(
+                                "unsupported notes source item tag {}; expected !csv or !inline",
+                                tagged.tag
+                            ),
+                        ));
+                    }
+                }
+                *notes = Value::Mapping(combined);
+                Ok(Some(Self::Sequence(sources)))
+            }
+            Value::Mapping(_) => Ok(None),
+            _ => Ok(None),
         }
-        let raw: RawDeclaration =
-            serde_yaml::from_value(tagged.value.clone()).map_err(|error| {
-                CsvNoteSourceError::new(
-                    provenance.clone(),
-                    None,
-                    None,
-                    None,
-                    format!("invalid notes !csv declaration: {error}"),
-                )
-            })?;
-        if raw.descriptor.is_empty() {
-            return Err(CsvNoteSourceError::new(
-                provenance.clone(),
-                None,
-                None,
-                None,
-                "notes !csv descriptor path must not be empty",
-            ));
-        }
-        *notes = Value::Mapping(serde_yaml::Mapping::new());
-        Ok(Some(Self {
-            descriptor: raw.descriptor,
-            parameters: raw.parameters,
-        }))
     }
 
-    pub(crate) fn restore(&self, mut canonical: String) -> Result<String, String> {
+    pub(crate) fn direct_csv(&self) -> Option<&CsvNoteSourceDeclaration> {
+        match self {
+            Self::Csv(declaration) => Some(declaration),
+            Self::Sequence(_) => None,
+        }
+    }
+
+    pub(crate) fn restore(
+        &self,
+        mut canonical: String,
+        deck: &CanonicalDeck,
+    ) -> Result<String, String> {
         let start = crate::strict_yaml::top_level_mapping_key_offset(&canonical, "notes")
             .ok_or_else(|| "canonical emission omitted the notes section".to_owned())?;
         let relative_end =
             crate::strict_yaml::top_level_mapping_key_offset(&canonical[start..], "media")
                 .ok_or_else(|| "canonical emission omitted media after notes".to_owned())?;
         let end = start + relative_end;
-        let mut replacement = format!(
-            "notes: !csv\n  descriptor: {}\n",
-            crate::yaml_scalar::scalar(&self.descriptor)
-        );
-        if self.parameters.is_empty() {
-            replacement.push_str("  parameters: {}\n");
-        } else {
-            replacement.push_str("  parameters:\n");
-            for (name, value) in &self.parameters {
-                let name = crate::yaml_scalar::key(name)
-                    .ok_or_else(|| format!("parameter name {name:?} cannot be emitted"))?;
-                replacement.push_str(&format!(
-                    "    {name}: {}\n",
-                    crate::yaml_scalar::scalar(value)
-                ));
+        let replacement = match self {
+            Self::Csv(declaration) => declaration.emit("notes: ", "  ")?,
+            Self::Sequence(sources) => {
+                let mut output = String::from("notes:\n");
+                for source in sources {
+                    match source {
+                        NoteSourceItem::Csv(declaration) => {
+                            output.push_str(&declaration.emit("  - ", "    ")?);
+                        }
+                        NoteSourceItem::Inline { note_ids } if note_ids.is_empty() => {
+                            output.push_str("  - !inline {}\n");
+                        }
+                        NoteSourceItem::Inline { note_ids } => {
+                            output.push_str("  - !inline\n");
+                            let body = canonical_notes_body(deck, note_ids)?;
+                            for line in body.lines() {
+                                output.push_str("    ");
+                                output.push_str(line);
+                                output.push('\n');
+                            }
+                        }
+                    }
+                }
+                output
             }
-        }
+        };
         canonical.replace_range(start..end, &replacement);
         Ok(canonical)
     }
+}
+
+fn canonical_notes_body(deck: &CanonicalDeck, note_ids: &[StableId]) -> Result<String, String> {
+    let mut selected = deck.clone();
+    selected.notes.clear();
+    for id in note_ids {
+        let note = deck
+            .notes
+            .get(id)
+            .ok_or_else(|| format!("inline note {id} is absent during source emission"))?;
+        selected.notes.insert(id.clone(), note.clone());
+    }
+    let canonical =
+        crate::canonical_yaml::to_string(&selected).map_err(|error| error.to_string())?;
+    let start = crate::strict_yaml::top_level_mapping_key_offset(&canonical, "notes")
+        .ok_or_else(|| "canonical emission omitted notes".to_owned())?;
+    let body_start = canonical[start..]
+        .find('\n')
+        .map(|offset| start + offset + 1)
+        .ok_or_else(|| "canonical notes section has no body".to_owned())?;
+    let end = body_start
+        + crate::strict_yaml::top_level_mapping_key_offset(&canonical[body_start..], "media")
+            .ok_or_else(|| "canonical emission omitted media after notes".to_owned())?;
+    Ok(canonical[body_start..end]
+        .lines()
+        .map(|line| line.strip_prefix("  ").unwrap_or(line))
+        .collect::<Vec<_>>()
+        .join("\n"))
 }
 
 /// Strict reusable descriptor for CSV-backed notes with explicit flat joins.
@@ -583,6 +790,21 @@ struct MappedField {
     kind: CsvFieldType,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct CsvCellProvenance {
+    pub table_alias: String,
+    pub source: SourceProvenance,
+    pub logical_row: Option<u64>,
+    pub header: String,
+    pub column: usize,
+}
+
+pub(crate) struct CsvNoteMaterialization {
+    pub notes: BTreeMap<StableId, Note>,
+    pub note_provenance: BTreeMap<StableId, CsvCellProvenance>,
+    pub field_provenance: BTreeMap<(StableId, StableId), CsvCellProvenance>,
+}
+
 struct PreparedJoin {
     alias: String,
     left_index: usize,
@@ -619,6 +841,14 @@ impl CsvNoteSourceMaterializer {
         tables: &BTreeMap<String, CsvSourceFile>,
         note_types: &BTreeMap<StableId, NoteType>,
     ) -> Result<BTreeMap<StableId, Note>, CsvNoteSourceError> {
+        Ok(self.materialize_with_provenance(tables, note_types)?.notes)
+    }
+
+    pub(crate) fn materialize_with_provenance(
+        &self,
+        tables: &BTreeMap<String, CsvSourceFile>,
+        note_types: &BTreeMap<StableId, NoteType>,
+    ) -> Result<CsvNoteMaterialization, CsvNoteSourceError> {
         let note_type_id =
             StableId::new(self.descriptor.note.note_type_id.clone()).map_err(|error| {
                 CsvNoteSourceError::descriptor(&self.descriptor.provenance, error.to_string())
@@ -697,6 +927,8 @@ impl CsvNoteSourceMaterializer {
         let joins = self.prepare_joins(&loaded)?;
 
         let mut notes = BTreeMap::new();
+        let mut note_provenance = BTreeMap::new();
+        let mut field_provenance = BTreeMap::new();
         for (primary_index, row) in primary.rows.iter().enumerate() {
             let mut selected =
                 BTreeMap::from([(self.descriptor.primary_table.clone(), Some(primary_index))]);
@@ -746,32 +978,38 @@ impl CsvNoteSourceMaterializer {
                     format!("duplicate stable note ID {id}"),
                 ));
             }
-            let fields = field_columns
-                .iter()
-                .map(|(field_id, field)| {
-                    let value = cell(&loaded, &selected, &field.column);
-                    let value = match field.kind {
-                        CsvFieldType::Scalar => FieldValue::Scalar(value.to_owned()),
-                        CsvFieldType::Image if value.is_empty() => {
-                            FieldValue::Scalar(String::new())
-                        }
-                        CsvFieldType::Image => {
-                            let media_id = StableId::new(value.to_owned()).map_err(|error| {
-                                CsvNoteSourceError::cell(
-                                    loaded[&field.column.alias].source,
-                                    selected_row(&loaded, &selected, &field.column)
-                                        .map_or(row.logical_row, |row| row.logical_row),
-                                    field.column.index,
-                                    &field.column.header,
-                                    error.to_string(),
-                                )
-                            })?;
-                            FieldValue::Images(vec![FieldImageReference { media_id }])
-                        }
-                    };
-                    Ok((field_id.clone(), value))
-                })
-                .collect::<Result<_, CsvNoteSourceError>>()?;
+            let mut fields = BTreeMap::new();
+            for (field_id, field) in &field_columns {
+                let selected_field_row = selected_row(&loaded, &selected, &field.column);
+                let value = cell(&loaded, &selected, &field.column);
+                let value = match field.kind {
+                    CsvFieldType::Scalar => FieldValue::Scalar(value.to_owned()),
+                    CsvFieldType::Image if value.is_empty() => FieldValue::Scalar(String::new()),
+                    CsvFieldType::Image => {
+                        let media_id = StableId::new(value.to_owned()).map_err(|error| {
+                            CsvNoteSourceError::cell(
+                                loaded[&field.column.alias].source,
+                                selected_field_row.map_or(row.logical_row, |row| row.logical_row),
+                                field.column.index,
+                                &field.column.header,
+                                error.to_string(),
+                            )
+                        })?;
+                        FieldValue::Images(vec![FieldImageReference { media_id }])
+                    }
+                };
+                fields.insert(field_id.clone(), value);
+                field_provenance.insert(
+                    (id.clone(), field_id.clone()),
+                    CsvCellProvenance {
+                        table_alias: field.column.alias.clone(),
+                        source: loaded[&field.column.alias].source.provenance().clone(),
+                        logical_row: selected_field_row.map(|row| row.logical_row),
+                        header: field.column.header.clone(),
+                        column: field.column.index + 1,
+                    },
+                );
+            }
             let tags = parse_tags(
                 loaded[&tags_column.alias].source,
                 selected_row(&loaded, &selected, &tags_column)
@@ -788,19 +1026,33 @@ impl CsvNoteSourceMaterializer {
                     adapter_ids.insert(namespace, value);
                 }
             }
+            note_provenance.insert(
+                id.clone(),
+                CsvCellProvenance {
+                    table_alias: self.descriptor.primary_table.clone(),
+                    source: primary.source.provenance().clone(),
+                    logical_row: Some(row.logical_row),
+                    header: primary.headers[id_index].to_owned(),
+                    column: id_index + 1,
+                },
+            );
             notes.insert(
                 id.clone(),
                 Note {
                     id,
                     note_type_id: note_type_id.clone(),
                     variables: BTreeMap::new(),
-                    fields,
+                    fields: fields.into(),
                     tags,
                     adapter_ids,
                 },
             );
         }
-        Ok(notes)
+        Ok(CsvNoteMaterialization {
+            notes,
+            note_provenance,
+            field_provenance,
+        })
     }
 
     fn mapped_column(

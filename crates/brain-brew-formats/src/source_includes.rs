@@ -78,18 +78,18 @@ where
     E: ToString,
 {
     strict_yaml::reject_duplicate_keys(input).map_err(|error| error.to_string())?;
-    if !input.contains("!include") && !input.contains("!csv") {
+    if !input.contains("!include") && !input.contains("!csv") && !input.contains("!inline") {
         return format(input).map_err(|error| error.to_string());
     }
 
     let mut value = serde_yaml::from_str::<Value>(input).map_err(|error| error.to_string())?;
-    let csv_notes = if value.as_mapping().is_some_and(|mapping| {
+    let note_sources = if value.as_mapping().is_some_and(|mapping| {
         let key = |name: &str| Value::String(name.to_owned());
         mapping.contains_key(key("deck"))
             && !mapping.contains_key(key("id"))
             && !mapping.contains_key(key("kind"))
     }) {
-        crate::csv_note_source::CsvNoteSourceDeclaration::take_from_root(
+        crate::csv_note_source::NoteSourceExpression::take_from_root(
             &mut value,
             &crate::source_document::SourceProvenance::new("<source>"),
         )
@@ -106,11 +106,13 @@ where
     replace_includes_with_sentinels(input, &mut value, &mut replacements)?;
     let source_with_sentinels = serde_yaml::to_string(&value).map_err(|error| error.to_string())?;
     let mut formatted = format(&source_with_sentinels).map_err(|error| error.to_string())?;
+    if let Some(expression) = note_sources {
+        let deck =
+            crate::canonical_yaml::from_str(&formatted).map_err(|error| error.to_string())?;
+        formatted = expression.restore(formatted, &deck)?;
+    }
     formatted = restore_top_level_note_types_include(formatted, note_types_include)?;
     formatted = restore_top_level_media_include(formatted, media_include)?;
-    if let Some(declaration) = csv_notes {
-        formatted = declaration.restore(formatted)?;
-    }
     for replacement in replacements {
         formatted = formatted.replace(&replacement.sentinel, &replacement.directive);
     }
@@ -999,11 +1001,16 @@ pub(crate) fn is_scalar_content_path(path: &[String]) -> bool {
         return (path.len() == 4 && path.get(2).is_some_and(|segment| segment == "fields"))
             || (path.len() == 5 && path.get(2).is_some_and(|segment| segment == "values"));
     }
-    if path.len() == 4
-        && path.first().is_some_and(|segment| segment == "notes")
-        && path.get(2).is_some_and(|segment| segment == "fields")
-    {
-        return true;
+    if path.first().is_some_and(|segment| segment == "notes") {
+        if path.len() == 4 && path.get(2).is_some_and(|segment| segment == "fields") {
+            return true;
+        }
+        if path.len() == 5
+            && path.get(1).is_some_and(|segment| segment.starts_with('['))
+            && path.get(3).is_some_and(|segment| segment == "fields")
+        {
+            return true;
+        }
     }
     if path.len() == 5
         && path.first().is_some_and(|segment| segment == "notes")

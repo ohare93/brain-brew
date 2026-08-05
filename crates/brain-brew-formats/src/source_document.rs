@@ -633,7 +633,7 @@ fn prepare_value(
                 ));
             };
             let target = target.clone();
-            let schema_path = display_path(path);
+            let schema_path = canonical_source_path(path);
             let request = IncludeRequest {
                 referring_source: root.clone(),
                 schema_path: schema_path.clone(),
@@ -924,6 +924,15 @@ fn path_segment(value: &Value) -> String {
         .as_str()
         .map(str::to_owned)
         .unwrap_or_else(|| format!("{value:?}"))
+}
+
+fn canonical_source_path(path: &[String]) -> String {
+    if path.len() > 1 && path[0] == "notes" && path[1].starts_with('[') && path[1].ends_with(']') {
+        let mut canonical = path.to_vec();
+        canonical.remove(1);
+        return display_path(&canonical);
+    }
+    display_path(path)
 }
 
 fn display_path(path: &[String]) -> String {

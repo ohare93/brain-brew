@@ -1,0 +1,42 @@
+deck:
+  id: deck.csv-migration
+  name: CSV migration
+  description: ''
+  adapter_ids:
+    crowdanki:uuid: 43c5ba66-9a65-11e8-90c9-a0481cc15658
+note_types:
+  note-type.basic:
+    name: Basic
+    field_order:
+      - field.front
+      - field.back
+    fields:
+      field.front:
+        name: Front
+      field.back:
+        name: Back
+    card_template_order: []
+    card_templates: {}
+    styling: ''
+    adapter_ids:
+      crowdanki:uuid: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+notes:
+  - !csv
+    descriptor: sources/notes.yaml
+    parameters: {}
+    exclude:
+      note_ids:
+        - note.france
+  - !inline
+    note.france:
+      note_type_id: note-type.basic
+      fields:
+        field.front: France
+        field.back: Paris
+      tags:
+        - europe
+        - geo
+      adapter_ids:
+        crowdanki: guid-france
+media: {}
+tombstones: []

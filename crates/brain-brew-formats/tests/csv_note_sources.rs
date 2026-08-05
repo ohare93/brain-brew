@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 
 use brain_brew_core::{FieldImageReference, FieldValue, StableId};
-use brain_brew_formats::canonical_source_document::CanonicalSourceDocument;
+use brain_brew_formats::canonical_source_document::{
+    CanonicalScalarTarget, CanonicalSourceDocument,
+};
 use brain_brew_formats::csv_note_source::{
     CsvNoteSourceDescriptor, CsvNoteSourceMaterializer, CsvSourceFile, CsvSourceRequestKind,
 };
@@ -44,6 +46,369 @@ fn inline_notes() -> &'static str {
 
 fn csv_declaration() -> &'static str {
     "notes: !csv\n  descriptor: sources/notes.yaml\n  parameters: {}\n"
+}
+
+const MIXED_BASELINE: &str = include_str!("fixtures/csv_notes_mixed/baseline.yaml");
+const MIXED_MIGRATED: &str = include_str!("fixtures/csv_notes_mixed/mixed.yaml");
+const MIXED_DESCRIPTOR: &[u8] = include_bytes!("fixtures/csv_notes_mixed/descriptor.yaml");
+const MIXED_CSV: &[u8] = include_bytes!("fixtures/csv_notes_mixed/notes.csv");
+
+fn parse_migration_fixture(root: &str) -> Result<CanonicalSourceDocument, String> {
+    CanonicalSourceDocument::parse_with_csv_sources(
+        source("deck.yaml", root),
+        |request| Err(format!("unexpected include {}", request.target())),
+        |request| match request.kind() {
+            CsvSourceRequestKind::Descriptor => {
+                Ok(csv_source("sources/notes.yaml", MIXED_DESCRIPTOR))
+            }
+            CsvSourceRequestKind::Table { alias } if alias == "main" => {
+                Ok(csv_source("data/notes.csv", MIXED_CSV))
+            }
+            other => Err(format!("unexpected CSV source request {other:?}")),
+        },
+    )
+    .map_err(|error| error.to_string())
+}
+
+#[test]
+fn csv_to_inline_storage_migration_preserves_canonical_and_crowdanki_bytes() {
+    let baseline = parse_migration_fixture(MIXED_BASELINE).expect("baseline materializes");
+    let migrated = parse_migration_fixture(MIXED_MIGRATED).expect("mixed source materializes");
+
+    assert!(
+        baseline
+            .resolved_deck()
+            .semantic_diff(migrated.resolved_deck())
+            .is_empty(),
+        "moving one complete note changes no CanonicalDeck semantics"
+    );
+    assert_eq!(
+        crowdanki::export_deck(baseline.resolved_deck())
+            .unwrap()
+            .deck_json,
+        crowdanki::export_deck(migrated.resolved_deck())
+            .unwrap()
+            .deck_json,
+        "representative CrowdAnki output stays byte-equal"
+    );
+}
+
+#[test]
+fn full_three_item_source_sequence_materializes_two_csv_sources_and_inline_disjointly() {
+    use brain_brew_formats::canonical_source_document::NoteAuthoringSourceKind;
+
+    let root = MIXED_MIGRATED.replace(
+        "  - !inline\n",
+        "  - !csv\n    descriptor: sources/extra.yaml\n    parameters: {}\n  - !inline\n",
+    );
+    let extra_descriptor = valid_descriptor().replace("data/notes.csv", "data/extra.csv");
+    let extra_csv = b"stable_id,front,back,tags,guid\nnote.spain,Spain,Madrid,europe,guid-spain\n";
+    let mut loaded = Vec::new();
+    let document = CanonicalSourceDocument::parse_with_csv_sources(
+        source("deck.yaml", root.clone()),
+        |request| Err(format!("unexpected include {}", request.target())),
+        |request| {
+            loaded.push(request.target().to_owned());
+            match (request.kind(), request.target()) {
+                (CsvSourceRequestKind::Descriptor, "sources/notes.yaml") => {
+                    Ok(csv_source("sources/notes.yaml", MIXED_DESCRIPTOR))
+                }
+                (CsvSourceRequestKind::Descriptor, "sources/extra.yaml") => Ok(csv_source(
+                    "sources/extra.yaml",
+                    extra_descriptor.clone().into_bytes(),
+                )),
+                (CsvSourceRequestKind::Table { alias }, "data/notes.csv") if alias == "main" => {
+                    Ok(csv_source("data/notes.csv", MIXED_CSV))
+                }
+                (CsvSourceRequestKind::Table { alias }, "data/extra.csv") if alias == "main" => {
+                    Ok(csv_source("data/extra.csv", extra_csv))
+                }
+                other => Err(format!("unexpected CSV source request {other:?}")),
+            }
+        },
+    )
+    .expect("three-item source sequence materializes");
+
+    assert_eq!(
+        loaded,
+        [
+            "sources/notes.yaml",
+            "data/notes.csv",
+            "sources/extra.yaml",
+            "data/extra.csv",
+        ]
+    );
+    assert_eq!(
+        document
+            .resolved_deck()
+            .notes
+            .keys()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+        ["note.france", "note.germany", "note.spain"]
+    );
+    assert_eq!(
+        document.resolved_deck().notes[&sid("note.france")].fields[&sid("field.back")],
+        FieldValue::Scalar("Paris".to_owned())
+    );
+    assert_eq!(
+        document.resolved_deck().notes[&sid("note.germany")].fields[&sid("field.back")],
+        FieldValue::Scalar("Berlin".to_owned())
+    );
+    assert_eq!(
+        document.resolved_deck().notes[&sid("note.spain")].fields[&sid("field.back")],
+        FieldValue::Scalar("Madrid".to_owned())
+    );
+    assert_eq!(document.emit().unwrap().root().text(), root);
+
+    let provenance = document.authoring_provenance();
+    assert_eq!(
+        provenance.note(&sid("note.france")).unwrap().source_kind(),
+        NoteAuthoringSourceKind::Inline
+    );
+    let spain = provenance.note(&sid("note.spain")).unwrap();
+    assert_eq!(spain.source_kind(), NoteAuthoringSourceKind::Csv);
+    assert_eq!(spain.declaration_path(), "notes[1]");
+    assert_eq!(
+        spain.descriptor().unwrap().source_name(),
+        "sources/extra.yaml"
+    );
+    assert_eq!(spain.file().unwrap().source_name(), "data/extra.csv");
+    assert_eq!(spain.logical_row(), Some(2));
+}
+
+#[test]
+fn mixed_sources_reject_collisions_even_when_materialized_notes_are_equal() {
+    let without_exclusion =
+        MIXED_MIGRATED.replace("    exclude:\n      note_ids:\n        - note.france\n", "");
+    for (label, root) in [
+        ("equal", without_exclusion.clone()),
+        (
+            "different",
+            without_exclusion.replace("field.back: Paris", "field.back: Lyon"),
+        ),
+    ] {
+        let error = parse_migration_fixture(&root).expect_err(label).to_string();
+        assert!(
+            error.contains("duplicate ownership of note ID note.france"),
+            "{label}: {error}"
+        );
+        assert!(
+            error.contains("source order never overrides"),
+            "{label}: {error}"
+        );
+    }
+}
+
+#[test]
+fn csv_exclusions_reject_unknown_duplicates_and_missing_transfers() {
+    let unknown = MIXED_MIGRATED.replace("note.france\n  - !inline", "note.unknown\n  - !inline");
+    let error = parse_migration_fixture(&unknown)
+        .expect_err("unknown exclusion fails")
+        .to_string();
+    assert!(
+        error.contains("unknown excluded note ID note.unknown"),
+        "{error}"
+    );
+
+    let duplicate = MIXED_MIGRATED.replace(
+        "        - note.france\n  - !inline",
+        "        - note.france\n        - note.france\n  - !inline",
+    );
+    let error = parse_migration_fixture(&duplicate)
+        .expect_err("duplicate exclusion fails")
+        .to_string();
+    assert!(
+        error.contains("duplicate excluded note ID note.france"),
+        "{error}"
+    );
+
+    let missing_transfer = MIXED_BASELINE.replace(
+        "  parameters: {}\nmedia:",
+        "  parameters: {}\n  exclude:\n    note_ids:\n      - note.france\nmedia:",
+    );
+    let error = parse_migration_fixture(&missing_transfer)
+        .expect_err("an exclusion without a new owner fails")
+        .to_string();
+    assert!(error.contains("ownership transfer is missing"), "{error}");
+}
+
+#[test]
+fn note_source_sequences_require_explicit_known_tags_and_well_formed_values() {
+    let cases = [
+        (
+            "untagged",
+            "notes:\n  - descriptor: sources/notes.yaml\n    parameters: {}\n",
+            "must be explicitly tagged !csv or !inline",
+        ),
+        (
+            "unknown tag",
+            "notes:\n  - !json\n    path: notes.json\n",
+            "unsupported notes source item tag !json",
+        ),
+        (
+            "non-map inline",
+            "notes:\n  - !inline note.france\n",
+            "must contain a note map",
+        ),
+        (
+            "direct inline wrapper",
+            "notes: !inline\n  note.france: {}\n",
+            "unsupported direct notes tag !inline",
+        ),
+    ];
+    for (label, declaration, expected) in cases {
+        let error = CanonicalSourceDocument::parse_with_csv_sources(
+            source("deck.yaml", deck_source(declaration)),
+            |request| Err(format!("unexpected include {}", request.target())),
+            |request| Err(format!("unexpected CSV source {}", request.target())),
+        )
+        .expect_err(label)
+        .to_string();
+        assert!(error.contains(expected), "{label}: {error}");
+    }
+}
+
+#[test]
+fn mixed_source_emission_and_authoring_provenance_are_deterministic() {
+    use brain_brew_formats::canonical_source_document::NoteAuthoringSourceKind;
+
+    let document = parse_migration_fixture(MIXED_MIGRATED).unwrap();
+    assert_eq!(document.emit().unwrap().root().text(), MIXED_MIGRATED);
+    assert_eq!(
+        source_includes::format_preserving_file_includes(
+            MIXED_MIGRATED,
+            brain_brew_formats::canonical_yaml::format_str,
+        )
+        .unwrap(),
+        MIXED_MIGRATED
+    );
+
+    let provenance = document.authoring_provenance();
+    assert_eq!(
+        provenance
+            .notes()
+            .map(|(id, _)| id.to_string())
+            .collect::<Vec<_>>(),
+        ["note.france", "note.germany"]
+    );
+    let france = provenance.note(&sid("note.france")).unwrap();
+    assert_eq!(france.source_kind(), NoteAuthoringSourceKind::Inline);
+    assert_eq!(france.root_declaration().source_name(), "deck.yaml");
+    assert_eq!(france.declaration_path(), "notes[1]");
+    assert_eq!(france.canonical_path(), "notes.note.france");
+    assert!(france.descriptor().is_none());
+    assert!(france.file().is_none());
+
+    let germany = provenance.note(&sid("note.germany")).unwrap();
+    assert_eq!(germany.source_kind(), NoteAuthoringSourceKind::Csv);
+    assert_eq!(germany.declaration_path(), "notes[0]");
+    assert_eq!(
+        germany.descriptor().unwrap().source_name(),
+        "sources/notes.yaml"
+    );
+    assert_eq!(germany.table(), Some("main"));
+    assert_eq!(germany.file().unwrap().source_name(), "data/notes.csv");
+    assert_eq!(germany.logical_row(), Some(3));
+    assert_eq!(germany.header(), Some("stable_id"));
+    assert_eq!(germany.column(), Some(1));
+    assert_eq!(germany.canonical_path(), "notes.note.germany");
+
+    let front = provenance
+        .field(&sid("note.germany"), &sid("field.front"))
+        .unwrap();
+    assert_eq!(front.source_kind(), NoteAuthoringSourceKind::Csv);
+    assert_eq!(front.logical_row(), Some(3));
+    assert_eq!(front.header(), Some("front"));
+    assert_eq!(front.column(), Some(2));
+    assert_eq!(
+        front.canonical_path(),
+        "notes.note.germany.fields.field.front"
+    );
+    assert_eq!(provenance.fields().count(), 4);
+}
+
+#[test]
+fn mixed_inline_notes_preserve_scalar_includes_without_expanding_csv_notes() {
+    let root = MIXED_MIGRATED.replace("field.back: Paris", "field.back: !include paris.txt");
+    let mut document = CanonicalSourceDocument::parse_with_csv_sources(
+        source("deck.yaml", root.clone()),
+        |request| match request.target() {
+            "paris.txt" => Ok(source("paris.txt", "Paris")),
+            other => Err(format!("unexpected include {other}")),
+        },
+        |request| match request.kind() {
+            CsvSourceRequestKind::Descriptor => {
+                Ok(csv_source("sources/notes.yaml", MIXED_DESCRIPTOR))
+            }
+            CsvSourceRequestKind::Table { alias } if alias == "main" => {
+                Ok(csv_source("data/notes.csv", MIXED_CSV))
+            }
+            other => Err(format!("unexpected CSV source request {other:?}")),
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        document.resolved_deck().notes[&sid("note.france")].fields[&sid("field.back")],
+        FieldValue::Scalar("Paris".to_owned())
+    );
+    assert_eq!(document.emit().unwrap().root().text(), root);
+    assert!(
+        !document
+            .emit()
+            .unwrap()
+            .root()
+            .text()
+            .contains("note.germany:")
+    );
+    document
+        .set_scalar(
+            CanonicalScalarTarget::NoteField {
+                note_id: sid("note.france"),
+                field_id: sid("field.back"),
+            },
+            "Paris",
+            "Lyon",
+        )
+        .unwrap();
+    let edited = document.emit().unwrap();
+    assert_eq!(edited.root().text(), root);
+    assert_eq!(edited.included_source("paris.txt").unwrap().text(), "Lyon");
+    assert_eq!(
+        source_includes::format_preserving_file_includes(
+            &root,
+            brain_brew_formats::canonical_yaml::format_str,
+        )
+        .unwrap(),
+        root
+    );
+}
+
+#[test]
+fn direct_inline_and_single_csv_sources_expose_ownership_without_wrappers() {
+    use brain_brew_formats::canonical_source_document::NoteAuthoringSourceKind;
+
+    let inline =
+        CanonicalSourceDocument::parse(source("deck.yaml", deck_source(inline_notes()))).unwrap();
+    assert_eq!(
+        inline
+            .authoring_provenance()
+            .note(&sid("note.one"))
+            .unwrap()
+            .source_kind(),
+        NoteAuthoringSourceKind::Inline
+    );
+    let csv = parse_csv_document(
+        b"stable_id,front,back,tags,guid\nnote.one,Front,Back,,guid-one\n".as_slice(),
+    );
+    assert_eq!(
+        csv.authoring_provenance()
+            .field(&sid("note.one"), &sid("field.back"))
+            .unwrap()
+            .source_kind(),
+        NoteAuthoringSourceKind::Csv
+    );
 }
 
 fn parse_csv_document(csv: impl Into<Vec<u8>>) -> CanonicalSourceDocument {
