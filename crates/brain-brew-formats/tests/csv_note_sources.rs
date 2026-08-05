@@ -71,6 +71,23 @@ fn parse_migration_fixture(root: &str) -> Result<CanonicalSourceDocument, String
 }
 
 #[test]
+fn document_enumerates_every_authoritative_csv_source_in_request_order() {
+    let document = parse_migration_fixture(MIXED_BASELINE).expect("CSV source materializes");
+    let sources = document.csv_sources();
+    assert_eq!(sources.len(), 2);
+    assert!(matches!(sources[0].0, CsvSourceRequestKind::Descriptor));
+    assert_eq!(
+        sources[0].1.provenance().source_name(),
+        "sources/notes.yaml"
+    );
+    assert!(matches!(
+        &sources[1].0,
+        CsvSourceRequestKind::Table { alias } if alias == "main"
+    ));
+    assert_eq!(sources[1].1.provenance().source_name(), "data/notes.csv");
+}
+
+#[test]
 fn csv_to_inline_storage_migration_preserves_canonical_and_crowdanki_bytes() {
     let baseline = parse_migration_fixture(MIXED_BASELINE).expect("baseline materializes");
     let migrated = parse_migration_fixture(MIXED_MIGRATED).expect("mixed source materializes");

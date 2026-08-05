@@ -260,7 +260,10 @@ fn verify_plan_source_formats(plan: &TargetPlan) -> Result<(), String> {
                     ));
                 }
             }
-            PlanSourceKind::Base | PlanSourceKind::ScalarInclude { .. } => {}
+            PlanSourceKind::Base
+            | PlanSourceKind::ScalarInclude { .. }
+            | PlanSourceKind::CsvDescriptor
+            | PlanSourceKind::CsvTable { .. } => {}
         }
     }
     Ok(())

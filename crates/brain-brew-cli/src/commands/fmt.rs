@@ -7,7 +7,8 @@ use brain_brew_formats::{
 
 use crate::help;
 use crate::io::{
-    canonical_source_document, overlay_source_document, workspace_root_for_source_path,
+    canonical_source_document, is_canonical_deck_source, overlay_source_document,
+    workspace_root_for_source_path,
 };
 use crate::output;
 use crate::workspace_mutation::{PlannedWorkspaceFile, commit_workspace_files, recover_workspace};
@@ -62,6 +63,7 @@ fn format_typed_source(path: &Path, input: &str) -> Result<(SourceKind, String),
             .map_err(|error| error.to_string())
     }) {
         Ok(formatted) => return Ok((SourceKind::CanonicalDeck, formatted)),
+        Err(error) if is_canonical_deck_source(input) => return Err(error),
         Err(error) => errors.push(format!("deck: {error}")),
     }
     match overlay_source_document(path, input).and_then(|document| {

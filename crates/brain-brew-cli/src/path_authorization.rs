@@ -54,6 +54,30 @@ impl PathAuthorizer {
         Ok(AuthorizedPath { resolved })
     }
 
+    /// Authorize an existing path relative to the directory containing its
+    /// referring source, while retaining the selected-root confinement policy.
+    pub(crate) fn authorize_read_relative_to(
+        &self,
+        referring_source: &Path,
+        field: impl Into<String>,
+        raw: &str,
+    ) -> Result<AuthorizedPath, Box<PathAuthorizationError>> {
+        let request = self.request(referring_source, field, raw)?;
+        let referring_source = fs::canonicalize(referring_source).map_err(|error| {
+            request.error(format!("referring source cannot be resolved: {error}"))
+        })?;
+        self.require_contained(&request, &referring_source)?;
+        let parent = referring_source
+            .parent()
+            .ok_or_else(|| request.error("referring source has no parent directory".to_owned()))?;
+        let joined = parent.join(request.relative.as_path());
+        let resolved = fs::canonicalize(&joined).map_err(|error| {
+            request.error(format!("target cannot be resolved for reading: {error}"))
+        })?;
+        self.require_contained(&request, &resolved)?;
+        Ok(AuthorizedPath { resolved })
+    }
+
     /// Authorize an existing or new target by resolving its deepest existing
     /// ancestor. Missing suffixes are appended only after the ancestor is known
     /// to be a contained directory.
@@ -285,6 +309,55 @@ mod tests {
                 .unwrap()
                 .join("new/deck.json")
         );
+    }
+
+    #[test]
+    fn authorizes_reads_relative_to_the_referring_source_parent() {
+        let root = TempDir::new().unwrap();
+        fs::create_dir_all(root.path().join("authoring/sources/data")).unwrap();
+        let descriptor = root.path().join("authoring/sources/descriptor.yaml");
+        fs::write(&descriptor, "descriptor").unwrap();
+        fs::write(root.path().join("authoring/sources/data/notes.csv"), "csv").unwrap();
+        let authorizer = PathAuthorizer::new("package", root.path()).unwrap();
+
+        assert_eq!(
+            authorizer
+                .authorize_read_relative_to(&descriptor, "tables.main.path", "data/notes.csv")
+                .unwrap()
+                .as_path(),
+            fs::canonicalize(root.path().join("authoring/sources/data/notes.csv")).unwrap()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn relative_reads_reject_referring_sources_and_targets_outside_selected_root() {
+        use std::os::unix::fs::symlink;
+
+        let root = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        fs::create_dir_all(root.path().join("authoring")).unwrap();
+        let referring = root.path().join("authoring/deck.yaml");
+        fs::write(&referring, "deck").unwrap();
+        fs::write(outside.path().join("descriptor.yaml"), "descriptor").unwrap();
+        symlink(outside.path(), root.path().join("authoring/escape")).unwrap();
+        let authorizer = PathAuthorizer::new("package", root.path()).unwrap();
+
+        for result in [
+            authorizer.authorize_read_relative_to(
+                &referring,
+                "notes.descriptor",
+                "escape/descriptor.yaml",
+            ),
+            authorizer.authorize_read_relative_to(
+                &outside.path().join("descriptor.yaml"),
+                "tables.main.path",
+                "descriptor.yaml",
+            ),
+        ] {
+            let error = result.unwrap_err().to_string();
+            assert!(error.contains("escapes the selected root"), "{error}");
+        }
     }
 
     #[cfg(unix)]

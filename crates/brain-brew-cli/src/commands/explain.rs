@@ -2,7 +2,9 @@ use serde_json::json;
 
 use crate::args::{parse_manifest_target_args, split_json_flag};
 use crate::output::{self, one_line, package_json, semantic_kind_name};
-use crate::planner::{OverlayExpansionOrigin, TargetExpansionOrigin, plan_manifest_target};
+use crate::planner::{
+    OverlayExpansionOrigin, PlanSourceKind, TargetExpansionOrigin, plan_manifest_target,
+};
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     let (json_output, rest) = split_json_flag(args);
@@ -21,6 +23,15 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         }
         println!("target: {}", plan.qualified_name);
         println!("base: {}", plan.base_label);
+        println!("sources:");
+        for source in plan.sources() {
+            println!(
+                "  {} {} sha256:{}",
+                source_kind_name(&source.kind),
+                source.path.display(),
+                source.sha256
+            );
+        }
         println!("overlay stack:");
         if plan.overlays.is_empty() {
             println!("  (none)");
@@ -86,6 +97,20 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             })
         })
         .collect::<Vec<_>>();
+    let sources = plan
+        .sources()
+        .map(|source| {
+            json!({
+                "path": source.path.display().to_string(),
+                "kind": source_kind_name(&source.kind),
+                "sha256": source.sha256,
+                "package": source.package.as_ref().map(|package| json!({
+                    "id": package.id,
+                    "version": package.version,
+                })),
+            })
+        })
+        .collect::<Vec<_>>();
     let overlays = plan
         .overlays
         .iter()
@@ -120,6 +145,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                         "target_expansion": target_expansion,
                         "base": plan.base_label,
                         "overlay_stack": overlay_stack,
+                        "sources": sources,
                         "changes": changes,
                         "errors": [],
                     }))
@@ -152,8 +178,21 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
                 "target_expansion": target_expansion,
                 "base": plan.base_label,
                 "overlay_stack": overlay_stack,
+                "sources": sources,
             }),
             &report,
         )),
+    }
+}
+
+fn source_kind_name(kind: &PlanSourceKind) -> &'static str {
+    match kind {
+        PlanSourceKind::Base => "base",
+        PlanSourceKind::Overlay { .. } => "overlay",
+        PlanSourceKind::ScalarInclude { .. } => "scalar_include",
+        PlanSourceKind::MediaInclude => "media_include",
+        PlanSourceKind::NoteTypesInclude => "note_types_include",
+        PlanSourceKind::CsvDescriptor => "csv_descriptor",
+        PlanSourceKind::CsvTable { .. } => "csv_table",
     }
 }

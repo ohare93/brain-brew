@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use brain_brew_core::{CanonicalDeck, Overlay};
 use brain_brew_formats::canonical_source_document::CanonicalSourceDocument;
+use brain_brew_formats::csv_note_source::{CsvSourceFile, CsvSourceRequest};
 use brain_brew_formats::overlay_source_document::OverlaySourceDocument;
 use brain_brew_formats::source_document::{IncludeRequest, SourceFile, SourceProvenance};
 use brain_brew_formats::{
@@ -48,11 +49,15 @@ pub(crate) fn format_source(input: &str) -> Result<String, String> {
 }
 
 pub(crate) fn format_source_at(path: &Path, input: &str) -> Result<String, String> {
-    if let Ok(document) = canonical_source_document(path, input) {
-        return document
-            .emit()
-            .map(|emission| emission.root().text().to_owned())
-            .map_err(|error| error.to_string());
+    match canonical_source_document(path, input) {
+        Ok(document) => {
+            return document
+                .emit()
+                .map(|emission| emission.root().text().to_owned())
+                .map_err(|error| error.to_string());
+        }
+        Err(error) if is_canonical_deck_source(input) => return Err(error),
+        Err(_) => {}
     }
     if let Ok(document) = overlay_source_document(path, input) {
         return document
@@ -63,15 +68,21 @@ pub(crate) fn format_source_at(path: &Path, input: &str) -> Result<String, Strin
     format_source(input)
 }
 
+pub(crate) fn is_canonical_deck_source(input: &str) -> bool {
+    let Ok(Value::Mapping(mapping)) = serde_yaml::from_str::<Value>(input) else {
+        return false;
+    };
+    ["deck", "note_types", "notes", "media"]
+        .into_iter()
+        .all(|expected| mapping.keys().any(|key| key.as_str() == Some(expected)))
+}
+
 pub(crate) fn canonical_source_document(
     path: &Path,
     input: &str,
 ) -> Result<CanonicalSourceDocument, String> {
     let context = source_context_for_path(path)?;
-    CanonicalSourceDocument::parse_with_includes(source_file(path, input, &context)?, |request| {
-        load_source_include(request, &context)
-    })
-    .map_err(|error| error.to_string())
+    parse_canonical_source(source_file(path, input, &context)?, &context)
 }
 
 pub(crate) fn overlay_source_document(
@@ -95,6 +106,18 @@ fn source_file(path: &Path, input: &str, context: &SourceContext) -> Result<Sour
     ))
 }
 
+fn parse_canonical_source(
+    source: SourceFile,
+    context: &SourceContext,
+) -> Result<CanonicalSourceDocument, String> {
+    CanonicalSourceDocument::parse_with_csv_sources(
+        source,
+        |request| load_source_include(request, context),
+        |request| load_csv_source(request, context),
+    )
+    .map_err(|error| error.to_string())
+}
+
 fn load_source_include(
     request: &IncludeRequest,
     context: &SourceContext,
@@ -108,6 +131,23 @@ fn load_source_include(
         SourceProvenance::new(absolute.display().to_string())
             .with_source_root(context.root.display().to_string()),
         text,
+    ))
+}
+
+fn load_csv_source(
+    request: &CsvSourceRequest,
+    context: &SourceContext,
+) -> Result<CsvSourceFile, String> {
+    let referring = Path::new(request.referring_source().source_name());
+    let absolute = PathAuthorizer::new("package", &context.root)?
+        .authorize_read_relative_to(referring, request.schema_path(), request.target())
+        .map_err(|error| error.to_string())?
+        .into_path_buf();
+    let bytes = fs::read(&absolute).map_err(|error| format!("{}: {error}", absolute.display()))?;
+    Ok(CsvSourceFile::new(
+        SourceProvenance::new(absolute.display().to_string())
+            .with_source_root(context.root.display().to_string()),
+        bytes,
     ))
 }
 
@@ -126,19 +166,13 @@ pub(crate) fn canonical_document_from_package(
         include_roots: include_roots.to_vec(),
     };
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    CanonicalSourceDocument::parse_with_includes(source_file(path, &input, &context)?, |request| {
-        load_source_include(request, &context)
-    })
-    .map_err(|error| error.to_string())
+    parse_canonical_source(source_file(path, &input, &context)?, &context)
 }
 
 fn read_deck_with_context(path: &Path, context: &SourceContext) -> Result<CanonicalDeck, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    CanonicalSourceDocument::parse_with_includes(source_file(path, &input, context)?, |request| {
-        load_source_include(request, context)
-    })
-    .map(|document| document.resolved_deck().clone())
-    .map_err(|error| error.to_string())
+    parse_canonical_source(source_file(path, &input, context)?, context)
+        .map(|document| document.resolved_deck().clone())
 }
 
 pub(crate) fn overlay_document_from_package(
@@ -302,7 +336,11 @@ fn nearest_manifest_root(path: &Path) -> Option<PathBuf> {
     let mut current = path.parent()?;
     loop {
         if current.join("brainbrew.yaml").exists() {
-            return Some(current.to_path_buf());
+            return Some(if current.as_os_str().is_empty() {
+                PathBuf::from(".")
+            } else {
+                current.to_path_buf()
+            });
         }
         current = current.parent()?;
     }

@@ -514,6 +514,8 @@ impl SourceKindName for SourceProvenance {
             PlanSourceKind::ScalarInclude { .. } => "scalar include",
             PlanSourceKind::MediaInclude => "media include",
             PlanSourceKind::NoteTypesInclude => "note-types include",
+            PlanSourceKind::CsvDescriptor => "CSV descriptor",
+            PlanSourceKind::CsvTable { .. } => "CSV table",
         }
     }
 }

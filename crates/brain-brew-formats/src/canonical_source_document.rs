@@ -13,8 +13,8 @@ use brain_brew_core::{CanonicalDeck, FieldValue, StableId};
 use crate::canonical_yaml;
 use crate::csv_note_source::{
     CsvCellProvenance, CsvNoteSourceDeclaration, CsvNoteSourceDescriptor,
-    CsvNoteSourceMaterializer, CsvSourceFile, CsvSourceRequest, NoteSourceExpression,
-    NoteSourceItem,
+    CsvNoteSourceMaterializer, CsvSourceFile, CsvSourceRequest, CsvSourceRequestKind,
+    NoteSourceExpression, NoteSourceItem,
 };
 use crate::source_document::{
     EditLocation, ImageConversionReport, IncludeRequest, IncludeState, IncludedSource,
@@ -210,6 +210,7 @@ pub struct CanonicalSourceDocument {
     includes: IncludeState,
     note_sources: Option<NoteSourceExpression>,
     authoring_provenance: NoteAuthoringProvenance,
+    csv_sources: Vec<(CsvSourceRequestKind, CsvSourceFile)>,
     original_sources: BTreeMap<SourceProvenance, SourceFile>,
 }
 
@@ -302,7 +303,7 @@ impl CanonicalSourceDocument {
         if let Some(media) = prepared.includes.media() {
             resolved_deck.media = media.clone();
         }
-        let authoring_provenance = materialize_note_sources(
+        let (authoring_provenance, csv_sources) = materialize_note_sources(
             &mut resolved_deck,
             note_sources.as_ref(),
             prepared.root.provenance(),
@@ -322,6 +323,7 @@ impl CanonicalSourceDocument {
             includes: prepared.includes,
             note_sources,
             authoring_provenance,
+            csv_sources,
             original_sources,
         })
     }
@@ -341,6 +343,7 @@ impl CanonicalSourceDocument {
             includes: IncludeState::default(),
             note_sources: None,
             authoring_provenance,
+            csv_sources: Vec::new(),
             original_sources: BTreeMap::new(),
         })
     }
@@ -359,6 +362,11 @@ impl CanonicalSourceDocument {
     /// Per-note and per-field authoring ownership for the materialized deck.
     pub fn authoring_provenance(&self) -> &NoteAuthoringProvenance {
         &self.authoring_provenance
+    }
+
+    /// Every authoritative CSV descriptor and table loaded by this document.
+    pub fn csv_sources(&self) -> &[(CsvSourceRequestKind, CsvSourceFile)] {
+        &self.csv_sources
     }
 
     /// Every scalar or structural media source loaded by this document.
@@ -563,10 +571,17 @@ fn materialize_note_sources(
     expression: Option<&NoteSourceExpression>,
     root: &SourceProvenance,
     csv_loader: &mut impl FnMut(&CsvSourceRequest) -> Result<CsvSourceFile, String>,
-) -> Result<NoteAuthoringProvenance, SourceDocumentError> {
+) -> Result<
+    (
+        NoteAuthoringProvenance,
+        Vec<(CsvSourceRequestKind, CsvSourceFile)>,
+    ),
+    SourceDocumentError,
+> {
     let mut provenance = NoteAuthoringProvenance::default();
     let mut owners = BTreeMap::<StableId, String>::new();
-    let mut csv_sources = Vec::new();
+    let mut declarations = Vec::new();
+    let mut loaded_sources = Vec::new();
 
     match expression {
         None => {
@@ -581,14 +596,14 @@ fn materialize_note_sources(
         }
         Some(NoteSourceExpression::Csv(declaration)) => {
             resolved_deck.notes.clear();
-            csv_sources.push(("notes".to_owned(), declaration));
+            declarations.push(("notes".to_owned(), declaration));
         }
         Some(NoteSourceExpression::Sequence(sources)) => {
             for (index, source) in sources.iter().enumerate() {
                 let declaration_path = format!("notes[{index}]");
                 match source {
                     NoteSourceItem::Csv(declaration) => {
-                        csv_sources.push((declaration_path, declaration));
+                        declarations.push((declaration_path, declaration));
                     }
                     NoteSourceItem::Inline { note_ids } => {
                         for note_id in note_ids {
@@ -614,7 +629,7 @@ fn materialize_note_sources(
     }
 
     let mut exclusions = Vec::<(StableId, String)>::new();
-    for (declaration_path, declaration) in csv_sources {
+    for (declaration_path, declaration) in declarations {
         let descriptor_path = format!("{declaration_path}.descriptor");
         let descriptor_request = CsvSourceRequest::descriptor(
             root.clone(),
@@ -631,6 +646,7 @@ fn materialize_note_sources(
                 ),
             )
         })?;
+        loaded_sources.push((CsvSourceRequestKind::Descriptor, descriptor_bytes.clone()));
         let descriptor_text = std::str::from_utf8(descriptor_bytes.bytes()).map_err(|error| {
             SourceDocumentError::at(
                 descriptor_bytes.provenance(),
@@ -671,6 +687,7 @@ fn materialize_note_sources(
                     format!("could not load CSV table {:?}: {message}", request.target()),
                 )
             })?;
+            loaded_sources.push((request.kind().clone(), table.clone()));
             tables.insert(alias, table);
         }
         let mut materialized = materializer
@@ -745,7 +762,7 @@ fn materialize_note_sources(
             ));
         }
     }
-    Ok(provenance)
+    Ok((provenance, loaded_sources))
 }
 
 fn inline_provenance(

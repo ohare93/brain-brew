@@ -5,7 +5,6 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::SystemTime;
 
 use axum::body::Body;
 use axum::extract::{Path as AxumPath, Query, State};
@@ -618,8 +617,7 @@ struct WorkspaceMetadata {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct FileSignature {
-    len: u64,
-    modified: Option<SystemTime>,
+    sha256: String,
 }
 
 #[derive(Clone)]
@@ -772,9 +770,8 @@ impl WorkspaceMetadata {
         Ok(paths
             .into_iter()
             .map(|path| {
-                let signature = fs::metadata(&path).ok().map(|metadata| FileSignature {
-                    len: metadata.len(),
-                    modified: metadata.modified().ok(),
+                let signature = fs::read(&path).ok().map(|bytes| FileSignature {
+                    sha256: format!("{:x}", Sha256::digest(bytes)),
                 });
                 (path, signature)
             })
@@ -4335,6 +4332,8 @@ fn ensure_root_source_mutable(
                     crate::planner::PlanSourceKind::ScalarInclude { .. } => "scalar include",
                     crate::planner::PlanSourceKind::MediaInclude => "media include",
                     crate::planner::PlanSourceKind::NoteTypesInclude => "note-types include",
+                    crate::planner::PlanSourceKind::CsvDescriptor => "CSV descriptor",
+                    crate::planner::PlanSourceKind::CsvTable { .. } => "CSV table",
                 },
                 source.path.display()
             ),
@@ -5499,6 +5498,50 @@ tombstones: []
             outputs,
             b"external translation edit\n",
         );
+    }
+
+    #[test]
+    fn csv_descriptor_and_table_bytes_participate_in_workbench_freshness() {
+        let workspace = tempfile::tempdir().unwrap();
+        fs::create_dir_all(workspace.path().join("sources/data")).unwrap();
+        let manifest_path = workspace.path().join("brainbrew.yaml");
+        fs::write(
+            &manifest_path,
+            "base: deck.yaml\noverlays: {}\ntargets:\n  standard:\n    overlays: []\n",
+        )
+        .unwrap();
+        fs::write(
+            workspace.path().join("deck.yaml"),
+            "deck:\n  id: deck.csv-workbench\n  name: CSV Workbench\n  description: ''\n  adapter_ids: {}\nnote_types:\n  note-type.basic:\n    name: Basic\n    field_order:\n      - field.front\n    fields:\n      field.front:\n        name: Front\n    card_template_order: []\n    card_templates: {}\n    styling: ''\n    adapter_ids: {}\nnotes: !csv\n  descriptor: sources/descriptor.yaml\n  parameters: {}\nmedia: {}\ntombstones: []\n",
+        )
+        .unwrap();
+        fs::write(
+            workspace.path().join("sources/descriptor.yaml"),
+            "version: 1\nprimary_table: main\ntables:\n  main:\n    path: data/notes.csv\nparameters: {}\njoins: []\nnote:\n  id: main.stable_id\n  note_type_id: note-type.basic\n  fields:\n    field.front:\n      column: main.front\n      type: scalar\n  tags:\n    column: main.tags\n    delimiter: '|'\n  adapter_ids: {}\n",
+        )
+        .unwrap();
+        let table = workspace.path().join("sources/data/notes.csv");
+        fs::write(&table, "stable_id,front,tags\nnote.one,Hallo,geo\n").unwrap();
+
+        let manifest = read_manifest(&manifest_path).unwrap();
+        let metadata =
+            WorkspaceMetadata::load(&manifest_path, manifest.clone(), &[], false).unwrap();
+        let before = metadata.tracked_file_signatures(&manifest).unwrap();
+        let descriptor = workspace.path().join("sources/descriptor.yaml");
+        assert!(before.contains_key(&descriptor));
+        assert!(before.contains_key(&table));
+
+        let descriptor_bytes = fs::read_to_string(&descriptor)
+            .unwrap()
+            .replace("delimiter: '|'", "delimiter: ','");
+        fs::write(&descriptor, descriptor_bytes).unwrap();
+        let descriptor_changed = metadata.tracked_file_signatures(&manifest).unwrap();
+        assert_ne!(before[&descriptor], descriptor_changed[&descriptor]);
+        assert_eq!(before[&table], descriptor_changed[&table]);
+
+        fs::write(&table, "stable_id,front,tags\nnote.one,Servu,geo\n").unwrap();
+        let after = metadata.tracked_file_signatures(&manifest).unwrap();
+        assert_ne!(descriptor_changed[&table], after[&table]);
     }
 
     #[test]

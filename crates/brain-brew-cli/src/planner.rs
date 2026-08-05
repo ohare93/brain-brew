@@ -63,6 +63,8 @@ pub(crate) enum PlanSourceKind {
     ScalarInclude { schema_path: String },
     MediaInclude,
     NoteTypesInclude,
+    CsvDescriptor,
+    CsvTable { alias: String },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -409,7 +411,10 @@ impl ManifestRegistry {
                 canonical_document_from_package(&base_path, &loaded.root, &loaded.include_roots)?;
             let source = source_provenance(loaded, base_path, PlanSourceKind::Base)?;
             sources.insert(source.path.clone(), source);
-            for include in included_provenance(loaded, base_document.included_sources())? {
+            for include in included_provenance(loaded, base_document.included_sources())?
+                .into_iter()
+                .chain(csv_source_provenance(loaded, base_document.csv_sources())?)
+            {
                 sources.insert(include.path.clone(), include);
             }
             for (overlay_id, entry) in &loaded.manifest.overlays {
@@ -475,7 +480,11 @@ impl ManifestRegistry {
         )?;
         let base = base_document.resolved_deck().clone();
         let base_source = source_provenance(base_loaded, base_path, PlanSourceKind::Base)?;
-        let base_includes = included_provenance(base_loaded, base_document.included_sources())?;
+        let mut base_includes = included_provenance(base_loaded, base_document.included_sources())?;
+        base_includes.extend(csv_source_provenance(
+            base_loaded,
+            base_document.csv_sources(),
+        )?);
 
         let mut overlays = Vec::new();
         let media_declaration_source = base_includes
@@ -941,7 +950,16 @@ fn source_provenance(
     kind: PlanSourceKind,
 ) -> Result<SourceProvenance, String> {
     let bytes = fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?;
-    Ok(SourceProvenance {
+    Ok(source_provenance_from_bytes(loaded, path, kind, &bytes))
+}
+
+fn source_provenance_from_bytes(
+    loaded: &RegistryManifest,
+    path: PathBuf,
+    kind: PlanSourceKind,
+    bytes: &[u8],
+) -> SourceProvenance {
+    SourceProvenance {
         package: loaded.identity.clone(),
         package_root: loaded.root.clone(),
         manifest: loaded.path.clone(),
@@ -949,7 +967,7 @@ fn source_provenance(
         path,
         kind,
         sha256: format!("{:x}", Sha256::digest(bytes)),
-    })
+    }
 }
 
 fn included_provenance(
@@ -967,6 +985,36 @@ fn included_provenance(
                 IncludedSourceKind::NoteTypeDeclarations => PlanSourceKind::NoteTypesInclude,
             };
             source_provenance(loaded, provenance_path(source.provenance())?, kind)
+        })
+        .collect()
+}
+
+fn csv_source_provenance(
+    loaded: &RegistryManifest,
+    sources: &[(
+        brain_brew_formats::csv_note_source::CsvSourceRequestKind,
+        brain_brew_formats::csv_note_source::CsvSourceFile,
+    )],
+) -> Result<Vec<SourceProvenance>, String> {
+    sources
+        .iter()
+        .map(|(kind, source)| {
+            let kind = match kind {
+                brain_brew_formats::csv_note_source::CsvSourceRequestKind::Descriptor => {
+                    PlanSourceKind::CsvDescriptor
+                }
+                brain_brew_formats::csv_note_source::CsvSourceRequestKind::Table { alias } => {
+                    PlanSourceKind::CsvTable {
+                        alias: alias.clone(),
+                    }
+                }
+            };
+            Ok(source_provenance_from_bytes(
+                loaded,
+                provenance_path(source.provenance())?,
+                kind,
+                source.bytes(),
+            ))
         })
         .collect()
 }
@@ -1130,6 +1178,54 @@ mod tests {
     use std::fs;
 
     use super::*;
+
+    #[test]
+    fn csv_provenance_hashes_the_injected_materialized_bytes() {
+        use brain_brew_formats::csv_note_source::{CsvSourceFile, CsvSourceRequestKind};
+        use brain_brew_formats::source_document::SourceProvenance as DocumentProvenance;
+
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("notes.csv");
+        fs::write(&path, b"bytes changed after materialization").unwrap();
+        let manifest_path = root.path().join("brainbrew.yaml");
+        fs::write(
+            &manifest_path,
+            "base: deck.yaml\noverlays: {}\ntargets: {}\n",
+        )
+        .unwrap();
+        let loaded = RegistryManifest {
+            path: manifest_path,
+            root: fs::canonicalize(root.path()).unwrap(),
+            include_roots: Vec::new(),
+            identity: None,
+            discovery: RegistrySourceKind::RootManifest,
+            manifest: manifest::from_str("base: deck.yaml\noverlays: {}\ntargets: {}\n").unwrap(),
+        };
+        let materialized = b"exact materialized bytes";
+        let source = CsvSourceFile::new(
+            DocumentProvenance::new(path.display().to_string()),
+            materialized,
+        );
+
+        let provenance = csv_source_provenance(
+            &loaded,
+            &[(
+                CsvSourceRequestKind::Table {
+                    alias: "main".to_owned(),
+                },
+                source,
+            )],
+        )
+        .unwrap();
+        assert_eq!(
+            provenance[0].sha256,
+            format!("{:x}", Sha256::digest(materialized))
+        );
+        assert_ne!(
+            provenance[0].sha256,
+            format!("{:x}", Sha256::digest(fs::read(&path).unwrap()))
+        );
+    }
 
     #[test]
     fn plan_retains_package_include_overlay_and_media_provenance() {
