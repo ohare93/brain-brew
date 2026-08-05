@@ -23,7 +23,7 @@ The maintained product surface is:
 
 The Canonical Deck File remains the strict root YAML declaration. Inline YAML and explicitly declared read-only sources such as CSV may own disjoint canonical paths and materialize into the same filesystem-independent `CanonicalDeck`, `Overlay`, and `TranslationDictionary` models. Source order never grants override precedence, and CSV-owned paths remain read-only until ownership moves explicitly to native YAML.
 
-Production Ultimate Geography source changes remain gated until the composable CSV authoring epic's repository-owned fixture certification passes. The separately pinned live-consumer gate then remains mandatory.
+The composable CSV authoring epic is certified by the maintained repository-owned workflow in [Composable CSV certification fixture](../authoring/composable-csv-certification.md). The `ultimate-geography-production` epic may resume only after that certification passes in the integrating commit; the separately pinned live-consumer/update gate then remains mandatory before production source adoption.
 
 ## Non-goals for the current milestone
 

@@ -1,0 +1,18 @@
+media.flag.france:
+  path: flag-france.svg
+  sha256: e90f7ec5ac1b1908ff4e8d4530a22b15736f52b82eef6e946c41b72f646fa9cb
+media.flag.germany:
+  path: flag-germany.svg
+  sha256: 48087cc3b18b97a973f8e9247d039f69394af676efba4aa66b24db73b4e3a55e
+media.flag.spain:
+  path: flag-spain.svg
+  sha256: 20a88409423690aeb699af239e3af4aab043e959bbcde9c251a27ffa4e406748
+media.map.france:
+  path: map-france.svg
+  sha256: 1f09b3d1b062356f96b0893bb42eb71bc26563eaee292030f66616fcda05b527
+media.map.germany:
+  path: map-germany.svg
+  sha256: 62e91fb807eac236ffa3476f99edfcffb727c7bcbf5c5dc1f857c48298664fff
+media.map.spain:
+  path: map-spain.svg
+  sha256: e82220c7d065b808be546b4f5e5f06a6385c6e31c20e2c7a81dc1611da26a546

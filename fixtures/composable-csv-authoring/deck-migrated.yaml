@@ -1,0 +1,33 @@
+deck:
+  id: deck.composable-csv-certification
+  name: Composable CSV Certification
+  description: Repository-owned UG-shaped certification fixture.
+  adapter_ids:
+    crowdanki:uuid: 11111111-1111-1111-1111-111111111111
+note_types: !include note-types.yaml
+notes:
+  - !csv
+    descriptor: sources/countries.yaml
+    parameters:
+      language: ''
+    exclude:
+      note_ids:
+        - note.france
+  - !inline
+    note.france:
+      note_type_id: note-type.country
+      fields:
+        field.country: France
+        field.capital: Paris
+        field.continent: Europe
+        field.shared: Shared
+        field.hint: Remove me
+        field.flag: !image media.flag.france
+        field.map: !image media.map.france
+      tags:
+        - europe
+        - geography
+      adapter_ids:
+        crowdanki: guid-fr
+media: !include media.yaml
+tombstones: []

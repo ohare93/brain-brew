@@ -1,0 +1,34 @@
+id: overlay.translation.de
+kind: translation
+translations:
+  from_csv:
+    - descriptor: sources/countries-experimental.yaml
+      parameters:
+        language: de
+      exclude:
+        source_texts:
+          - Europe
+        note_ids:
+          - note.france
+        paths:
+          - notes.note.germany.fields.field.shared
+  direct:
+    Europe: Europa
+    France: Frankreich
+  contextual:
+    notes.note:
+      france.fields.field.shared:
+        Shared: Gemeinsam
+      germany.fields.field.shared:
+        Shared: Geteilt
+  no_change:
+    - Paris
+  adapter_ids:
+    crowdanki:
+      guid-fr: guid-fr-de
+target_adaptations:
+  notes.note.france.fields.field.hint:
+    intent: delete
+    ownership: translation
+    expected_source: Remove me
+    reason: Migrated from certified CSV translation ownership.

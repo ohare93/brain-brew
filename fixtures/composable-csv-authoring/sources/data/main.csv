@@ -1,0 +1,4 @@
+stable_id,iso,flag,map,region_code,tags
+note.france,FR,media.flag.france,media.map.france,WE,geography|europe
+note.germany,DE,media.flag.germany,media.map.germany,CE,geography|europe
+note.spain,ES,media.flag.spain,media.map.spain,SW,geography|europe

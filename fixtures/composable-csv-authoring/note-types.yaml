@@ -1,0 +1,42 @@
+note-type.country:
+  name: Country
+  field_order:
+    - field.country
+    - field.capital
+    - field.continent
+    - field.shared
+    - field.hint
+    - field.flag
+    - field.map
+  fields:
+    field.country:
+      name: Country
+    field.capital:
+      name: Capital
+    field.continent:
+      name: Continent
+    field.shared:
+      name: Shared phrase
+    field.hint:
+      name: Hint
+    field.flag:
+      name: Flag
+    field.map:
+      name: Map
+  card_template_order:
+    - template.country-capital
+    - template.country-map
+  card_templates:
+    template.country-capital:
+      name: Country - Capital
+      question_format: '{{Country}}'
+      answer_format: '{{FrontSide}}<hr id=answer>{{Capital}}'
+      adapter_ids: {}
+    template.country-map:
+      name: Country - Map
+      question_format: '{{Country}}'
+      answer_format: '{{FrontSide}}<hr id=answer>{{Map}}'
+      adapter_ids: {}
+  styling: '.card { font-family: sans-serif; }'
+  adapter_ids:
+    crowdanki:uuid: 22222222-2222-2222-2222-222222222222

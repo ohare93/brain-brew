@@ -149,4 +149,7 @@ brainbrew fmt brainbrew.yaml
 find overlays -name '*.yaml' -print0 | xargs -0 -n1 brainbrew fmt
 ```
 
-`brainbrew verify --all-targets` also checks formatting.
+`brainbrew verify --all-targets` also checks formatting. The maintained
+[Composable CSV certification fixture](composable-csv-certification.md) shows
+all-CSV and mixed/native states together and provides the executable end-to-end
+workflow.

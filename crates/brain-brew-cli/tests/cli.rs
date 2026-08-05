@@ -267,6 +267,171 @@ fn workbench_runtime_flag_cannot_bypass_missing_compile_capability() {
 
 #[cfg(feature = "workbench-write-dev")]
 #[test]
+fn workbench_certified_composable_csv_fixture_enforces_and_transfers_capabilities() {
+    let dir = temp_dir("workbench-composable-csv-certification");
+    copy_composable_csv_fixture(&dir);
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew-migrated.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+        "--enable-write",
+    ]);
+
+    let pivot = get_json(&server.url("/api/workbench/note-pivot?language=de&target=experimental"));
+    let field = |note_id: &str, field_id: &str| {
+        pivot["notes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|note| note["note_id"] == note_id)
+            .unwrap()["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|field| field["field_id"] == field_id)
+            .unwrap()
+            .clone()
+    };
+    let france = field("note.france", "field.country");
+    assert_eq!(france["source_capability"]["source_kind"], "inline");
+    assert_eq!(france["translation_capability"]["source_kind"], "inline");
+    assert_eq!(france["source_editable"], true);
+    assert_eq!(france["editable"], true);
+    let germany = field("note.germany", "field.country");
+    assert_eq!(germany["source_capability"]["source_kind"], "csv");
+    assert_eq!(germany["translation_capability"]["source_kind"], "csv");
+    assert_eq!(germany["source_editable"], false);
+    assert_eq!(germany["editable"], false);
+
+    let sparse_pivot = get_json(
+        &server
+            .url("/api/workbench/note-pivot?language=de&target=experimental&overlay=experimental"),
+    );
+    let sparse_field = |note_id: &str| {
+        sparse_pivot["notes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|note| note["note_id"] == note_id)
+            .unwrap()["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|field| field["field_id"] == "field.region-code")
+            .unwrap()
+            .clone()
+    };
+    let france_region = sparse_field("note.france");
+    assert_eq!(france_region["source"], "WE");
+    assert_eq!(france_region["source_capability"]["source_kind"], "inline");
+    assert_eq!(france_region["source_capability"]["writable"], true);
+    assert_eq!(france_region["source_editable"], true);
+    for (note_id, value) in [("note.germany", "CE"), ("note.spain", "SW")] {
+        let region = sparse_field(note_id);
+        assert_eq!(region["source"], value);
+        assert_eq!(region["source_capability"]["source_kind"], "csv");
+        assert_eq!(region["source_capability"]["writable"], false);
+        assert_eq!(region["source_editable"], false);
+        assert_eq!(
+            region["source_capability"]["provenance"]["declaration"],
+            "field_additions.note-type.country.values.from_csv[0]"
+        );
+    }
+
+    let sparse_forbidden = serde_json::json!({
+        "language": "de",
+        "target": "experimental",
+        "overlay": "experimental",
+        "edits": [{
+            "kind": "source",
+            "path": "notes.note.germany.fields.field.region-code",
+            "source": "CE",
+            "value": "FORBIDDEN",
+            "mode": "direct",
+            "scope": "field"
+        }]
+    });
+    let (status, body) = post_json_error(
+        &server.url("/api/workbench/apply-preview"),
+        sparse_forbidden,
+    );
+    assert_eq!(status, 403);
+    let error: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(error["error"]["code"], "csv_source_read_only");
+
+    let forbidden = serde_json::json!({
+        "language": "de",
+        "target": "experimental",
+        "edits": [{
+            "kind": "translation",
+            "path": "notes.note.germany.fields.field.country",
+            "source": "Germany",
+            "value": "Verboten",
+            "mode": "contextual"
+        }]
+    });
+    let (status, body) = post_json_error(&server.url("/api/workbench/apply-preview"), forbidden);
+    assert_eq!(status, 403);
+    let error: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(error["error"]["code"], "csv_source_read_only");
+
+    let native_edit = serde_json::json!({
+        "language": "de",
+        "target": "experimental",
+        "overlay": "base",
+        "edits": [{
+            "kind": "source",
+            "path": "notes.note.france.fields.field.country",
+            "source": "France",
+            "value": "French Republic",
+            "scope": "field",
+            "impact_action": "stale_translation"
+        }]
+    });
+    let preview = post_json(
+        &server.url("/api/workbench/apply-preview"),
+        native_edit.clone(),
+    );
+    assert_eq!(preview["validation"]["ok"], true);
+    let applied = post_json(&server.url("/api/workbench/apply"), native_edit);
+    assert_eq!(applied["applied"], true);
+    assert!(
+        fs::read_to_string(dir.join("deck-migrated.yaml"))
+            .unwrap()
+            .contains("field.country: French Republic")
+    );
+    let overlay = fs::read_to_string(dir.join("translation-de-migrated.yaml")).unwrap();
+    assert!(overlay.contains("stale_translations:"));
+    assert!(overlay.contains("old_source: France"));
+    assert!(overlay.contains("new_source: French Republic"));
+}
+
+fn copy_composable_csv_fixture(destination: &Path) {
+    fn copy_tree(source: &Path, destination: &Path) {
+        for entry in fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let target = destination.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                fs::create_dir(&target).unwrap();
+                copy_tree(&entry.path(), &target);
+            } else {
+                fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+
+    copy_tree(
+        &workspace_root().join("fixtures/composable-csv-authoring"),
+        destination,
+    );
+}
+
+#[cfg(feature = "workbench-write-dev")]
+#[test]
 fn workbench_new_language_scaffold_preview_write_and_initial_edit() {
     let dir = temp_dir("workbench-new-language");
     write_workbench_workspace(&dir);

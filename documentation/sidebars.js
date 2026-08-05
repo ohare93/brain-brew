@@ -26,6 +26,7 @@ const sidebars = {
       label: 'Authoring',
       items: [
         'authoring/workspace',
+        'authoring/composable-csv-certification',
         'authoring/manifests-targets',
         'authoring/translations',
         'authoring/extensions',
