@@ -4,6 +4,8 @@
 **Status**: Accepted  
 **Deciders**: Project Lead
 
+> **Amendment:** ADR-022 permits explicitly declared, source-controlled CSV to materialize the existing `TranslationDictionary` categories. The dictionary remains authoritative; CSV does not apply localized note replacements or replace core translation semantics. Historical stale detection is unavailable while both sides of a translation pair regenerate from live CSV.
+
 ## Context
 
 Translation overlays become hard to review when a small phrase change requires replacing entire card template HTML blocks. Note field translations are also noisy if every entry repeats replace intent and expected-base boilerplate. At the same time, translations still need drift protection: stale translations should fail when upstream source text changes.

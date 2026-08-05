@@ -4,15 +4,17 @@
 **Status**: Accepted  
 **Deciders**: Project Lead
 
+> **Amendment:** ADR-022 keeps strict canonical YAML as the root Canonical Deck File and native source format, but permits explicitly declared read-only Authoring Sources such as CSV to own disjoint canonical paths.
+
 ## Context
 
 Deck maintainers need source files that are easy to review, version, canonicalize, and export through adapter formats. Brain Brew should preserve intentional deck information, but it should not promise to preserve arbitrary input bytes, hand formatting, unsupported adapter payloads, or source ownership recovery from an adapter export.
 
 ## Decision
 
-Store maintainer-owned Canonical Deck source as strict canonical YAML.
+Store the root Canonical Deck File and native maintainer-owned source as strict canonical YAML. ADR-022 permits that root to declare read-only Authoring Sources for disjoint canonical paths.
 
-Canonical YAML is schema-driven and deterministic. Formatting produces byte-stable canonicalized source, not arbitrary original source bytes. A federated package may contain multiple source files such as a base deck, overlays, a manifest, and a lockfile, but each Canonical Deck source file has one canonical representation.
+Canonical YAML is schema-driven and deterministic. Formatting produces byte-stable canonicalized source, not arbitrary original source bytes. A federated package may contain multiple source files such as a base deck, overlays, a manifest, a lockfile, and declared external source inputs, but each native Canonical Deck YAML file has one canonical representation.
 
 ## Rationale
 

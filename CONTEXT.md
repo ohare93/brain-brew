@@ -37,8 +37,12 @@ The format-independent representation of a deck's notes, note types, card templa
 _Avoid_: canonical note list, CrowdAnki JSON
 
 **Canonical Deck File**:
-The maintainer-owned source file containing a canonical deck.
-_Avoid_: generated artifact, adapter export
+The root maintainer-owned YAML declaration that embeds or names **Authoring Sources** which resolve into a **Canonical Deck**.
+_Avoid_: complete source set, generated artifact, adapter export
+
+**Authoring Source**:
+A maintainer-owned representation that owns selected, disjoint canonical paths and materializes them into a **Canonical Deck**, **Overlay**, or **Translation Dictionary**. An Authoring Source may be native YAML or an explicitly declared read-only external source such as CSV.
+_Avoid_: resolved deck, adapter export, implicit override layer
 
 **Note**:
 A deck entity containing field values and tags for one learnable fact or item.
@@ -211,7 +215,8 @@ _Avoid_: promise of an Anki-to-source merge or source ownership recovery
 - A **Learner** studies a **Shared Deck** and may have a **Personal Overlay**.
 - **Brain Brew** works on **Decks**.
 - A **Canonical Deck** represents one **Deck** without binding it to a source or distribution format.
-- A **Canonical Deck File** is the source of truth for a **Canonical Deck**.
+- A **Canonical Deck File** is the root declaration for the **Authoring Sources** that resolve into a **Canonical Deck**.
+- An **Authoring Source** owns an explicit, disjoint portion of a **Canonical Deck**, **Overlay**, or **Translation Dictionary**.
 - A **Deck** contains **Deck Entities**.
 - A **Note** belongs to one **Note Type**.
 - A **Note Type** has one or more **Card Templates**.
@@ -259,7 +264,7 @@ _Avoid_: promise of an Anki-to-source merge or source ownership recovery
 - "media in the deck file" could mean embedded bytes; resolved: **Canonical Deck** stores **Media References**, while **Media Assets** remain external files.
 - "overlay order" could imply last-write-wins; resolved: an **Overlay Stack** is ordered, but conflicting changes fail unless explicitly resolved.
 - "byte-for-byte adapter equivalence" could mean preserving arbitrary input formatting; resolved: byte stability applies to **Canonicalized Source**.
-- "CSV source" previously implied the maintainer source of truth; resolved: the **Canonical Deck File** is the source of truth, while CSV is an adapter format.
+- "CSV source" previously implied either an adapter format or the complete maintainer source of truth; resolved: a declared read-only CSV may be an **Authoring Source** for selected canonical paths, while the **Canonical Deck File** remains the root YAML declaration.
 - "subdeck" could mean Anki deck hierarchy; resolved: composable source packages in a deck federation are **Federated Decks**, not Anki subdecks.
 - "translated deck identity" could mean a separate stable identity per language; resolved: translations use language-neutral **Stable IDs** for the same conceptual **Deck Entities** and language-specific external identities remain **Adapter IDs**.
 - "Ultimate Geography support" could mean product-specific application behavior; resolved: Ultimate Geography is a demanding case study and parity fixture for general Brain Brew federation behavior, not a special-purpose application feature.

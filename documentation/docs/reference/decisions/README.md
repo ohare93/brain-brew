@@ -29,6 +29,7 @@ The ADRs are written in hindsight around the decisions that still shape the Rust
 | [0019](0019-use-canonical-entity-fingerprints-for-complete-destructive-changes.md) | Use Canonical Entity Fingerprints for Complete Destructive Changes | Accepted | 2026-07-10 |
 | [0020](0020-address-removals-with-typed-path-tombstones.md) | Address Removals with Typed Path Tombstones | Accepted | 2026-07-10 |
 | [0021](0021-use-field-level-list-message-patterns.md) | Use Field-Level List Message Patterns | Accepted | 2026-07-22 |
+| [0022](0022-use-composable-read-only-authoring-sources.md) | Use Composable Read-Only Authoring Sources | Accepted | 2026-08-05 |
 
 ## Process
 
