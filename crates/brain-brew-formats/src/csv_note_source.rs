@@ -8,7 +8,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use brain_brew_core::{
-    AdapterIds, CanonicalDeck, FieldImageReference, FieldValue, Note, NoteType, StableId,
+    AdapterIds, CanonicalDeck, FieldImageReference, FieldValue, Note, NoteType, Overlay,
+    OverlayKind, StableId, TargetAdaptation, TargetAdaptationIntent, TargetAdaptationOwnership,
+    TranslationCoverageCategory, TranslationDictionary,
 };
 use serde::Deserialize;
 use serde_yaml::Value;
@@ -206,6 +208,106 @@ impl CsvNoteSourceDeclaration {
             for id in &self.exclude_note_ids {
                 output.push_str(&format!("{property_indent}    - {id}\n"));
             }
+        }
+        Ok(output)
+    }
+}
+
+/// Strict `translations.from_csv` declaration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CsvTranslationSourceDeclaration {
+    descriptor: String,
+    parameters: BTreeMap<String, String>,
+    exclude: CsvTranslationExclusions,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct CsvTranslationExclusions {
+    source_texts: Vec<String>,
+    note_ids: Vec<String>,
+    paths: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTranslationDeclaration {
+    descriptor: String,
+    parameters: BTreeMap<String, String>,
+    exclude: RawTranslationExclusions,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTranslationExclusions {
+    source_texts: Vec<String>,
+    note_ids: Vec<String>,
+    paths: Vec<String>,
+}
+
+impl CsvTranslationSourceDeclaration {
+    pub(crate) fn parse(
+        value: Value,
+        provenance: &SourceProvenance,
+    ) -> Result<Self, CsvNoteSourceError> {
+        let raw: RawTranslationDeclaration = serde_yaml::from_value(value).map_err(|error| {
+            CsvNoteSourceError::descriptor(
+                provenance,
+                format!("invalid translations.from_csv declaration: {error}"),
+            )
+        })?;
+        if raw.descriptor.is_empty() {
+            return Err(CsvNoteSourceError::descriptor(
+                provenance,
+                "translations.from_csv descriptor path must not be empty",
+            ));
+        }
+        let exclude = CsvTranslationExclusions {
+            source_texts: raw.exclude.source_texts,
+            note_ids: raw.exclude.note_ids,
+            paths: raw.exclude.paths,
+        };
+        Ok(Self {
+            descriptor: raw.descriptor,
+            parameters: raw.parameters,
+            exclude,
+        })
+    }
+
+    pub fn descriptor(&self) -> &str {
+        &self.descriptor
+    }
+
+    pub fn parameters(&self) -> &BTreeMap<String, String> {
+        &self.parameters
+    }
+
+    pub(crate) fn has_nonempty_exclusions(&self) -> bool {
+        !self.exclude.source_texts.is_empty()
+            || !self.exclude.note_ids.is_empty()
+            || !self.exclude.paths.is_empty()
+    }
+
+    pub(crate) fn emit(&self, indent: &str) -> Result<String, String> {
+        let mut output = format!(
+            "{indent}- descriptor: {}\n",
+            crate::yaml_scalar::scalar(&self.descriptor)
+        );
+        if self.parameters.is_empty() {
+            output.push_str(&format!("{indent}  parameters: {{}}\n"));
+        } else {
+            output.push_str(&format!("{indent}  parameters:\n"));
+            for (name, value) in &self.parameters {
+                let name = crate::yaml_scalar::key(name)
+                    .ok_or_else(|| format!("parameter name {name:?} cannot be emitted"))?;
+                output.push_str(&format!(
+                    "{indent}    {name}: {}\n",
+                    crate::yaml_scalar::scalar(value)
+                ));
+            }
+        }
+        output.push_str(&format!("{indent}  exclude:\n"));
+        for name in ["source_texts", "note_ids", "paths"] {
+            output.push_str(&format!("{indent}    {name}: []\n"));
         }
         Ok(output)
     }
@@ -803,6 +905,7 @@ pub(crate) struct CsvNoteMaterialization {
     pub notes: BTreeMap<StableId, Note>,
     pub note_provenance: BTreeMap<StableId, CsvCellProvenance>,
     pub field_provenance: BTreeMap<(StableId, StableId), CsvCellProvenance>,
+    pub adapter_provenance: BTreeMap<(StableId, String), CsvCellProvenance>,
 }
 
 struct PreparedJoin {
@@ -929,6 +1032,7 @@ impl CsvNoteSourceMaterializer {
         let mut notes = BTreeMap::new();
         let mut note_provenance = BTreeMap::new();
         let mut field_provenance = BTreeMap::new();
+        let mut adapter_provenance = BTreeMap::new();
         for (primary_index, row) in primary.rows.iter().enumerate() {
             let mut selected =
                 BTreeMap::from([(self.descriptor.primary_table.clone(), Some(primary_index))]);
@@ -1021,10 +1125,21 @@ impl CsvNoteSourceMaterializer {
             )?;
             let mut adapter_ids = AdapterIds::new();
             for (namespace, column) in &adapter_columns {
+                let selected_adapter_row = selected_row(&loaded, &selected, column);
                 let value = cell(&loaded, &selected, column);
                 if !value.is_empty() {
                     adapter_ids.insert(namespace, value);
                 }
+                adapter_provenance.insert(
+                    (id.clone(), namespace.clone()),
+                    CsvCellProvenance {
+                        table_alias: column.alias.clone(),
+                        source: loaded[&column.alias].source.provenance().clone(),
+                        logical_row: selected_adapter_row.map(|row| row.logical_row),
+                        header: column.header.clone(),
+                        column: column.index + 1,
+                    },
+                );
             }
             note_provenance.insert(
                 id.clone(),
@@ -1052,6 +1167,7 @@ impl CsvNoteSourceMaterializer {
             notes,
             note_provenance,
             field_provenance,
+            adapter_provenance,
         })
     }
 
@@ -1166,6 +1282,374 @@ impl CsvNoteSourceMaterializer {
             ));
         }
         Ok(())
+    }
+}
+
+pub(crate) const CSV_LEGACY_IMPORT_REASON: &str = "imported from a legacy CSV translation source; move ownership to native YAML for historical stale detection";
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CsvTranslationAuthoringLocation {
+    file: SourceProvenance,
+    logical_row: Option<u64>,
+    header: String,
+    column: usize,
+    canonical_path: String,
+}
+
+impl CsvTranslationAuthoringLocation {
+    pub fn file(&self) -> &SourceProvenance {
+        &self.file
+    }
+
+    pub fn logical_row(&self) -> Option<u64> {
+        self.logical_row
+    }
+
+    pub fn header(&self) -> &str {
+        &self.header
+    }
+
+    pub fn column(&self) -> usize {
+        self.column
+    }
+
+    pub fn canonical_path(&self) -> &str {
+        &self.canonical_path
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CsvTranslationAuthoringProvenance {
+    adaptations: BTreeMap<String, CsvTranslationAuthoringLocation>,
+}
+
+impl CsvTranslationAuthoringProvenance {
+    pub fn adaptation(&self, path: &str) -> Option<&CsvTranslationAuthoringLocation> {
+        self.adaptations.get(path)
+    }
+
+    pub fn adaptations(&self) -> impl Iterator<Item = (&str, &CsvTranslationAuthoringLocation)> {
+        self.adaptations
+            .iter()
+            .map(|(path, location)| (path.as_str(), location))
+    }
+
+    pub(crate) fn merge(&mut self, other: Self) {
+        self.adaptations.extend(other.adaptations);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct CsvTranslationPair {
+    pub path: String,
+    pub source: String,
+    pub target: String,
+}
+
+pub(crate) struct CsvTranslationMaterialization {
+    pub translations: TranslationDictionary,
+    pub provenance: CsvTranslationAuthoringProvenance,
+    pub owned_text: Vec<CsvTranslationPair>,
+}
+
+/// Pairs the unsuffixed and explicitly localized views of one note descriptor.
+pub(crate) struct CsvTranslationSourceMaterializer {
+    descriptor: CsvNoteSourceDescriptor,
+    parameters: BTreeMap<String, String>,
+}
+
+impl CsvTranslationSourceMaterializer {
+    pub(crate) fn new(
+        descriptor: CsvNoteSourceDescriptor,
+        parameters: &BTreeMap<String, String>,
+    ) -> Result<Self, CsvNoteSourceError> {
+        let parameters = descriptor.parameter_values(parameters)?;
+        let localized_parameters = descriptor
+            .note
+            .fields
+            .values()
+            .filter_map(|mapping| mapping.localized_by.as_ref())
+            .chain(
+                descriptor
+                    .note
+                    .adapter_ids
+                    .values()
+                    .filter_map(|mapping| mapping.localized_by.as_ref()),
+            )
+            .collect::<BTreeSet<_>>();
+        if localized_parameters.is_empty() {
+            return Err(CsvNoteSourceError::descriptor(
+                &descriptor.provenance,
+                "CSV translation descriptor has no localized scalar field or adapter-ID mapping",
+            ));
+        }
+        for parameter in localized_parameters {
+            if parameters[parameter].is_empty() {
+                return Err(CsvNoteSourceError::descriptor(
+                    &descriptor.provenance,
+                    format!(
+                        "CSV translation localized_column parameter {parameter:?} must be non-empty; source-to-itself pairing is forbidden"
+                    ),
+                ));
+            }
+        }
+        Ok(Self {
+            descriptor,
+            parameters,
+        })
+    }
+
+    pub(crate) fn table_paths(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.descriptor.table_paths()
+    }
+
+    pub(crate) fn materialize(
+        &self,
+        tables: &BTreeMap<String, CsvSourceFile>,
+        source_deck: &CanonicalDeck,
+    ) -> Result<CsvTranslationMaterialization, CsvNoteSourceError> {
+        let mut source_parameters = self.parameters.clone();
+        for mapping in self.descriptor.note.fields.values() {
+            if let Some(parameter) = &mapping.localized_by {
+                source_parameters.insert(parameter.clone(), String::new());
+            }
+        }
+        for mapping in self.descriptor.note.adapter_ids.values() {
+            if let Some(parameter) = &mapping.localized_by {
+                source_parameters.insert(parameter.clone(), String::new());
+            }
+        }
+
+        let source = CsvNoteSourceMaterializer::new(self.descriptor.clone())
+            .with_parameters(&source_parameters)?
+            .materialize_with_provenance(tables, &source_deck.note_types)?;
+        let target = CsvNoteSourceMaterializer::new(self.descriptor.clone())
+            .with_parameters(&self.parameters)?
+            .materialize_with_provenance(tables, &source_deck.note_types)?;
+
+        let mut owned_text = Vec::new();
+        let mut provenance = CsvTranslationAuthoringProvenance::default();
+        let mut translations = TranslationDictionary::default();
+        for (field_id, mapping) in &self.descriptor.note.fields {
+            if mapping.localized_by.is_none() {
+                continue;
+            }
+            if !matches!(
+                CsvFieldType::parse(&mapping.kind),
+                Some(CsvFieldType::Scalar)
+            ) {
+                return Err(CsvNoteSourceError::descriptor(
+                    &self.descriptor.provenance,
+                    format!("localized translation field mapping {field_id} must be scalar"),
+                ));
+            }
+            let field_id = StableId::new(field_id.clone()).expect("descriptor field IDs validated");
+            for (note_id, source_note) in &source.notes {
+                let path = format!("notes.{note_id}.fields.{field_id}");
+                let source_value = source_note.fields[&field_id]
+                    .as_scalar()
+                    .expect("localized scalar mapping materialized as scalar");
+                let target_value = target.notes[note_id].fields[&field_id]
+                    .as_scalar()
+                    .expect("localized scalar mapping materialized as scalar");
+                let live_value = source_deck
+                    .notes
+                    .get(note_id)
+                    .and_then(|note| note.fields.get(&field_id))
+                    .and_then(FieldValue::as_scalar)
+                    .ok_or_else(|| {
+                        CsvNoteSourceError::descriptor(
+                            &self.descriptor.provenance,
+                            format!("CSV translation path {path} is absent or is not a scalar field in the resolved source deck"),
+                        )
+                    })?;
+                if live_value != source_value {
+                    return Err(CsvNoteSourceError::descriptor(
+                        &self.descriptor.provenance,
+                        format!(
+                            "CSV translation source mismatch at {path}: descriptor cell is {source_value:?}, resolved source is {live_value:?}"
+                        ),
+                    ));
+                }
+                if source_value.is_empty() && target_value.is_empty() {
+                    continue;
+                }
+                if source_value.is_empty() || target_value.is_empty() {
+                    let intent = if source_value.is_empty() {
+                        TargetAdaptationIntent::Adapt
+                    } else {
+                        TargetAdaptationIntent::Delete
+                    };
+                    translations.target_adaptations.insert(
+                        path.clone(),
+                        TargetAdaptation {
+                            intent,
+                            ownership: TargetAdaptationOwnership::Translation,
+                            expected_source: source_value.to_owned(),
+                            target: target_value.to_owned(),
+                            reason: CSV_LEGACY_IMPORT_REASON.to_owned(),
+                        },
+                    );
+                    let cell = &target.field_provenance[&(note_id.clone(), field_id.clone())];
+                    provenance.adaptations.insert(
+                        path.clone(),
+                        CsvTranslationAuthoringLocation {
+                            file: cell.source.clone(),
+                            logical_row: cell.logical_row,
+                            header: cell.header.clone(),
+                            column: cell.column,
+                            canonical_path: path,
+                        },
+                    );
+                    continue;
+                }
+                owned_text.push(CsvTranslationPair {
+                    path,
+                    source: source_value.to_owned(),
+                    target: target_value.to_owned(),
+                });
+            }
+        }
+
+        let coverage_overlay = Overlay {
+            id: StableId::new("overlay.csv-translation-occurrences")
+                .expect("static overlay ID is valid"),
+            kind: OverlayKind::Translation,
+            translations: Some(TranslationDictionary::default()),
+            deck_change: None,
+            note_changes: BTreeMap::new(),
+            note_type_changes: BTreeMap::new(),
+            media_changes: BTreeMap::new(),
+        };
+        let coverage = source_deck
+            .translation_coverage(&coverage_overlay)
+            .map_err(|error| {
+                CsvNoteSourceError::descriptor(
+                    &self.descriptor.provenance,
+                    format!("could not enumerate resolved source translation occurrences: {error}"),
+                )
+            })?;
+        let mut global_paths = BTreeMap::<String, BTreeSet<String>>::new();
+        for entry in coverage.entries {
+            if entry.category == TranslationCoverageCategory::UntranslatedFallback {
+                global_paths
+                    .entry(entry.source)
+                    .or_default()
+                    .insert(entry.path);
+            }
+        }
+        let mut pairs_by_source = BTreeMap::<String, Vec<&CsvTranslationPair>>::new();
+        for pair in &owned_text {
+            pairs_by_source
+                .entry(pair.source.clone())
+                .or_default()
+                .push(pair);
+        }
+        for (source_text, pairs) in pairs_by_source {
+            let owned_paths = pairs
+                .iter()
+                .map(|pair| pair.path.clone())
+                .collect::<BTreeSet<_>>();
+            let targets = pairs
+                .iter()
+                .map(|pair| pair.target.as_str())
+                .collect::<BTreeSet<_>>();
+            let globally_covered = global_paths.get(&source_text) == Some(&owned_paths);
+            if globally_covered && targets.len() == 1 {
+                let target_text = *targets.first().expect("one target exists");
+                if target_text == source_text {
+                    translations.no_change.insert(source_text);
+                } else {
+                    translations
+                        .direct
+                        .insert(source_text, target_text.to_owned());
+                }
+            } else {
+                for pair in pairs {
+                    translations
+                        .contextual
+                        .entry(pair.path.clone())
+                        .or_default()
+                        .insert(pair.source.clone(), pair.target.clone());
+                }
+            }
+        }
+
+        for (namespace, mapping) in &self.descriptor.note.adapter_ids {
+            if mapping.localized_by.is_none() {
+                continue;
+            }
+            let mut replacements = BTreeMap::<String, String>::new();
+            for (note_id, source_note) in &source.notes {
+                let source_id = source_note.adapter_ids.get(namespace).unwrap_or("");
+                let target_id = target.notes[note_id]
+                    .adapter_ids
+                    .get(namespace)
+                    .unwrap_or("");
+                let live_id = source_deck
+                    .notes
+                    .get(note_id)
+                    .and_then(|note| note.adapter_ids.get(namespace))
+                    .unwrap_or("");
+                if live_id != source_id {
+                    return Err(CsvNoteSourceError::descriptor(
+                        &self.descriptor.provenance,
+                        format!(
+                            "CSV translation adapter ID source mismatch at notes.{note_id}.adapter_ids.{namespace}: descriptor cell is {source_id:?}, resolved source is {live_id:?}"
+                        ),
+                    ));
+                }
+                if source_id.is_empty() && target_id.is_empty() || source_id == target_id {
+                    continue;
+                }
+                if source_id.is_empty() || target_id.is_empty() {
+                    let cell = if target_id.is_empty() {
+                        &target.adapter_provenance[&(note_id.clone(), namespace.clone())]
+                    } else {
+                        &source.adapter_provenance[&(note_id.clone(), namespace.clone())]
+                    };
+                    return Err(CsvNoteSourceError::new(
+                        cell.source.clone(),
+                        cell.logical_row,
+                        Some(cell.column),
+                        Some(cell.header.clone()),
+                        format!(
+                            "adapter ID pair for namespace {namespace:?} has exactly one blank cell; source={source_id:?}, target={target_id:?}"
+                        ),
+                    ));
+                }
+                if let Some(previous) =
+                    replacements.insert(source_id.to_owned(), target_id.to_owned())
+                    && previous != target_id
+                {
+                    let cell = &target.adapter_provenance[&(note_id.clone(), namespace.clone())];
+                    return Err(CsvNoteSourceError::new(
+                        cell.source.clone(),
+                        cell.logical_row,
+                        Some(cell.column),
+                        Some(cell.header.clone()),
+                        format!(
+                            "conflicting adapter ID translations for namespace {namespace:?} and source {source_id:?}: {previous:?} and {target_id:?}"
+                        ),
+                    ));
+                }
+            }
+            if !replacements.is_empty() {
+                translations
+                    .adapter_ids
+                    .insert(namespace.clone(), replacements);
+            }
+        }
+        translations
+            .validate_mutation_invariants()
+            .map_err(|error| {
+                CsvNoteSourceError::descriptor(&self.descriptor.provenance, error.to_string())
+            })?;
+        Ok(CsvTranslationMaterialization {
+            translations,
+            provenance,
+            owned_text,
+        })
     }
 }
 

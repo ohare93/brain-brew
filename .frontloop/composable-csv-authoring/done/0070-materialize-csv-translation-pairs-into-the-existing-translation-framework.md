@@ -31,3 +31,25 @@ Allow translation overlays to declare `translations.from_csv`, pairing English/s
 ## Implementation Notes
 
 Depends on joins/parameters and authorized loading. Reuse brain-brew-core translation APIs and invariants rather than duplicating translation application in formats or CLI. Coordinate with translation-integrity and architecture-performance translation tasks.
+
+
+## Completion Summary
+
+- Added strict source-preserved `translations.from_csv` declarations alongside inline translation dictionaries, with non-empty transfer exclusions gated to task 0080.
+- Materialized exact unsuffixed/localized scalar and adapter-ID pairs through existing TranslationDictionary direct, contextual, no-change, Adapt, Delete, and adapter map semantics.
+- Implemented global occurrence-aware inference against a two-pass complete translation-free source deck so later extensions and prior translations cannot incorrectly create reusable decisions.
+- Merged imported and inline decisions transactionally, retained CSV adaptation/deletion provenance and a fixed legacy-import reason, and kept core coverage/composition/CrowdAnki export authoritative.
+- Extended authorized overlay CSV loading, source planning/hashing/freshness, source-preserving formatting, and stale-detection documentation.
+- Passed fresh Grok review after fixing its complete-deck blocker, focused CSV translation/CLI/planner/core suites, full workspace tests, fmt, and clippy.
+
+### Files Changed
+
+- crates/brain-brew-cli/src/io.rs
+- crates/brain-brew-cli/src/planner.rs
+- crates/brain-brew-cli/tests/csv_authoring_sources.rs
+- crates/brain-brew-formats/src/canonical_source_document.rs
+- crates/brain-brew-formats/src/csv_note_source.rs
+- crates/brain-brew-formats/src/overlay_source_document.rs
+- crates/brain-brew-formats/tests/csv_translation_sources.rs
+- documentation/docs/authoring/workspace.md
+- .frontloop/composable-csv-authoring/done/0070-materialize-csv-translation-pairs-into-the-existing-translation-framework.md

@@ -90,9 +90,11 @@ pub(crate) fn overlay_source_document(
     input: &str,
 ) -> Result<OverlaySourceDocument, String> {
     let context = source_context_for_path(path)?;
-    OverlaySourceDocument::parse_with_includes(source_file(path, input, &context)?, |request| {
-        load_source_include(request, &context)
-    })
+    OverlaySourceDocument::parse_with_csv_inventory(
+        source_file(path, input, &context)?,
+        |request| load_source_include(request, &context),
+        |request| load_csv_source(request, &context),
+    )
     .map_err(|error| error.to_string())
 }
 
@@ -180,20 +182,61 @@ pub(crate) fn overlay_document_from_package(
     package_root: &Path,
     include_roots: &[PathBuf],
 ) -> Result<OverlaySourceDocument, String> {
+    overlay_document_from_package_inner(path, package_root, include_roots, None)
+}
+
+pub(crate) fn overlay_document_from_package_with_source_deck(
+    path: &Path,
+    package_root: &Path,
+    include_roots: &[PathBuf],
+    source_deck: &CanonicalDeck,
+) -> Result<OverlaySourceDocument, String> {
+    overlay_document_from_package_inner(path, package_root, include_roots, Some(source_deck))
+}
+
+fn overlay_document_from_package_inner(
+    path: &Path,
+    package_root: &Path,
+    include_roots: &[PathBuf],
+    source_deck: Option<&CanonicalDeck>,
+) -> Result<OverlaySourceDocument, String> {
     let context = SourceContext {
         root: package_root.to_path_buf(),
         include_roots: include_roots.to_vec(),
     };
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    OverlaySourceDocument::parse_with_includes(source_file(path, &input, &context)?, |request| {
-        load_source_include(request, &context)
-    })
-    .map_err(|error| error.to_string())
+    let source = source_file(path, &input, &context)?;
+    let result = if let Some(source_deck) = source_deck {
+        OverlaySourceDocument::parse_with_csv_translations(
+            source,
+            source_deck,
+            |request| load_source_include(request, &context),
+            |request| load_csv_source(request, &context),
+        )
+    } else {
+        OverlaySourceDocument::parse_with_csv_inventory(
+            source,
+            |request| load_source_include(request, &context),
+            |request| load_csv_source(request, &context),
+        )
+    };
+    result.map_err(|error| error.to_string())
 }
 
-fn read_overlay_with_context(path: &Path, context: &SourceContext) -> Result<Overlay, String> {
+fn read_overlay_with_context(
+    path: &Path,
+    context: &SourceContext,
+    source_deck: &CanonicalDeck,
+) -> Result<Overlay, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    overlay_from_source_text_with_context(path, &input, context)
+    OverlaySourceDocument::parse_with_csv_translations(
+        source_file(path, &input, context)?,
+        source_deck,
+        |request| load_source_include(request, context),
+        |request| load_csv_source(request, context),
+    )
+    .map(|document| document.resolved_overlay().clone())
+    .map_err(|error| error.to_string())
 }
 
 pub(crate) fn overlay_from_source_text(path: &Path, input: &str) -> Result<Overlay, String> {
@@ -201,21 +244,46 @@ pub(crate) fn overlay_from_source_text(path: &Path, input: &str) -> Result<Overl
     overlay_from_source_text_with_context(path, input, &context)
 }
 
+fn overlay_inventory_document_from_source_text_with_context(
+    path: &Path,
+    input: &str,
+    context: &SourceContext,
+) -> Result<OverlaySourceDocument, String> {
+    OverlaySourceDocument::parse_with_csv_inventory(
+        source_file(path, input, context)?,
+        |request| load_source_include(request, context),
+        |request| load_csv_source(request, context),
+    )
+    .map_err(|error| error.to_string())
+}
+
 fn overlay_from_source_text_with_context(
     path: &Path,
     input: &str,
     context: &SourceContext,
 ) -> Result<Overlay, String> {
-    OverlaySourceDocument::parse_with_includes(source_file(path, input, context)?, |request| {
-        load_source_include(request, context)
-    })
-    .map(|document| document.resolved_overlay().clone())
-    .map_err(|error| error.to_string())
+    overlay_inventory_document_from_source_text_with_context(path, input, context)
+        .map(|document| document.resolved_overlay().clone())
 }
 
 pub(crate) fn read_manifest(path: &Path) -> Result<manifest::FederatedDeckManifest, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
     manifest::from_str(&input).map_err(|error| format!("{}: {error}", path.display()))
+}
+
+pub(crate) fn compose_translation_free_source(
+    base: &CanonicalDeck,
+    overlays: &[Overlay],
+) -> Result<CanonicalDeck, String> {
+    let overlays = overlays
+        .iter()
+        .cloned()
+        .map(|mut overlay| {
+            overlay.translations = None;
+            overlay
+        })
+        .collect::<Vec<_>>();
+    base.compose(&overlays).map_err(|error| error.to_string())
 }
 
 pub(crate) fn read_deck_and_overlays(
@@ -224,12 +292,45 @@ pub(crate) fn read_deck_and_overlays(
 ) -> Result<(CanonicalDeck, Vec<(String, Overlay)>), String> {
     let context = source_context_for_path(deck_path)?;
     let deck = read_deck_with_context(deck_path, &context)?;
+    let inventory = overlay_paths
+        .iter()
+        .map(|path| {
+            let input = fs::read_to_string(path).map_err(|error| format!("{path}: {error}"))?;
+            Ok((
+                path.clone(),
+                overlay_inventory_document_from_source_text_with_context(
+                    Path::new(path),
+                    &input,
+                    &context,
+                )?,
+            ))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    if inventory
+        .iter()
+        .all(|(_, document)| document.csv_translation_sources().is_empty())
+    {
+        return Ok((
+            deck,
+            inventory
+                .into_iter()
+                .map(|(path, document)| (path, document.resolved_overlay().clone()))
+                .collect(),
+        ));
+    }
+    let source_deck = compose_translation_free_source(
+        &deck,
+        &inventory
+            .iter()
+            .map(|(_, document)| document.resolved_overlay().clone())
+            .collect::<Vec<_>>(),
+    )?;
     let overlays = overlay_paths
         .iter()
         .map(|path| {
             Ok((
                 path.clone(),
-                read_overlay_with_context(Path::new(path), &context)?,
+                read_overlay_with_context(Path::new(path), &context, &source_deck)?,
             ))
         })
         .collect::<Result<Vec<_>, String>>()?;
@@ -265,7 +366,17 @@ pub(crate) fn verify_canonical_deck_format(path: &Path) -> Result<(), String> {
 }
 
 pub(crate) fn verify_overlay_format(path: &Path) -> Result<(), String> {
-    verify_format_with(path, canonical_yaml::overlay_format_str)
+    let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let formatted = overlay_source_document(path, &input)?
+        .emit()
+        .map_err(|error| error.to_string())?
+        .root()
+        .text()
+        .to_owned();
+    if formatted != input {
+        return Err(format!("{} is not in canonical format", path.display()));
+    }
+    Ok(())
 }
 
 pub(crate) fn verify_manifest_format(path: &Path) -> Result<(), String> {

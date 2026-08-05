@@ -18,8 +18,9 @@ use sha2::{Digest, Sha256};
 
 use crate::commands::lock::locked_package_manifest_paths;
 use crate::io::{
-    canonical_document_from_package, include_roots_from_manifest, manifest_root,
-    overlay_document_from_package, read_manifest,
+    canonical_document_from_package, compose_translation_free_source, include_roots_from_manifest,
+    manifest_root, overlay_document_from_package, overlay_document_from_package_with_source_deck,
+    read_manifest,
 };
 use crate::package_resolver::{
     DiscoveryPolicy, DiscoveryResult, DiscoveryStats, discover_package_manifests,
@@ -429,7 +430,10 @@ impl ManifestRegistry {
                 let kind = overlay.kind;
                 let source = source_provenance(loaded, file, PlanSourceKind::Overlay { kind })?;
                 sources.insert(source.path.clone(), source);
-                for include in included_provenance(loaded, document.included_sources())? {
+                for include in included_provenance(loaded, document.included_sources())?
+                    .into_iter()
+                    .chain(csv_source_provenance(loaded, document.csv_sources())?)
+                {
                     sources.insert(include.path.clone(), include);
                 }
             }
@@ -486,6 +490,34 @@ impl ManifestRegistry {
             base_document.csv_sources(),
         )?);
 
+        let mut inventory = Vec::new();
+        for overlay_blueprint in blueprint.overlays {
+            let loaded = &self.manifests[overlay_blueprint.manifest_index];
+            let entry = &loaded.manifest.overlays[&overlay_blueprint.overlay_id];
+            let file = authorize_manifest_path(
+                loaded,
+                format!("overlays.{}.file", overlay_blueprint.overlay_id),
+                &entry.file,
+            )?;
+            let document =
+                overlay_document_from_package(&file, &loaded.root, &loaded.include_roots)?;
+            inventory.push((overlay_blueprint, file, document));
+        }
+        let has_csv_translations = inventory
+            .iter()
+            .any(|(_, _, document)| !document.csv_translation_sources().is_empty());
+        let source_deck = has_csv_translations
+            .then(|| {
+                compose_translation_free_source(
+                    &base,
+                    &inventory
+                        .iter()
+                        .map(|(_, _, document)| document.resolved_overlay().clone())
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .transpose()?;
+
         let mut overlays = Vec::new();
         let media_declaration_source = base_includes
             .iter()
@@ -507,16 +539,19 @@ impl ManifestRegistry {
                 )
             })
             .collect::<BTreeMap<_, _>>();
-        for overlay_blueprint in blueprint.overlays {
+        for (overlay_blueprint, file, inventory_document) in inventory {
             let loaded = &self.manifests[overlay_blueprint.manifest_index];
             let entry = &loaded.manifest.overlays[&overlay_blueprint.overlay_id];
-            let file = authorize_manifest_path(
-                loaded,
-                format!("overlays.{}.file", overlay_blueprint.overlay_id),
-                &entry.file,
-            )?;
-            let document =
-                overlay_document_from_package(&file, &loaded.root, &loaded.include_roots)?;
+            let document = if let Some(source_deck) = &source_deck {
+                overlay_document_from_package_with_source_deck(
+                    &file,
+                    &loaded.root,
+                    &loaded.include_roots,
+                    source_deck,
+                )?
+            } else {
+                inventory_document
+            };
             let overlay = document.resolved_overlay().clone();
             let kind = overlay.kind;
             let qualified_id = self.qualified_overlay(
@@ -524,7 +559,8 @@ impl ManifestRegistry {
                 &overlay_blueprint.overlay_id,
             );
             let source = source_provenance(loaded, file.clone(), PlanSourceKind::Overlay { kind })?;
-            let includes = included_provenance(loaded, document.included_sources())?;
+            let mut includes = included_provenance(loaded, document.included_sources())?;
+            includes.extend(csv_source_provenance(loaded, document.csv_sources())?);
             for (id, change) in &overlay.media_changes {
                 match change.intent {
                     ChangeIntent::Remove => {
@@ -1224,6 +1260,102 @@ mod tests {
         assert_ne!(
             provenance[0].sha256,
             format!("{:x}", Sha256::digest(fs::read(&path).unwrap()))
+        );
+    }
+
+    #[test]
+    fn csv_translation_inference_uses_later_translation_free_source_occurrences() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(root.path().join("overlays/sources/data")).unwrap();
+        fs::write(
+            root.path().join("deck.yaml"),
+            "deck:\n  id: deck.csv-global\n  name: Global\n  description: ''\n  adapter_ids: {}\nnote_types:\n  note-type.basic:\n    name: Basic\n    field_order: [field.front]\n    fields:\n      field.front:\n        name: Front\n    card_template_order: []\n    card_templates: {}\n    styling: ''\n    adapter_ids: {}\nnotes:\n  note.one:\n    note_type_id: note-type.basic\n    fields:\n      field.front: Hello\n    tags: []\n    adapter_ids: {}\nmedia: {}\ntombstones: []\n",
+        )
+        .unwrap();
+        fs::write(
+            root.path().join("overlays/de.yaml"),
+            "id: overlay.translation.de\nkind: translation\ntranslations:\n  from_csv:\n    - descriptor: sources/descriptor.yaml\n      parameters:\n        language: de\n      exclude:\n        source_texts: []\n        note_ids: []\n        paths: []\n",
+        )
+        .unwrap();
+        fs::write(
+            root.path().join("overlays/extension.yaml"),
+            "id: overlay.extension.later\nkind: extension\nnotes:\n  note.two:\n    intent: add\n    note:\n      note_type_id: note-type.basic\n      fields:\n        field.front: Hello\n      tags: []\n      adapter_ids: {}\n",
+        )
+        .unwrap();
+        fs::write(
+            root.path().join("overlays/sources/descriptor.yaml"),
+            "version: 1\nprimary_table: main\ntables:\n  main:\n    path: data/notes.csv\nparameters:\n  language:\n    type: localized_column\n    default: ''\n    separator: ':'\njoins: []\nnote:\n  id: main.stable_id\n  note_type_id: note-type.basic\n  fields:\n    field.front:\n      column: main.front\n      localized_by: language\n      type: scalar\n  tags:\n    column: main.tags\n    delimiter: '|'\n  adapter_ids: {}\n",
+        )
+        .unwrap();
+        fs::write(
+            root.path().join("overlays/sources/data/notes.csv"),
+            "stable_id,front,front:de,tags\nnote.one,Hello,Hallo,\n",
+        )
+        .unwrap();
+        fs::write(
+            root.path().join("brainbrew.yaml"),
+            "base: deck.yaml\noverlays:\n  overlay.translation.de:\n    file: overlays/de.yaml\n    kind: translation\n  overlay.extension.later:\n    file: overlays/extension.yaml\n    kind: extension\ntargets:\n  de:\n    overlays: [overlay.translation.de, overlay.extension.later]\n",
+        )
+        .unwrap();
+
+        let plan = ManifestRegistry::load(&root.path().join("brainbrew.yaml"), &[], &[])
+            .unwrap()
+            .plan("de")
+            .unwrap();
+        let translations = plan.overlays[0].1.translations.as_ref().unwrap();
+        assert!(!translations.direct.contains_key("Hello"));
+        assert!(!translations.no_change.contains("Hello"));
+        assert_eq!(
+            translations.contextual["notes.note.one.fields.field.front"]["Hello"],
+            "Hallo"
+        );
+        let composed = plan.compose().unwrap();
+        assert_eq!(
+            composed.notes[&brain_brew_core::StableId::new("note.one").unwrap()].fields
+                [&brain_brew_core::StableId::new("field.front").unwrap()]
+                .as_scalar(),
+            Some("Hallo")
+        );
+        assert_eq!(
+            composed.notes[&brain_brew_core::StableId::new("note.two").unwrap()].fields
+                [&brain_brew_core::StableId::new("field.front").unwrap()]
+                .as_scalar(),
+            Some("Hello")
+        );
+
+        fs::write(
+            root.path().join("overlays/second.yaml"),
+            "id: overlay.translation.second\nkind: translation\ntranslations:\n  from_csv:\n    - descriptor: sources/second.yaml\n      parameters:\n        language: de\n      exclude:\n        source_texts: []\n        note_ids: []\n        paths: []\n",
+        )
+        .unwrap();
+        fs::write(
+            root.path().join("overlays/sources/second.yaml"),
+            fs::read_to_string(root.path().join("overlays/sources/descriptor.yaml"))
+                .unwrap()
+                .replace("data/notes.csv", "data/second.csv"),
+        )
+        .unwrap();
+        fs::write(
+            root.path().join("overlays/sources/data/second.csv"),
+            "stable_id,front,front:de,tags\nnote.one,Hallo,Guten Tag,\n",
+        )
+        .unwrap();
+        fs::write(
+            root.path().join("brainbrew.yaml"),
+            "base: deck.yaml\noverlays:\n  overlay.translation.de:\n    file: overlays/de.yaml\n    kind: translation\n  overlay.extension.later:\n    file: overlays/extension.yaml\n    kind: extension\n  overlay.translation.second:\n    file: overlays/second.yaml\n    kind: translation\ntargets:\n  de:\n    overlays: [overlay.translation.de, overlay.extension.later, overlay.translation.second]\n",
+        )
+        .unwrap();
+        let error = match ManifestRegistry::load(&root.path().join("brainbrew.yaml"), &[], &[])
+            .unwrap()
+            .plan("de")
+        {
+            Ok(_) => panic!("a second CSV overlay treated prior translated output as source"),
+            Err(error) => error,
+        };
+        assert!(error.contains("CSV translation source mismatch"), "{error}");
+        assert!(
+            error.contains("descriptor cell is \"Hallo\", resolved source is \"Hello\""),
+            "{error}"
         );
     }
 

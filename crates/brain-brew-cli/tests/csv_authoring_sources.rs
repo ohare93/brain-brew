@@ -515,3 +515,139 @@ fn absent_explicit_localized_header_is_actionable_in_direct_and_manifest_routes(
         assert!(error.contains("notes.csv"), "{error}");
     }
 }
+
+#[test]
+fn translation_csv_sources_are_materialized_authorized_planned_and_fresh() {
+    let workspace = TempDir::new().unwrap();
+    fs::create_dir_all(workspace.path().join("overlays/sources/data")).unwrap();
+    fs::create_dir_all(workspace.path().join("authoring")).unwrap();
+    fs::write(
+        workspace.path().join("authoring/deck.yaml"),
+        "deck:\n  id: deck.csv-translation-cli\n  name: Fixture\n  description: ''\n  adapter_ids: {}\nnote_types:\n  note-type.basic:\n    name: Basic\n    field_order: [field.front]\n    fields:\n      field.front:\n        name: Front\n    card_template_order: []\n    card_templates: {}\n    styling: ''\n    adapter_ids: {}\nnotes:\n  note.one:\n    note_type_id: note-type.basic\n    fields:\n      field.front: Hello\n    tags: []\n    adapter_ids:\n      crowdanki: guid-one\nmedia: {}\ntombstones: []\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/de.yaml"),
+        "id: overlay.translation.de\nkind: translation\ntranslations:\n  from_csv:\n    - descriptor: sources/descriptor.yaml\n      parameters:\n        language: de\n      exclude:\n        source_texts: []\n        note_ids: []\n        paths: []\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/extension.yaml"),
+        "id: overlay.extension.later\nkind: extension\nnotes:\n  note.two:\n    intent: add\n    note:\n      note_type_id: note-type.basic\n      fields:\n        field.front: Hello\n      tags: []\n      adapter_ids:\n        crowdanki: guid-two\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/sources/descriptor.yaml"),
+        "version: 1\nprimary_table: main\ntables:\n  main:\n    path: data/notes.csv\nparameters:\n  language:\n    type: localized_column\n    default: ''\n    separator: ':'\njoins: []\nnote:\n  id: main.stable_id\n  note_type_id: note-type.basic\n  fields:\n    field.front:\n      column: main.front\n      localized_by: language\n      type: scalar\n  tags:\n    column: main.tags\n    delimiter: '|'\n  adapter_ids:\n    crowdanki:\n      column: main.guid\n      localized_by: language\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/sources/data/notes.csv"),
+        "stable_id,front,front:de,tags,guid,guid:de\nnote.one,Hello,Hallo,,guid-one,guid-one-de\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("brainbrew.yaml"),
+        "base: authoring/deck.yaml\noverlays:\n  overlay.translation.de:\n    file: overlays/de.yaml\n    kind: translation\n  overlay.extension.later:\n    file: overlays/extension.yaml\n    kind: extension\ntargets:\n  de:\n    overlays: [overlay.translation.de, overlay.extension.later]\n",
+    )
+    .unwrap();
+
+    let compose = run(
+        workspace.path(),
+        &["compose", "--manifest", "brainbrew.yaml", "--target", "de"],
+    );
+    assert!(compose.status.success(), "{}", stderr(&compose));
+    let composed = String::from_utf8_lossy(&compose.stdout);
+    assert_eq!(composed.matches("field.front: Hallo").count(), 1);
+    assert_eq!(composed.matches("field.front: Hello").count(), 1);
+
+    let direct = run(
+        workspace.path(),
+        &[
+            "compose",
+            "authoring/deck.yaml",
+            "--overlay",
+            "overlays/de.yaml",
+            "--overlay",
+            "overlays/extension.yaml",
+        ],
+    );
+    assert!(direct.status.success(), "{}", stderr(&direct));
+    let direct = String::from_utf8_lossy(&direct.stdout);
+    assert_eq!(direct.matches("field.front: Hallo").count(), 1);
+    assert_eq!(direct.matches("field.front: Hello").count(), 1);
+
+    let explain = run(
+        workspace.path(),
+        &[
+            "explain",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "de",
+            "--json",
+        ],
+    );
+    assert!(explain.status.success(), "{}", stderr(&explain));
+    let json: serde_json::Value = serde_json::from_slice(&explain.stdout).unwrap();
+    assert_eq!(
+        json["sources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|source| source["kind"] == "csv_descriptor")
+            .count(),
+        1
+    );
+    assert_eq!(
+        json["sources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|source| source["kind"] == "csv_table")
+            .count(),
+        1
+    );
+    let original_table_hash = json["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|source| source["kind"] == "csv_table")
+        .unwrap()["sha256"]
+        .clone();
+
+    fs::write(
+        workspace.path().join("overlays/sources/data/notes.csv"),
+        "stable_id,front,front:de,tags,guid,guid:de\nnote.one,Hello,Servus,,guid-one,guid-one-de\n",
+    )
+    .unwrap();
+    let changed = run(
+        workspace.path(),
+        &["compose", "--manifest", "brainbrew.yaml", "--target", "de"],
+    );
+    assert!(changed.status.success(), "{}", stderr(&changed));
+    let changed_output = String::from_utf8_lossy(&changed.stdout);
+    assert_eq!(changed_output.matches("field.front: Servus").count(), 1);
+    assert_eq!(changed_output.matches("field.front: Hello").count(), 1);
+    let refreshed = run(
+        workspace.path(),
+        &[
+            "explain",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "de",
+            "--json",
+        ],
+    );
+    assert!(refreshed.status.success(), "{}", stderr(&refreshed));
+    let refreshed: serde_json::Value = serde_json::from_slice(&refreshed.stdout).unwrap();
+    let refreshed_table_hash = refreshed["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|source| source["kind"] == "csv_table")
+        .unwrap()["sha256"]
+        .clone();
+    assert_ne!(refreshed_table_hash, original_table_hash);
+}

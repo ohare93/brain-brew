@@ -5,7 +5,14 @@
 
 use std::collections::BTreeMap;
 
-use brain_brew_core::{FieldValue, Overlay, StableId, TranslationDictionary};
+use brain_brew_core::{CanonicalDeck, FieldValue, Overlay, StableId, TranslationDictionary};
+use serde_yaml::Value;
+
+use crate::csv_note_source::{
+    CsvNoteSourceDescriptor, CsvSourceFile, CsvSourceRequest, CsvSourceRequestKind,
+    CsvTranslationAuthoringProvenance, CsvTranslationPair, CsvTranslationSourceDeclaration,
+    CsvTranslationSourceMaterializer,
+};
 
 use crate::canonical_yaml;
 use crate::source_document::{
@@ -23,6 +30,9 @@ pub struct OverlaySourceDocument {
     overlay: Overlay,
     resolved_overlay: Overlay,
     includes: IncludeState,
+    csv_translation_sources: Vec<CsvTranslationSourceDeclaration>,
+    csv_translation_provenance: CsvTranslationAuthoringProvenance,
+    csv_sources: Vec<(CsvSourceRequestKind, CsvSourceFile)>,
     original_sources: BTreeMap<SourceProvenance, SourceFile>,
 }
 
@@ -50,14 +60,74 @@ impl OverlaySourceDocument {
         source: SourceFile,
         mut loader: impl FnMut(&IncludeRequest) -> Result<SourceFile, String>,
     ) -> Result<Self, SourceDocumentError> {
-        let prepared = prepare_source(source, false, &mut loader)?;
-        let overlay = canonical_yaml::overlay_from_str(&prepared.yaml_without_directives).map_err(
-            |error| SourceDocumentError::source(prepared.root.provenance(), error.to_string()),
+        Self::parse_with_loaders(source, None, &mut loader, &mut |request| {
+            Err(format!(
+                "no CSV source loader was provided for {:?}",
+                request.target()
+            ))
+        })
+    }
+
+    /// Parse and materialize CSV translation declarations against the complete source deck.
+    pub fn parse_with_csv_translations(
+        source: SourceFile,
+        source_deck: &CanonicalDeck,
+        mut include_loader: impl FnMut(&IncludeRequest) -> Result<SourceFile, String>,
+        mut csv_loader: impl FnMut(&CsvSourceRequest) -> Result<CsvSourceFile, String>,
+    ) -> Result<Self, SourceDocumentError> {
+        Self::parse_with_loaders(
+            source,
+            Some(source_deck),
+            &mut include_loader,
+            &mut csv_loader,
+        )
+    }
+
+    /// Parse and authorize every CSV input without materializing deck-dependent decisions.
+    pub fn parse_with_csv_inventory(
+        source: SourceFile,
+        mut include_loader: impl FnMut(&IncludeRequest) -> Result<SourceFile, String>,
+        mut csv_loader: impl FnMut(&CsvSourceRequest) -> Result<CsvSourceFile, String>,
+    ) -> Result<Self, SourceDocumentError> {
+        Self::parse_with_loaders(source, None, &mut include_loader, &mut csv_loader)
+    }
+
+    fn parse_with_loaders(
+        source: SourceFile,
+        source_deck: Option<&CanonicalDeck>,
+        include_loader: &mut impl FnMut(&IncludeRequest) -> Result<SourceFile, String>,
+        csv_loader: &mut impl FnMut(&CsvSourceRequest) -> Result<CsvSourceFile, String>,
+    ) -> Result<Self, SourceDocumentError> {
+        let prepared = prepare_source(source, false, include_loader)?;
+        let (source_yaml, declarations) = strip_csv_translation_declarations(
+            &prepared.yaml_without_directives,
+            prepared.root.provenance(),
         )?;
-        let resolved_overlay = canonical_yaml::overlay_from_str(&prepared.materialized_yaml)
-            .map_err(|error| {
+        let (resolved_yaml, resolved_declarations) = strip_csv_translation_declarations(
+            &prepared.materialized_yaml,
+            prepared.root.provenance(),
+        )?;
+        if declarations != resolved_declarations {
+            return Err(SourceDocumentError::at(
+                prepared.root.provenance(),
+                "translations.from_csv",
+                "scalar include materialization changed CSV translation declarations",
+            ));
+        }
+        let overlay = canonical_yaml::overlay_from_str(&source_yaml).map_err(|error| {
+            SourceDocumentError::source(prepared.root.provenance(), error.to_string())
+        })?;
+        let mut resolved_overlay =
+            canonical_yaml::overlay_from_str(&resolved_yaml).map_err(|error| {
                 SourceDocumentError::source(prepared.root.provenance(), error.to_string())
             })?;
+        let (csv_translation_provenance, csv_sources) = load_csv_translation_sources(
+            &declarations,
+            source_deck,
+            &mut resolved_overlay,
+            prepared.root.provenance(),
+            csv_loader,
+        )?;
         canonical_yaml::overlay_to_string(&overlay).map_err(|error| {
             SourceDocumentError::source(prepared.root.provenance(), error.to_string())
         })?;
@@ -67,6 +137,9 @@ impl OverlaySourceDocument {
             overlay,
             resolved_overlay,
             includes: prepared.includes,
+            csv_translation_sources: declarations,
+            csv_translation_provenance,
+            csv_sources,
             original_sources,
         })
     }
@@ -82,6 +155,9 @@ impl OverlaySourceDocument {
             resolved_overlay: overlay.clone(),
             overlay,
             includes: IncludeState::default(),
+            csv_translation_sources: Vec::new(),
+            csv_translation_provenance: CsvTranslationAuthoringProvenance::default(),
+            csv_sources: Vec::new(),
             original_sources: BTreeMap::new(),
         })
     }
@@ -93,6 +169,19 @@ impl OverlaySourceDocument {
     /// Every scalar source loaded by this document.
     pub fn included_sources(&self) -> Vec<IncludedSource> {
         self.includes.source_provenance()
+    }
+
+    pub fn csv_translation_sources(&self) -> &[CsvTranslationSourceDeclaration] {
+        &self.csv_translation_sources
+    }
+
+    pub fn csv_translation_provenance(&self) -> &CsvTranslationAuthoringProvenance {
+        &self.csv_translation_provenance
+    }
+
+    /// Every authoritative descriptor and table loaded by CSV translation declarations.
+    pub fn csv_sources(&self) -> &[(CsvSourceRequestKind, CsvSourceFile)] {
+        &self.csv_sources
     }
 
     /// Read-only validated domain view. Mutation remains behind typed methods.
@@ -447,6 +536,11 @@ impl OverlaySourceDocument {
         self.validate()?;
         let canonical = canonical_yaml::overlay_to_string(&self.overlay)
             .map_err(|error| SourceDocumentError::source(&self.provenance, error.to_string()))?;
+        let canonical =
+            restore_csv_translation_declarations(canonical, &self.csv_translation_sources)
+                .map_err(|message| {
+                    SourceDocumentError::at(&self.provenance, "translations.from_csv", message)
+                })?;
         let canonical = self.includes.restore_directives(canonical)?;
         crate::strict_yaml::reject_duplicate_keys(&canonical)
             .map_err(|error| SourceDocumentError::source(&self.provenance, error.to_string()))?;
@@ -462,6 +556,342 @@ impl OverlaySourceDocument {
             .map(|_| ())
             .map_err(|error| SourceDocumentError::source(&self.provenance, error.to_string()))
     }
+}
+
+fn strip_csv_translation_declarations(
+    yaml: &str,
+    provenance: &SourceProvenance,
+) -> Result<(String, Vec<CsvTranslationSourceDeclaration>), SourceDocumentError> {
+    let mut root = serde_yaml::from_str::<Value>(yaml)
+        .map_err(|error| SourceDocumentError::source(provenance, error.to_string()))?;
+    let Some(root_mapping) = root.as_mapping_mut() else {
+        return Ok((yaml.to_owned(), Vec::new()));
+    };
+    let translations_key = Value::String("translations".to_owned());
+    let Some(translations) = root_mapping.get_mut(&translations_key) else {
+        return Ok((yaml.to_owned(), Vec::new()));
+    };
+    let Some(translations) = translations.as_mapping_mut() else {
+        return Ok((yaml.to_owned(), Vec::new()));
+    };
+    let from_csv_key = Value::String("from_csv".to_owned());
+    let Some(from_csv) = translations.remove(&from_csv_key) else {
+        return Ok((yaml.to_owned(), Vec::new()));
+    };
+    let Value::Sequence(entries) = from_csv else {
+        return Err(SourceDocumentError::at(
+            provenance,
+            "translations.from_csv",
+            "translations.from_csv must be a non-empty sequence",
+        ));
+    };
+    if entries.is_empty() {
+        return Err(SourceDocumentError::at(
+            provenance,
+            "translations.from_csv",
+            "translations.from_csv must be a non-empty sequence",
+        ));
+    }
+    let declarations = entries
+        .into_iter()
+        .enumerate()
+        .map(|(index, entry)| {
+            CsvTranslationSourceDeclaration::parse(entry, provenance).map_err(|error| {
+                SourceDocumentError::at(
+                    provenance,
+                    format!("translations.from_csv[{index}]"),
+                    error.to_string(),
+                )
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let yaml = serde_yaml::to_string(&root)
+        .map_err(|error| SourceDocumentError::source(provenance, error.to_string()))?;
+    Ok((yaml, declarations))
+}
+
+fn restore_csv_translation_declarations(
+    mut canonical: String,
+    declarations: &[CsvTranslationSourceDeclaration],
+) -> Result<String, String> {
+    if declarations.is_empty() {
+        return Ok(canonical);
+    }
+    let mut section = String::from("translations:\n  from_csv:\n");
+    for declaration in declarations {
+        section.push_str(&declaration.emit("    ")?);
+    }
+    let start = crate::strict_yaml::top_level_mapping_key_offset(&canonical, "translations")
+        .ok_or_else(|| "canonical emission omitted translations".to_owned())?;
+    let line_end = canonical[start..]
+        .find('\n')
+        .map_or(canonical.len(), |offset| start + offset + 1);
+    let line = canonical[start..line_end].trim_end_matches(['\r', '\n']);
+    if matches!(line, "translations: {}" | "translations:") {
+        canonical.replace_range(start..line_end, &section);
+    } else {
+        return Err("canonical translations section has an unexpected shape".to_owned());
+    }
+    Ok(canonical)
+}
+
+fn load_csv_translation_sources(
+    declarations: &[CsvTranslationSourceDeclaration],
+    source_deck: Option<&CanonicalDeck>,
+    resolved_overlay: &mut Overlay,
+    root: &SourceProvenance,
+    csv_loader: &mut impl FnMut(&CsvSourceRequest) -> Result<CsvSourceFile, String>,
+) -> Result<
+    (
+        CsvTranslationAuthoringProvenance,
+        Vec<(CsvSourceRequestKind, CsvSourceFile)>,
+    ),
+    SourceDocumentError,
+> {
+    let mut provenance = CsvTranslationAuthoringProvenance::default();
+    let mut loaded_sources = Vec::new();
+    for (index, declaration) in declarations.iter().enumerate() {
+        let declaration_path = format!("translations.from_csv[{index}]");
+        let descriptor_path = format!("{declaration_path}.descriptor");
+        let descriptor_request = CsvSourceRequest::descriptor(
+            root.clone(),
+            descriptor_path.clone(),
+            declaration.descriptor().to_owned(),
+        );
+        let descriptor_bytes = csv_loader(&descriptor_request).map_err(|message| {
+            SourceDocumentError::at(
+                root,
+                &descriptor_path,
+                format!(
+                    "could not load CSV translation descriptor {:?}: {message}",
+                    declaration.descriptor()
+                ),
+            )
+        })?;
+        loaded_sources.push((CsvSourceRequestKind::Descriptor, descriptor_bytes.clone()));
+        let descriptor_text = std::str::from_utf8(descriptor_bytes.bytes()).map_err(|error| {
+            SourceDocumentError::at(
+                descriptor_bytes.provenance(),
+                &descriptor_path,
+                format!("descriptor is not valid UTF-8: {error}"),
+            )
+        })?;
+        let descriptor = CsvNoteSourceDescriptor::parse(SourceFile::new(
+            descriptor_bytes.provenance().clone(),
+            descriptor_text,
+        ))
+        .map_err(|error| SourceDocumentError::at(root, &declaration_path, error.to_string()))?;
+        let descriptor_provenance = descriptor.provenance().clone();
+        let materializer =
+            CsvTranslationSourceMaterializer::new(descriptor, declaration.parameters()).map_err(
+                |error| SourceDocumentError::at(root, &declaration_path, error.to_string()),
+            )?;
+        let requests = materializer
+            .table_paths()
+            .map(|(alias, target)| {
+                CsvSourceRequest::table(
+                    descriptor_provenance.clone(),
+                    format!("{declaration_path}.tables.{alias}"),
+                    alias.to_owned(),
+                    target.to_owned(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut tables = BTreeMap::new();
+        for request in requests {
+            let alias = match request.kind() {
+                CsvSourceRequestKind::Table { alias } => alias.clone(),
+                CsvSourceRequestKind::Descriptor => unreachable!(),
+            };
+            let table = csv_loader(&request).map_err(|message| {
+                SourceDocumentError::at(
+                    root,
+                    &declaration_path,
+                    format!("could not load CSV table {:?}: {message}", request.target()),
+                )
+            })?;
+            loaded_sources.push((request.kind().clone(), table.clone()));
+            tables.insert(alias, table);
+        }
+        if let Some(source_deck) = source_deck {
+            let materialized = materializer
+                .materialize(&tables, source_deck)
+                .map_err(|error| {
+                    SourceDocumentError::at(root, &declaration_path, error.to_string())
+                })?;
+            if declaration.has_nonempty_exclusions() {
+                return Err(SourceDocumentError::at(
+                    root,
+                    &declaration_path,
+                    "non-empty translations.from_csv exclusions require ownership-transfer task 0080",
+                ));
+            }
+            merge_csv_translations(
+                resolved_overlay
+                    .translations
+                    .get_or_insert_with(TranslationDictionary::default),
+                &materialized.translations,
+                &materialized.owned_text,
+            )
+            .map_err(|message| SourceDocumentError::at(root, &declaration_path, message))?;
+            provenance.merge(materialized.provenance);
+        } else if declaration.has_nonempty_exclusions() {
+            return Err(SourceDocumentError::at(
+                root,
+                &declaration_path,
+                "non-empty translations.from_csv exclusions require ownership-transfer task 0080",
+            ));
+        }
+    }
+    Ok((provenance, loaded_sources))
+}
+
+#[derive(Eq, PartialEq)]
+enum EffectiveTranslation {
+    Text(String),
+    Adaptation(brain_brew_core::TargetAdaptation),
+}
+
+fn effective_translation(
+    translations: &TranslationDictionary,
+    path: &str,
+    source: &str,
+) -> Option<EffectiveTranslation> {
+    if let Some(adaptation) = translations.target_adaptations.get(path) {
+        return Some(EffectiveTranslation::Adaptation(adaptation.clone()));
+    }
+    if let Some(target) = translations
+        .contextual
+        .iter()
+        .filter(|(context, replacements)| {
+            replacements.contains_key(source)
+                && (context.as_str() == path
+                    || path
+                        .strip_prefix(context.as_str())
+                        .is_some_and(|suffix| suffix.starts_with('.')))
+        })
+        .max_by_key(|(context, _)| context.len())
+        .and_then(|(_, replacements)| replacements.get(source))
+    {
+        return Some(EffectiveTranslation::Text(target.clone()));
+    }
+    translations
+        .direct
+        .get(source)
+        .map(|target| EffectiveTranslation::Text(target.clone()))
+        .or_else(|| {
+            translations
+                .no_change
+                .contains(source)
+                .then(|| EffectiveTranslation::Text(source.to_owned()))
+        })
+}
+
+fn merge_csv_translations(
+    existing: &mut TranslationDictionary,
+    imported: &TranslationDictionary,
+    owned_text: &[CsvTranslationPair],
+) -> Result<(), String> {
+    let mut next = existing.clone();
+    for pair in owned_text {
+        if let Some(current) = effective_translation(&next, &pair.path, &pair.source)
+            && current != EffectiveTranslation::Text(pair.target.clone())
+        {
+            return Err(format!(
+                "CSV translation conflict at {} for source {:?}: inline and imported decisions differ",
+                pair.path, pair.source
+            ));
+        }
+    }
+    for (path, adaptation) in &imported.target_adaptations {
+        let current = effective_translation(&next, path, &adaptation.expected_source);
+        if let Some(current) = current
+            && current != EffectiveTranslation::Adaptation(adaptation.clone())
+        {
+            return Err(format!(
+                "CSV translation conflict at {path}: inline and imported adaptation/deletion decisions differ"
+            ));
+        }
+    }
+    for (source, target) in &imported.direct {
+        if next.no_change.contains(source) && target != source {
+            return Err(format!(
+                "CSV direct translation for {source:?} conflicts with inline no_change"
+            ));
+        }
+        for replacements in next.contextual.values() {
+            if let Some(current) = replacements.get(source)
+                && current != target
+            {
+                return Err(format!(
+                    "CSV direct translation for {source:?} conflicts with inline contextual translation"
+                ));
+            }
+        }
+        insert_identical_or_vacant(&mut next.direct, source, target, "direct translation")?;
+    }
+    for (context, replacements) in &imported.contextual {
+        for (source, target) in replacements {
+            let inline = next.contextual.entry(context.clone()).or_default();
+            insert_identical_or_vacant(inline, source, target, "contextual translation")?;
+        }
+    }
+    for source in &imported.no_change {
+        if next
+            .direct
+            .get(source)
+            .is_some_and(|target| target != source)
+        {
+            return Err(format!(
+                "CSV no_change for {source:?} conflicts with inline direct translation"
+            ));
+        }
+        for replacements in next.contextual.values() {
+            if replacements
+                .get(source)
+                .is_some_and(|target| target != source)
+            {
+                return Err(format!(
+                    "CSV no_change for {source:?} conflicts with inline contextual translation"
+                ));
+            }
+        }
+        next.no_change.insert(source.clone());
+    }
+    for (path, adaptation) in &imported.target_adaptations {
+        insert_identical_or_vacant(
+            &mut next.target_adaptations,
+            path,
+            adaptation,
+            "target adaptation",
+        )?;
+    }
+    for (namespace, replacements) in &imported.adapter_ids {
+        let inline = next.adapter_ids.entry(namespace.clone()).or_default();
+        for (source, target) in replacements {
+            insert_identical_or_vacant(inline, source, target, "adapter-ID translation")?;
+        }
+    }
+    next.validate_mutation_invariants()
+        .map_err(|error| error.to_string())?;
+    *existing = next;
+    Ok(())
+}
+
+fn insert_identical_or_vacant<K: Ord + Clone, V: Eq + Clone>(
+    map: &mut BTreeMap<K, V>,
+    key: &K,
+    value: &V,
+    kind: &str,
+) -> Result<(), String> {
+    if let Some(current) = map.get(key) {
+        if current != value {
+            return Err(format!("conflicting {kind} entries"));
+        }
+    } else {
+        map.insert(key.clone(), value.clone());
+    }
+    Ok(())
 }
 
 fn apply_translation_decision(

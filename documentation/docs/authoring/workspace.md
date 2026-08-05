@@ -64,6 +64,12 @@ Sparse changes to the base deck. Keep overlays small and purpose-shaped:
 - optional content extensions in `overlays/extensions/`;
 - corrections in `overlays/patches/`.
 
+## CSV-backed translation ownership
+
+A translation overlay may keep `translations.from_csv` beside ordinary inline dictionary entries. The declaration reads the note descriptor's exact unsuffixed and localized columns and materializes the existing translation dictionary; it does not replace notes or infer a language from the target name.
+
+CSV-owned pairs are regenerated from the current CSV bytes. Source fingerprints detect input changes, but historical stale-translation review is unavailable because the old source key is not retained. To regain native stale detection, transfer the affected source text, note, or path to inline YAML by excluding it from `from_csv` and adding the equivalent inline decision in the same change. Non-empty transfer exclusions are reserved for the ownership-transfer workflow and are rejected until that workflow is enabled.
+
 ## `brainbrew.yaml`
 
 The manifest declares package metadata, named overlays, dependencies, and build targets. It also defines the package root used for file includes.

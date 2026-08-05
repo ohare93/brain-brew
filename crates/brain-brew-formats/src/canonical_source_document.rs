@@ -708,6 +708,9 @@ fn materialize_note_sources(
             materialized
                 .field_provenance
                 .retain(|(owned_note_id, _), _| owned_note_id != note_id);
+            materialized
+                .adapter_provenance
+                .retain(|(owned_note_id, _), _| owned_note_id != note_id);
             exclusions.push((note_id.clone(), declaration_path.clone()));
         }
 
