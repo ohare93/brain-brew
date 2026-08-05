@@ -27,3 +27,23 @@ Support the narrow tabular composition needed by UG-style data without recreatin
 ## Implementation Notes
 
 Depends on CSV note materialization. Keep the descriptor narrowly sufficient for tabular note data; no formula language, automatic header lowercasing, arbitrary transforms, or write-back.
+
+
+## Completion Summary
+
+- Extended the existing CSV materializer with explicit flat many-to-one joins over one primary table and uniquely keyed joined tables.
+- Added required and optional join semantics, strict key ownership/cardinality checks, and fail-closed rejection of chained, recursive, implicit, or ambiguous declarations.
+- Added literal `localized_column` parameters with empty defaults and explicit field/adapter-ID opt-in while keeping tags unsuffixed.
+- Added maintained main/country/guid fixtures for empty, `de`, and `zh-tw` parameter values plus strict regression coverage for join and parameter failures.
+- Passed independent Grok review, 14 focused CSV tests, the full formats and workspace suites, formatting, and clippy.
+
+### Files Changed
+
+- crates/brain-brew-formats/src/canonical_source_document.rs
+- crates/brain-brew-formats/src/csv_note_source.rs
+- crates/brain-brew-formats/tests/csv_note_sources.rs
+- crates/brain-brew-formats/tests/fixtures/csv_notes_joins/descriptor.yaml
+- crates/brain-brew-formats/tests/fixtures/csv_notes_joins/main.csv
+- crates/brain-brew-formats/tests/fixtures/csv_notes_joins/country.csv
+- crates/brain-brew-formats/tests/fixtures/csv_notes_joins/guid.csv
+- .frontloop/composable-csv-authoring/done/0030-add-explicit-joins-and-localized-column-parameters.md

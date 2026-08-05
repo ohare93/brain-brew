@@ -1,7 +1,7 @@
 //! Strict, filesystem-free CSV note Authoring Source materialization.
 //!
-//! This module owns the typed `!csv` declaration and descriptor for the first,
-//! deliberately narrow single-table slice. Callers authorize and inject all
+//! This module owns the typed `!csv` declaration, explicit flat joins, and
+//! literal localized-column parameters. Callers authorize and inject all
 //! descriptor and CSV bytes; no path is opened here.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -148,15 +148,6 @@ impl CsvNoteSourceDeclaration {
                 "notes !csv descriptor path must not be empty",
             ));
         }
-        if !raw.parameters.is_empty() {
-            return Err(CsvNoteSourceError::new(
-                provenance.clone(),
-                None,
-                None,
-                None,
-                "notes !csv parameters are not supported by the single-table materialization slice",
-            ));
-        }
         *notes = Value::Mapping(serde_yaml::Mapping::new());
         Ok(Some(Self {
             descriptor: raw.descriptor,
@@ -171,21 +162,36 @@ impl CsvNoteSourceDeclaration {
             crate::strict_yaml::top_level_mapping_key_offset(&canonical[start..], "media")
                 .ok_or_else(|| "canonical emission omitted media after notes".to_owned())?;
         let end = start + relative_end;
-        let replacement = format!(
-            "notes: !csv\n  descriptor: {}\n  parameters: {{}}\n",
+        let mut replacement = format!(
+            "notes: !csv\n  descriptor: {}\n",
             crate::yaml_scalar::scalar(&self.descriptor)
         );
+        if self.parameters.is_empty() {
+            replacement.push_str("  parameters: {}\n");
+        } else {
+            replacement.push_str("  parameters:\n");
+            for (name, value) in &self.parameters {
+                let name = crate::yaml_scalar::key(name)
+                    .ok_or_else(|| format!("parameter name {name:?} cannot be emitted"))?;
+                replacement.push_str(&format!(
+                    "    {name}: {}\n",
+                    crate::yaml_scalar::scalar(value)
+                ));
+            }
+        }
         canonical.replace_range(start..end, &replacement);
         Ok(canonical)
     }
 }
 
-/// Strict reusable descriptor for the initial single-table scalar-note slice.
+/// Strict reusable descriptor for CSV-backed scalar notes with explicit flat joins.
 #[derive(Clone, Debug)]
 pub struct CsvNoteSourceDescriptor {
     provenance: SourceProvenance,
     primary_table: String,
     tables: BTreeMap<String, CsvTableDescriptor>,
+    parameters: BTreeMap<String, CsvLocalizedColumnParameter>,
+    joins: Vec<CsvJoinDescriptor>,
     note: CsvNoteMapping,
 }
 
@@ -195,8 +201,8 @@ struct RawDescriptor {
     version: u32,
     primary_table: String,
     tables: BTreeMap<String, CsvTableDescriptor>,
-    parameters: BTreeMap<String, Value>,
-    joins: Vec<Value>,
+    parameters: BTreeMap<String, CsvLocalizedColumnParameter>,
+    joins: Vec<CsvJoinDescriptor>,
     note: CsvNoteMapping,
 }
 
@@ -204,6 +210,28 @@ struct RawDescriptor {
 #[serde(deny_unknown_fields)]
 struct CsvTableDescriptor {
     path: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CsvLocalizedColumnParameter {
+    #[serde(rename = "type")]
+    kind: String,
+    default: String,
+    separator: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CsvJoinDescriptor {
+    left: String,
+    right: String,
+    #[serde(default = "default_required_join")]
+    required: bool,
+}
+
+fn default_required_join() -> bool {
+    true
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -220,6 +248,8 @@ struct CsvNoteMapping {
 #[serde(deny_unknown_fields)]
 struct CsvScalarFieldMapping {
     column: String,
+    #[serde(default)]
+    localized_by: Option<String>,
     #[serde(rename = "type")]
     kind: String,
 }
@@ -235,6 +265,8 @@ struct CsvTagsMapping {
 #[serde(deny_unknown_fields)]
 struct CsvAdapterIdMapping {
     column: String,
+    #[serde(default)]
+    localized_by: Option<String>,
 }
 
 impl CsvNoteSourceDescriptor {
@@ -254,42 +286,83 @@ impl CsvNoteSourceDescriptor {
                 ),
             ));
         }
-        if raw.primary_table.is_empty() {
-            return Err(CsvNoteSourceError::descriptor(
-                source.provenance(),
-                "primary_table must not be empty",
-            ));
-        }
-        if raw.tables.len() != 1 {
-            return Err(CsvNoteSourceError::descriptor(
-                source.provenance(),
-                "the single-table materialization slice requires exactly one table",
-            ));
-        }
-        let Some(table) = raw.tables.get(&raw.primary_table) else {
+        validate_name(
+            source.provenance(),
+            "primary table alias",
+            &raw.primary_table,
+        )?;
+        let Some(_) = raw.tables.get(&raw.primary_table) else {
             return Err(CsvNoteSourceError::descriptor(
                 source.provenance(),
                 format!("primary table {:?} is not declared", raw.primary_table),
             ));
         };
-        if table.path.is_empty() {
-            return Err(CsvNoteSourceError::descriptor(
-                source.provenance(),
-                format!("table {:?} path must not be empty", raw.primary_table),
-            ));
+        for (alias, table) in &raw.tables {
+            validate_name(source.provenance(), "table alias", alias)?;
+            if table.path.is_empty() {
+                return Err(CsvNoteSourceError::descriptor(
+                    source.provenance(),
+                    format!("table {alias:?} path must not be empty"),
+                ));
+            }
         }
-        if !raw.parameters.is_empty() {
-            return Err(CsvNoteSourceError::descriptor(
-                source.provenance(),
-                "parameters are not supported by the single-table materialization slice",
-            ));
+        for (name, parameter) in &raw.parameters {
+            validate_name(source.provenance(), "parameter name", name)?;
+            if parameter.kind != "localized_column" {
+                return Err(CsvNoteSourceError::descriptor(
+                    source.provenance(),
+                    format!(
+                        "parameter {name:?} has unsupported type {:?}; expected localized_column",
+                        parameter.kind
+                    ),
+                ));
+            }
+            if !parameter.default.is_empty() {
+                return Err(CsvNoteSourceError::descriptor(
+                    source.provenance(),
+                    format!("localized_column parameter {name:?} default must be empty"),
+                ));
+            }
         }
-        if !raw.joins.is_empty() {
-            return Err(CsvNoteSourceError::descriptor(
-                source.provenance(),
-                "joins are not supported by the single-table materialization slice",
-            ));
+
+        let mut joined_aliases = BTreeSet::new();
+        for join in &raw.joins {
+            let (left_alias, _) = qualified_column(source.provenance(), &join.left, &raw.tables)?;
+            let (right_alias, _) = qualified_column(source.provenance(), &join.right, &raw.tables)?;
+            if left_alias != raw.primary_table {
+                return Err(CsvNoteSourceError::descriptor(
+                    source.provenance(),
+                    format!(
+                        "join left column {:?} must belong to primary table {:?}",
+                        join.left, raw.primary_table
+                    ),
+                ));
+            }
+            if right_alias == raw.primary_table {
+                return Err(CsvNoteSourceError::descriptor(
+                    source.provenance(),
+                    format!(
+                        "join right column {:?} must belong to a joined table",
+                        join.right
+                    ),
+                ));
+            }
+            if !joined_aliases.insert(right_alias.to_owned()) {
+                return Err(CsvNoteSourceError::descriptor(
+                    source.provenance(),
+                    format!("joined table alias {right_alias:?} is joined more than once"),
+                ));
+            }
         }
+        for alias in raw.tables.keys() {
+            if alias != &raw.primary_table && !joined_aliases.contains(alias) {
+                return Err(CsvNoteSourceError::descriptor(
+                    source.provenance(),
+                    format!("non-primary table {alias:?} has no explicit join"),
+                ));
+            }
+        }
+
         if raw.note.fields.is_empty() {
             return Err(CsvNoteSourceError::descriptor(
                 source.provenance(),
@@ -302,12 +375,27 @@ impl CsvNoteSourceDescriptor {
                 "tag delimiter must not be empty",
             ));
         }
-        validate_qualified_column(source.provenance(), &raw.note.id, &raw.primary_table)?;
+        let (id_alias, _) = qualified_column(source.provenance(), &raw.note.id, &raw.tables)?;
+        if id_alias != raw.primary_table {
+            return Err(CsvNoteSourceError::descriptor(
+                source.provenance(),
+                format!(
+                    "note ID column must belong to primary table {:?}",
+                    raw.primary_table
+                ),
+            ));
+        }
         for (field_id, field) in &raw.note.fields {
             StableId::new(field_id.clone()).map_err(|error| {
                 CsvNoteSourceError::descriptor(source.provenance(), error.to_string())
             })?;
-            validate_qualified_column(source.provenance(), &field.column, &raw.primary_table)?;
+            qualified_column(source.provenance(), &field.column, &raw.tables)?;
+            validate_localized_by(
+                source.provenance(),
+                field.localized_by.as_deref(),
+                &raw.parameters,
+                &format!("field mapping {field_id}"),
+            )?;
             if field.kind != "scalar" {
                 return Err(CsvNoteSourceError::descriptor(
                     source.provenance(),
@@ -318,11 +406,7 @@ impl CsvNoteSourceDescriptor {
                 ));
             }
         }
-        validate_qualified_column(
-            source.provenance(),
-            &raw.note.tags.column,
-            &raw.primary_table,
-        )?;
+        qualified_column(source.provenance(), &raw.note.tags.column, &raw.tables)?;
         for (namespace, mapping) in &raw.note.adapter_ids {
             if namespace.is_empty() {
                 return Err(CsvNoteSourceError::descriptor(
@@ -330,7 +414,13 @@ impl CsvNoteSourceDescriptor {
                     "adapter namespace must not be empty",
                 ));
             }
-            validate_qualified_column(source.provenance(), &mapping.column, &raw.primary_table)?;
+            qualified_column(source.provenance(), &mapping.column, &raw.tables)?;
+            validate_localized_by(
+                source.provenance(),
+                mapping.localized_by.as_deref(),
+                &raw.parameters,
+                &format!("adapter-ID mapping {namespace:?}"),
+            )?;
         }
         StableId::new(raw.note.note_type_id.clone()).map_err(|error| {
             CsvNoteSourceError::descriptor(source.provenance(), error.to_string())
@@ -339,6 +429,8 @@ impl CsvNoteSourceDescriptor {
             provenance: source.provenance().clone(),
             primary_table: raw.primary_table,
             tables: raw.tables,
+            parameters: raw.parameters,
+            joins: raw.joins,
             note: raw.note,
         })
     }
@@ -352,49 +444,145 @@ impl CsvNoteSourceDescriptor {
             .iter()
             .map(|(alias, table)| (alias.as_str(), table.path.as_str()))
     }
+
+    fn parameter_values(
+        &self,
+        arguments: &BTreeMap<String, String>,
+    ) -> Result<BTreeMap<String, String>, CsvNoteSourceError> {
+        if let Some(unknown) = arguments
+            .keys()
+            .find(|name| !self.parameters.contains_key(*name))
+        {
+            return Err(CsvNoteSourceError::descriptor(
+                &self.provenance,
+                format!("unknown CSV source parameter argument {unknown:?}"),
+            ));
+        }
+        Ok(self
+            .parameters
+            .iter()
+            .map(|(name, parameter)| {
+                (
+                    name.clone(),
+                    arguments
+                        .get(name)
+                        .cloned()
+                        .unwrap_or_else(|| parameter.default.clone()),
+                )
+            })
+            .collect())
+    }
 }
 
-fn validate_qualified_column(
+fn validate_name(
     provenance: &SourceProvenance,
+    kind: &str,
     value: &str,
-    primary_table: &str,
 ) -> Result<(), CsvNoteSourceError> {
+    if value.is_empty() || value.contains('.') || value.contains(['\n', '\r']) {
+        return Err(CsvNoteSourceError::descriptor(
+            provenance,
+            format!("invalid {kind} {value:?}; expected a non-empty name without '.'"),
+        ));
+    }
+    Ok(())
+}
+
+fn qualified_column<'a>(
+    provenance: &SourceProvenance,
+    value: &'a str,
+    tables: &BTreeMap<String, CsvTableDescriptor>,
+) -> Result<(&'a str, &'a str), CsvNoteSourceError> {
     let Some((alias, header)) = value.split_once('.') else {
         return Err(CsvNoteSourceError::descriptor(
             provenance,
             format!("column reference {value:?} must be qualified as table.header"),
         ));
     };
-    if alias != primary_table {
+    if alias.is_empty() || header.is_empty() {
         return Err(CsvNoteSourceError::descriptor(
             provenance,
-            format!("column reference {value:?} does not use primary table {primary_table:?}"),
+            format!("column reference {value:?} has an empty alias or header"),
         ));
     }
-    if header.is_empty() {
+    if !tables.contains_key(alias) {
         return Err(CsvNoteSourceError::descriptor(
             provenance,
-            format!("column reference {value:?} has an empty header"),
+            format!("column reference {value:?} uses undeclared table alias {alias:?}"),
+        ));
+    }
+    Ok((alias, header))
+}
+
+fn validate_localized_by(
+    provenance: &SourceProvenance,
+    localized_by: Option<&str>,
+    parameters: &BTreeMap<String, CsvLocalizedColumnParameter>,
+    mapping: &str,
+) -> Result<(), CsvNoteSourceError> {
+    if let Some(name) = localized_by
+        && !parameters.contains_key(name)
+    {
+        return Err(CsvNoteSourceError::descriptor(
+            provenance,
+            format!("{mapping} references unknown localized_by parameter {name:?}"),
         ));
     }
     Ok(())
 }
 
-fn column_header<'a>(qualified: &'a str, alias: &str) -> &'a str {
-    qualified
-        .strip_prefix(alias)
-        .and_then(|value| value.strip_prefix('.'))
-        .expect("descriptor qualification was validated")
-}
-
-/// Materializes one validated single-table descriptor into ordinary core notes.
+/// Materializes one validated descriptor into ordinary core notes.
 pub struct CsvNoteSourceMaterializer {
     descriptor: CsvNoteSourceDescriptor,
+    parameters: BTreeMap<String, String>,
+}
+
+struct LoadedTable<'a> {
+    source: &'a CsvSourceFile,
+    headers: csv::StringRecord,
+    rows: Vec<LoadedRow>,
+}
+
+struct LoadedRow {
+    logical_row: u64,
+    record: csv::StringRecord,
+}
+
+struct MappedColumn {
+    alias: String,
+    index: usize,
+    header: String,
+}
+
+struct PreparedJoin {
+    alias: String,
+    left_index: usize,
+    left_header: String,
+    required: bool,
+    lookup: BTreeMap<String, usize>,
 }
 
 impl CsvNoteSourceMaterializer {
     pub fn new(descriptor: CsvNoteSourceDescriptor) -> Self {
-        Self { descriptor }
+        let parameters = descriptor
+            .parameter_values(&BTreeMap::new())
+            .expect("validated parameter defaults");
+        Self {
+            descriptor,
+            parameters,
+        }
+    }
+
+    pub fn with_parameters(
+        mut self,
+        parameters: &BTreeMap<String, String>,
+    ) -> Result<Self, CsvNoteSourceError> {
+        self.parameters = self.descriptor.parameter_values(parameters)?;
+        Ok(self)
+    }
+
+    pub fn table_paths(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.descriptor.table_paths()
     }
 
     pub fn materialize(
@@ -414,104 +602,135 @@ impl CsvNoteSourceMaterializer {
         })?;
         self.validate_field_completeness(note_type)?;
 
-        let source = tables.get(&self.descriptor.primary_table).ok_or_else(|| {
-            CsvNoteSourceError::descriptor(
+        if let Some(alias) = tables
+            .keys()
+            .find(|alias| !self.descriptor.tables.contains_key(*alias))
+        {
+            return Err(CsvNoteSourceError::descriptor(
                 &self.descriptor.provenance,
-                format!(
-                    "caller did not provide bytes for primary table {:?}",
-                    self.descriptor.primary_table
-                ),
-            )
-        })?;
-        validate_csv_bytes(source)?;
-        let mut reader = csv::ReaderBuilder::new()
-            .has_headers(true)
-            .flexible(false)
-            .from_reader(source.bytes());
-        let headers = reader
-            .headers()
-            .map_err(|error| csv_error(source, error))?
-            .clone();
-        validate_headers(source, &headers)?;
+                format!("caller provided bytes for undeclared table {alias:?}"),
+            ));
+        }
+        let loaded = self
+            .descriptor
+            .tables
+            .keys()
+            .map(|alias| {
+                let source = tables.get(alias).ok_or_else(|| {
+                    CsvNoteSourceError::descriptor(
+                        &self.descriptor.provenance,
+                        format!("caller did not provide bytes for table {alias:?}"),
+                    )
+                })?;
+                Ok((alias.clone(), load_table(source)?))
+            })
+            .collect::<Result<BTreeMap<_, _>, CsvNoteSourceError>>()?;
 
-        let alias = &self.descriptor.primary_table;
-        let id_index = required_header(
-            source,
-            &headers,
-            column_header(&self.descriptor.note.id, alias),
+        let primary = &loaded[&self.descriptor.primary_table];
+        let (_, id_header) = qualified_column(
+            &self.descriptor.provenance,
+            &self.descriptor.note.id,
+            &self.descriptor.tables,
         )?;
-        let field_indexes = self
+        let id_index = required_header(primary.source, &primary.headers, id_header)?;
+        let field_columns = self
             .descriptor
             .note
             .fields
             .iter()
             .map(|(field_id, mapping)| {
-                let stable_id = StableId::new(field_id.clone()).expect("mapping IDs validated");
-                let header = column_header(&mapping.column, alias);
-                Ok((stable_id, required_header(source, &headers, header)?))
+                Ok((
+                    StableId::new(field_id.clone()).expect("mapping IDs validated"),
+                    self.mapped_column(&loaded, &mapping.column, mapping.localized_by.as_deref())?,
+                ))
             })
             .collect::<Result<BTreeMap<_, _>, CsvNoteSourceError>>()?;
-        let tags_header = column_header(&self.descriptor.note.tags.column, alias);
-        let tags_index = required_header(source, &headers, tags_header)?;
-        let adapter_indexes = self
+        let tags_column = self.mapped_column(&loaded, &self.descriptor.note.tags.column, None)?;
+        let adapter_columns = self
             .descriptor
             .note
             .adapter_ids
             .iter()
             .map(|(namespace, mapping)| {
-                let header = column_header(&mapping.column, alias);
                 Ok((
                     namespace.clone(),
-                    required_header(source, &headers, header)?,
+                    self.mapped_column(&loaded, &mapping.column, mapping.localized_by.as_deref())?,
                 ))
             })
             .collect::<Result<BTreeMap<_, _>, CsvNoteSourceError>>()?;
+        let joins = self.prepare_joins(&loaded)?;
 
         let mut notes = BTreeMap::new();
-        for record in reader.records() {
-            let record = record.map_err(|error| csv_error(source, error))?;
-            let logical_row = record
-                .position()
-                .map_or(2, |position| position.record().saturating_add(1));
-            let id_cell = &record[id_index];
+        for (primary_index, row) in primary.rows.iter().enumerate() {
+            let mut selected =
+                BTreeMap::from([(self.descriptor.primary_table.clone(), Some(primary_index))]);
+            for join in &joins {
+                let key = &row.record[join.left_index];
+                if key.is_empty() {
+                    return Err(CsvNoteSourceError::cell(
+                        primary.source,
+                        row.logical_row,
+                        join.left_index,
+                        &join.left_header,
+                        "join left key must not be empty",
+                    ));
+                }
+                let matched = join.lookup.get(key).copied();
+                if join.required && matched.is_none() {
+                    return Err(CsvNoteSourceError::cell(
+                        primary.source,
+                        row.logical_row,
+                        join.left_index,
+                        &join.left_header,
+                        format!(
+                            "required join to table {:?} has no match for key {key:?}",
+                            join.alias
+                        ),
+                    ));
+                }
+                selected.insert(join.alias.clone(), matched);
+            }
+
+            let id_cell = &row.record[id_index];
             let id = StableId::new(id_cell.to_owned()).map_err(|error| {
                 CsvNoteSourceError::cell(
-                    source,
-                    logical_row,
+                    primary.source,
+                    row.logical_row,
                     id_index,
-                    &headers[id_index],
+                    &primary.headers[id_index],
                     error.to_string(),
                 )
             })?;
             if notes.contains_key(&id) {
                 return Err(CsvNoteSourceError::cell(
-                    source,
-                    logical_row,
+                    primary.source,
+                    row.logical_row,
                     id_index,
-                    &headers[id_index],
+                    &primary.headers[id_index],
                     format!("duplicate stable note ID {id}"),
                 ));
             }
-            let fields = field_indexes
+            let fields = field_columns
                 .iter()
-                .map(|(field_id, index)| {
+                .map(|(field_id, column)| {
                     (
                         field_id.clone(),
-                        FieldValue::Scalar(record[*index].to_owned()),
+                        FieldValue::Scalar(cell(&loaded, &selected, column).to_owned()),
                     )
                 })
                 .collect();
             let tags = parse_tags(
-                source,
-                logical_row,
-                tags_index,
-                tags_header,
-                &record[tags_index],
+                loaded[&tags_column.alias].source,
+                selected_row(&loaded, &selected, &tags_column)
+                    .map_or(row.logical_row, |row| row.logical_row),
+                tags_column.index,
+                &tags_column.header,
+                cell(&loaded, &selected, &tags_column),
                 &self.descriptor.note.tags.delimiter,
             )?;
             let mut adapter_ids = AdapterIds::new();
-            for (namespace, index) in &adapter_indexes {
-                let value = &record[*index];
+            for (namespace, column) in &adapter_columns {
+                let value = cell(&loaded, &selected, column);
                 if !value.is_empty() {
                     adapter_ids.insert(namespace, value);
                 }
@@ -529,6 +748,91 @@ impl CsvNoteSourceMaterializer {
             );
         }
         Ok(notes)
+    }
+
+    fn mapped_column(
+        &self,
+        loaded: &BTreeMap<String, LoadedTable<'_>>,
+        qualified: &str,
+        localized_by: Option<&str>,
+    ) -> Result<MappedColumn, CsvNoteSourceError> {
+        let (alias, base_header) = qualified_column(
+            &self.descriptor.provenance,
+            qualified,
+            &self.descriptor.tables,
+        )?;
+        let header = if let Some(parameter_name) = localized_by {
+            let parameter = &self.descriptor.parameters[parameter_name];
+            let value = &self.parameters[parameter_name];
+            if value.is_empty() {
+                base_header.to_owned()
+            } else {
+                format!("{base_header}{}{value}", parameter.separator)
+            }
+        } else {
+            base_header.to_owned()
+        };
+        let table = &loaded[alias];
+        Ok(MappedColumn {
+            alias: alias.to_owned(),
+            index: required_header(table.source, &table.headers, &header)?,
+            header,
+        })
+    }
+
+    fn prepare_joins(
+        &self,
+        loaded: &BTreeMap<String, LoadedTable<'_>>,
+    ) -> Result<Vec<PreparedJoin>, CsvNoteSourceError> {
+        let primary = &loaded[&self.descriptor.primary_table];
+        self.descriptor
+            .joins
+            .iter()
+            .map(|join| {
+                let (_, left_header) = qualified_column(
+                    &self.descriptor.provenance,
+                    &join.left,
+                    &self.descriptor.tables,
+                )?;
+                let (right_alias, right_header) = qualified_column(
+                    &self.descriptor.provenance,
+                    &join.right,
+                    &self.descriptor.tables,
+                )?;
+                let left_index = required_header(primary.source, &primary.headers, left_header)?;
+                let right = &loaded[right_alias];
+                let right_index = required_header(right.source, &right.headers, right_header)?;
+                let mut lookup = BTreeMap::new();
+                for (index, row) in right.rows.iter().enumerate() {
+                    let key = &row.record[right_index];
+                    if key.is_empty() {
+                        return Err(CsvNoteSourceError::cell(
+                            right.source,
+                            row.logical_row,
+                            right_index,
+                            right_header,
+                            "join right key must not be empty",
+                        ));
+                    }
+                    if lookup.insert(key.to_owned(), index).is_some() {
+                        return Err(CsvNoteSourceError::cell(
+                            right.source,
+                            row.logical_row,
+                            right_index,
+                            right_header,
+                            format!("duplicate join right key {key:?}"),
+                        ));
+                    }
+                }
+                Ok(PreparedJoin {
+                    alias: right_alias.to_owned(),
+                    left_index,
+                    left_header: left_header.to_owned(),
+                    required: join.required,
+                    lookup,
+                })
+            })
+            .collect()
     }
 
     fn validate_field_completeness(&self, note_type: &NoteType) -> Result<(), CsvNoteSourceError> {
@@ -558,6 +862,53 @@ impl CsvNoteSourceMaterializer {
         }
         Ok(())
     }
+}
+
+fn load_table(source: &CsvSourceFile) -> Result<LoadedTable<'_>, CsvNoteSourceError> {
+    validate_csv_bytes(source)?;
+    let mut reader = csv::ReaderBuilder::new()
+        .has_headers(true)
+        .flexible(false)
+        .from_reader(source.bytes());
+    let headers = reader
+        .headers()
+        .map_err(|error| csv_error(source, error))?
+        .clone();
+    validate_headers(source, &headers)?;
+    let rows = reader
+        .records()
+        .map(|record| {
+            let record = record.map_err(|error| csv_error(source, error))?;
+            let logical_row = record
+                .position()
+                .map_or(2, |position| position.record().saturating_add(1));
+            Ok(LoadedRow {
+                logical_row,
+                record,
+            })
+        })
+        .collect::<Result<Vec<_>, CsvNoteSourceError>>()?;
+    Ok(LoadedTable {
+        source,
+        headers,
+        rows,
+    })
+}
+
+fn selected_row<'a>(
+    loaded: &'a BTreeMap<String, LoadedTable<'a>>,
+    selected: &BTreeMap<String, Option<usize>>,
+    column: &MappedColumn,
+) -> Option<&'a LoadedRow> {
+    selected[&column.alias].map(|index| &loaded[&column.alias].rows[index])
+}
+
+fn cell<'a>(
+    loaded: &'a BTreeMap<String, LoadedTable<'a>>,
+    selected: &BTreeMap<String, Option<usize>>,
+    column: &MappedColumn,
+) -> &'a str {
+    selected_row(loaded, selected, column).map_or("", |row| &row.record[column.index])
 }
 
 fn validate_csv_bytes(source: &CsvSourceFile) -> Result<(), CsvNoteSourceError> {

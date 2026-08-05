@@ -240,11 +240,17 @@ impl CanonicalSourceDocument {
             .map_err(|error| {
                 SourceDocumentError::at(prepared.root.provenance(), "notes", error.to_string())
             })?;
-            let table_requests = descriptor
+            let descriptor_provenance = descriptor.provenance().clone();
+            let materializer = CsvNoteSourceMaterializer::new(descriptor)
+                .with_parameters(declaration.parameters())
+                .map_err(|error| {
+                    SourceDocumentError::at(prepared.root.provenance(), "notes", error.to_string())
+                })?;
+            let table_requests = materializer
                 .table_paths()
                 .map(|(alias, target)| {
                     CsvSourceRequest::table(
-                        descriptor.provenance().clone(),
+                        descriptor_provenance.clone(),
                         alias.to_owned(),
                         target.to_owned(),
                     )
@@ -265,7 +271,7 @@ impl CanonicalSourceDocument {
                 })?;
                 tables.insert(alias, table);
             }
-            resolved_deck.notes = CsvNoteSourceMaterializer::new(descriptor)
+            resolved_deck.notes = materializer
                 .materialize(&tables, &resolved_deck.note_types)
                 .map_err(|error| {
                     SourceDocumentError::at(prepared.root.provenance(), "notes", error.to_string())
