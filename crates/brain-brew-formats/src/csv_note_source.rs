@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use brain_brew_core::{AdapterIds, FieldValue, Note, NoteType, StableId};
+use brain_brew_core::{AdapterIds, FieldImageReference, FieldValue, Note, NoteType, StableId};
 use serde::Deserialize;
 use serde_yaml::Value;
 
@@ -184,7 +184,7 @@ impl CsvNoteSourceDeclaration {
     }
 }
 
-/// Strict reusable descriptor for CSV-backed scalar notes with explicit flat joins.
+/// Strict reusable descriptor for CSV-backed notes with explicit flat joins.
 #[derive(Clone, Debug)]
 pub struct CsvNoteSourceDescriptor {
     provenance: SourceProvenance,
@@ -239,19 +239,35 @@ fn default_required_join() -> bool {
 struct CsvNoteMapping {
     id: String,
     note_type_id: String,
-    fields: BTreeMap<String, CsvScalarFieldMapping>,
+    fields: BTreeMap<String, CsvFieldMapping>,
     tags: CsvTagsMapping,
     adapter_ids: BTreeMap<String, CsvAdapterIdMapping>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct CsvScalarFieldMapping {
+struct CsvFieldMapping {
     column: String,
     #[serde(default)]
     localized_by: Option<String>,
     #[serde(rename = "type")]
     kind: String,
+}
+
+#[derive(Clone, Copy)]
+enum CsvFieldType {
+    Scalar,
+    Image,
+}
+
+impl CsvFieldType {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "scalar" => Some(Self::Scalar),
+            "image" => Some(Self::Image),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -390,21 +406,29 @@ impl CsvNoteSourceDescriptor {
                 CsvNoteSourceError::descriptor(source.provenance(), error.to_string())
             })?;
             qualified_column(source.provenance(), &field.column, &raw.tables)?;
+            let Some(field_type) = CsvFieldType::parse(&field.kind) else {
+                return Err(CsvNoteSourceError::descriptor(
+                    source.provenance(),
+                    format!(
+                        "field mapping {field_id} has unsupported type {:?}; expected scalar or image",
+                        field.kind
+                    ),
+                ));
+            };
+            if matches!(field_type, CsvFieldType::Image) && field.localized_by.is_some() {
+                return Err(CsvNoteSourceError::descriptor(
+                    source.provenance(),
+                    format!(
+                        "image field mapping {field_id} cannot use localized_by; media ID columns must remain unsuffixed"
+                    ),
+                ));
+            }
             validate_localized_by(
                 source.provenance(),
                 field.localized_by.as_deref(),
                 &raw.parameters,
                 &format!("field mapping {field_id}"),
             )?;
-            if field.kind != "scalar" {
-                return Err(CsvNoteSourceError::descriptor(
-                    source.provenance(),
-                    format!(
-                        "field mapping {field_id} has unsupported type {:?}; expected scalar",
-                        field.kind
-                    ),
-                ));
-            }
         }
         qualified_column(source.provenance(), &raw.note.tags.column, &raw.tables)?;
         for (namespace, mapping) in &raw.note.adapter_ids {
@@ -554,6 +578,11 @@ struct MappedColumn {
     header: String,
 }
 
+struct MappedField {
+    column: MappedColumn,
+    kind: CsvFieldType,
+}
+
 struct PreparedJoin {
     alias: String,
     left_index: usize,
@@ -641,7 +670,14 @@ impl CsvNoteSourceMaterializer {
             .map(|(field_id, mapping)| {
                 Ok((
                     StableId::new(field_id.clone()).expect("mapping IDs validated"),
-                    self.mapped_column(&loaded, &mapping.column, mapping.localized_by.as_deref())?,
+                    MappedField {
+                        column: self.mapped_column(
+                            &loaded,
+                            &mapping.column,
+                            mapping.localized_by.as_deref(),
+                        )?,
+                        kind: CsvFieldType::parse(&mapping.kind).expect("mapping types validated"),
+                    },
                 ))
             })
             .collect::<Result<BTreeMap<_, _>, CsvNoteSourceError>>()?;
@@ -712,13 +748,30 @@ impl CsvNoteSourceMaterializer {
             }
             let fields = field_columns
                 .iter()
-                .map(|(field_id, column)| {
-                    (
-                        field_id.clone(),
-                        FieldValue::Scalar(cell(&loaded, &selected, column).to_owned()),
-                    )
+                .map(|(field_id, field)| {
+                    let value = cell(&loaded, &selected, &field.column);
+                    let value = match field.kind {
+                        CsvFieldType::Scalar => FieldValue::Scalar(value.to_owned()),
+                        CsvFieldType::Image if value.is_empty() => {
+                            FieldValue::Scalar(String::new())
+                        }
+                        CsvFieldType::Image => {
+                            let media_id = StableId::new(value.to_owned()).map_err(|error| {
+                                CsvNoteSourceError::cell(
+                                    loaded[&field.column.alias].source,
+                                    selected_row(&loaded, &selected, &field.column)
+                                        .map_or(row.logical_row, |row| row.logical_row),
+                                    field.column.index,
+                                    &field.column.header,
+                                    error.to_string(),
+                                )
+                            })?;
+                            FieldValue::Images(vec![FieldImageReference { media_id }])
+                        }
+                    };
+                    Ok((field_id.clone(), value))
                 })
-                .collect();
+                .collect::<Result<_, CsvNoteSourceError>>()?;
             let tags = parse_tags(
                 loaded[&tags_column.alias].source,
                 selected_row(&loaded, &selected, &tags_column)

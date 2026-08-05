@@ -67,6 +67,20 @@ Media mutation is intentionally narrower: `media hash` and `media images-to-refs
 
 A CrowdAnki bootstrap import emits an ordinary new deck file and re-inlines the `media:` block; it does not preserve a previously hoisted media include or modify the source that was exported.
 
+## CSV image fields
+
+CSV note descriptors can map an image-only field explicitly:
+
+```yaml
+field.flag:
+  column: main.flag
+  type: image
+```
+
+Each non-empty cell is exactly one stable media ID; `media.yaml` remains the sole authority for its path and hash. An empty image cell remains an ordinary empty scalar. Scalar mappings preserve `<img ...>` text as raw HTML and never infer an image reference.
+
+Normalize legacy `<img>` CSV cells to stable media IDs once before switching their mappings from `type: scalar` to `type: image`. Brain Brew deliberately does not parse legacy HTML cells or provide a multi-image CSV encoding.
+
 ## Single and multi-image fields
 
 Use a scalar tag for one image:

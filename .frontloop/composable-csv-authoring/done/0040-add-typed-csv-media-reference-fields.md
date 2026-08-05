@@ -27,3 +27,24 @@ Let CSV-backed notes create the same structured image values as `!image` YAML fi
 ## Implementation Notes
 
 Depends on note materialization; may land before or after explicit joins. Reuse FieldValue::Images, FieldImageReference, existing media binding, and release-media integrity paths.
+
+
+## Completion Summary
+
+- Added explicit `type: image` CSV field mappings that materialize one canonical structured media reference per non-empty cell while keeping empty cells as ordinary empty scalars.
+- Reused existing stable-ID, canonical media-reference, tombstone, path/hash, and CrowdAnki export validation without moving media authority out of media.yaml.
+- Kept raw `<img>` cells scalar-only, rejected localized image mappings, and retained single-image/no-HTML-parser scope.
+- Added maintained flag/map media fixtures and focused coverage for valid, empty, malformed, unknown, tombstoned, optional-join, hash, and export-equivalence behavior.
+- Documented one-time normalization from legacy HTML cells to stable media IDs; passed fresh Grok review, 18 focused CSV tests, full formats/workspace suites, fmt, and clippy.
+
+### Files Changed
+
+- crates/brain-brew-formats/src/csv_note_source.rs
+- crates/brain-brew-formats/tests/csv_note_sources.rs
+- crates/brain-brew-formats/tests/fixtures/csv_notes_typed_media/descriptor.yaml
+- crates/brain-brew-formats/tests/fixtures/csv_notes_typed_media/flag.svg
+- crates/brain-brew-formats/tests/fixtures/csv_notes_typed_media/map.svg
+- crates/brain-brew-formats/tests/fixtures/csv_notes_typed_media/media.yaml
+- crates/brain-brew-formats/tests/fixtures/csv_notes_typed_media/notes.csv
+- documentation/docs/authoring/media.md
+- .frontloop/composable-csv-authoring/done/0040-add-typed-csv-media-reference-fields.md

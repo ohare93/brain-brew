@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 
-use brain_brew_core::{FieldValue, StableId};
+use brain_brew_core::{FieldImageReference, FieldValue, StableId};
 use brain_brew_formats::canonical_source_document::CanonicalSourceDocument;
 use brain_brew_formats::csv_note_source::{
     CsvNoteSourceDescriptor, CsvNoteSourceMaterializer, CsvSourceFile, CsvSourceRequestKind,
 };
 use brain_brew_formats::source_document::{SourceFile, SourceProvenance};
-use brain_brew_formats::source_includes;
+use brain_brew_formats::{crowdanki, media, source_includes};
 
 fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
@@ -576,6 +576,35 @@ fn optional_join_absence_contributes_empty_cells_but_present_keys_stay_unique() 
 }
 
 #[test]
+fn optional_join_absence_contributes_empty_scalar_for_image_mapping() {
+    let descriptor = JOINED_DESCRIPTOR
+        .replace(
+            "right: country.country\n  - left:",
+            "right: country.country\n    required: false\n  - left:",
+        )
+        .replace(
+            "    field.front:\n      column: country.name\n      localized_by: language\n      type: scalar\n",
+            "    field.front:\n      column: country.name\n      type: image\n",
+        );
+    let main = concat!(
+        "stable_id,country,capital,capital:de,capital:zh-tw,tags\n",
+        "note.missing,country.missing,Nowhere,Nirgendwo,無,geo\n",
+    );
+    let guid = concat!(
+        "country,guid,guid:de,guid:zh-tw\n",
+        "country.missing,guid-missing,guid-missing-de,guid-missing-zh-tw\n",
+    );
+
+    let notes =
+        joined_materialization(descriptor, main, JOINED_COUNTRY, guid, BTreeMap::new()).unwrap();
+
+    assert_eq!(
+        notes[&sid("note.missing")].fields[&sid("field.front")],
+        FieldValue::Scalar(String::new())
+    );
+}
+
+#[test]
 fn join_key_cardinality_and_required_match_fail_closed() {
     let cases = [
         (
@@ -706,9 +735,195 @@ fn recursive_implicit_and_ambiguous_join_declarations_fail_closed() {
     }
 }
 
+const TYPED_MEDIA_DESCRIPTOR: &[u8] =
+    include_bytes!("fixtures/csv_notes_typed_media/descriptor.yaml");
+const TYPED_MEDIA_CSV: &[u8] = include_bytes!("fixtures/csv_notes_typed_media/notes.csv");
+const TYPED_MEDIA_YAML: &str = include_str!("fixtures/csv_notes_typed_media/media.yaml");
+const TYPED_MEDIA_FLAG: &[u8] = include_bytes!("fixtures/csv_notes_typed_media/flag.svg");
+const TYPED_MEDIA_MAP: &[u8] = include_bytes!("fixtures/csv_notes_typed_media/map.svg");
+
+fn typed_media_deck_source(tombstone: bool) -> String {
+    let tombstones = if tombstone {
+        "tombstones:\n  - kind: media_reference\n    path: media.media.flag.france\n"
+    } else {
+        "tombstones: []\n"
+    };
+    format!(
+        "deck:\n  id: deck.csv-media\n  name: CSV media\n  description: ''\n  adapter_ids:\n    crowdanki:uuid: 43c5ba66-9a65-11e8-90c9-a0481cc15658\nnote_types:\n  note-type.country:\n    name: Country\n    field_order:\n      - field.country\n      - field.legacy-image\n      - field.flag\n      - field.map\n    fields:\n      field.country:\n        name: Country\n      field.legacy-image:\n        name: Legacy Image\n      field.flag:\n        name: Flag\n      field.map:\n        name: Map\n    card_template_order:\n      - template.country\n    card_templates:\n      template.country:\n        name: Country\n        question_format: '{{{{Country}}}}'\n        answer_format: '{{{{Flag}}}}{{{{Map}}}}'\n        adapter_ids: {{}}\n    styling: ''\n    adapter_ids:\n      crowdanki:uuid: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\nnotes: !csv\n  descriptor: sources/typed-media.yaml\n  parameters: {{}}\nmedia: !include media.yaml\n{tombstones}"
+    )
+}
+
+fn parse_typed_media_document(
+    csv: impl Into<Vec<u8>>,
+    tombstone: bool,
+) -> Result<CanonicalSourceDocument, String> {
+    let csv = csv.into();
+    CanonicalSourceDocument::parse_with_csv_sources(
+        source("deck.yaml", typed_media_deck_source(tombstone)),
+        |request| match request.target() {
+            "media.yaml" => Ok(source("media.yaml", TYPED_MEDIA_YAML)),
+            other => Err(format!("unexpected include {other}")),
+        },
+        |request| match request.kind() {
+            CsvSourceRequestKind::Descriptor => Ok(csv_source(
+                "sources/typed-media.yaml",
+                TYPED_MEDIA_DESCRIPTOR,
+            )),
+            CsvSourceRequestKind::Table { alias } if alias == "main" => {
+                Ok(csv_source("data/notes.csv", csv.clone()))
+            }
+            other => Err(format!("unexpected CSV source request {other:?}")),
+        },
+    )
+    .map_err(|error| error.to_string())
+}
+
+#[test]
+fn typed_image_cells_materialize_canonical_images_and_empty_scalars() {
+    let document = parse_typed_media_document(TYPED_MEDIA_CSV, false).unwrap();
+    let france = &document.resolved_deck().notes[&sid("note.france")];
+    assert_eq!(
+        france.fields[&sid("field.flag")],
+        FieldValue::Images(vec![FieldImageReference {
+            media_id: sid("media.flag.france"),
+        }])
+    );
+    assert_eq!(
+        france.fields[&sid("field.map")],
+        FieldValue::Images(vec![FieldImageReference {
+            media_id: sid("media.map.france"),
+        }])
+    );
+    assert_eq!(
+        france.fields[&sid("field.legacy-image")],
+        FieldValue::Scalar("<img src=\"flags/france.svg\" />".to_owned())
+    );
+
+    let empty = &document.resolved_deck().notes[&sid("note.empty")];
+    assert_eq!(
+        empty.fields[&sid("field.flag")],
+        FieldValue::Scalar(String::new())
+    );
+    assert_eq!(
+        empty.fields[&sid("field.map")],
+        FieldValue::Scalar(String::new())
+    );
+
+    media::validate_references(document.resolved_deck()).unwrap();
+    media::validate_hashes(
+        document.resolved_deck(),
+        &BTreeMap::from([
+            ("flags/france.svg".to_owned(), TYPED_MEDIA_FLAG.to_vec()),
+            ("maps/france.svg".to_owned(), TYPED_MEDIA_MAP.to_vec()),
+        ]),
+    )
+    .unwrap();
+}
+
+#[test]
+fn typed_image_cells_reuse_stable_id_and_canonical_media_validation() {
+    let malformed = String::from_utf8(TYPED_MEDIA_CSV.to_vec())
+        .unwrap()
+        .replace(
+            "media.flag.france,media.map.france",
+            "<img>,media.map.france",
+        );
+    let error = parse_typed_media_document(malformed, false).expect_err("malformed ID fails");
+    assert!(
+        error.contains("data/notes.csv:row 2:column 4 (flag): invalid stable id \"<img>\""),
+        "{error}"
+    );
+
+    let multi = String::from_utf8(TYPED_MEDIA_CSV.to_vec())
+        .unwrap()
+        .replace(
+            "media.flag.france,media.map.france",
+            "media.flag.france|media.map.france,media.map.france",
+        );
+    let error =
+        parse_typed_media_document(multi, false).expect_err("multiple image IDs in one cell fail");
+    assert!(error.contains("invalid stable id"), "{error}");
+
+    let otherwise_invalid = String::from_utf8(TYPED_MEDIA_CSV.to_vec())
+        .unwrap()
+        .replace("media.flag.france", "media.bad.fields.id");
+    let error = parse_typed_media_document(otherwise_invalid, false)
+        .expect_err("canonical DeckPath-invalid media ID fails");
+    assert!(
+        error.contains("contains reserved DeckPath marker .fields."),
+        "{error}"
+    );
+
+    let unknown = String::from_utf8(TYPED_MEDIA_CSV.to_vec())
+        .unwrap()
+        .replace("media.flag.france", "media.flag.unknown");
+    let error = parse_typed_media_document(unknown, false).expect_err("unknown media fails");
+    assert!(
+        error.contains("unknown media id \"media.flag.unknown\""),
+        "{error}"
+    );
+    assert!(
+        error.contains("notes.note.france.fields.field.flag"),
+        "{error}"
+    );
+
+    let error = parse_typed_media_document(TYPED_MEDIA_CSV, true)
+        .expect_err("tombstoned media fails canonical validation");
+    assert!(
+        error.contains("unknown media id \"media.flag.france\""),
+        "{error}"
+    );
+    assert!(
+        error.contains("notes.note.france.fields.field.flag"),
+        "{error}"
+    );
+}
+
+#[test]
+fn typed_csv_images_keep_crowdanki_lowering_byte_equivalent_to_raw_html() {
+    let document = parse_typed_media_document(TYPED_MEDIA_CSV, false).unwrap();
+    let typed = document.resolved_deck();
+    let mut raw = typed.clone();
+    let france = raw.notes.get_mut(&sid("note.france")).unwrap();
+    france.fields.insert(
+        sid("field.flag"),
+        FieldValue::Scalar("<img src=\"flags/france.svg\" />".to_owned()),
+    );
+    france.fields.insert(
+        sid("field.map"),
+        FieldValue::Scalar("<img src=\"maps/france.svg\" />".to_owned()),
+    );
+
+    let typed_export = crowdanki::export_deck(typed).unwrap().deck_json;
+    let raw_export = crowdanki::export_deck(&raw).unwrap().deck_json;
+    assert_eq!(typed_export, raw_export);
+
+    let json: serde_json::Value = serde_json::from_str(&typed_export).unwrap();
+    let france = json["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|note| note["guid"] == "note.france")
+        .unwrap();
+    assert_eq!(
+        france["fields"],
+        serde_json::json!([
+            "France",
+            "<img src=\"flags/france.svg\" />",
+            "<img src=\"flags/france.svg\" />",
+            "<img src=\"maps/france.svg\" />"
+        ])
+    );
+}
+
 #[test]
 fn localized_parameter_declarations_arguments_and_headers_are_strict() {
     let descriptor_cases = [
+        (
+            "localized image field",
+            JOINED_DESCRIPTOR.replacen("type: scalar", "type: image", 1),
+            "image field mapping field.front cannot use localized_by; media ID columns must remain unsuffixed",
+        ),
         (
             "unknown parameter type",
             JOINED_DESCRIPTOR.replace("type: localized_column", "type: formula"),
