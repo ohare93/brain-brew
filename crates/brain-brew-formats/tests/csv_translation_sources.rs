@@ -63,11 +63,10 @@ note:
       localized_by: language
 ";
 
+const NO_EXCLUSIONS: &str = "source_texts: []\n        note_ids: []\n        paths: []";
+
 fn overlay_source(inline: &str) -> String {
-    overlay_source_with_exclusions(
-        "source_texts: []\n        note_ids: []\n        paths: []",
-        inline,
-    )
+    overlay_source_with_exclusions(NO_EXCLUSIONS, inline)
 }
 
 fn overlay_source_with_exclusions(exclusions: &str, inline: &str) -> String {
@@ -91,6 +90,45 @@ fn parse(
             }
             CsvSourceRequestKind::Table { alias } if alias == "main" => {
                 Ok(csv_source("sources/data/notes.csv", csv))
+            }
+            other => Err(format!("unexpected CSV request {other:?}")),
+        },
+    )
+    .map_err(|error| error.to_string())
+}
+
+fn two_source_overlay(first_exclusions: &str, second_exclusions: &str, inline: &str) -> String {
+    format!(
+        "id: overlay.translation.de\nkind: translation\ntranslations:\n  from_csv:\n    - descriptor: sources/one/descriptor.yaml\n      parameters:\n        language: de\n      exclude:\n        {first_exclusions}\n    - descriptor: sources/two/descriptor.yaml\n      parameters:\n        language: de\n      exclude:\n        {second_exclusions}\n{inline}"
+    )
+}
+
+fn parse_with_sources(
+    source_deck: &brain_brew_core::CanonicalDeck,
+    overlay: &str,
+    sources: &[(&str, &[u8])],
+) -> Result<OverlaySourceDocument, String> {
+    OverlaySourceDocument::parse_with_csv_translations(
+        source("overlay.yaml", overlay),
+        source_deck,
+        |request| Err(format!("unexpected include {}", request.target())),
+        |request| match request.kind() {
+            CsvSourceRequestKind::Descriptor => sources
+                .iter()
+                .find(|(descriptor, _)| *descriptor == request.target())
+                .map(|(descriptor, _)| csv_source(descriptor, DESCRIPTOR))
+                .ok_or_else(|| format!("unexpected descriptor {}", request.target())),
+            CsvSourceRequestKind::Table { alias } if alias == "main" => {
+                let descriptor = request.referring_source().source_name();
+                let (_, csv) = sources
+                    .iter()
+                    .find(|(candidate, _)| *candidate == descriptor)
+                    .ok_or_else(|| format!("unexpected table referrer {descriptor}"))?;
+                let prefix = descriptor
+                    .strip_suffix("descriptor.yaml")
+                    .expect("test descriptor path suffix");
+                let table = format!("{prefix}data/notes.csv");
+                Ok(csv_source(&table, *csv))
             }
             other => Err(format!("unexpected CSV request {other:?}")),
         },
@@ -156,6 +194,148 @@ fn csv_pairs_materialize_into_existing_coverage_composition_and_export() {
     )
     .unwrap();
     assert_eq!(inventory.emit().unwrap().root().text(), emitted);
+}
+
+#[test]
+fn multiple_csv_declarations_merge_disjoint_units_and_reject_overlapping_paths() {
+    let source_deck = deck(&[
+        ("note.one", "One", "guid-one"),
+        ("note.two", "Two", "guid-two"),
+    ]);
+    let one = b"stable_id,front,front:de,tags,guid,guid:de\nnote.one,One,Eins,,guid-one,guid-one\n";
+    let two = b"stable_id,front,front:de,tags,guid,guid:de\nnote.two,Two,Zwei,,guid-two,guid-two\n";
+    let overlay = two_source_overlay(NO_EXCLUSIONS, NO_EXCLUSIONS, "");
+    let document = parse_with_sources(
+        &source_deck,
+        &overlay,
+        &[
+            ("sources/one/descriptor.yaml", one),
+            ("sources/two/descriptor.yaml", two),
+        ],
+    )
+    .unwrap();
+    let translations = document.resolved_overlay().translations.as_ref().unwrap();
+    assert_eq!(translations.direct["One"], "Eins");
+    assert_eq!(translations.direct["Two"], "Zwei");
+    assert_eq!(
+        document
+            .csv_translation_provenance()
+            .units()
+            .map(|unit| unit.declaration())
+            .collect::<Vec<_>>(),
+        ["translations.from_csv[0]", "translations.from_csv[1]"]
+    );
+
+    let overlap = parse_with_sources(
+        &deck(&[("note.one", "One", "guid-one")]),
+        &overlay,
+        &[
+            ("sources/one/descriptor.yaml", one),
+            ("sources/two/descriptor.yaml", one),
+        ],
+    )
+    .expect_err("two CSV declarations cannot own the same occurrence");
+    assert!(
+        overlap.contains("CSV-owned path notes.note.one.fields.field.front is already owned by translations.from_csv[0]"),
+        "{overlap}"
+    );
+    assert!(overlap.contains("translations.from_csv[1]"), "{overlap}");
+}
+
+#[test]
+fn cross_declaration_transfer_rejects_csv_ownership_in_both_orders() {
+    let source_deck = deck(&[("note.one", "Hello", "guid-one")]);
+    let csv =
+        b"stable_id,front,front:de,tags,guid,guid:de\nnote.one,Hello,Hallo,,guid-one,guid-one\n";
+    let path_exclusion = "source_texts: []\n        note_ids: []\n        paths:\n          - notes.note.one.fields.field.front";
+    let sources = [
+        ("sources/one/descriptor.yaml", csv.as_slice()),
+        ("sources/two/descriptor.yaml", csv.as_slice()),
+    ];
+
+    let transferred_first = two_source_overlay(
+        path_exclusion,
+        NO_EXCLUSIONS,
+        "  direct:\n    Hello: Hallo\n",
+    );
+    let error = parse_with_sources(&source_deck, &transferred_first, &sources)
+        .expect_err("later CSV ownership conflicts with an earlier transfer");
+    assert!(
+        error.contains("CSV-owned path notes.note.one.fields.field.front conflicts with native ownership transferred by translations.from_csv[0]"),
+        "{error}"
+    );
+    assert!(error.contains("translations.from_csv[1]"), "{error}");
+
+    let transferred_second = two_source_overlay(
+        NO_EXCLUSIONS,
+        path_exclusion,
+        "  direct:\n    Hello: Hallo\n",
+    );
+    let error = parse_with_sources(&source_deck, &transferred_second, &sources)
+        .expect_err("later transfer cannot displace earlier CSV ownership");
+    assert!(
+        error.contains("excluded path notes.note.one.fields.field.front is still CSV-owned by translations.from_csv[0]"),
+        "{error}"
+    );
+    assert!(error.contains("translations.from_csv[1]"), "{error}");
+}
+
+#[test]
+fn adapter_global_map_deduplicates_and_rejects_invalid_pairs() {
+    let shared = deck(&[
+        ("note.one", "One", "guid-shared"),
+        ("note.two", "Two", "guid-shared"),
+    ]);
+    let equal = b"stable_id,front,front:de,tags,guid,guid:de\nnote.one,One,Eins,,guid-shared,guid-de\nnote.two,Two,Zwei,,guid-shared,guid-de\n";
+    let document = parse(&shared, &overlay_source(""), equal).unwrap();
+    let adapters = &document
+        .resolved_overlay()
+        .translations
+        .as_ref()
+        .unwrap()
+        .adapter_ids["crowdanki"];
+    assert_eq!(adapters.len(), 1);
+    assert_eq!(adapters["guid-shared"], "guid-de");
+
+    let conflicting = b"stable_id,front,front:de,tags,guid,guid:de\nnote.one,One,Eins,,guid-shared,guid-de\nnote.two,Two,Zwei,,guid-shared,guid-other\n";
+    let error = parse(&shared, &overlay_source(""), conflicting)
+        .expect_err("one adapter source cannot map to two targets");
+    assert!(error.contains("row 3:column 6 (guid:de)"), "{error}");
+    assert!(
+        error.contains("conflicting adapter ID translations")
+            && error.contains("guid-shared")
+            && error.contains("guid-de")
+            && error.contains("guid-other"),
+        "{error}"
+    );
+
+    let empty = deck(&[("note.empty", "Hello", "")]);
+    let both_blank = b"stable_id,front,front:de,tags,guid,guid:de\nnote.empty,Hello,Hallo,,,\n";
+    let document = parse(&empty, &overlay_source(""), both_blank).unwrap();
+    let translations = document.resolved_overlay().translations.as_ref().unwrap();
+    assert_eq!(translations.direct["Hello"], "Hallo");
+    assert!(translations.adapter_ids.is_empty());
+
+    let mismatch =
+        b"stable_id,front,front:de,tags,guid,guid:de\nnote.one,One,Eins,,guid-csv,guid-de\n";
+    let error = parse(
+        &deck(&[("note.one", "One", "guid-live")]),
+        &overlay_source(""),
+        mismatch,
+    )
+    .expect_err("CSV adapter source must match the resolved source deck");
+    assert!(
+        error.contains("CSV translation adapter ID source mismatch"),
+        "{error}"
+    );
+    assert!(
+        error.contains("notes.note.one.adapter_ids.crowdanki"),
+        "{error}"
+    );
+    assert!(
+        error.contains("guid-csv") && error.contains("guid-live"),
+        "{error}"
+    );
 }
 
 #[test]

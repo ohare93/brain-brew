@@ -355,13 +355,24 @@ fn workbench_certified_composable_csv_fixture_enforces_and_transfers_capabilitie
             "scope": "field"
         }]
     });
-    let (status, body) = post_json_error(
-        &server.url("/api/workbench/apply-preview"),
-        sparse_forbidden,
-    );
-    assert_eq!(status, 403);
-    let error: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(error["error"]["code"], "csv_source_read_only");
+    let protected_sources = [
+        "deck-migrated.yaml",
+        "experimental-migrated.yaml",
+        "sources/data/main.csv",
+    ]
+    .map(|path| (path, fs::read(dir.join(path)).unwrap()));
+    for endpoint in ["apply-preview", "apply"] {
+        let (status, body) = post_json_error(
+            &server.url(&format!("/api/workbench/{endpoint}")),
+            sparse_forbidden.clone(),
+        );
+        assert_eq!(status, 403);
+        let error: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(error["error"]["code"], "csv_source_read_only");
+        for (path, before) in &protected_sources {
+            assert_eq!(fs::read(dir.join(path)).unwrap(), *before);
+        }
+    }
 
     let forbidden = serde_json::json!({
         "language": "de",

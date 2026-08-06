@@ -273,6 +273,21 @@ fn note_source_sequences_require_explicit_known_tags_and_well_formed_values() {
             "notes: !inline\n  note.france: {}\n",
             "unsupported direct notes tag !inline",
         ),
+        (
+            "duplicate inline owner",
+            "notes:\n  - !inline\n    note.one: {}\n  - !inline\n    note.one: {}\n",
+            "duplicate inline ownership of note ID note.one",
+        ),
+        (
+            "empty source sequence",
+            "notes: []\n",
+            "notes source sequence must not be empty",
+        ),
+        (
+            "non-string inline note ID",
+            "notes:\n  - !inline\n    1: {}\n",
+            "notes !inline source item 0 has a non-string note ID",
+        ),
     ];
     for (label, declaration, expected) in cases {
         let error = CanonicalSourceDocument::parse_with_csv_sources(
