@@ -5,7 +5,7 @@ use brain_brew_core::{
 use brain_brew_formats::canonical_yaml;
 use brain_brew_formats::crowdanki;
 use brain_brew_formats::csv_note_source::{CsvSourceFile, CsvSourceRequestKind};
-use brain_brew_formats::overlay_source_document::OverlaySourceDocument;
+use brain_brew_formats::overlay_source_document::{OverlaySourceDocument, TranslationDecision};
 use brain_brew_formats::source_document::{SourceFile, SourceProvenance};
 
 fn source(name: &str, text: impl Into<String>) -> SourceFile {
@@ -80,13 +80,22 @@ fn parse(
     overlay: &str,
     csv: &[u8],
 ) -> Result<OverlaySourceDocument, String> {
+    parse_with_descriptor(source_deck, overlay, DESCRIPTOR, csv)
+}
+
+fn parse_with_descriptor(
+    source_deck: &brain_brew_core::CanonicalDeck,
+    overlay: &str,
+    descriptor: &str,
+    csv: &[u8],
+) -> Result<OverlaySourceDocument, String> {
     OverlaySourceDocument::parse_with_csv_translations(
         source("overlay.yaml", overlay),
         source_deck,
         |request| Err(format!("unexpected include {}", request.target())),
         |request| match request.kind() {
             CsvSourceRequestKind::Descriptor => {
-                Ok(csv_source("sources/descriptor.yaml", DESCRIPTOR))
+                Ok(csv_source("sources/descriptor.yaml", descriptor))
             }
             CsvSourceRequestKind::Table { alias } if alias == "main" => {
                 Ok(csv_source("sources/data/notes.csv", csv))
@@ -815,4 +824,89 @@ fn inline_identical_and_disjoint_entries_merge_but_conflicts_are_transactional()
     let conflict = overlay_source("  direct:\n    Hello: Servus\n");
     let error = parse(&source_deck, &conflict, csv).expect_err("conflict fails atomically");
     assert!(error.contains("conflict"), "{error}");
+}
+
+#[test]
+fn translation_descriptor_requires_localized_mapping_and_resolved_note_path() {
+    let no_localized_mapping = "version: 1
+primary_table: main
+tables:
+  main:
+    path: data/notes.csv
+parameters: {}
+joins: []
+note:
+  id: main.stable_id
+  note_type_id: note-type.basic
+  fields:
+    field.front:
+      column: main.front
+      type: scalar
+  tags:
+    column: main.tags
+    delimiter: '|'
+  adapter_ids: {}
+";
+    let source_deck = deck(&[("note.one", "Hello", "guid-one")]);
+    let no_parameter_overlay = "id: overlay.translation.de
+kind: translation
+translations:
+  from_csv:
+    - descriptor: sources/descriptor.yaml
+      parameters: {}
+      exclude:
+        source_texts: []
+        note_ids: []
+        paths: []
+";
+    let error = parse_with_descriptor(
+        &source_deck,
+        no_parameter_overlay,
+        no_localized_mapping,
+        b"stable_id,front,tags\nnote.one,Hello,\n",
+    )
+    .expect_err("translation descriptors need a localized mapping");
+    assert_eq!(
+        error,
+        "overlay.yaml:translations.from_csv[0]: sources/descriptor.yaml: CSV translation descriptor has no localized scalar field or adapter-ID mapping"
+    );
+
+    let error = parse(
+        &source_deck,
+        &overlay_source(""),
+        b"stable_id,front,front:de,tags,guid,guid:de\nnote.missing,Missing,Fehlt,,guid-missing,guid-missing-de\n",
+    )
+    .expect_err("translation CSV paths must exist in the source deck");
+    assert_eq!(
+        error,
+        "overlay.yaml:translations.from_csv[0]: sources/descriptor.yaml: CSV translation path notes.note.missing.fields.field.front is absent or is not a scalar field in the resolved source deck"
+    );
+}
+
+#[test]
+fn csv_owned_translation_mutation_emits_but_cannot_reparse_as_valid_ownership() {
+    let source_deck = deck(&[("note.one", "Hello", "guid-one")]);
+    let csv =
+        b"stable_id,front,front:de,tags,guid,guid:de\nnote.one,Hello,Hallo,,guid-one,guid-one-de\n";
+    let original = parse(&source_deck, &overlay_source(""), csv).unwrap();
+    let original_source = original.emit().unwrap().root().text().to_owned();
+    let mut edited = original.clone();
+    edited
+        .set_translation_decision(
+            "notes.note.one.fields.field.front",
+            "Hello",
+            TranslationDecision::Direct("Servus".to_owned()),
+        )
+        .unwrap();
+    let emitted = edited.emit().unwrap().root().text().to_owned();
+    assert!(emitted.contains("Hello: Servus"), "{emitted}");
+
+    let error = parse(&source_deck, &emitted, csv)
+        .expect_err("a conflicting inline mutation cannot take CSV ownership");
+    assert!(
+        error.contains("CSV translation conflict at notes.note.one.fields.field.front")
+            && error.contains("inline and imported decisions differ"),
+        "{error}"
+    );
+    assert_eq!(original.emit().unwrap().root().text(), original_source);
 }

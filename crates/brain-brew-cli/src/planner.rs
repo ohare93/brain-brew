@@ -122,7 +122,6 @@ pub(crate) struct PlannedOverlay {
     pub(crate) includes: Vec<SourceProvenance>,
     pub(crate) csv_translation_provenance: CsvTranslationAuthoringProvenance,
     pub(crate) csv_sparse_field_provenance: NoteAuthoringProvenance,
-    pub(crate) has_csv_sparse_field_sources: bool,
     pub(crate) origin: OverlayExpansionOrigin,
 }
 
@@ -658,7 +657,6 @@ impl ManifestRegistry {
                     includes,
                     csv_translation_provenance: document.csv_translation_provenance().clone(),
                     csv_sparse_field_provenance: document.csv_sparse_field_provenance().clone(),
-                    has_csv_sparse_field_sources: !document.csv_sparse_field_sources().is_empty(),
                     origin: overlay_blueprint.origin,
                 },
                 overlay,

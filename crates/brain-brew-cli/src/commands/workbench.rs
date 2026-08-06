@@ -4578,11 +4578,10 @@ fn inline_overlay_field_owner<'a>(
         .plan_overlays
         .iter()
         .filter(|(planned, _)| {
-            planned.has_csv_sparse_field_sources
-                && planned
-                    .csv_sparse_field_provenance
-                    .field(note_id, field_id)
-                    .is_none()
+            planned
+                .csv_sparse_field_provenance
+                .field(note_id, field_id)
+                .is_none()
         })
         .find_map(|(planned, overlay)| {
             overlay

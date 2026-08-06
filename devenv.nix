@@ -15,12 +15,14 @@ in
   packages = [
     pkgs.cargo
     pkgs.cargo-audit
+    pkgs.cargo-llvm-cov
     pkgs.binaryen
     pkgs.chromedriver
     pkgs.chromium
     pkgs.clippy
     pkgs.curl
     pkgs.lld
+    pkgs.llvmPackages.llvm
     pkgs.nodejs_22
     pkgs.rustc
     pkgs.rustfmt
@@ -28,6 +30,9 @@ in
     pkgs.wasm-bindgen-cli
     releasePkgs.cargo-dist
   ];
+
+  env.LLVM_COV = "${pkgs.llvmPackages.llvm}/bin/llvm-cov";
+  env.LLVM_PROFDATA = "${pkgs.llvmPackages.llvm}/bin/llvm-profdata";
 
   enterShell = ''
     ${rustParallelismDefaults}

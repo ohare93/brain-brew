@@ -421,6 +421,103 @@ fn workbench_certified_composable_csv_fixture_enforces_and_transfers_capabilitie
     assert!(overlay.contains("new_source: French Republic"));
 }
 
+#[cfg(feature = "workbench-write-dev")]
+#[test]
+fn workbench_fully_native_sparse_field_edits_its_extension_overlay() {
+    let dir = temp_dir("workbench-fully-native-sparse");
+    copy_composable_csv_fixture(&dir);
+    fs::write(
+        dir.join("experimental-migrated.yaml"),
+        "id: overlay.extension.experimental\nkind: extension\nfield_additions:\n  note-type.country:\n    fields:\n      field.region-code: Region code\n    values:\n      note.france:\n        field.region-code: WE\n      note.germany:\n        field.region-code: CE\n      note.spain:\n        field.region-code: SW\n",
+    )
+    .unwrap();
+    let server = spawn_workbench_server([
+        "workbench",
+        "serve",
+        "--manifest",
+        dir.join("brainbrew-migrated.yaml").to_str().unwrap(),
+        "--port",
+        "0",
+        "--no-open",
+        "--enable-write",
+    ]);
+
+    let pivot = get_json(
+        &server
+            .url("/api/workbench/note-pivot?language=de&target=experimental&overlay=experimental"),
+    );
+    let region = pivot["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|note| note["note_id"] == "note.germany")
+        .unwrap()["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["field_id"] == "field.region-code")
+        .unwrap();
+    assert_eq!(region["source"], "CE");
+    assert_eq!(region["source_capability"]["source_kind"], "inline");
+    assert_eq!(region["source_capability"]["writable"], true);
+    assert_eq!(region["source_editable"], true);
+
+    let edit = serde_json::json!({
+        "language": "de",
+        "target": "experimental",
+        "overlay": "experimental",
+        "edits": [{
+            "kind": "source",
+            "path": "notes.note.germany.fields.field.region-code",
+            "source": "CE",
+            "value": "DE-CENTRAL",
+            "mode": "direct",
+            "scope": "field"
+        }]
+    });
+    let preview = post_json(&server.url("/api/workbench/apply-preview"), edit.clone());
+    assert_eq!(preview["validation"]["ok"], true);
+    assert!(
+        preview["affected_files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|file| { file["path"] == "experimental-migrated.yaml" })
+    );
+    assert!(
+        !fs::read_to_string(dir.join("experimental-migrated.yaml"))
+            .unwrap()
+            .contains("DE-CENTRAL")
+    );
+
+    let applied = post_json(&server.url("/api/workbench/apply"), edit);
+    assert_eq!(applied["applied"], true);
+    assert!(
+        fs::read_to_string(dir.join("experimental-migrated.yaml"))
+            .unwrap()
+            .contains("field.region-code: DE-CENTRAL")
+    );
+
+    let reloaded = get_json(
+        &server
+            .url("/api/workbench/note-pivot?language=de&target=experimental&overlay=experimental"),
+    );
+    let source = reloaded["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|note| note["note_id"] == "note.germany")
+        .unwrap()["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["field_id"] == "field.region-code")
+        .unwrap()["source"]
+        .as_str()
+        .unwrap();
+    assert_eq!(source, "DE-CENTRAL");
+}
+
 fn copy_composable_csv_fixture(destination: &Path) {
     fn copy_tree(source: &Path, destination: &Path) {
         for entry in fs::read_dir(source).unwrap() {
