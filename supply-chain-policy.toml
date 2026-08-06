@@ -12,6 +12,7 @@ allowed = ["0BSD", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "BSL-1.0", "CC0
 # not shipped in the Rust binary, but are production dependencies of docs builds
 # and therefore remain gated and time-bounded rather than hidden with --omit=dev.
 "GHSA-5c6j-r48x-rmvq" = { owner = "release-maintainers", expires = "2026-08-15", rationale = "serialize-javascript is transitive through Docusaurus minifiers; upstream's non-breaking tree is not patched." }
+"GHSA-7p8r-x3mc-p8w7" = { owner = "release-maintainers", expires = "2026-08-15", rationale = "fast-uri 3.1.5 is patched but has not passed the global seven-day minimum release age; remove this exception once it becomes eligible." }
 "GHSA-qj8w-gfj5-8c6v" = { owner = "release-maintainers", expires = "2026-08-15", rationale = "same locked serialize-javascript transitive path; review with the RCE advisory above." }
 "GHSA-w5hq-g745-h8pq" = { owner = "release-maintainers", expires = "2026-08-15", rationale = "uuid is nested below webpack-dev-server; review when Docusaurus can upgrade without a breaking downgrade." }
 
