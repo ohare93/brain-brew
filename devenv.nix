@@ -23,7 +23,7 @@ in
     pkgs.curl
     pkgs.lld
     pkgs.llvmPackages.llvm
-    pkgs.nodejs_22
+    pkgs.nodejs_24
     pkgs.rustc
     pkgs.rustfmt
     pkgs.trunk
