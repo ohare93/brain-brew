@@ -171,7 +171,9 @@ Cells are decoded literally with no trimming and no configurable null tokens:
 - a tags cell is split by the descriptor's exact delimiter; empty means no tags, while empty or duplicate segments fail;
 - an optional missing join cell behaves like an empty cell of the mapped type.
 
-Initial CSV note materialization may preserve legacy image HTML as an ordinary scalar field. A later explicit `image` field mapping accepts one non-empty stable media ID and materializes the existing structured image value; an empty image cell remains an ordinary empty scalar. That migration includes a one-time source normalization from HTML cells to media IDs. It does not add an HTML parser, infer media paths, alter `media.yaml` path/hash authority, or invent a multi-image cell encoding. Scalar HTML and structured image values remain semantically distinct even when they lower to equal adapter bytes.
+Initial CSV note materialization may preserve legacy image HTML as an ordinary scalar field. A later explicit `image` field mapping accepts stable media IDs and materializes the existing structured image value. Without `delimiter`, a non-empty cell contains exactly one media ID. With a non-empty exact `delimiter`, the cell is split into a non-empty ordered image sequence; every segment must be a non-empty valid stable media ID. No trimming, escaping, or delimiter fallback is applied. The delimiter is source syntax only: multi-image fields retain the existing adjacent-tag rendering with no output separator. An empty whole cell remains an ordinary empty scalar.
+
+That migration includes a one-time source normalization from HTML cells to media IDs. It does not add an HTML parser, infer media paths, alter `media.yaml` path/hash authority, or add mixed text/image CSV values. Scalar HTML and structured image values remain semantically distinct even when they lower to equal adapter bytes.
 
 ### CSV-backed translation dictionaries
 

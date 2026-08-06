@@ -77,9 +77,22 @@ field.flag:
   type: image
 ```
 
-Each non-empty cell is exactly one stable media ID; `media.yaml` remains the sole authority for its path and hash. An empty image cell remains an ordinary empty scalar. Scalar mappings preserve `<img ...>` text as raw HTML and never infer an image reference.
+Without a `delimiter`, each non-empty cell is exactly one stable media ID. Add an exact delimiter when a cell may contain several ordered images:
 
-Normalize legacy `<img>` CSV cells to stable media IDs once before switching their mappings from `type: scalar` to `type: image`. Brain Brew deliberately does not parse legacy HTML cells or provide a multi-image CSV encoding.
+```yaml
+field.flag:
+  column: main.flag
+  type: image
+  delimiter: '|'
+```
+
+```csv
+media.flag.bolivia.blur|media.flag.bolivia
+```
+
+Every segment must be a non-empty valid media ID. Brain Brew does not trim or escape segments. The delimiter only separates CSV source values; export renders the images as adjacent tags with no separator. An empty whole cell remains an ordinary empty scalar, and `media.yaml` remains the sole authority for paths and hashes. Scalar mappings preserve `<img ...>` text as raw HTML and never infer image references.
+
+Normalize legacy `<img>` CSV cells to stable media IDs once before switching their mappings from `type: scalar` to `type: image`. Mixed text and images remain scalar HTML.
 
 ## Single and multi-image fields
 

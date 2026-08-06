@@ -1154,7 +1154,16 @@ fn parse_typed_media_document(
     csv: impl Into<Vec<u8>>,
     tombstone: bool,
 ) -> Result<CanonicalSourceDocument, String> {
+    parse_typed_media_document_with_descriptor(csv, TYPED_MEDIA_DESCRIPTOR, tombstone)
+}
+
+fn parse_typed_media_document_with_descriptor(
+    csv: impl Into<Vec<u8>>,
+    descriptor: impl Into<Vec<u8>>,
+    tombstone: bool,
+) -> Result<CanonicalSourceDocument, String> {
     let csv = csv.into();
+    let descriptor = descriptor.into();
     CanonicalSourceDocument::parse_with_csv_sources(
         source("deck.yaml", typed_media_deck_source(tombstone)),
         |request| match request.target() {
@@ -1162,10 +1171,9 @@ fn parse_typed_media_document(
             other => Err(format!("unexpected include {other}")),
         },
         |request| match request.kind() {
-            CsvSourceRequestKind::Descriptor => Ok(csv_source(
-                "sources/typed-media.yaml",
-                TYPED_MEDIA_DESCRIPTOR,
-            )),
+            CsvSourceRequestKind::Descriptor => {
+                Ok(csv_source("sources/typed-media.yaml", descriptor.clone()))
+            }
             CsvSourceRequestKind::Table { alias } if alias == "main" => {
                 Ok(csv_source("data/notes.csv", csv.clone()))
             }
@@ -1173,6 +1181,87 @@ fn parse_typed_media_document(
         },
     )
     .map_err(|error| error.to_string())
+}
+
+#[test]
+fn delimited_image_cells_materialize_ordered_image_sequences() {
+    let descriptor = String::from_utf8(TYPED_MEDIA_DESCRIPTOR.to_vec())
+        .unwrap()
+        .replace(
+            "      column: main.flag\n      type: image",
+            "      column: main.flag\n      type: image\n      delimiter: '|'",
+        );
+    let csv = String::from_utf8(TYPED_MEDIA_CSV.to_vec())
+        .unwrap()
+        .replace(
+            "media.flag.france,media.map.france",
+            "media.flag.france|media.map.france,media.map.france",
+        );
+
+    let document = parse_typed_media_document_with_descriptor(csv, descriptor, false).unwrap();
+
+    assert_eq!(
+        document.resolved_deck().notes[&sid("note.france")].fields[&sid("field.flag")],
+        FieldValue::Images(vec![
+            FieldImageReference {
+                media_id: sid("media.flag.france"),
+            },
+            FieldImageReference {
+                media_id: sid("media.map.france"),
+            },
+        ])
+    );
+}
+
+#[test]
+fn delimited_image_mappings_reject_invalid_delimiters_and_segments() {
+    let image_descriptor = String::from_utf8(TYPED_MEDIA_DESCRIPTOR.to_vec()).unwrap();
+    for (label, descriptor, expected) in [
+        (
+            "empty delimiter",
+            image_descriptor.replace(
+                "      column: main.flag\n      type: image",
+                "      column: main.flag\n      type: image\n      delimiter: ''",
+            ),
+            "field mapping field.flag delimiter must not be empty",
+        ),
+        (
+            "scalar delimiter",
+            image_descriptor.replace(
+                "      column: main.country\n      type: scalar",
+                "      column: main.country\n      type: scalar\n      delimiter: '|'",
+            ),
+            "scalar field mapping field.country cannot declare a delimiter",
+        ),
+    ] {
+        let error = CsvNoteSourceDescriptor::parse(source("sources/typed-media.yaml", descriptor))
+            .expect_err(label)
+            .to_string();
+        assert!(error.contains(expected), "{label}: {error}");
+    }
+
+    let descriptor = image_descriptor.replace(
+        "      column: main.flag\n      type: image",
+        "      column: main.flag\n      type: image\n      delimiter: '|'",
+    );
+    for value in [
+        "|media.flag.france",
+        "media.flag.france|",
+        "media.flag.france||media.map.france",
+    ] {
+        let csv = String::from_utf8(TYPED_MEDIA_CSV.to_vec())
+            .unwrap()
+            .replace(
+                "media.flag.france,media.map.france",
+                &format!("{value},media.map.france"),
+            );
+        let error = parse_typed_media_document_with_descriptor(csv, descriptor.clone(), false)
+            .expect_err("empty image segment fails");
+        assert!(
+            error.contains("data/notes.csv:row 2:column 4 (flag): invalid stable id \"\""),
+            "{value:?}: {error}"
+        );
+    }
 }
 
 #[test]

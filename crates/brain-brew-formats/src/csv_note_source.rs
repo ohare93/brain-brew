@@ -732,6 +732,8 @@ struct CsvFieldMapping {
     localized_by: Option<String>,
     #[serde(rename = "type")]
     kind: String,
+    #[serde(default)]
+    delimiter: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -903,6 +905,18 @@ impl CsvNoteSourceDescriptor {
                     ),
                 ));
             }
+            if field.delimiter.as_deref() == Some("") {
+                return Err(CsvNoteSourceError::descriptor(
+                    source.provenance(),
+                    format!("field mapping {field_id} delimiter must not be empty"),
+                ));
+            }
+            if field.delimiter.is_some() && !matches!(field_type, CsvFieldType::Image) {
+                return Err(CsvNoteSourceError::descriptor(
+                    source.provenance(),
+                    format!("scalar field mapping {field_id} cannot declare a delimiter"),
+                ));
+            }
             validate_localized_by(
                 source.provenance(),
                 field.localized_by.as_deref(),
@@ -1072,6 +1086,7 @@ struct MappedColumn {
 struct MappedField {
     column: MappedColumn,
     kind: CsvFieldType,
+    delimiter: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1192,6 +1207,7 @@ impl CsvNoteSourceMaterializer {
                             mapping.localized_by.as_deref(),
                         )?,
                         kind: CsvFieldType::parse(&mapping.kind).expect("mapping types validated"),
+                        delimiter: mapping.delimiter.clone(),
                     },
                 ))
             })
@@ -1272,16 +1288,30 @@ impl CsvNoteSourceMaterializer {
                     CsvFieldType::Scalar => FieldValue::Scalar(value.to_owned()),
                     CsvFieldType::Image if value.is_empty() => FieldValue::Scalar(String::new()),
                     CsvFieldType::Image => {
-                        let media_id = StableId::new(value.to_owned()).map_err(|error| {
-                            CsvNoteSourceError::cell(
-                                loaded[&field.column.alias].source,
-                                selected_field_row.map_or(row.logical_row, |row| row.logical_row),
-                                field.column.index,
-                                &field.column.header,
-                                error.to_string(),
+                        let images = field
+                            .delimiter
+                            .as_deref()
+                            .map_or_else(
+                                || vec![value],
+                                |delimiter| value.split(delimiter).collect(),
                             )
-                        })?;
-                        FieldValue::Images(vec![FieldImageReference { media_id }])
+                            .into_iter()
+                            .map(|value| {
+                                let media_id =
+                                    StableId::new(value.to_owned()).map_err(|error| {
+                                        CsvNoteSourceError::cell(
+                                            loaded[&field.column.alias].source,
+                                            selected_field_row
+                                                .map_or(row.logical_row, |row| row.logical_row),
+                                            field.column.index,
+                                            &field.column.header,
+                                            error.to_string(),
+                                        )
+                                    })?;
+                                Ok(FieldImageReference { media_id })
+                            })
+                            .collect::<Result<Vec<_>, CsvNoteSourceError>>()?;
+                        FieldValue::Images(images)
                     }
                 };
                 fields.insert(field_id.clone(), value);
