@@ -1982,6 +1982,7 @@ impl CsvTranslationSourceMaterializer {
         &self,
         tables: &BTreeMap<String, CsvSourceFile>,
         source_deck: &CanonicalDeck,
+        occurrence_deck: &CanonicalDeck,
     ) -> Result<CsvTranslationMaterialization, CsvNoteSourceError> {
         let mut source_parameters = self.parameters.clone();
         for mapping in self.descriptor.note.fields.values() {
@@ -2105,7 +2106,7 @@ impl CsvTranslationSourceMaterializer {
             note_type_changes: BTreeMap::new(),
             media_changes: BTreeMap::new(),
         };
-        let coverage = source_deck
+        let coverage = occurrence_deck
             .translation_coverage(&coverage_overlay)
             .map_err(|error| {
                 CsvNoteSourceError::descriptor(
@@ -2121,6 +2122,12 @@ impl CsvTranslationSourceMaterializer {
                     .or_default()
                     .insert(entry.path);
             }
+        }
+        for pair in &owned_text {
+            global_paths
+                .entry(pair.source.clone())
+                .or_default()
+                .insert(pair.path.clone());
         }
         infer_csv_text_translations(
             &mut translations,

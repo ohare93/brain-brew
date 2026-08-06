@@ -20,8 +20,8 @@ use sha2::{Digest, Sha256};
 
 use crate::commands::lock::locked_package_manifest_paths;
 use crate::io::{
-    canonical_document_from_package, compose_translation_free_source, include_roots_from_manifest,
-    manifest_root, overlay_document_from_package, overlay_document_from_package_with_source_deck,
+    canonical_document_from_package, include_roots_from_manifest, manifest_root,
+    overlay_document_from_package, overlay_document_from_package_with_source_decks,
     overlay_document_from_package_with_sparse_source_deck, read_manifest,
 };
 use crate::package_resolver::{
@@ -509,45 +509,30 @@ impl ManifestRegistry {
                 overlay_document_from_package(&file, &loaded.root, &loaded.include_roots)?;
             inventory.push((overlay_blueprint, file, document));
         }
-        let has_csv_translations = inventory
-            .iter()
-            .any(|(_, _, document)| !document.csv_translation_sources().is_empty());
-        let has_csv_sparse_fields = inventory
-            .iter()
-            .any(|(_, _, document)| !document.csv_sparse_field_sources().is_empty());
-        let inventory_source_deck = (has_csv_translations || has_csv_sparse_fields)
-            .then(|| {
-                compose_translation_free_source(
-                    &base,
-                    &inventory
-                        .iter()
-                        .map(|(_, _, document)| document.resolved_overlay().clone())
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .transpose()?;
-        let translation_source_deck = if has_csv_translations && has_csv_sparse_fields {
-            let source_deck = inventory_source_deck
-                .as_ref()
-                .expect("CSV inventory source deck was composed");
-            let sparse_overlays = inventory
-                .iter()
-                .map(|(blueprint, file, _)| {
-                    let loaded = &self.manifests[blueprint.manifest_index];
-                    overlay_document_from_package_with_sparse_source_deck(
-                        file,
-                        &loaded.root,
-                        &loaded.include_roots,
-                        source_deck,
-                    )
-                    .map(|document| document.resolved_overlay().clone())
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            Some(compose_translation_free_source(&base, &sparse_overlays)?)
+        let has_csv_sources = inventory.iter().any(|(_, _, document)| {
+            !document.csv_translation_sources().is_empty()
+                || !document.csv_sparse_field_sources().is_empty()
+        });
+        let occurrence_deck = if has_csv_sources {
+            let mut current = base.clone();
+            for (overlay_blueprint, file, inventory_document) in &inventory {
+                let document = self.materialize_overlay_document(
+                    overlay_blueprint,
+                    file,
+                    inventory_document,
+                    &current,
+                    &current,
+                )?;
+                current = current
+                    .compose(std::slice::from_ref(document.resolved_overlay()))
+                    .map_err(|error| error.to_string())?;
+            }
+            Some(current)
         } else {
-            inventory_source_deck.clone()
+            None
         };
 
+        let mut current = base.clone();
         let mut overlays = Vec::new();
         let media_declaration_source = base_includes
             .iter()
@@ -572,28 +557,23 @@ impl ManifestRegistry {
         for (overlay_blueprint, file, inventory_document) in inventory {
             let loaded = &self.manifests[overlay_blueprint.manifest_index];
             let entry = &loaded.manifest.overlays[&overlay_blueprint.overlay_id];
-            let document = if has_csv_translations {
-                overlay_document_from_package_with_source_deck(
+            let document = if let Some(occurrence_deck) = &occurrence_deck {
+                self.materialize_overlay_document(
+                    &overlay_blueprint,
                     &file,
-                    &loaded.root,
-                    &loaded.include_roots,
-                    translation_source_deck
-                        .as_ref()
-                        .expect("CSV translation source deck was composed"),
-                )?
-            } else if has_csv_sparse_fields {
-                overlay_document_from_package_with_sparse_source_deck(
-                    &file,
-                    &loaded.root,
-                    &loaded.include_roots,
-                    inventory_source_deck
-                        .as_ref()
-                        .expect("CSV sparse source deck was composed"),
+                    &inventory_document,
+                    &current,
+                    occurrence_deck,
                 )?
             } else {
                 inventory_document
             };
             let overlay = document.resolved_overlay().clone();
+            if occurrence_deck.is_some() {
+                current = current
+                    .compose(std::slice::from_ref(&overlay))
+                    .map_err(|error| error.to_string())?;
+            }
             let kind = overlay.kind;
             let qualified_id = self.qualified_overlay(
                 overlay_blueprint.manifest_index,
@@ -682,6 +662,35 @@ impl ManifestRegistry {
             target_expansion: blueprint.targets,
             media_declarations,
         })
+    }
+
+    fn materialize_overlay_document(
+        &self,
+        blueprint: &OverlayBlueprint,
+        file: &Path,
+        inventory: &brain_brew_formats::overlay_source_document::OverlaySourceDocument,
+        source_deck: &CanonicalDeck,
+        occurrence_deck: &CanonicalDeck,
+    ) -> Result<brain_brew_formats::overlay_source_document::OverlaySourceDocument, String> {
+        let loaded = &self.manifests[blueprint.manifest_index];
+        if !inventory.csv_translation_sources().is_empty() {
+            overlay_document_from_package_with_source_decks(
+                file,
+                &loaded.root,
+                &loaded.include_roots,
+                source_deck,
+                occurrence_deck,
+            )
+        } else if !inventory.csv_sparse_field_sources().is_empty() {
+            overlay_document_from_package_with_sparse_source_deck(
+                file,
+                &loaded.root,
+                &loaded.include_roots,
+                source_deck,
+            )
+        } else {
+            Ok(inventory.clone())
+        }
     }
 
     fn visit_target(
@@ -1308,7 +1317,7 @@ mod tests {
     }
 
     #[test]
-    fn csv_translation_inference_uses_later_translation_free_source_occurrences() {
+    fn csv_translation_inference_uses_later_occurrences_and_ordered_translated_sources() {
         let root = tempfile::tempdir().unwrap();
         fs::create_dir_all(root.path().join("overlays/sources/data")).unwrap();
         fs::write(
@@ -1389,17 +1398,13 @@ mod tests {
             "base: deck.yaml\noverlays:\n  overlay.translation.de:\n    file: overlays/de.yaml\n    kind: translation\n  overlay.extension.later:\n    file: overlays/extension.yaml\n    kind: extension\n  overlay.translation.second:\n    file: overlays/second.yaml\n    kind: translation\ntargets:\n  de:\n    overlays: [overlay.translation.de, overlay.extension.later, overlay.translation.second]\n",
         )
         .unwrap();
-        let error = match ManifestRegistry::load(&root.path().join("brainbrew.yaml"), &[], &[])
+        let plan = ManifestRegistry::load(&root.path().join("brainbrew.yaml"), &[], &[])
             .unwrap()
             .plan("de")
-        {
-            Ok(_) => panic!("a second CSV overlay treated prior translated output as source"),
-            Err(error) => error,
-        };
-        assert!(error.contains("CSV translation source mismatch"), "{error}");
-        assert!(
-            error.contains("descriptor cell is \"Hallo\", resolved source is \"Hello\""),
-            "{error}"
+            .unwrap();
+        assert_eq!(
+            plan.overlays[2].1.translations.as_ref().unwrap().direct["Hallo"],
+            "Guten Tag"
         );
     }
 

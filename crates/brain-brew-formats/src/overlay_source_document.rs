@@ -32,7 +32,10 @@ pub use brain_brew_core::{SourceTranslationImpact, TranslationDecision, Translat
 enum CsvMaterialization<'a> {
     Inventory,
     SparseFields(&'a CanonicalDeck),
-    All(&'a CanonicalDeck),
+    All {
+        source_deck: &'a CanonicalDeck,
+        occurrence_deck: &'a CanonicalDeck,
+    },
 }
 
 /// Deep source module for one sparse overlay and its scalar includes.
@@ -91,12 +94,33 @@ impl OverlaySourceDocument {
     pub fn parse_with_csv_translations(
         source: SourceFile,
         source_deck: &CanonicalDeck,
+        include_loader: impl FnMut(&IncludeRequest) -> Result<SourceFile, String>,
+        csv_loader: impl FnMut(&CsvSourceRequest) -> Result<CsvSourceFile, String>,
+    ) -> Result<Self, SourceDocumentError> {
+        Self::parse_with_csv_translations_and_occurrences(
+            source,
+            source_deck,
+            source_deck,
+            include_loader,
+            csv_loader,
+        )
+    }
+
+    /// Materialize CSV translations against the current deck while classifying
+    /// reusable text against all occurrences in the resolved target stack.
+    pub fn parse_with_csv_translations_and_occurrences(
+        source: SourceFile,
+        source_deck: &CanonicalDeck,
+        occurrence_deck: &CanonicalDeck,
         mut include_loader: impl FnMut(&IncludeRequest) -> Result<SourceFile, String>,
         mut csv_loader: impl FnMut(&CsvSourceRequest) -> Result<CsvSourceFile, String>,
     ) -> Result<Self, SourceDocumentError> {
         Self::parse_with_loaders(
             source,
-            CsvMaterialization::All(source_deck),
+            CsvMaterialization::All {
+                source_deck,
+                occurrence_deck,
+            },
             &mut include_loader,
             &mut csv_loader,
         )
@@ -174,7 +198,10 @@ impl OverlaySourceDocument {
             })?;
         let sparse_source_deck = match materialization {
             CsvMaterialization::Inventory => None,
-            CsvMaterialization::SparseFields(deck) | CsvMaterialization::All(deck) => Some(deck),
+            CsvMaterialization::SparseFields(deck)
+            | CsvMaterialization::All {
+                source_deck: deck, ..
+            } => Some(deck),
         };
         let (csv_sparse_field_provenance, mut csv_sources) = load_csv_sparse_field_sources(
             &sparse_declarations,
@@ -183,13 +210,16 @@ impl OverlaySourceDocument {
             prepared.root.provenance(),
             csv_loader,
         )?;
-        let translation_source_deck = match materialization {
-            CsvMaterialization::All(deck) => Some(deck),
+        let translation_decks = match materialization {
+            CsvMaterialization::All {
+                source_deck,
+                occurrence_deck,
+            } => Some((source_deck, occurrence_deck)),
             CsvMaterialization::Inventory | CsvMaterialization::SparseFields(_) => None,
         };
         let (csv_translation_provenance, translation_sources) = load_csv_translation_sources(
             &translation_declarations,
-            translation_source_deck,
+            translation_decks,
             &mut resolved_overlay,
             prepared.root.provenance(),
             csv_loader,
@@ -1140,7 +1170,7 @@ fn restore_csv_translation_declarations(
 
 fn load_csv_translation_sources(
     declarations: &[CsvTranslationSourceDeclaration],
-    source_deck: Option<&CanonicalDeck>,
+    decks: Option<(&CanonicalDeck, &CanonicalDeck)>,
     resolved_overlay: &mut Overlay,
     root: &SourceProvenance,
     csv_loader: &mut impl FnMut(&CsvSourceRequest) -> Result<CsvSourceFile, String>,
@@ -1219,13 +1249,12 @@ fn load_csv_translation_sources(
             loaded_sources.push((request.kind().clone(), table.clone()));
             tables.insert(alias, table);
         }
-        if let Some(source_deck) = source_deck {
-            let mut materialized =
-                materializer
-                    .materialize(&tables, source_deck)
-                    .map_err(|error| {
-                        SourceDocumentError::at(root, &declaration_path, error.to_string())
-                    })?;
+        if let Some((source_deck, occurrence_deck)) = decks {
+            let mut materialized = materializer
+                .materialize(&tables, source_deck, occurrence_deck)
+                .map_err(|error| {
+                    SourceDocumentError::at(root, &declaration_path, error.to_string())
+                })?;
             let excluded = materialized
                 .apply_exclusions(declaration, &declaration_path)
                 .map_err(|message| SourceDocumentError::at(root, &declaration_path, message))?;

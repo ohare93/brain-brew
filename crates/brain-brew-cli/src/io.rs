@@ -182,16 +182,23 @@ pub(crate) fn overlay_document_from_package(
     package_root: &Path,
     include_roots: &[PathBuf],
 ) -> Result<OverlaySourceDocument, String> {
-    overlay_document_from_package_inner(path, package_root, include_roots, None)
+    overlay_document_from_package_inner(path, package_root, include_roots, None, None)
 }
 
-pub(crate) fn overlay_document_from_package_with_source_deck(
+pub(crate) fn overlay_document_from_package_with_source_decks(
     path: &Path,
     package_root: &Path,
     include_roots: &[PathBuf],
     source_deck: &CanonicalDeck,
+    occurrence_deck: &CanonicalDeck,
 ) -> Result<OverlaySourceDocument, String> {
-    overlay_document_from_package_inner(path, package_root, include_roots, Some(source_deck))
+    overlay_document_from_package_inner(
+        path,
+        package_root,
+        include_roots,
+        Some(source_deck),
+        Some(occurrence_deck),
+    )
 }
 
 pub(crate) fn overlay_document_from_package_with_sparse_source_deck(
@@ -219,6 +226,7 @@ fn overlay_document_from_package_inner(
     package_root: &Path,
     include_roots: &[PathBuf],
     source_deck: Option<&CanonicalDeck>,
+    occurrence_deck: Option<&CanonicalDeck>,
 ) -> Result<OverlaySourceDocument, String> {
     let context = SourceContext {
         root: package_root.to_path_buf(),
@@ -227,9 +235,10 @@ fn overlay_document_from_package_inner(
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
     let source = source_file(path, &input, &context)?;
     let result = if let Some(source_deck) = source_deck {
-        OverlaySourceDocument::parse_with_csv_translations(
+        OverlaySourceDocument::parse_with_csv_translations_and_occurrences(
             source,
             source_deck,
+            occurrence_deck.expect("translation occurrence deck accompanies source deck"),
             |request| load_source_include(request, &context),
             |request| load_csv_source(request, &context),
         )

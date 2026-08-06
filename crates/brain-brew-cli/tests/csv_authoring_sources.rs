@@ -704,6 +704,156 @@ fn translation_csv_sources_are_materialized_authorized_planned_and_fresh() {
 }
 
 #[test]
+fn dependency_ordered_csv_translation_and_sparse_overlay_keep_expected_bases_consistent() {
+    let workspace = TempDir::new().unwrap();
+    fs::create_dir_all(workspace.path().join("overlays/sources")).unwrap();
+    fs::write(
+        workspace.path().join("deck.yaml"),
+        "deck:\n  id: deck.ordered-csv\n  name: Ordered CSV\n  description: ''\n  adapter_ids:\n    crowdanki:uuid: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\nnote_types:\n  note-type.basic:\n    name: Basic\n    field_order: [field.front]\n    fields:\n      field.front:\n        name: Front\n    card_template_order: []\n    card_templates: {}\n    styling: ''\n    adapter_ids:\n      crowdanki:uuid: bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\nnotes:\n  note.one:\n    note_type_id: note-type.basic\n    fields:\n      field.front: Hello\n    tags: []\n    adapter_ids:\n      crowdanki: 11111111-1111-1111-1111-111111111111\nmedia: {}\ntombstones: []\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/translation.yaml"),
+        "id: overlay.translation.de\nkind: translation\ntranslations:\n  from_csv:\n    - descriptor: sources/translation.yaml\n      parameters:\n        language: de\n      exclude:\n        source_texts: []\n        note_ids: []\n        paths: []\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/experimental.yaml"),
+        "id: overlay.extension.experimental\nkind: extension\nfield_additions:\n  note-type.basic:\n    fields:\n      field.experimental: Experimental\n    values:\n      from_csv:\n        - descriptor: sources/experimental.yaml\n          parameters: {}\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/identity.yaml"),
+        "id: overlay.extension.identity\nkind: extension\nnotes:\n  note.one:\n    intent: merge\n    adapter_ids:\n      crowdanki:\n        intent: override\n        value: 33333333-3333-3333-3333-333333333333\n        expected_base:\n          value: 22222222-2222-2222-2222-222222222222\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/sources/translation.yaml"),
+        "version: 1\nprimary_table: main\ntables:\n  main:\n    path: translation.csv\nparameters:\n  language:\n    type: localized_column\n    default: ''\n    separator: ':'\njoins: []\nnote:\n  id: main.stable_id\n  note_type_id: note-type.basic\n  fields:\n    field.front:\n      column: main.front\n      localized_by: language\n      type: scalar\n  tags:\n    column: main.tags\n    delimiter: '|'\n  adapter_ids:\n    crowdanki:\n      column: main.guid\n      localized_by: language\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/sources/translation.csv"),
+        "stable_id,front,front:de,tags,guid,guid:de\nnote.one,Hello,Hallo,,11111111-1111-1111-1111-111111111111,22222222-2222-2222-2222-222222222222\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/sources/experimental.yaml"),
+        "version: 1\nprimary_table: main\ntables:\n  main:\n    path: experimental.csv\nparameters: {}\njoins: []\nnote:\n  id: main.stable_id\n  note_type_id: note-type.basic\n  fields:\n    field.experimental:\n      column: main.experimental\n      type: scalar\n  tags:\n    column: main.tags\n    delimiter: '|'\n  adapter_ids: {}\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("overlays/sources/experimental.csv"),
+        "stable_id,experimental,tags\nnote.one,enabled,\n",
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("brainbrew.yaml"),
+        "base: deck.yaml\noverlays:\n  overlay.translation.de:\n    file: overlays/translation.yaml\n    kind: translation\n  overlay.extension.experimental:\n    file: overlays/experimental.yaml\n    kind: extension\n    depends_on: [overlay.translation.de]\n  overlay.extension.identity:\n    file: overlays/identity.yaml\n    kind: extension\n    depends_on: [overlay.extension.experimental]\ntargets:\n  de-experimental:\n    overlays: [overlay.extension.identity]\n",
+    )
+    .unwrap();
+
+    for path in [
+        "deck.yaml",
+        "overlays/translation.yaml",
+        "overlays/experimental.yaml",
+        "overlays/identity.yaml",
+        "brainbrew.yaml",
+    ] {
+        let formatted = run(workspace.path(), &["fmt", path]);
+        assert!(formatted.status.success(), "{path}: {}", stderr(&formatted));
+    }
+
+    let targets = run(
+        workspace.path(),
+        &["targets", "--manifest", "brainbrew.yaml", "--json"],
+    );
+    assert!(
+        targets.status.success(),
+        "targets: {}{}",
+        stderr(&targets),
+        String::from_utf8_lossy(&targets.stdout)
+    );
+    let targets: serde_json::Value = serde_json::from_slice(&targets.stdout).unwrap();
+    assert_eq!(
+        targets["targets"][0]["overlays"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|overlay| overlay["id"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        [
+            "overlay.translation.de",
+            "overlay.extension.experimental",
+            "overlay.extension.identity",
+        ]
+    );
+
+    for args in [
+        vec![
+            "validate",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "de-experimental",
+        ],
+        vec![
+            "verify",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "de-experimental",
+            "--media-mode",
+            "reference-only",
+        ],
+    ] {
+        let output = run(workspace.path(), &args);
+        assert!(output.status.success(), "{args:?}: {}", stderr(&output));
+    }
+
+    let compose = run(
+        workspace.path(),
+        &[
+            "compose",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "de-experimental",
+        ],
+    );
+    assert!(compose.status.success(), "compose: {}", stderr(&compose));
+    let composed = String::from_utf8_lossy(&compose.stdout);
+    assert!(composed.contains("field.front: Hallo"), "{composed}");
+    assert!(
+        composed.contains("field.experimental: enabled"),
+        "{composed}"
+    );
+    assert!(
+        composed.contains("crowdanki: 33333333-3333-3333-3333-333333333333"),
+        "{composed}"
+    );
+
+    let export = run(
+        workspace.path(),
+        &[
+            "export",
+            "crowdanki",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "de-experimental",
+            "--out",
+            "export",
+            "--media-mode",
+            "reference-only",
+        ],
+    );
+    assert!(export.status.success(), "export: {}", stderr(&export));
+    let exported = fs::read_to_string(workspace.path().join("export/deck.json")).unwrap();
+    assert!(exported.contains("enabled"));
+}
+
+#[test]
 fn sparse_overlay_csv_values_compose_format_and_register_authoritative_inputs() {
     let workspace = TempDir::new().unwrap();
     fs::create_dir_all(workspace.path().join("overlays/sources")).unwrap();
