@@ -42,6 +42,7 @@ REPOSITORY_ONLY_PACKAGE_FILES = {
     },
     "brainbrew": {
         "tests/cli.rs",
+        "tests/composable_csv_certification.rs",
         "tests/crowdanki_import_media_cli.rs",
         "tests/crowdanki_import_plan_cli.rs",
         "tests/release_media_integrity.rs",

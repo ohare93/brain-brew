@@ -593,6 +593,7 @@ fn success(root: &Path, args: &[&str]) -> Output {
 fn run(root: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_brainbrew"))
         .current_dir(root)
+        .env("BRAINBREW_CACHE_DIR", root.join(".brainbrew-cache"))
         .args(args)
         .output()
         .expect("brainbrew runs")

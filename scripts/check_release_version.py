@@ -10,8 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PUBLISHABLE = {"brain-brew-core", "brain-brew-formats", "brainbrew"}
 INTERNAL = {"brain-brew-core", "brain-brew-formats"}
-CURRENT = "1.0.0-alpha.4"
-STALE = "1.0.0-alpha.3"
+CURRENT = "1.0.0-alpha.5"
+STALE = "1.0.0-alpha.4"
 CURRENT_DOCS = [
     Path("README.md"),
     Path("documentation/docs/getting-started/install.md"),
@@ -37,6 +37,7 @@ IGNORED_DIRECTORIES = {
     ".agentleman",
     ".frontloop",
     ".jj",
+    ".pi-subagents",
     "build",
     "node_modules",
     "target",

@@ -14,6 +14,7 @@ homepage = "https://github.com/jeprecated/brain-brew"
 # those inputs part of the crates.io CLI package.
 exclude = [
     "tests/cli.rs",
+    "tests/composable_csv_certification.rs",
     "tests/crowdanki_import_media_cli.rs",
     "tests/crowdanki_import_plan_cli.rs",
     "tests/release_media_integrity.rs",

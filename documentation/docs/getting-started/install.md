@@ -10,7 +10,7 @@ The normal install paths are the published crates.io package and prebuilt GitHub
 
 ## Recommended version for deck contributors
 
-Use the version recommended by the deck repository you are contributing to. The current Brain Brew preview is `v1.0.0-alpha.4`; pin examples and contributor docs to that immutable tag and verify the installed binary with:
+Use the version recommended by the deck repository you are contributing to. The current Brain Brew preview is `v1.0.0-alpha.5`; pin examples and contributor docs to that immutable tag and verify the installed binary with:
 
 ```bash
 brainbrew --version
@@ -20,10 +20,10 @@ If a deck needs a newer Brain Brew behavior, update its docs to name the new Bra
 
 ## Cargo install
 
-After the alpha.4 release gates pass and the maintainer manually publishes it, install the crate from crates.io:
+After the alpha.5 release gates pass and the maintainer manually publishes it, install the crate from crates.io:
 
 ```bash
-cargo install brainbrew --version 1.0.0-alpha.4 --locked
+cargo install brainbrew --version 1.0.0-alpha.5 --locked
 brainbrew --version
 ```
 
@@ -39,7 +39,7 @@ integrity check. Download it first, verify its entry from the release's
 macOS and Linux:
 
 ```bash
-release=https://github.com/jeprecated/brain-brew/releases/download/v1.0.0-alpha.4
+release=https://github.com/jeprecated/brain-brew/releases/download/v1.0.0-alpha.5
 curl --fail --location --remote-name "$release/brainbrew-installer.sh"
 curl --fail --location --remote-name "$release/SHA256SUMS"
 grep '  brainbrew-installer.sh$' SHA256SUMS | sha256sum --check
@@ -56,7 +56,7 @@ grep '  brainbrew-installer.sh$' SHA256SUMS | shasum -a 256 --check
 Windows PowerShell:
 
 ```powershell
-$release = 'https://github.com/jeprecated/brain-brew/releases/download/v1.0.0-alpha.4'
+$release = 'https://github.com/jeprecated/brain-brew/releases/download/v1.0.0-alpha.5'
 Invoke-WebRequest "$release/brainbrew-installer.ps1" -OutFile brainbrew-installer.ps1
 Invoke-WebRequest "$release/SHA256SUMS" -OutFile SHA256SUMS
 # Compare the Get-FileHash value with brainbrew-installer.ps1's SHA256SUMS entry.
@@ -73,7 +73,7 @@ matching filename before execution.
 If you need to test the exact GitHub tag instead of the crates.io package, install directly from the same release tag:
 
 ```bash
-cargo install --git https://github.com/jeprecated/brain-brew --tag v1.0.0-alpha.4 brainbrew --locked
+cargo install --git https://github.com/jeprecated/brain-brew --tag v1.0.0-alpha.5 brainbrew --locked
 brainbrew --version
 ```
 
@@ -98,7 +98,7 @@ nix run . -- --help
 From another deck workspace, pin the same release tag (or pin its resolved flake revision in your lock file):
 
 ```bash
-nix run github:jeprecated/brain-brew/v1.0.0-alpha.4 -- targets --manifest brainbrew.yaml
+nix run github:jeprecated/brain-brew/v1.0.0-alpha.5 -- targets --manifest brainbrew.yaml
 ```
 
 Build and test the distributable CLI plus its deterministic unit/integration
