@@ -1149,6 +1149,23 @@ impl CsvNoteSourceMaterializer {
         tables: &BTreeMap<String, CsvSourceFile>,
         note_types: &BTreeMap<StableId, NoteType>,
     ) -> Result<CsvNoteMaterialization, CsvNoteSourceError> {
+        self.materialize_with_field_completeness(tables, note_types, true)
+    }
+
+    fn materialize_field_subset_with_provenance(
+        &self,
+        tables: &BTreeMap<String, CsvSourceFile>,
+        note_types: &BTreeMap<StableId, NoteType>,
+    ) -> Result<CsvNoteMaterialization, CsvNoteSourceError> {
+        self.materialize_with_field_completeness(tables, note_types, false)
+    }
+
+    fn materialize_with_field_completeness(
+        &self,
+        tables: &BTreeMap<String, CsvSourceFile>,
+        note_types: &BTreeMap<StableId, NoteType>,
+        require_complete_fields: bool,
+    ) -> Result<CsvNoteMaterialization, CsvNoteSourceError> {
         let note_type_id =
             StableId::new(self.descriptor.note.note_type_id.clone()).map_err(|error| {
                 CsvNoteSourceError::descriptor(&self.descriptor.provenance, error.to_string())
@@ -1159,7 +1176,7 @@ impl CsvNoteSourceMaterializer {
                 format!("mapped note type {note_type_id} is not declared by the deck"),
             )
         })?;
-        self.validate_field_completeness(note_type)?;
+        self.validate_field_completeness(note_type, require_complete_fields)?;
 
         if let Some(alias) = tables
             .keys()
@@ -1468,7 +1485,11 @@ impl CsvNoteSourceMaterializer {
             .collect()
     }
 
-    fn validate_field_completeness(&self, note_type: &NoteType) -> Result<(), CsvNoteSourceError> {
+    fn validate_field_completeness(
+        &self,
+        note_type: &NoteType,
+        require_complete_fields: bool,
+    ) -> Result<(), CsvNoteSourceError> {
         let declared = note_type
             .fields
             .iter()
@@ -1487,7 +1508,7 @@ impl CsvNoteSourceMaterializer {
                 format!("unknown field mapping {unknown}"),
             ));
         }
-        if let Some(missing) = declared.difference(&mapped).next() {
+        if require_complete_fields && let Some(missing) = declared.difference(&mapped).next() {
             return Err(CsvNoteSourceError::descriptor(
                 &self.descriptor.provenance,
                 format!("missing field mapping {missing}"),
@@ -1976,10 +1997,10 @@ impl CsvTranslationSourceMaterializer {
 
         let source = CsvNoteSourceMaterializer::new(self.descriptor.clone())
             .with_parameters(&source_parameters)?
-            .materialize_with_provenance(tables, &source_deck.note_types)?;
+            .materialize_field_subset_with_provenance(tables, &source_deck.note_types)?;
         let target = CsvNoteSourceMaterializer::new(self.descriptor.clone())
             .with_parameters(&self.parameters)?
-            .materialize_with_provenance(tables, &source_deck.note_types)?;
+            .materialize_field_subset_with_provenance(tables, &source_deck.note_types)?;
 
         let mut owned_text = Vec::new();
         let mut provenance = CsvTranslationAuthoringProvenance::default();

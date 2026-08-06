@@ -66,7 +66,7 @@ Sparse changes to the base deck. Keep overlays small and purpose-shaped:
 
 ## CSV-backed translation ownership
 
-A translation overlay may keep `translations.from_csv` beside ordinary inline dictionary entries. The declaration reads the note descriptor's exact unsuffixed and localized columns and materializes the existing translation dictionary; it does not replace notes or infer a language from the target name.
+A translation overlay may keep `translations.from_csv` beside ordinary inline dictionary entries. The declaration reads the note descriptor's exact unsuffixed and localized columns and materializes the existing translation dictionary; it does not replace notes or infer a language from the target name. Its mapped fields must exist but may be a subset of the resolved note type, so fields owned by structural overlays need not be repeated in a shared translation descriptor.
 
 CSV-owned pairs are regenerated from the current CSV bytes. Source fingerprints detect input changes, but historical stale-translation review is unavailable because the old source key is not retained. To regain native stale detection, transfer the affected source text, note, or path to inline YAML by excluding it from `from_csv` and adding the equivalent inline decision in the same change:
 

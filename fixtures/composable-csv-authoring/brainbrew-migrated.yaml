@@ -21,13 +21,21 @@ targets:
       - overlay.translation.de
       - overlay.extension.experimental
       - overlay.translation.experimental.de
+  de-standard:
+    overlays:
+      - overlay.translation.de
   en-experimental:
     overlays:
       - overlay.extension.experimental
+  en-standard:
+    overlays: []
   es-experimental:
     overlays:
       - overlay.translation.es
       - overlay.extension.experimental
+  es-standard:
+    overlays:
+      - overlay.translation.es
 languages:
   de:
     display_name: German
@@ -37,12 +45,14 @@ languages:
     primary_target: experimental
     targets:
       experimental: de-experimental
+      standard: de-standard
   en:
     display_name: English
     source: true
     primary_target: experimental
     targets:
       experimental: en-experimental
+      standard: en-standard
   es:
     display_name: Spanish
     translation_overlays:
@@ -50,6 +60,7 @@ languages:
     primary_target: experimental
     targets:
       experimental: es-experimental
+      standard: es-standard
 translation_profile:
   structural_fields:
     - field.flag

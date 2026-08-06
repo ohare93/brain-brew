@@ -2,7 +2,12 @@
 
 ## Unreleased
 
-The next preview is `1.0.0-alpha.5`; it is pending the documented release gates and manual crates.io publication.
+The next preview is `1.0.0-alpha.6`; it is pending the documented release gates and manual crates.io publication.
+
+- CSV translation descriptors now own a validated subset of resolved note-type fields, allowing one shared translation source across Standard and extension-added fields while ordinary CSV note sources remain complete.
+- Typed CSV image fields may split one cell into an ordered structured-image sequence with an exact descriptor delimiter.
+
+## v1.0.0-alpha.5
 
 - Adds ADR-022 composable read-only CSV authoring with explicit descriptors, joins, and localized columns; translation and sparse-field sources; exact incremental CSV-to-YAML ownership transfer; Workbench provenance and read-only enforcement; source-graph fingerprint and lock integration; and maintained all-CSV-versus-migrated certification.
 - Distributed Workbench binaries now include the write implementation by default while retaining the explicit runtime `--enable-write` opt-in; release smoke tests reject artifacts that omit the capability.

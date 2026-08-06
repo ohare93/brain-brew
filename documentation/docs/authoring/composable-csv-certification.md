@@ -16,7 +16,7 @@ The fixture has two manifests over the same authoritative tables:
   translation, two contextual `Shared` occurrences, and France's region code to
   native YAML with explicit exclusions.
 
-Both expose English, German, and Spanish Experimental targets. The
+Both expose English, German, and Spanish Standard and Experimental targets. The
 maintained test proves that every storage-only migration has an empty semantic
 diff and that the German Experimental CrowdAnki directory is byte-identical.
 It separately uses Workbench to prove a remaining CSV unit is read-only while a
@@ -112,13 +112,15 @@ See [Workspace layout](workspace.md) and
 
 `sources/countries.yaml` is strict: it names one primary table, required country
 and GUID joins, an optional hint join, explicit stable note IDs, exact headers,
-tags, and a fixed note type. `sources/countries-experimental.yaml` repeats that
-closed mapping at the Experimental source shape and explicitly includes the
-non-localized region field; descriptors do not infer fields added by an
-overlay. The `language` parameter is a
-`localized_column`; declarations pass literal `de` or `es`, selecting exact
-`:de` or `:es` headers. There is no manifest-language inference, header
-normalization, fallback lookup, transform expression, or ID generation.
+tags, and a fixed note type. Ordinary `notes: !csv` uses it to materialize the
+complete Standard note shape. Standard and Experimental translation overlays
+reuse the same descriptor: `translations.from_csv` validates its mapped fields
+as a subset of the resolved note type, so the Experimental region field remains
+owned by its structural overlay. Unknown or misspelled translation field
+mappings still fail. The `language` parameter is a `localized_column`;
+declarations pass literal `de` or `es`, selecting exact `:de` or `:es` headers.
+There is no manifest-language inference, header normalization, fallback lookup,
+transform expression, or ID generation.
 
 The all-CSV base demonstrates typed `image` mappings for flag and map cells.
 Cells contain stable media IDs, while `media.yaml` remains the only path/hash
@@ -146,7 +148,8 @@ through the adapter-ID map.
 Both-blank text pairs are ignored. Exactly one blank adapter-ID cell remains a
 fatal error because the adapter map cannot represent an adaptation or deletion.
 CSV inference is global-occurrence-aware against the complete translation-free
-source shape, including the Experimental field addition.
+source shape, including the Experimental field addition even though the shared
+translation descriptor does not own that field.
 
 Migration selectors are exact unions: non-empty `source_texts`, stable
 `note_ids`, and canonical `paths`. They are not globs, regular expressions, or

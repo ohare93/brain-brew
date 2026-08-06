@@ -6,7 +6,14 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 const MANIFESTS: [&str; 2] = ["brainbrew-all-csv.yaml", "brainbrew-migrated.yaml"];
-const TARGETS: [&str; 3] = ["en-experimental", "de-experimental", "es-experimental"];
+const TARGETS: [&str; 6] = [
+    "en-standard",
+    "de-standard",
+    "es-standard",
+    "en-experimental",
+    "de-experimental",
+    "es-experimental",
+];
 
 #[test]
 fn maintained_composable_csv_fixture_certifies_the_incremental_workflow() {
@@ -274,7 +281,6 @@ fn maintained_composable_csv_fixture_certifies_the_incremental_workflow() {
     let sources = explain_before["sources"].as_array().unwrap();
     for name in [
         "countries.yaml",
-        "countries-experimental.yaml",
         "regions.yaml",
         "main.csv",
         "countries.csv",
@@ -386,16 +392,24 @@ fn assert_csv_unit(units: &[Value], category: &str, path: &str, source: &str, ta
 
 fn assert_composed_output(target: &str, output: &str) {
     for anchor in [
-        "field.region-code: WE",
-        "field.region-code: CE",
-        "field.region-code: SW",
         "field.flag: !image media.flag.france",
         "field.map: !image media.map.spain",
     ] {
         assert!(output.contains(anchor), "{target} missing {anchor:?}");
     }
+    if target.ends_with("-experimental") {
+        for anchor in [
+            "field.region-code: WE",
+            "field.region-code: CE",
+            "field.region-code: SW",
+        ] {
+            assert!(output.contains(anchor), "{target} missing {anchor:?}");
+        }
+    } else {
+        assert!(!output.contains("field.region-code:"), "{target}");
+    }
     match target {
-        "de-experimental" => {
+        "de-experimental" | "de-standard" => {
             for anchor in [
                 "field.country: Frankreich",
                 "field.country: Deutschland",
@@ -406,7 +420,7 @@ fn assert_composed_output(target: &str, output: &str) {
                 assert!(output.contains(anchor), "{target} missing {anchor:?}");
             }
         }
-        "es-experimental" => {
+        "es-experimental" | "es-standard" => {
             for anchor in [
                 "field.country: Francia",
                 "field.country: Alemania",
@@ -416,7 +430,9 @@ fn assert_composed_output(target: &str, output: &str) {
                 assert!(output.contains(anchor), "{target} missing {anchor:?}");
             }
         }
-        "en-experimental" => assert!(output.contains("field.country: France")),
+        "en-experimental" | "en-standard" => {
+            assert!(output.contains("field.country: France"));
+        }
         _ => unreachable!(),
     }
 }

@@ -1,5 +1,5 @@
 use brain_brew_core::{
-    FieldValue, SourceTranslationImpact, StableId, TargetAdaptationIntent,
+    FieldDefinition, FieldValue, SourceTranslationImpact, StableId, TargetAdaptationIntent,
     TranslationCoverageCategory,
 };
 use brain_brew_formats::canonical_yaml;
@@ -203,6 +203,43 @@ fn csv_pairs_materialize_into_existing_coverage_composition_and_export() {
     )
     .unwrap();
     assert_eq!(inventory.emit().unwrap().root().text(), emitted);
+}
+
+#[test]
+fn translation_field_mappings_are_validated_subsets() {
+    let csv =
+        b"stable_id,front,front:de,tags,guid,guid:de\nnote.one,Hello,Hallo,,guid-one,guid-one-de\n";
+    let standard = deck(&[("note.one", "Hello", "guid-one")]);
+    parse(&standard, &overlay_source(""), csv).expect("standard translation materializes");
+
+    let mut experimental = standard.clone();
+    let region_code = sid("field.region-code");
+    experimental
+        .note_types
+        .get_mut(&sid("note-type.basic"))
+        .unwrap()
+        .fields
+        .push(FieldDefinition {
+            id: region_code.clone(),
+            name: "Region code".to_owned(),
+            message_pattern: None,
+        });
+    experimental
+        .notes
+        .get_mut(&sid("note.one"))
+        .unwrap()
+        .fields
+        .insert(region_code, "WE");
+    parse(&experimental, &overlay_source(""), csv)
+        .expect("translation may omit an extension-owned field");
+
+    let unknown = DESCRIPTOR.replace("field.front:", "field.typo:");
+    let error = parse_with_descriptor(&standard, &overlay_source(""), &unknown, csv)
+        .expect_err("unknown translation field mapping fails");
+    assert!(
+        error.contains("unknown field mapping field.typo"),
+        "{error}"
+    );
 }
 
 #[test]

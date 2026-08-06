@@ -2,7 +2,7 @@ id: overlay.translation.de
 kind: translation
 translations:
   from_csv:
-    - descriptor: sources/countries-experimental.yaml
+    - descriptor: sources/countries.yaml
       parameters:
         language: de
       exclude:

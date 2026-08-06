@@ -128,7 +128,7 @@ The serialized descriptor shape above and the following contract are fixed:
 - Empty or duplicate headers, invalid UTF-8, malformed records, and records whose width differs from the header fail with descriptor, CSV file, logical row, and column/header diagnostics. A UTF-8 BOM is not silently stripped; diagnostics identify it explicitly rather than reporting only that the declared first header is absent.
 - Extra unmapped columns are allowed. This permits one table to carry several language columns while a declaration selects one language.
 - Every primary row materializes one note unless explicitly excluded. Stable note IDs come from an explicit mapped cell; they are never derived from row number, display text, a slug heuristic, or an adapter ID.
-- A descriptor maps exactly one fixed note type. Every field declared by that note type is mapped exactly once; missing and unknown field mappings fail through canonical validation.
+- An ordinary `notes: !csv` descriptor maps exactly one fixed note type and materializes complete notes. Every field declared by that note type is mapped exactly once; missing and unknown field mappings fail through canonical validation.
 - Table and source iteration is deterministic. Resolved maps use canonical stable-ID ordering rather than filesystem or hash-map order. CSV file row order is not rewritten.
 
 All descriptor and CSV paths use the existing portable safe-relative path and package-root authorization rules. Absolute paths, traversal, backslashes, drive/UNC forms, repeated separators, and symlink escapes fail before reads. Descriptors cannot recursively include or discover other descriptors.
@@ -197,6 +197,8 @@ translations:
 ```
 
 `from_csv` pairs each opted-in unsuffixed source column with the localized column selected by the declaration's non-empty `language` parameter. An omitted or empty `language` is a fatal declaration error rather than a source-to-itself pairing. It uses the descriptor's stable note IDs and canonical field paths. It materializes the existing `TranslationDictionary` and path-scoped Target Adaptation semantics; it never applies localized note replacements.
+
+Unlike complete CSV note materialization, a CSV translation descriptor owns a validated subset of the resolved note type's fields. Every mapped field must exist, so unknown or misspelled mappings remain fatal, but fields omitted from the descriptor may be owned by another overlay. An omitted structural field receives no CSV translation ownership and remains owned by its structural overlay. No declaration option selects this behavior; the `translations.from_csv` context determines it.
 
 Inference is global-occurrence-aware across the complete resolved source deck:
 
