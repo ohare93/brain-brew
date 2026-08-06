@@ -1040,3 +1040,50 @@ note_types:
         value: rtl
         expected_base:
           value: ltr
+    fields:
+      field.capital:
+        intent: override
+        name: Capital
+        rtl: true
+        expected_base:
+          fingerprint: sha256:v2:a88a704e28a3164986659ec6f45998e73d0cc582e8048e8fcc1274349a91446a
+      field.capital-hint:
+        intent: override
+        name: Capital hint
+        rtl: true
+        expected_base:
+          fingerprint: sha256:v2:df994f573fdf0ad6290e24941b5bcfa8dba49048df0cd081d0503ee77bf1ef41
+      field.capital-info:
+        intent: override
+        name: Capital info
+        rtl: true
+        expected_base:
+          fingerprint: sha256:v2:609fc8e482031015a6c96874bfc52d0e0b7036076be1f7edd0137278465e3538
+      field.country:
+        intent: override
+        name: Country
+        rtl: true
+        expected_base:
+          fingerprint: sha256:v2:4dbf4483b9c72b81d7cf479d97a202921351936f939ee8a4d484d4a0b5b24f27
+      field.country-info:
+        intent: override
+        name: Country info
+        rtl: true
+        expected_base:
+          fingerprint: sha256:v2:d3e826358c4b78479f435577fee9ae57e3f4559d96a3ffa76d6b4052f1e95cda
+      field.flag-similarity:
+        intent: override
+        name: Flag similarity
+        rtl: true
+        message_pattern:
+          kind: list
+          item_format: '{country} ({description})'
+          separator: ', '
+          parameters:
+            country:
+              type: note_field_ref
+              field: field.country
+            description:
+              type: text
+        expected_base:
+          fingerprint: sha256:v2:917df99572ff087cf2163be8623f26048ded5f843b8cded33fa708ca6e6b3d06

@@ -222,6 +222,7 @@ fn translation_field_mappings_are_validated_subsets() {
         .push(FieldDefinition {
             id: region_code.clone(),
             name: "Region code".to_owned(),
+            rtl: false,
             message_pattern: None,
         });
     experimental

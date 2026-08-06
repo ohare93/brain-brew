@@ -4,6 +4,8 @@
 **Status**: Accepted  
 **Deciders**: Project Lead
 
+> **Amendment:** Fingerprint v2 adds field RTL direction to field-definition and note-type fingerprints. Unchanged card-template, note, and media-reference encodings continue to emit v1 so their vectors remain stable; v1 and v2 text forms are both validated.
+
 ## Context
 
 ADR-007 requires an expected value or fingerprint before destructive overlay changes. Complete note type, field definition, card template, note, and media operations previously accepted `entity_present`, and several paths checked only that some expected base had been supplied. A stale overlay could therefore erase a different current entity. YAML summaries would be formatting-dependent, while requiring maintainers to repeat complete prior entities would be noisy and error-prone.
@@ -12,9 +14,9 @@ Sparse note-field values are now semantic `FieldValue` values under ADR-018 and 
 
 ## Decision
 
-Sparse/property changes continue to use exact typed expected values. Complete entity replacement, override, and removal use `EntityFingerprint`, with canonical text `sha256:v1:<lowercase digest>`.
+Sparse/property changes continue to use exact typed expected values. Complete entity replacement, override, and removal use `EntityFingerprint`, with canonical text `sha256:v<version>:<lowercase digest>`.
 
-Version 1 hashes a hand-defined tagged, length-prefixed canonical domain encoding. It domain-separates `brainbrew:1:<entity-kind>`, preserves semantic sequence order, sorts maps/sets, distinguishes every `FieldValue` and message-component variant, and includes stable IDs, adapter IDs, and all entity configuration. It does not use YAML, Debug, Serde, or platform output.
+Each version hashes a hand-defined tagged, length-prefixed canonical domain encoding. It domain-separates `brainbrew:<version>:<entity-kind>`, preserves semantic sequence order, sorts maps/sets, distinguishes every `FieldValue` and message-component variant, and includes stable IDs, adapter IDs, and all entity configuration. It does not use YAML, Debug, Serde, or platform output.
 
 The covered complete families are note type, field definition, card template, note, and media reference. The actual current entity is fingerprinted immediately before every operation. Presence-only expected bases never authorize a destructive operation, including `override`. A stale override fails its precondition before conflict resolution.
 

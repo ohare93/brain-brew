@@ -27,6 +27,7 @@ note_types:
     fields:
       field.country:
         name: Country
+        rtl: true
       field.capital:
         name: Capital
     card_template_order:
@@ -65,7 +66,7 @@ Canonical YAML is deliberately strict:
 - formatting is deterministic;
 - comments are not part of the durable model.
 
-For a valid base Deck, formatting emits note-type field definitions and each note's field values in `field_order`, and emits card template definitions in `card_template_order`.
+For a valid base Deck, formatting emits note-type field definitions and each note's field values in `field_order`, and emits card template definitions in `card_template_order`. A field definition may set `rtl: true`; omission means `false`. CrowdAnki import and export preserve this per-field direction flag.
 
 Run the formatter before review:
 

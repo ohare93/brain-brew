@@ -72,7 +72,7 @@ impl std::error::Error for InvalidStableId {}
 /// `.images.`, `.message.`, `.message_pattern.`), or reserved property suffixes (`.id`,
 /// `.name`, `.styling`, `.fields`, `.card_templates`, `.variables`, `.adapter_ids`,
 /// `.tags`, `.images`, `.note_type_id`, `.message`, `.message_pattern`, `.item_format`,
-/// `.separator`, `.path`, `.sha256`, `.question_format`, `.answer_format`). Non-StableId map keys and tag strings are exempt from that
+/// `.separator`, `.rtl`, `.path`, `.sha256`, `.question_format`, `.answer_format`). Non-StableId map keys and tag strings are exempt from that
 /// StableId-only invariant, so keys such as `note-type.name` remain legal after
 /// the first reserved container split.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -119,6 +119,10 @@ pub enum DeckPath {
         field_id: StableId,
     },
     NoteTypeFieldName {
+        note_type_id: StableId,
+        field_id: StableId,
+    },
+    NoteTypeFieldRtl {
         note_type_id: StableId,
         field_id: StableId,
     },
@@ -306,6 +310,10 @@ impl fmt::Display for DeckPath {
                 note_type_id,
                 field_id,
             } => write!(f, "note_types.{note_type_id}.fields.{field_id}.name"),
+            Self::NoteTypeFieldRtl {
+                note_type_id,
+                field_id,
+            } => write!(f, "note_types.{note_type_id}.fields.{field_id}.rtl"),
             Self::NoteTypeFieldMessagePattern {
                 note_type_id,
                 field_id,
@@ -610,6 +618,12 @@ fn parse_note_type_field_path(note_type_id: StableId, rest: &str) -> Option<Deck
     }
     if let Some(field_text) = rest.strip_suffix(".name") {
         return stable_id(field_text).map(|field_id| DeckPath::NoteTypeFieldName {
+            note_type_id,
+            field_id,
+        });
+    }
+    if let Some(field_text) = rest.strip_suffix(".rtl") {
+        return stable_id(field_text).map(|field_id| DeckPath::NoteTypeFieldRtl {
             note_type_id,
             field_id,
         });
@@ -1908,6 +1922,7 @@ pub struct NoteType {
 pub struct FieldDefinition {
     pub id: StableId,
     pub name: String,
+    pub rtl: bool,
     pub message_pattern: Option<ListMessagePattern>,
 }
 

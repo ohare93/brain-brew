@@ -77,13 +77,15 @@ substitution is a regression and fails.
 
 The `54b3254…` refresh deliberately corrects the capital-hint question label in
 83 of the 100 targets across 13 localized language families. Against the
-preceding accepted snapshot, the complete recursive parsed-JSON delta is exactly
-one `note_models[0].tmpls[1].qfmt` value per affected target; there are no
-changes at any other JSON path. All source-layout refactors render identically.
-The accepted source is 739 files and 20,031,852 bytes with tree SHA-256
-`e1251709feadd4d494b5dce862e4291a18e5d1ffb5b3dfe31b160ea498947cdd`;
-the canonical expected JSON is 10,024,794 bytes with semantic SHA-256
-`9e6fa4baa2552722f3316bce886eb48e2706f71299acd48a03b4918b4e4f4e7c`.
+preceding accepted snapshot, that refresh changed exactly one
+`note_models[0].tmpls[1].qfmt` value per affected target. The later canonical
+RTL acceptance also restores six `note_models[0].flds[].rtl` values in each of
+the three Hebrew targets; Flag and Map remain left-to-right. All source-layout
+refactors render identically.
+The accepted source is 739 files and 20,033,438 bytes with tree SHA-256
+`43645ea828c9295ba3984cf501d94e0ae7d045d9209798ed05cdbf3a12d73bb8`;
+the canonical expected JSON is 10,024,776 bytes with semantic SHA-256
+`267a3459fcc94bcff126c5c496b2c31dac3e72bc85fa7483b3beac2d2f152d2d`.
 
 ## Maintenance boundaries
 

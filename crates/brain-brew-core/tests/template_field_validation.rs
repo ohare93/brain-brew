@@ -19,11 +19,13 @@ fn deck(question_format: &str, answer_format: &str) -> CanonicalDeck {
             FieldDefinition {
                 id: sid("field.country"),
                 name: "Country".to_owned(),
+                rtl: false,
                 message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.capital"),
                 name: "Capital".to_owned(),
+                rtl: false,
                 message_pattern: None,
             },
         ],

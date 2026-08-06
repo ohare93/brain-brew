@@ -28,7 +28,7 @@ An error is one of:
 | deck UUID/config UUID/config name | `crowdanki_uuid`, `deck_config_uuid`, default config name | compared; all other config values must be the one documented default |
 | deck stable ID | absent | regenerated from visible deck name |
 | note model UUID, name, CSS | `note_models[].crowdanki_uuid`, `name`, `css` | compared |
-| fields, names, order | `flds[].name`, `ord`, array order | names/order compared; non-default display options reject |
+| fields, names, direction, order | `flds[].name`, `rtl`, `ord`, array order | names/RTL/order compared; other non-default display options reject |
 | templates, names, question/answer HTML, order/ord | `tmpls[]` | compared; ord must exactly equal its zero-based array position |
 | LaTeX pre/post/SVG, requirements, sort field, model tags/version | model options | only documented defaults are supported; any other value rejects |
 | canonical variables and typed structured values | rendered/lowered adapter strings | deliberately projected: variables render and images/messages lower before exact comparison |

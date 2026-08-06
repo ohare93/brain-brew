@@ -56,9 +56,9 @@
     }
   },
   "expected": {
-    "accepted_from_source_sha256": "e1251709feadd4d494b5dce862e4291a18e5d1ffb5b3dfe31b160ea498947cdd",
+    "accepted_from_source_sha256": "43645ea828c9295ba3984cf501d94e0ae7d045d9209798ed05cdbf3a12d73bb8",
     "algorithm": "sha256-path-canonical-json-v1",
-    "canonical_byte_count": 10024794,
+    "canonical_byte_count": 10024776,
     "file_count": 100,
     "generated_by": {
       "build": {
@@ -226,7 +226,7 @@
       }
     ],
     "root": "ultimate-geography-expected/crowdanki",
-    "sha256": "9e6fa4baa2552722f3316bce886eb48e2706f71299acd48a03b4918b4e4f4e7c"
+    "sha256": "267a3459fcc94bcff126c5c496b2c31dac3e72bc85fa7483b3beac2d2f152d2d"
   },
   "provenance": {
     "brain_brew": {
@@ -249,7 +249,7 @@
   "schema_version": 3,
   "source": {
     "algorithm": "sha256-path-length-content-v1",
-    "byte_count": 20031852,
+    "byte_count": 20033438,
     "file_count": 739,
     "goldens": {
       "algorithm": "sha256-path-length-content-v1",
@@ -409,7 +409,7 @@
       "sha256": "ad8bd371b4837d639d76f3a56a11fd7437d0ca0d31022ff5022fe5d5ce03e761"
     },
     "root": "ultimate-geography",
-    "sha256": "e1251709feadd4d494b5dce862e4291a18e5d1ffb5b3dfe31b160ea498947cdd",
+    "sha256": "43645ea828c9295ba3984cf501d94e0ae7d045d9209798ed05cdbf3a12d73bb8",
     "third_party_attribution": {
       "algorithm": "sha256-path-length-content-v1",
       "byte_count": 58618,

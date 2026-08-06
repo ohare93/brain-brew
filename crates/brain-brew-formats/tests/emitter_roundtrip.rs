@@ -254,6 +254,7 @@ fn canonical_deck_with_value(value: &str) -> CanonicalDeck {
         fields: vec![FieldDefinition {
             id: sid("field.value"),
             name: "Value".to_owned(),
+            rtl: false,
             message_pattern: None,
         }],
         card_templates: vec![],

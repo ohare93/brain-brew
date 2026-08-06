@@ -947,6 +947,7 @@ fn load_csv_sparse_field_sources(
                     .map(|id| FieldDefinition {
                         name: id.to_string(),
                         id,
+                        rtl: false,
                         message_pattern: None,
                     })
                     .collect(),

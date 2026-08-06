@@ -9,8 +9,10 @@ use crate::{
     StructuredMessage,
 };
 
-/// Canonical entity fingerprint schema version.
-pub const ENTITY_FINGERPRINT_SCHEMA_VERSION: u32 = 1;
+/// Latest supported canonical entity fingerprint schema version.
+///
+/// Entity kinds whose encoding is unchanged may continue emitting an older version.
+pub const ENTITY_FINGERPRINT_SCHEMA_VERSION: u32 = 2;
 
 /// Maintained digest algorithm used by canonical entity fingerprints.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -28,7 +30,7 @@ impl EntityFingerprintAlgorithm {
 
 /// A validated fingerprint of one complete canonical entity.
 ///
-/// The canonical text form is `sha256:v1:<64 lowercase hex digits>`.
+/// The canonical text form is `sha256:v<version>:<64 lowercase hex digits>`.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct EntityFingerprint {
     algorithm: EntityFingerprintAlgorithm,
@@ -49,10 +51,10 @@ impl EntityFingerprint {
         &self.digest
     }
 
-    fn sha256_v1(digest: [u8; 32]) -> Self {
+    fn sha256(schema_version: u32, digest: [u8; 32]) -> Self {
         Self {
             algorithm: EntityFingerprintAlgorithm::Sha256,
-            schema_version: ENTITY_FINGERPRINT_SCHEMA_VERSION,
+            schema_version,
             digest,
         }
     }
@@ -90,12 +92,16 @@ impl FromStr for EntityFingerprint {
                 "missing version separator",
             ));
         };
-        if version != "v1" {
-            return Err(InvalidEntityFingerprint::new(
-                value,
-                "unsupported schema version; expected v1",
-            ));
-        }
+        let schema_version = match version {
+            "v1" => 1,
+            "v2" => 2,
+            _ => {
+                return Err(InvalidEntityFingerprint::new(
+                    value,
+                    "unsupported schema version; expected v1 or v2",
+                ));
+            }
+        };
         if digest.len() != 64
             || !digest
                 .bytes()
@@ -110,7 +116,7 @@ impl FromStr for EntityFingerprint {
         for (index, pair) in digest.as_bytes().chunks_exact(2).enumerate() {
             bytes[index] = (hex_nibble(pair[0]) << 4) | hex_nibble(pair[1]);
         }
-        Ok(Self::sha256_v1(bytes))
+        Ok(Self::sha256(schema_version, bytes))
     }
 }
 
@@ -160,41 +166,42 @@ impl std::error::Error for InvalidEntityFingerprint {}
 
 /// Fingerprint a complete note type, including sequence order and adapter configuration.
 pub fn fingerprint_note_type(value: &NoteType) -> EntityFingerprint {
-    fingerprint("note-type", |encoder| encode_note_type(encoder, value))
+    fingerprint(2, "note-type", |encoder| encode_note_type(encoder, value))
 }
 
 /// Fingerprint a complete field definition.
 pub fn fingerprint_field_definition(value: &FieldDefinition) -> EntityFingerprint {
-    fingerprint("field-definition", |encoder| {
+    fingerprint(2, "field-definition", |encoder| {
         encode_field_definition(encoder, value)
     })
 }
 
 /// Fingerprint a complete card template, including adapter configuration.
 pub fn fingerprint_card_template(value: &CardTemplate) -> EntityFingerprint {
-    fingerprint("card-template", |encoder| {
+    fingerprint(1, "card-template", |encoder| {
         encode_card_template(encoder, value)
     })
 }
 
 /// Fingerprint a complete note and every semantic field-value variant.
 pub fn fingerprint_note(value: &Note) -> EntityFingerprint {
-    fingerprint("note", |encoder| encode_note(encoder, value))
+    fingerprint(1, "note", |encoder| encode_note(encoder, value))
 }
 
 /// Fingerprint a complete media declaration/reference.
 pub fn fingerprint_media_reference(value: &MediaReference) -> EntityFingerprint {
-    fingerprint("media-reference", |encoder| encode_media(encoder, value))
+    fingerprint(1, "media-reference", |encoder| encode_media(encoder, value))
 }
 
-fn fingerprint(kind: &str, encode: impl FnOnce(&mut CanonicalEncoder)) -> EntityFingerprint {
+fn fingerprint(
+    schema_version: u32,
+    kind: &str,
+    encode: impl FnOnce(&mut CanonicalEncoder),
+) -> EntityFingerprint {
     let mut encoder = CanonicalEncoder::default();
-    encoder.string(
-        1,
-        &format!("brainbrew:{ENTITY_FINGERPRINT_SCHEMA_VERSION}:{kind}"),
-    );
+    encoder.string(1, &format!("brainbrew:{schema_version}:{kind}"));
     encode(&mut encoder);
-    EntityFingerprint::sha256_v1(Sha256::digest(encoder.bytes).into())
+    EntityFingerprint::sha256(schema_version, Sha256::digest(encoder.bytes).into())
 }
 
 #[derive(Default)]
@@ -219,6 +226,11 @@ impl CanonicalEncoder {
 
     fn stable_id(&mut self, tag: u8, value: &StableId) {
         self.string(tag, value.as_str());
+    }
+
+    fn bool(&mut self, tag: u8, value: bool) {
+        self.tag(tag);
+        self.bytes.push(u8::from(value));
     }
 
     fn sequence(&mut self, tag: u8, length: usize, encode: impl FnOnce(&mut Self)) {
@@ -276,6 +288,7 @@ fn encode_field_definition(encoder: &mut CanonicalEncoder, value: &FieldDefiniti
             }
         });
     }
+    encoder.bool(5, value.rtl);
 }
 
 fn encode_card_template(encoder: &mut CanonicalEncoder, value: &CardTemplate) {

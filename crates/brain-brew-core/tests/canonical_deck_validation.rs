@@ -274,16 +274,19 @@ fn ug_style_deck() -> CanonicalDeck {
             FieldDefinition {
                 id: sid("field.country"),
                 name: "Country".to_owned(),
+                rtl: false,
                 message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.capital"),
                 name: "Capital".to_owned(),
+                rtl: false,
                 message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.flag"),
                 name: "Flag".to_owned(),
+                rtl: false,
                 message_pattern: None,
             },
         ],

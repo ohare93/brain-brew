@@ -119,6 +119,86 @@ fn ultimate_geography_fixture_uses_shared_structural_and_scalar_includes() {
 }
 
 #[test]
+fn hebrew_translation_overlay_sets_rtl_only_on_text_fields() {
+    let root = fixture_root();
+    let manifest = read_manifest(&root);
+    let expected = [
+        ("field.country", true),
+        ("field.country-info", true),
+        ("field.capital", true),
+        ("field.capital-info", true),
+        ("field.capital-hint", true),
+        ("field.flag", false),
+        ("field.flag-similarity", true),
+        ("field.map", false),
+    ];
+
+    for target in manifest
+        .targets
+        .keys()
+        .filter(|target| target.starts_with("he-"))
+    {
+        let deck = compose_target(&root, &manifest, target);
+        let note_type = ug_note_type(&deck);
+        for (field_id, rtl) in expected {
+            assert_eq!(
+                note_type
+                    .fields
+                    .iter()
+                    .find(|field| field.id == sid(field_id))
+                    .unwrap()
+                    .rtl,
+                rtl,
+                "{target} {field_id} canonical RTL"
+            );
+        }
+
+        let exported = exported_json(&deck);
+        for (index, (_, rtl)) in expected.into_iter().enumerate() {
+            assert_eq!(
+                exported["note_models"][0]["flds"][index]["rtl"], rtl,
+                "{target} field {index} CrowdAnki RTL"
+            );
+        }
+    }
+}
+
+#[test]
+fn hebrew_crowdanki_field_rtl_round_trips_exactly() {
+    let input = fs::read_to_string(
+        fixture_root()
+            .with_file_name("ultimate-geography-expected")
+            .join("crowdanki/he-standard/deck.json"),
+    )
+    .unwrap();
+    let imported = import_approved(&input).expect("legacy Hebrew CrowdAnki imports");
+    let actual = exported_json(&imported);
+    let expected = [true, true, true, true, true, false, true, false];
+
+    assert_eq!(
+        imported
+            .note_types
+            .values()
+            .next()
+            .unwrap()
+            .fields
+            .iter()
+            .map(|field| field.rtl)
+            .collect::<Vec<_>>(),
+        expected
+    );
+    assert_eq!(
+        actual["note_models"][0]["flds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|field| field["rtl"].as_bool().unwrap())
+            .collect::<Vec<_>>(),
+        expected
+    );
+}
+
+#[test]
 fn ultimate_geography_fixture_guards_current_declarative_source_layout() {
     let root = fixture_root();
     let note_types_source = fs::read_to_string(root.join("note-types.yaml")).unwrap();
@@ -875,7 +955,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
     const UG_REVISION: &str = "54b32544a84d1746403ac8efaa3af0e2250ad4c0";
     const HARDCORE_REVISION: &str = "09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46";
     const BRAINBREW_REVISION: &str = "68a828350de4bda46af85b5167bca807edd7d733";
-    const SOURCE_SHA256: &str = "e1251709feadd4d494b5dce862e4291a18e5d1ffb5b3dfe31b160ea498947cdd";
+    const SOURCE_SHA256: &str = "43645ea828c9295ba3984cf501d94e0ae7d045d9209798ed05cdbf3a12d73bb8";
     const MEDIA_SHA256: &str = "ad8bd371b4837d639d76f3a56a11fd7437d0ca0d31022ff5022fe5d5ce03e761";
     const GOLDENS_SHA256: &str = "6a2ec22f3a937e310e364d50eafb20a5fb73c17c27f6966ef07001c88d49704d";
     const ATTRIBUTION_SHA256: &str =
@@ -891,7 +971,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
     const GENERATOR_IDENTITY_SHA256: &str =
         "f377b4d27dac34df9b09046cb139f00e1efba570f2592b9b635aa9694963ce9e";
     const EXPECTED_SHA256: &str =
-        "9e6fa4baa2552722f3316bce886eb48e2706f71299acd48a03b4918b4e4f4e7c";
+        "267a3459fcc94bcff126c5c496b2c31dac3e72bc85fa7483b3beac2d2f152d2d";
 
     let root = fixture_root();
     let lock_path = root.with_file_name("ultimate-geography.lock.json");
@@ -937,7 +1017,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
 
     let source_metadata = tree_metadata(&root);
     assert_eq!(source_metadata.file_count, 739);
-    assert_eq!(source_metadata.byte_count, 20_031_852);
+    assert_eq!(source_metadata.byte_count, 20_033_438);
     assert_eq!(source_metadata.sha256, SOURCE_SHA256);
     assert_tree_lock(&lock["source"], &source_metadata, "source snapshot");
     assert_eq!(lock["source"]["sha256"], SOURCE_SHA256);
@@ -1135,7 +1215,7 @@ fn ultimate_geography_fixture_matches_all_pinned_outputs_and_strict_real_media()
 
     let expected_metadata = canonical_json_tree_metadata(&expected_root);
     assert_eq!(expected_metadata.file_count, 100);
-    assert_eq!(expected_metadata.canonical_byte_count, 10_024_794);
+    assert_eq!(expected_metadata.canonical_byte_count, 10_024_776);
     assert_eq!(expected_metadata.sha256, EXPECTED_SHA256);
     assert_eq!(
         lock["expected"]["algorithm"],
@@ -1390,6 +1470,7 @@ fn ug_regression_field_definition_changes_flow_to_crowdanki_for_every_target() {
                 field: Some(FieldDefinition {
                     id: field_id.clone(),
                     name: format!("Regression Capital Field {target}"),
+                    rtl: false,
                     message_pattern: None,
                 }),
                 expected_base: Some(ExpectedBase::EntityFingerprint(
@@ -1439,6 +1520,7 @@ fn ug_regression_field_definition_changes_flow_to_crowdanki_for_every_target() {
                 field: Some(FieldDefinition {
                     id: field_id.clone(),
                     name: field_name.clone(),
+                    rtl: false,
                     message_pattern: None,
                 }),
                 expected_base: None,

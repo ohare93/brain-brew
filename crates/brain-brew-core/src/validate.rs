@@ -525,6 +525,7 @@ const RESERVED_PROPERTY_SUFFIXES: &[&str] = &[
     ".message_pattern",
     ".item_format",
     ".separator",
+    ".rtl",
     ".path",
     ".sha256",
     ".question_format",

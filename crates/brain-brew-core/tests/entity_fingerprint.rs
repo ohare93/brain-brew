@@ -10,20 +10,23 @@ use brain_brew_core::{
 
 #[test]
 fn fingerprint_text_is_canonical_and_validated() {
-    let fingerprint = EntityFingerprint::from_str(
-        "sha256:v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-    )
-    .expect("canonical fingerprint parses");
-    assert_eq!(
-        fingerprint.to_string(),
-        "sha256:v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-    );
+    for version in ["v1", "v2"] {
+        let text = format!(
+            "sha256:{version}:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        );
+        assert_eq!(
+            EntityFingerprint::from_str(&text)
+                .expect("supported canonical fingerprint parses")
+                .to_string(),
+            text
+        );
+    }
 
     for invalid in [
-        "sha1:v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        "sha256:v2:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        "sha256:v1:ABCDEF6789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        "sha256:v1:short",
+        "sha1:v2:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "sha256:v3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "sha256:v2:ABCDEF6789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "sha256:v2:short",
     ] {
         assert!(
             EntityFingerprint::from_str(invalid).is_err(),
@@ -55,7 +58,7 @@ fn entity_fingerprint_golden_vectors_are_stable() {
     let fixtures = fixtures();
     assert_eq!(
         fingerprint_field_definition(&fixtures.field).to_string(),
-        "sha256:v1:0cfe364c1c8ac76337f9839d9b8aebc911032c185db66121c8381aa2f75165f6"
+        "sha256:v2:aac0189b585f5118de3fde39df4eb90fddf9ddcb8a5018c8090b5fe7f8b73183"
     );
     assert_eq!(
         fingerprint_card_template(&fixtures.template).to_string(),
@@ -63,7 +66,7 @@ fn entity_fingerprint_golden_vectors_are_stable() {
     );
     assert_eq!(
         fingerprint_note_type(&fixtures.note_type).to_string(),
-        "sha256:v1:3ee5401b567c312f73097c713c5fd0738b509dbd6ca956e455ac96a88cb85221"
+        "sha256:v2:603bb75c87655dd62c76c8c1698ffdc643dfcd9e1584e95012a87aa5f75a9901"
     );
     assert_eq!(
         fingerprint_note(&fixtures.note).to_string(),
@@ -85,6 +88,9 @@ fn every_semantic_entity_property_changes_its_fingerprint() {
     assert_ne!(field, fingerprint_field_definition(&changed));
     let mut changed = fixtures.field.clone();
     changed.name.push('!');
+    assert_ne!(field, fingerprint_field_definition(&changed));
+    let mut changed = fixtures.field.clone();
+    changed.rtl = true;
     assert_ne!(field, fingerprint_field_definition(&changed));
 
     let template = fingerprint_card_template(&fixtures.template);
@@ -308,11 +314,13 @@ fn fixtures() -> Fixtures {
     let field = FieldDefinition {
         id: sid("field.front"),
         name: "Front".to_owned(),
+        rtl: false,
         message_pattern: None,
     };
     let second_field = FieldDefinition {
         id: sid("field.back"),
         name: "Back".to_owned(),
+        rtl: false,
         message_pattern: None,
     };
     let mut template_adapter_ids = AdapterIds::new();

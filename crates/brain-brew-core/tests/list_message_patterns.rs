@@ -397,6 +397,7 @@ fn parameter_context_is_scoped_to_its_pattern_field() {
         .push(FieldDefinition {
             id: second_field_id.clone(),
             name: "Other similarity".to_owned(),
+            rtl: false,
             message_pattern: Some(second_pattern),
         });
     for note in deck.notes.values_mut() {
@@ -793,11 +794,13 @@ fn pattern_deck() -> CanonicalDeck {
         FieldDefinition {
             id: sid("field.country"),
             name: "Country".to_owned(),
+            rtl: false,
             message_pattern: None,
         },
         FieldDefinition {
             id: sid("field.flag-similarity"),
             name: "Flag similarity".to_owned(),
+            rtl: false,
             message_pattern: country_pattern(),
         },
     ];

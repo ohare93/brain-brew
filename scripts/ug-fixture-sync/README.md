@@ -19,10 +19,10 @@ Hardcore attribution digests, exact 609-file attribution coverage, the source
 digest from which expected output was accepted, the semantic digest of all 100
 expected JSON files, and the reviewed generator's executable SHA-256 plus
 deterministic source/build identity. The accepted source snapshot is 739 files
-and 20,031,852 bytes with tree SHA-256
-`e1251709feadd4d494b5dce862e4291a18e5d1ffb5b3dfe31b160ea498947cdd`;
-the 100 canonical expected JSON values total 10,024,794 bytes with semantic
-SHA-256 `9e6fa4baa2552722f3316bce886eb48e2706f71299acd48a03b4918b4e4f4e7c`.
+and 20,033,438 bytes with tree SHA-256
+`43645ea828c9295ba3984cf501d94e0ae7d045d9209798ed05cdbf3a12d73bb8`;
+the 100 canonical expected JSON values total 10,024,776 bytes with semantic
+SHA-256 `267a3459fcc94bcff126c5c496b2c31dac3e72bc85fa7483b3beac2d2f152d2d`.
 
 The source snapshot lives at `fixtures/ultimate-geography/`. Its top level is an
 exact whitelist: both manifests and deck files, the shared `note-types.yaml`,
@@ -49,9 +49,11 @@ exactly 100. No expected target contains media; all targets share the one real
 vendored media tree. The `54b3254…` acceptance intentionally changes 83 target
 projections: exactly one `note_models[0].tmpls[1].qfmt` path in each affected
 target, correcting the capital-hint question label for 13 localized language
-families. Every other parsed JSON path is unchanged; declared ordering, the
-shared note-type include and metadata overlays, sparse region codes, and
-pattern-parameter context refactors render identically.
+families. The later canonical RTL acceptance restores six
+`note_models[0].flds[].rtl` values in each Hebrew target while Flag and Map
+remain left-to-right. Declared ordering, the shared note-type include and
+metadata overlays, sparse region codes, and pattern-parameter context refactors
+render identically.
 
 ## Three separate boundaries
 

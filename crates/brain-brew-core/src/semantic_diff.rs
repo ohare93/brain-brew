@@ -186,11 +186,13 @@ fn diff_field_definitions(
             let FieldDefinition {
                 id: left_id,
                 name: left_name,
+                rtl: left_rtl,
                 message_pattern: left_pattern,
             } = left;
             let FieldDefinition {
                 id: right_id,
                 name: right_name,
+                rtl: right_rtl,
                 message_pattern: right_pattern,
             } = right;
             modified(
@@ -213,6 +215,17 @@ fn diff_field_definitions(
                 .to_string(),
                 left_name,
                 right_name,
+            );
+            modified(
+                changes,
+                DeckPath::NoteTypeFieldRtl {
+                    note_type_id: note_type_id.clone(),
+                    field_id: key.clone(),
+                }
+                .to_string(),
+                left_rtl,
+                right_rtl,
+                ToString::to_string,
             );
             modified(
                 changes,
@@ -961,10 +974,11 @@ fn field_definition_summary(field: &FieldDefinition) -> String {
     let FieldDefinition {
         id,
         name,
+        rtl,
         message_pattern,
     } = field;
     format!(
-        "field(id={},name={},message_pattern={message_pattern:?})",
+        "field(id={},name={},rtl={rtl},message_pattern={message_pattern:?})",
         quote(id.as_str()),
         quote(name)
     )

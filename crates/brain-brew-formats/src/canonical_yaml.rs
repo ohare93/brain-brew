@@ -257,6 +257,9 @@ pub fn to_string(deck: &CanonicalDeck) -> Result<String, CanonicalYamlError> {
                 .expect("writing to a string cannot fail");
             writeln!(out, "        name: {}", yaml_scalar(&field.name))
                 .expect("writing to a string cannot fail");
+            if field.rtl {
+                writeln!(out, "        rtl: true").expect("writing to a string cannot fail");
+            }
             if let Some(pattern) = &field.message_pattern {
                 write_list_message_pattern(&mut out, "        ", pattern);
             }
@@ -462,6 +465,10 @@ pub fn overlay_to_string(overlay: &Overlay) -> Result<String, CanonicalYamlError
                     if let Some(field) = &field_change.field {
                         writeln!(out, "        name: {}", yaml_scalar(&field.name))
                             .expect("writing to a string cannot fail");
+                        if field.rtl {
+                            writeln!(out, "        rtl: true")
+                                .expect("writing to a string cannot fail");
+                        }
                         if let Some(pattern) = &field.message_pattern {
                             write_list_message_pattern(&mut out, "        ", pattern);
                         }
@@ -613,6 +620,7 @@ fn split_field_additions_for_format(
             if field_change.intent == ChangeIntent::Add
                 && field_change.expected_base.is_none()
                 && let Some(field) = &field_change.field
+                && !field.rtl
                 && field.message_pattern.is_none()
             {
                 field_additions
@@ -1291,6 +1299,9 @@ fn write_note_type_payload(out: &mut String, indent: &str, note_type: &NoteType)
             .expect("writing to a string cannot fail");
         writeln!(out, "{indent}    name: {}", yaml_scalar(&field.name))
             .expect("writing to a string cannot fail");
+        if field.rtl {
+            writeln!(out, "{indent}    rtl: true").expect("writing to a string cannot fail");
+        }
         if let Some(pattern) = &field.message_pattern {
             write_list_message_pattern(out, &format!("{indent}    "), pattern);
         }
@@ -2431,6 +2442,7 @@ impl FieldAdditionsYaml {
                     field: Some(FieldDefinition {
                         id: field_id,
                         name,
+                        rtl: false,
                         message_pattern: None,
                     }),
                     expected_base: None,
@@ -3012,6 +3024,8 @@ struct FieldDefinitionChangeYaml {
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
+    rtl: Option<bool>,
+    #[serde(default)]
     message_pattern: Option<MessagePatternYaml>,
     #[serde(default)]
     expected_base: Option<ExpectedBaseYaml>,
@@ -3030,12 +3044,13 @@ impl FieldDefinitionChangeYaml {
             (Some(name), message_pattern) => Some(FieldDefinition {
                 id,
                 name,
+                rtl: self.rtl.unwrap_or(false),
                 message_pattern,
             }),
-            (None, None) => None,
-            (None, Some(_)) => {
+            (None, None) if self.rtl.is_none() => None,
+            (None, _) => {
                 return Err(CanonicalYamlError::InvalidFieldValue(
-                    "field-definition message_pattern requires `name` in a complete field payload"
+                    "field-definition rtl/message_pattern requires `name` in a complete field payload"
                         .to_owned(),
                 ));
             }
@@ -3536,6 +3551,7 @@ impl NoteTypeYaml {
             Ok(FieldDefinition {
                 id,
                 name: field.name,
+                rtl: field.rtl,
                 message_pattern: field
                     .message_pattern
                     .map(MessagePatternYaml::into_pattern)
@@ -3574,6 +3590,8 @@ impl NoteTypeYaml {
 #[serde(deny_unknown_fields)]
 struct FieldYaml {
     name: String,
+    #[serde(default)]
+    rtl: bool,
     #[serde(default)]
     message_pattern: Option<MessagePatternYaml>,
 }

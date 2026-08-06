@@ -78,6 +78,25 @@ fn structured_field_values_and_representation_changes_are_semantic_differences()
 }
 
 #[test]
+fn field_rtl_changes_are_reported_by_canonical_path() {
+    let left = ug_style_deck();
+    let mut right = ug_style_deck();
+    right
+        .note_types
+        .get_mut(&sid("note-type.country"))
+        .unwrap()
+        .fields[0]
+        .rtl = true;
+
+    let diff = left.semantic_diff(&right);
+
+    assert!(diff.has_change(
+        SemanticChangeKind::Modified,
+        "note_types.note-type.country.fields.field.country.rtl"
+    ));
+}
+
+#[test]
 fn added_and_removed_notes_are_reported_by_stable_id_not_position() {
     let left = ug_style_deck();
     let mut right = ug_style_deck();
@@ -120,16 +139,19 @@ fn ug_style_deck() -> CanonicalDeck {
             FieldDefinition {
                 id: sid("field.country"),
                 name: "Country".to_owned(),
+                rtl: false,
                 message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.capital"),
                 name: "Capital".to_owned(),
+                rtl: false,
                 message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.flag"),
                 name: "Flag".to_owned(),
+                rtl: false,
                 message_pattern: None,
             },
         ],

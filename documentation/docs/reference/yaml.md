@@ -113,6 +113,21 @@ notes:
 
 Accepted positions are base note field values, overlay field change `value`, `field_additions` values, and `field_fills` values. A single image emits as scalar `!image <media-stable-id>`; multiple images emit as a non-empty sequence of `!image` tagged scalars. Unknown media IDs fail verification/rendering. Raw HTML remains valid and is required for mixed text plus images, custom attributes, card templates, and styling.
 
+## Right-to-left fields
+
+Set `rtl: true` on a note-type field definition when Anki should edit and display that field right-to-left:
+
+```yaml
+fields:
+  field.country:
+    name: Country
+    rtl: true
+  field.flag:
+    name: Flag
+```
+
+Omitted `rtl` defaults to `false`, so existing sources remain unchanged. Complete field-definition changes in overlays use the same property, and CrowdAnki import/export preserves `flds[].rtl`.
+
 ## Structured field messages
 
 Note fields are usually scalar strings. For genuinely composite text that should reuse existing translations, a field may use an inline `format` with named message variables:

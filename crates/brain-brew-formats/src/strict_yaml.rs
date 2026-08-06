@@ -260,8 +260,11 @@ fn typed_scalar_is_allowed(policy: ScalarPolicy, path: &str, kind: &str) -> bool
         return true;
     }
     match policy {
-        ScalarPolicy::CanonicalDeck | ScalarPolicy::MediaMap => false,
-        ScalarPolicy::Overlay => kind == "boolean" && path == "translations.require_complete",
+        ScalarPolicy::CanonicalDeck => kind == "boolean" && path.ends_with(".rtl"),
+        ScalarPolicy::MediaMap => false,
+        ScalarPolicy::Overlay => {
+            kind == "boolean" && (path == "translations.require_complete" || path.ends_with(".rtl"))
+        }
         ScalarPolicy::Manifest => {
             kind == "boolean" && path.starts_with("languages.") && path.ends_with(".source")
         }

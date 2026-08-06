@@ -187,6 +187,7 @@ fn normalized_equivalence_oracle_mutation_matrix_observes_every_supported_json_p
         "note model name",
         "note model CSS",
         "field name",
+        "field RTL",
         "template name",
         "template question HTML",
         "template answer HTML",
@@ -220,6 +221,7 @@ fn normalized_equivalence_oracle_mutation_matrix_observes_every_supported_json_p
             "field name" => {
                 changed["note_models"][0]["flds"][1]["name"] = serde_json::json!("Changed field")
             }
+            "field RTL" => changed["note_models"][0]["flds"][1]["rtl"] = serde_json::json!(true),
             "template name" => {
                 changed["note_models"][0]["tmpls"][0]["name"] =
                     serde_json::json!("Changed template")
@@ -998,15 +1000,17 @@ fn importing_field_size_fails_closed() {
 }
 
 #[test]
-fn importing_field_rtl_fails_closed() {
+fn field_rtl_round_trips_through_canonical_model() {
     let mut deck_json = expected_crowdanki_json_value();
     deck_json["note_models"][0]["flds"][0]["rtl"] = serde_json::json!(true);
 
-    assert_import_error_contains(
-        &deck_json,
-        "field rtl",
-        &["field Country", "non-default CrowdAnki options"],
-    );
+    let imported = import_approved(&deck_json.to_string()).expect("RTL field imports");
+    let field = &imported.note_types.values().next().unwrap().fields[0];
+    assert!(field.rtl);
+
+    let exported = crowdanki::export_deck(&imported).expect("RTL field exports");
+    let exported: serde_json::Value = serde_json::from_str(&exported.deck_json).unwrap();
+    assert_eq!(exported["note_models"][0]["flds"][0]["rtl"], true);
 }
 
 #[test]
@@ -1661,16 +1665,19 @@ fn ug_style_deck() -> CanonicalDeck {
             FieldDefinition {
                 id: sid("field.country"),
                 name: "Country".to_owned(),
+                rtl: false,
                 message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.capital"),
                 name: "Capital".to_owned(),
+                rtl: false,
                 message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.flag"),
                 name: "Flag".to_owned(),
+                rtl: false,
                 message_pattern: None,
             },
         ],

@@ -620,7 +620,7 @@
           "media": [],
           "name": "Country",
           "ord": 0,
-          "rtl": false,
+          "rtl": true,
           "size": 20,
           "sticky": false
         },
@@ -629,7 +629,7 @@
           "media": [],
           "name": "Country info",
           "ord": 1,
-          "rtl": false,
+          "rtl": true,
           "size": 20,
           "sticky": false
         },
@@ -638,7 +638,7 @@
           "media": [],
           "name": "Capital",
           "ord": 2,
-          "rtl": false,
+          "rtl": true,
           "size": 20,
           "sticky": false
         },
@@ -647,7 +647,7 @@
           "media": [],
           "name": "Capital info",
           "ord": 3,
-          "rtl": false,
+          "rtl": true,
           "size": 20,
           "sticky": false
         },
@@ -656,7 +656,7 @@
           "media": [],
           "name": "Capital hint",
           "ord": 4,
-          "rtl": false,
+          "rtl": true,
           "size": 20,
           "sticky": false
         },
@@ -674,7 +674,7 @@
           "media": [],
           "name": "Flag similarity",
           "ord": 6,
-          "rtl": false,
+          "rtl": true,
           "size": 20,
           "sticky": false
         },

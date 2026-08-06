@@ -6,6 +6,7 @@ The next preview is `1.0.0-alpha.6`; it is pending the documented release gates 
 
 - CSV translation descriptors now own a validated subset of resolved note-type fields, allowing one shared translation source across Standard and extension-added fields while ordinary CSV note sources remain complete.
 - Typed CSV image fields may split one cell into an ordered structured-image sequence with an exact descriptor delimiter.
+- Canonical field definitions now preserve CrowdAnki right-to-left direction through YAML, overlays, composition, fingerprints, import, and export; omitted `rtl` remains `false`.
 
 ## v1.0.0-alpha.5
 

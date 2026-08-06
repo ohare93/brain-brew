@@ -14,6 +14,28 @@ fn emits_canonical_deck_yaml_in_declared_note_type_order() {
 }
 
 #[test]
+fn field_rtl_defaults_false_and_emits_only_when_true() {
+    let source = canonical_yaml::to_string(&ug_style_deck()).expect("deck emits");
+    assert!(!source.contains("rtl:"));
+
+    let mut deck = canonical_yaml::from_str(&source).expect("omitted RTL parses");
+    let field = &mut deck
+        .note_types
+        .get_mut(&sid("note-type.country"))
+        .unwrap()
+        .fields[0];
+    assert!(!field.rtl);
+    field.rtl = true;
+
+    let source = canonical_yaml::to_string(&deck).expect("RTL deck emits");
+    assert!(source.contains("        rtl: true\n"));
+    assert!(
+        canonical_yaml::from_str(&source).unwrap().note_types[&sid("note-type.country")].fields[0]
+            .rtl
+    );
+}
+
+#[test]
 fn emits_card_templates_in_declared_order_instead_of_stable_id_order() {
     let mut deck = ug_style_deck();
     deck.note_types
@@ -1385,16 +1407,19 @@ fn ug_style_deck() -> CanonicalDeck {
             FieldDefinition {
                 id: sid("field.country"),
                 name: "Country".to_owned(),
+                rtl: false,
                 message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.capital"),
                 name: "Capital".to_owned(),
+                rtl: false,
                 message_pattern: None,
             },
             FieldDefinition {
                 id: sid("field.flag"),
                 name: "Flag".to_owned(),
+                rtl: false,
                 message_pattern: None,
             },
         ],

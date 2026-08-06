@@ -559,6 +559,10 @@ fn crowdanki_source_path(
         | DeckPath::NoteTypeFieldName {
             note_type_id,
             field_id,
+        }
+        | DeckPath::NoteTypeFieldRtl {
+            note_type_id,
+            field_id,
         } => {
             let (model, field) = note_field_index(actual, source, &note_type_id, &field_id)?;
             Some(format!("$.note_models[{model}].flds[{field}]"))
@@ -1458,7 +1462,7 @@ fn export_note_model(
                 media: Vec::new(),
                 name: field.name.clone(),
                 ord,
-                rtl: false,
+                rtl: field.rtl,
                 size: 20,
                 sticky: false,
             })
@@ -2687,6 +2691,7 @@ impl CrowdAnkiNoteModelJson {
                 Ok(FieldDefinition {
                     id,
                     name: field.name,
+                    rtl: field.rtl,
                     message_pattern: None,
                 })
             })
@@ -2740,7 +2745,6 @@ impl CrowdAnkiFieldJson {
         if self.font != "Arial"
             || !self.media.is_empty()
             || self.ord != expected_ord
-            || self.rtl
             || self.size != 20
             || self.sticky
         {
