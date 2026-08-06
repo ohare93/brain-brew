@@ -820,6 +820,14 @@ fn inline_identical_and_disjoint_entries_merge_but_conflicts_are_transactional()
     let translations = document.resolved_overlay().translations.as_ref().unwrap();
     assert_eq!(translations.direct["Hello"], "Hallo");
     assert_eq!(translations.variables["label"]["Label"], "Beschriftung");
+    let csv_owner = document
+        .csv_translation_provenance()
+        .units()
+        .find(|unit| unit.canonical_path() == "notes.note.one.fields.field.front")
+        .expect("identical inline value remains CSV-owned");
+    assert_eq!(csv_owner.category().as_str(), "direct");
+    assert_eq!(csv_owner.source(), "Hello");
+    assert_eq!(csv_owner.target(), "Hallo");
 
     let conflict = overlay_source("  direct:\n    Hello: Servus\n");
     let error = parse(&source_deck, &conflict, csv).expect_err("conflict fails atomically");

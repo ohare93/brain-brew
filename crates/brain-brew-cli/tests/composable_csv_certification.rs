@@ -456,7 +456,12 @@ fn certify_lock_invalidation(package: &Path) {
     let consumer = TempDir::new().unwrap();
     fs::write(
         consumer.path().join("brainbrew.yaml"),
-        "package:\n  id: fixture.consumer\n  version: 1.0.0\n  base_package: fixture.composable-csv-authoring\n  compatible_base_versions:\n    - '>=1.0.0, <2.0.0'\n  depends_on:\n    - fixture.composable-csv-authoring@1.0.0\ntargets:\n  de:\n    extends: fixture.composable-csv-authoring:de-experimental\n    overlays: []\n",
+        "package:\n  id: fixture.consumer\n  version: 1.0.0\n  base_package: fixture.composable-csv-authoring\n  compatible_base_versions:\n    - '>=1.0.0, <2.0.0'\n  depends_on:\n    - fixture.composable-csv-authoring@1.0.0\nbase: deck.yaml\noverlays: {}\ntargets:\n  de:\n    extends: fixture.composable-csv-authoring:de-experimental\n    overlays: []\n",
+    )
+    .unwrap();
+    fs::write(
+        consumer.path().join("deck.yaml"),
+        "deck:\n  id: deck.unused\n  name: Unused\n  description: Unused.\n  adapter_ids: {}\nnote_types:\n  note-type.unused:\n    name: Unused\n    field_order:\n      - field.front\n    fields:\n      field.front:\n        name: Front\n    card_template_order: []\n    card_templates: {}\n    styling: ''\n    adapter_ids: {}\nnotes: {}\nmedia: {}\ntombstones: []\n",
     )
     .unwrap();
     success(
@@ -479,15 +484,99 @@ fn certify_lock_invalidation(package: &Path) {
         &["lock", "verify", "--lock", "brainbrew.lock"],
     );
 
+    let package_output = consumer.path().join("package-de.yaml");
+    let consumer_output = consumer.path().join("consumer-de.yaml");
+    success(
+        package,
+        &[
+            "compose",
+            "--manifest",
+            "brainbrew-all-csv.yaml",
+            "--target",
+            "de-experimental",
+            "--out",
+            package_output.to_str().unwrap(),
+        ],
+    );
+    success(
+        consumer.path(),
+        &[
+            "compose",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "de",
+            "--out",
+            consumer_output.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(
+        fs::read(&consumer_output).unwrap(),
+        fs::read(&package_output).unwrap()
+    );
+    success(
+        consumer.path(),
+        &["validate", "--manifest", "brainbrew.yaml", "--target", "de"],
+    );
+    success(
+        consumer.path(),
+        &[
+            "translations",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "de",
+            "--json",
+        ],
+    );
+
     let csv = package.join("sources/data/main.csv");
     let original = fs::read(&csv).unwrap();
-    fs::write(&csv, [original.as_slice(), b"\n"].concat()).unwrap();
+    let mutated = String::from_utf8(original.clone())
+        .unwrap()
+        .replace(",CE,", ",CX,");
+    assert_ne!(mutated.as_bytes(), original);
+    fs::write(&csv, mutated).unwrap();
     let stale = run(
         consumer.path(),
         &["lock", "verify", "--lock", "brainbrew.lock"],
     );
     assert!(!stale.status.success());
     assert!(stderr(&stale).contains("nar_hash mismatch"));
+    let live_output = consumer.path().join("live-mutated-de.yaml");
+    success(
+        package,
+        &[
+            "compose",
+            "--manifest",
+            "brainbrew-all-csv.yaml",
+            "--target",
+            "de-experimental",
+            "--out",
+            live_output.to_str().unwrap(),
+        ],
+    );
+    assert_ne!(
+        fs::read(&live_output).unwrap(),
+        fs::read(&package_output).unwrap()
+    );
+    let stale_consumer_output = consumer.path().join("stale-consumer-de.yaml");
+    success(
+        consumer.path(),
+        &[
+            "compose",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "de",
+            "--out",
+            stale_consumer_output.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(
+        fs::read(&stale_consumer_output).unwrap(),
+        fs::read(&package_output).unwrap()
+    );
     fs::write(csv, original).unwrap();
     success(
         consumer.path(),

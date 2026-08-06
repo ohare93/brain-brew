@@ -1543,9 +1543,13 @@ fn workbench_csv_units_are_read_only_per_unit_and_refresh_from_all_csv_inputs() 
             }
         ]
     });
-    let (status, _) = post_json_error(&server.url("/api/workbench/apply"), mixed);
-    assert_eq!(status, 403);
-    assert_eq!(fs::read(&overlay_path).unwrap(), original_overlay);
+    for endpoint in ["/api/workbench/apply-preview", "/api/workbench/apply"] {
+        let (status, body) = post_json_error(&server.url(endpoint), mixed.clone());
+        assert_eq!(status, 403);
+        let error: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(error["error"]["code"], "csv_source_read_only");
+        assert_eq!(fs::read(&overlay_path).unwrap(), original_overlay);
+    }
 
     let native = serde_json::json!({
         "language": "de",
