@@ -1,0 +1,6 @@
+media.flag.france:
+  path: flags/france.svg
+  sha256: 7d60456a97e22d91478ee30e94697f5d389595ad89124dc84e654cbd7618bc16
+media.map.france:
+  path: maps/france.svg
+  sha256: 627e5a91f53d61958733fcfc6a4903a80d68a3ab9fb91eb80d0d2a12a7a65bd4

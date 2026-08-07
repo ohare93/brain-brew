@@ -1,0 +1,659 @@
+deck:
+  id: deck.ultimate-geography-fixture
+  name: Ultimate Geography Fixture
+  description: Milestone 1 Ultimate Geography-style fixture.
+  adapter_ids:
+    crowdanki:uuid: 11111111-1111-1111-1111-111111111111
+note_types:
+  note-type.country:
+    name: Country
+    field_order:
+      - field.country
+      - field.capital
+      - field.country-es
+      - field.capital-es
+      - field.country-sv
+      - field.capital-sv
+      - field.capital-hint
+      - field.flag
+      - field.map
+    fields:
+      field.country:
+        name: Country
+      field.capital:
+        name: Capital
+      field.country-es:
+        name: Country ES
+      field.capital-es:
+        name: Capital ES
+      field.country-sv:
+        name: Country SV
+      field.capital-sv:
+        name: Capital SV
+      field.capital-hint:
+        name: Capital hint
+      field.flag:
+        name: Flag
+      field.map:
+        name: Map
+    card_template_order:
+      - template.country-capital
+      - template.capital-country
+      - template.country-flag
+      - template.flag-country
+      - template.country-map-extended
+      - template.map-country-extended
+    card_templates:
+      template.country-capital:
+        name: Country - Capital
+        question_format: '{{Country}}'
+        answer_format: '{{FrontSide}}<hr id=answer>{{Capital}}'
+        adapter_ids: {}
+      template.capital-country:
+        name: Capital - Country
+        question_format: '{{Capital}}'
+        answer_format: '{{FrontSide}}<hr id=answer>{{Country}}'
+        adapter_ids: {}
+      template.country-flag:
+        name: Country - Flag
+        question_format: '{{Country}}'
+        answer_format: '{{FrontSide}}<hr id=answer>{{Flag}}'
+        adapter_ids: {}
+      template.flag-country:
+        name: Flag - Country
+        question_format: '{{Flag}}'
+        answer_format: '{{FrontSide}}<hr id=answer>{{Country}}'
+        adapter_ids: {}
+      template.country-map-extended:
+        name: 'Country - Map [Extended]'
+        question_format: '{{Country}}'
+        answer_format: '{{FrontSide}}<hr id=answer>{{Map}}'
+        adapter_ids: {}
+      template.map-country-extended:
+        name: 'Map - Country [Extended]'
+        question_format: '{{Map}}'
+        answer_format: '{{FrontSide}}<hr id=answer>{{Country}}'
+        adapter_ids: {}
+    styling: |
+      .card { font-family: sans-serif; }
+      .extended { color: #2255aa; }
+    adapter_ids:
+      crowdanki:uuid: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+notes:
+  note.australia:
+    note_type_id: note-type.country
+    fields:
+      field.country: Australia
+      field.capital: Canberra
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/au.png">'
+      field.map: '<img src="maps/au.svg">'
+    tags:
+      - Oceania
+      - Pacific
+    adapter_ids:
+      crowdanki:guid: ug-australia-guid
+  note.austria:
+    note_type_id: note-type.country
+    fields:
+      field.country: Austria
+      field.capital: Vienna
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/at.png">'
+      field.map: '<img src="maps/at.svg">'
+    tags:
+      - Central
+      - Europe
+    adapter_ids:
+      crowdanki:guid: ug-austria-guid
+  note.belgium:
+    note_type_id: note-type.country
+    fields:
+      field.country: Belgium
+      field.capital: Brussels
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/be.png">'
+      field.map: '<img src="maps/be.svg">'
+    tags:
+      - Europe
+      - Western
+    adapter_ids:
+      crowdanki:guid: ug-belgium-guid
+  note.canada:
+    note_type_id: note-type.country
+    fields:
+      field.country: Canada
+      field.capital: Ottawa
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/ca.png">'
+      field.map: '<img src="maps/ca.svg">'
+    tags:
+      - Americas
+      - North America
+    adapter_ids:
+      crowdanki:guid: ug-canada-guid
+  note.czechia:
+    note_type_id: note-type.country
+    fields:
+      field.country: Czechia
+      field.capital: Prague
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/cz.png">'
+      field.map: '<img src="maps/cz.svg">'
+    tags:
+      - Central
+      - Europe
+    adapter_ids:
+      crowdanki:guid: ug-czechia-guid
+  note.denmark:
+    note_type_id: note-type.country
+    fields:
+      field.country: Denmark
+      field.capital: Copenhagen
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/dk.png">'
+      field.map: '<img src="maps/dk.svg">'
+    tags:
+      - Europe
+      - Nordic
+    adapter_ids:
+      crowdanki:guid: ug-denmark-guid
+  note.estonia:
+    note_type_id: note-type.country
+    fields:
+      field.country: Estonia
+      field.capital: Tallinn
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/ee.png">'
+      field.map: '<img src="maps/ee.svg">'
+    tags:
+      - Baltic
+      - Europe
+    adapter_ids:
+      crowdanki:guid: ug-estonia-guid
+  note.finland:
+    note_type_id: note-type.country
+    fields:
+      field.country: Finland
+      field.capital: Helsinki
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/fi.png">'
+      field.map: '<img src="maps/fi.svg">'
+    tags:
+      - Europe
+      - Nordic
+    adapter_ids:
+      crowdanki:guid: ug-finland-guid
+  note.france:
+    note_type_id: note-type.country
+    fields:
+      field.country: France
+      field.capital: Paris
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/fr.png">'
+      field.map: '<img src="maps/fr.svg">'
+    tags:
+      - Europe
+      - Western
+    adapter_ids:
+      crowdanki:guid: ug-france-guid
+  note.germany:
+    note_type_id: note-type.country
+    fields:
+      field.country: Germany
+      field.capital: Berlin
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/de.png">'
+      field.map: '<img src="maps/de.svg">'
+    tags:
+      - Central
+      - Europe
+    adapter_ids:
+      crowdanki:guid: ug-germany-guid
+  note.iceland:
+    note_type_id: note-type.country
+    fields:
+      field.country: Iceland
+      field.capital: Reykjavik
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/is.png">'
+      field.map: '<img src="maps/is.svg">'
+    tags:
+      - Europe
+      - Nordic
+    adapter_ids:
+      crowdanki:guid: ug-iceland-guid
+  note.ireland:
+    note_type_id: note-type.country
+    fields:
+      field.country: Ireland
+      field.capital: Dublin
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/ie.png">'
+      field.map: '<img src="maps/ie.svg">'
+    tags:
+      - Europe
+      - Western
+    adapter_ids:
+      crowdanki:guid: ug-ireland-guid
+  note.italy:
+    note_type_id: note-type.country
+    fields:
+      field.country: Italy
+      field.capital: Rome
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/it.png">'
+      field.map: '<img src="maps/it.svg">'
+    tags:
+      - Europe
+      - Southern
+    adapter_ids:
+      crowdanki:guid: ug-italy-guid
+  note.japan:
+    note_type_id: note-type.country
+    fields:
+      field.country: Japan
+      field.capital: Tokyo
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/jp.png">'
+      field.map: '<img src="maps/jp.svg">'
+    tags:
+      - Asia
+      - East Asia
+    adapter_ids:
+      crowdanki:guid: ug-japan-guid
+  note.latvia:
+    note_type_id: note-type.country
+    fields:
+      field.country: Latvia
+      field.capital: Riga
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/lv.png">'
+      field.map: '<img src="maps/lv.svg">'
+    tags:
+      - Baltic
+      - Europe
+    adapter_ids:
+      crowdanki:guid: ug-latvia-guid
+  note.lithuania:
+    note_type_id: note-type.country
+    fields:
+      field.country: Lithuania
+      field.capital: Vilnius
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/lt.png">'
+      field.map: '<img src="maps/lt.svg">'
+    tags:
+      - Baltic
+      - Europe
+    adapter_ids:
+      crowdanki:guid: ug-lithuania-guid
+  note.mexico:
+    note_type_id: note-type.country
+    fields:
+      field.country: Mexico
+      field.capital: Mexico City
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/mx.png">'
+      field.map: '<img src="maps/mx.svg">'
+    tags:
+      - Americas
+      - North America
+    adapter_ids:
+      crowdanki:guid: ug-mexico-guid
+  note.netherlands:
+    note_type_id: note-type.country
+    fields:
+      field.country: Netherlands
+      field.capital: Amsterdam
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/nl.png">'
+      field.map: '<img src="maps/nl.svg">'
+    tags:
+      - Europe
+      - Western
+    adapter_ids:
+      crowdanki:guid: ug-netherlands-guid
+  note.norway:
+    note_type_id: note-type.country
+    fields:
+      field.country: Norway
+      field.capital: Oslo
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/no.png">'
+      field.map: '<img src="maps/no.svg">'
+    tags:
+      - Europe
+      - Nordic
+    adapter_ids:
+      crowdanki:guid: ug-norway-guid
+  note.poland:
+    note_type_id: note-type.country
+    fields:
+      field.country: Poland
+      field.capital: Warsaw
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/pl.png">'
+      field.map: '<img src="maps/pl.svg">'
+    tags:
+      - Central
+      - Europe
+    adapter_ids:
+      crowdanki:guid: ug-poland-guid
+  note.portugal:
+    note_type_id: note-type.country
+    fields:
+      field.country: Portugal
+      field.capital: Lisbon
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/pt.png">'
+      field.map: '<img src="maps/pt.svg">'
+    tags:
+      - Europe
+      - Southern
+    adapter_ids:
+      crowdanki:guid: ug-portugal-guid
+  note.spain:
+    note_type_id: note-type.country
+    fields:
+      field.country: Spain
+      field.capital: Madrid
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/es.png">'
+      field.map: '<img src="maps/es.svg">'
+    tags:
+      - Europe
+      - Southern
+    adapter_ids:
+      crowdanki:guid: ug-spain-guid
+  note.sweden:
+    note_type_id: note-type.country
+    fields:
+      field.country: Sweden
+      field.capital: Stockholm
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/se.png">'
+      field.map: '<img src="maps/se.svg">'
+    tags:
+      - Europe
+      - Nordic
+    adapter_ids:
+      crowdanki:guid: ug-sweden-guid
+  note.switzerland:
+    note_type_id: note-type.country
+    fields:
+      field.country: Switzerland
+      field.capital: Bern
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/ch.png">'
+      field.map: '<img src="maps/ch.svg">'
+    tags:
+      - Central
+      - Europe
+    adapter_ids:
+      crowdanki:guid: ug-switzerland-guid
+  note.united-kingdom:
+    note_type_id: note-type.country
+    fields:
+      field.country: United Kingdom
+      field.capital: London
+      field.country-es: ''
+      field.capital-es: ''
+      field.country-sv: ''
+      field.capital-sv: ''
+      field.capital-hint: ''
+      field.flag: '<img src="flags/gb.png">'
+      field.map: '<img src="maps/gb.svg">'
+    tags:
+      - Europe
+      - Western
+    adapter_ids:
+      crowdanki:guid: ug-united-kingdom-guid
+media:
+  media.flags-at-png:
+    path: flags/at.png
+    sha256: ''
+  media.flags-au-png:
+    path: flags/au.png
+    sha256: ''
+  media.flags-be-png:
+    path: flags/be.png
+    sha256: ''
+  media.flags-ca-png:
+    path: flags/ca.png
+    sha256: ''
+  media.flags-ch-png:
+    path: flags/ch.png
+    sha256: ''
+  media.flags-cz-png:
+    path: flags/cz.png
+    sha256: ''
+  media.flags-de-png:
+    path: flags/de.png
+    sha256: ''
+  media.flags-dk-png:
+    path: flags/dk.png
+    sha256: ''
+  media.flags-ee-png:
+    path: flags/ee.png
+    sha256: ''
+  media.flags-es-png:
+    path: flags/es.png
+    sha256: ''
+  media.flags-fi-png:
+    path: flags/fi.png
+    sha256: ''
+  media.flags-fr-png:
+    path: flags/fr.png
+    sha256: ''
+  media.flags-gb-png:
+    path: flags/gb.png
+    sha256: ''
+  media.flags-ie-png:
+    path: flags/ie.png
+    sha256: ''
+  media.flags-is-png:
+    path: flags/is.png
+    sha256: ''
+  media.flags-it-png:
+    path: flags/it.png
+    sha256: ''
+  media.flags-jp-png:
+    path: flags/jp.png
+    sha256: ''
+  media.flags-lt-png:
+    path: flags/lt.png
+    sha256: ''
+  media.flags-lv-png:
+    path: flags/lv.png
+    sha256: ''
+  media.flags-mx-png:
+    path: flags/mx.png
+    sha256: ''
+  media.flags-nl-png:
+    path: flags/nl.png
+    sha256: ''
+  media.flags-no-png:
+    path: flags/no.png
+    sha256: ''
+  media.flags-pl-png:
+    path: flags/pl.png
+    sha256: ''
+  media.flags-pt-png:
+    path: flags/pt.png
+    sha256: ''
+  media.flags-se-png:
+    path: flags/se.png
+    sha256: ''
+  media.maps-at-svg:
+    path: maps/at.svg
+    sha256: ''
+  media.maps-au-svg:
+    path: maps/au.svg
+    sha256: ''
+  media.maps-be-svg:
+    path: maps/be.svg
+    sha256: ''
+  media.maps-ca-svg:
+    path: maps/ca.svg
+    sha256: ''
+  media.maps-ch-svg:
+    path: maps/ch.svg
+    sha256: ''
+  media.maps-cz-svg:
+    path: maps/cz.svg
+    sha256: ''
+  media.maps-de-svg:
+    path: maps/de.svg
+    sha256: ''
+  media.maps-dk-svg:
+    path: maps/dk.svg
+    sha256: ''
+  media.maps-ee-svg:
+    path: maps/ee.svg
+    sha256: ''
+  media.maps-es-svg:
+    path: maps/es.svg
+    sha256: ''
+  media.maps-fi-svg:
+    path: maps/fi.svg
+    sha256: ''
+  media.maps-fr-svg:
+    path: maps/fr.svg
+    sha256: ''
+  media.maps-gb-svg:
+    path: maps/gb.svg
+    sha256: ''
+  media.maps-ie-svg:
+    path: maps/ie.svg
+    sha256: ''
+  media.maps-is-svg:
+    path: maps/is.svg
+    sha256: ''
+  media.maps-it-svg:
+    path: maps/it.svg
+    sha256: ''
+  media.maps-jp-svg:
+    path: maps/jp.svg
+    sha256: ''
+  media.maps-lt-svg:
+    path: maps/lt.svg
+    sha256: ''
+  media.maps-lv-svg:
+    path: maps/lv.svg
+    sha256: ''
+  media.maps-mx-svg:
+    path: maps/mx.svg
+    sha256: ''
+  media.maps-nl-svg:
+    path: maps/nl.svg
+    sha256: ''
+  media.maps-no-svg:
+    path: maps/no.svg
+    sha256: ''
+  media.maps-pl-svg:
+    path: maps/pl.svg
+    sha256: ''
+  media.maps-pt-svg:
+    path: maps/pt.svg
+    sha256: ''
+  media.maps-se-svg:
+    path: maps/se.svg
+    sha256: ''
+tombstones: []

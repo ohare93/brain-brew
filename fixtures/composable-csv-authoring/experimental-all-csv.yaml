@@ -1,0 +1,10 @@
+id: overlay.extension.experimental
+kind: extension
+field_additions:
+  note-type.country:
+    fields:
+      field.region-code: Region code
+    values:
+      from_csv:
+        - descriptor: sources/regions.yaml
+          parameters: {}

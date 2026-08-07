@@ -1,0 +1,75 @@
+package:
+  id: fixture.composable-csv-authoring
+  version: 1.0.0
+base: deck-migrated.yaml
+overlays:
+  overlay.extension.experimental:
+    file: experimental-migrated.yaml
+    kind: extension
+  overlay.translation.de:
+    file: translation-de-migrated.yaml
+    kind: translation
+  overlay.translation.es:
+    file: translation-es-migrated.yaml
+    kind: translation
+  overlay.translation.experimental.de:
+    file: translation-experimental-de.yaml
+    kind: translation
+targets:
+  de-experimental:
+    overlays:
+      - overlay.translation.de
+      - overlay.extension.experimental
+      - overlay.translation.experimental.de
+  de-standard:
+    overlays:
+      - overlay.translation.de
+  en-experimental:
+    overlays:
+      - overlay.extension.experimental
+  en-standard:
+    overlays: []
+  es-experimental:
+    overlays:
+      - overlay.translation.es
+      - overlay.extension.experimental
+  es-standard:
+    overlays:
+      - overlay.translation.es
+languages:
+  de:
+    display_name: German
+    translation_overlays:
+      base: overlay.translation.de
+      experimental: overlay.translation.experimental.de
+    primary_target: experimental
+    targets:
+      experimental: de-experimental
+      standard: de-standard
+  en:
+    display_name: English
+    source: true
+    primary_target: experimental
+    targets:
+      experimental: en-experimental
+      standard: en-standard
+  es:
+    display_name: Spanish
+    translation_overlays:
+      base: overlay.translation.es
+    primary_target: experimental
+    targets:
+      experimental: es-experimental
+      standard: es-standard
+translation_profile:
+  structural_fields:
+    - field.flag
+    - field.map
+  metadata_paths:
+    - 'deck.*'
+    - 'note_types.*'
+    - 'notes.*.tags.*'
+  metadata_exclude_paths:
+    - 'deck.adapter_ids.*'
+    - 'note_types.*.adapter_ids.*'
+    - 'notes.*.adapter_ids.*'

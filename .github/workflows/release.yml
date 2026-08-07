@@ -1,0 +1,296 @@
+# cargo-dist generated the original release graph. This checked-in graph keeps its
+# artifact matrix but replaces generated mutable installers with reviewed local
+# tooling; no cargo-dist hosting command may run before quality-gates.
+name: Release
+
+on:
+  push:
+    tags:
+      - '**[0-9]+.[0-9]+.[0-9]+*'
+
+permissions:
+  contents: read
+
+# GitHub's keyless OIDC subject format is the workflow path plus ref. Every
+# bundle verification below requires this release workflow and a tag ref, not
+# merely any workflow in this repository.
+env:
+  SIGSTORE_CERTIFICATE_IDENTITY_REGEX: '^https://github\.com/jeprecated/brain-brew/\.github/workflows/release\.yml@refs/tags/'
+
+jobs:
+  quality-gates:
+    name: release quality and artifact gates
+    uses: ./.github/workflows/reusable-quality.yml
+    with:
+      target_sha: ${{ github.sha }}
+      # This remains intentionally blocked until the separate live Ultimate
+      # Geography consumer workflow supplies HTTPS evidence and its checksum.
+      require_representative_consumer: true
+      representative_consumer_evidence_url: ${{ vars.REPRESENTATIVE_CONSUMER_EVIDENCE_URL }}
+      representative_consumer_evidence_sha256: ${{ vars.REPRESENTATIVE_CONSUMER_EVIDENCE_SHA256 }}
+
+  plan:
+    needs:
+      - quality-gates
+    runs-on: ubuntu-22.04
+    outputs:
+      manifest: ${{ steps.plan.outputs.manifest }}
+      tag: ${{ github.ref_name }}
+      tag-flag: ${{ format('--tag={0}', github.ref_name) }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6; documentation/docs/reference/release-security.md
+        with:
+          ref: ${{ needs.quality-gates.outputs.target-sha }}
+          persist-credentials: false
+          submodules: recursive
+      - name: Verify the immutable gate SHA is the annotated or lightweight tag target
+        env:
+          TARGET_SHA: ${{ needs.quality-gates.outputs.target-sha }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse "refs/tags/$TAG^{}")" = "$TARGET_SHA"
+      - name: Install checksum-verified cargo-dist
+        run: scripts/install_cargo_dist.sh "$HOME/.cargo/bin"
+      - id: plan
+        run: |
+          # The release workflow is intentionally post-generated to add
+          # fail-closed gates, so cargo-dist must not replace it at runtime.
+          dist plan --allow-dirty --output-format=json > plan-dist-manifest.json
+          echo "manifest=$(jq -c '.' plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
+      - name: Upload dist plan
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6; documentation/docs/reference/release-security.md
+        with:
+          name: artifacts-plan-dist-manifest
+          path: plan-dist-manifest.json
+
+  build-local-artifacts:
+    name: build-local-artifacts (${{ join(matrix.targets, ', ') }})
+    needs:
+      - quality-gates
+      - plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan.outputs.manifest).ci.github.artifacts_matrix }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      BUILD_MANIFEST_NAME: target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
+      METADATA_DIR: target/distrib/release-metadata-${{ join(matrix.targets, '_') }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6; documentation/docs/reference/release-security.md
+        with:
+          ref: ${{ needs.quality-gates.outputs.target-sha }}
+          persist-credentials: false
+          submodules: recursive
+      - name: Install checksum-verified cargo-dist
+        run: scripts/install_cargo_dist.sh "$HOME/.cargo/bin"
+      - name: Install pinned keyless signing client
+        uses: sigstore/cosign-installer@d7543c93d881b35a8faa02e8e3605f69b7a1ce62 # v3.10.0; documentation/docs/reference/release-security.md
+        with:
+          cosign-release: v2.5.3
+      - name: Fetch plan
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7; documentation/docs/reference/release-security.md
+        with:
+          pattern: artifacts-*
+          path: target/distrib/
+          merge-multiple: true
+      - id: cargo-dist
+        name: Build artifacts
+        shell: bash
+        run: |
+          dist build --allow-dirty ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
+          echo 'paths<<EOF' >> "$GITHUB_OUTPUT"
+          dist print-upload-files-from-manifest --manifest dist-manifest.json >> "$GITHUB_OUTPUT"
+          echo EOF >> "$GITHUB_OUTPUT"
+          cp dist-manifest.json "$BUILD_MANIFEST_NAME"
+          mapfile -t upload_files < <(dist print-upload-files-from-manifest --manifest dist-manifest.json)
+          metadata_args=()
+          subject_count=0
+          echo 'artifact-subjects<<EOF' >> "$GITHUB_OUTPUT"
+          for artifact in "${upload_files[@]}"; do
+            case "$artifact" in
+              target/distrib/*) ;;
+              *) echo "refusing non-distribution artifact subject: $artifact" >&2; exit 1 ;;
+            esac
+            test -f "$artifact"
+            metadata_args+=(--artifact "$artifact")
+            # cargo-dist checksum files and our generated metadata are evidence,
+            # not shipped artifact subjects. All remaining upload files are the
+            # archive, binary, or installer bytes release consumers receive.
+            case "$artifact" in *.sha256|*.sha256sum|*.sbom.cdx.json|*.provenance.json|*.sigstore.json|*/SHA256SUMS) continue ;; esac
+            printf '%s\n' "$artifact" >> "$GITHUB_OUTPUT"
+            subject_count=$((subject_count + 1))
+          done
+          echo EOF >> "$GITHUB_OUTPUT"
+          test "$subject_count" -gt 0
+          python3 scripts/generate_release_metadata.py "${metadata_args[@]}" --output "$METADATA_DIR" --source-sha '${{ needs.quality-gates.outputs.target-sha }}' --workflow-run '${{ github.run_id }}'
+          python3 scripts/generate_release_metadata.py "${metadata_args[@]}" --output "$METADATA_DIR" --source-sha '${{ needs.quality-gates.outputs.target-sha }}' --workflow-run '${{ github.run_id }}' --verify
+          cosign sign-blob --yes --bundle "$METADATA_DIR/SHA256SUMS.sigstore.json" "$METADATA_DIR/SHA256SUMS"
+          cosign verify-blob --offline --bundle "$METADATA_DIR/SHA256SUMS.sigstore.json" --certificate-identity-regexp "$SIGSTORE_CERTIFICATE_IDENTITY_REGEX" --certificate-oidc-issuer https://token.actions.githubusercontent.com "$METADATA_DIR/SHA256SUMS"
+      - name: Keylessly attest produced shipped artifacts
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3; documentation/docs/reference/release-security.md
+        with:
+          subject-path: ${{ steps.cargo-dist.outputs.artifact-subjects }}
+      - name: Upload built artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6; documentation/docs/reference/release-security.md
+        with:
+          name: artifacts-build-local-${{ join(matrix.targets, '_') }}
+          path: |
+            ${{ steps.cargo-dist.outputs.paths }}
+            ${{ env.BUILD_MANIFEST_NAME }}
+            ${{ env.METADATA_DIR }}
+
+  build-global-artifacts:
+    needs:
+      - quality-gates
+      - plan
+      - build-local-artifacts
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      BUILD_MANIFEST_NAME: target/distrib/global-dist-manifest.json
+      METADATA_DIR: target/distrib/release-metadata-global
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6; documentation/docs/reference/release-security.md
+        with:
+          ref: ${{ needs.quality-gates.outputs.target-sha }}
+          persist-credentials: false
+          submodules: recursive
+      - name: Install checksum-verified cargo-dist
+        run: scripts/install_cargo_dist.sh "$HOME/.cargo/bin"
+      - name: Install pinned keyless signing client
+        uses: sigstore/cosign-installer@d7543c93d881b35a8faa02e8e3605f69b7a1ce62 # v3.10.0; documentation/docs/reference/release-security.md
+        with:
+          cosign-release: v2.5.3
+      - name: Fetch local artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7; documentation/docs/reference/release-security.md
+        with:
+          pattern: artifacts-*
+          path: target/distrib/
+          merge-multiple: true
+      - id: cargo-dist
+        shell: bash
+        run: |
+          dist build --allow-dirty ${{ needs.plan.outputs.tag-flag }} --output-format=json --artifacts=global > dist-manifest.json
+          echo 'paths<<EOF' >> "$GITHUB_OUTPUT"
+          jq --raw-output '.upload_files[]' dist-manifest.json >> "$GITHUB_OUTPUT"
+          echo EOF >> "$GITHUB_OUTPUT"
+          cp dist-manifest.json "$BUILD_MANIFEST_NAME"
+          mapfile -t upload_files < <(jq --raw-output '.upload_files[]' dist-manifest.json)
+          metadata_args=()
+          subject_count=0
+          echo 'artifact-subjects<<EOF' >> "$GITHUB_OUTPUT"
+          for artifact in "${upload_files[@]}"; do
+            case "$artifact" in
+              target/distrib/*) ;;
+              *) echo "refusing non-distribution artifact subject: $artifact" >&2; exit 1 ;;
+            esac
+            test -f "$artifact"
+            metadata_args+=(--artifact "$artifact")
+            case "$artifact" in *.sha256|*.sha256sum|*.sbom.cdx.json|*.provenance.json|*.sigstore.json|*/SHA256SUMS) continue ;; esac
+            printf '%s\n' "$artifact" >> "$GITHUB_OUTPUT"
+            subject_count=$((subject_count + 1))
+          done
+          echo EOF >> "$GITHUB_OUTPUT"
+          test "$subject_count" -gt 0
+          python3 scripts/generate_release_metadata.py "${metadata_args[@]}" --output "$METADATA_DIR" --source-sha '${{ needs.quality-gates.outputs.target-sha }}' --workflow-run '${{ github.run_id }}'
+          python3 scripts/generate_release_metadata.py "${metadata_args[@]}" --output "$METADATA_DIR" --source-sha '${{ needs.quality-gates.outputs.target-sha }}' --workflow-run '${{ github.run_id }}' --verify
+          cosign sign-blob --yes --bundle "$METADATA_DIR/SHA256SUMS.sigstore.json" "$METADATA_DIR/SHA256SUMS"
+          cosign verify-blob --offline --bundle "$METADATA_DIR/SHA256SUMS.sigstore.json" --certificate-identity-regexp "$SIGSTORE_CERTIFICATE_IDENTITY_REGEX" --certificate-oidc-issuer https://token.actions.githubusercontent.com "$METADATA_DIR/SHA256SUMS"
+      - name: Keylessly attest produced shipped artifacts
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3; documentation/docs/reference/release-security.md
+        with:
+          subject-path: ${{ steps.cargo-dist.outputs.artifact-subjects }}
+      - name: Upload built artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6; documentation/docs/reference/release-security.md
+        with:
+          name: artifacts-build-global
+          path: |
+            ${{ steps.cargo-dist.outputs.paths }}
+            ${{ env.BUILD_MANIFEST_NAME }}
+            ${{ env.METADATA_DIR }}
+
+  host:
+    # Default GitHub Actions dependency semantics skip this job if any required
+    # gate is failed, cancelled, or skipped.
+    needs:
+      - quality-gates
+      - plan
+      - build-local-artifacts
+      - build-global-artifacts
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6; documentation/docs/reference/release-security.md
+        with:
+          ref: ${{ needs.quality-gates.outputs.target-sha }}
+          persist-credentials: false
+          submodules: recursive
+      - name: Assert evidence and release checkout use the same SHA
+        env:
+          TARGET_SHA: ${{ needs.quality-gates.outputs.target-sha }}
+          EVIDENCE_SHA256: ${{ needs.quality-gates.outputs.evidence-sha256 }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test "$EVIDENCE_SHA256" != ''
+      - name: Install checksum-verified cargo-dist
+        run: scripts/install_cargo_dist.sh "$HOME/.cargo/bin"
+      - name: Install pinned keyless signing client
+        uses: sigstore/cosign-installer@d7543c93d881b35a8faa02e8e3605f69b7a1ce62 # v3.10.0; documentation/docs/reference/release-security.md
+        with:
+          cosign-release: v2.5.3
+      - name: Fetch produced artifacts only
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7; documentation/docs/reference/release-security.md
+        with:
+          pattern: artifacts-*
+          path: target/distrib/
+          merge-multiple: true
+      - name: Verify produced checksums, SBOMs, and workflow-bound provenance offline
+        env:
+          TARGET_SHA: ${{ needs.quality-gates.outputs.target-sha }}
+          WORKFLOW_RUN: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          found=0
+          while IFS= read -r provenance; do
+            artifact_name="$(jq -r '.subject[0].name' "$provenance")"
+            artifact="$(find target/distrib -type f -name "$artifact_name" ! -path '*/release-metadata-*/*' -print -quit)"
+            test -n "$artifact"
+            python3 scripts/generate_release_metadata.py --verify --artifact "$artifact" --output "$(dirname "$provenance")" --source-sha "$TARGET_SHA" --workflow-run "$WORKFLOW_RUN"
+            found=1
+          done < <(find target/distrib -type f -name '*.provenance.json' | sort)
+          test "$found" = 1
+          while IFS= read -r checksum; do
+            cosign verify-blob --offline --bundle "$checksum.sigstore.json" --certificate-identity-regexp "$SIGSTORE_CERTIFICATE_IDENTITY_REGEX" --certificate-oidc-issuer https://token.actions.githubusercontent.com "$checksum"
+          done < <(find target/distrib -type f -name SHA256SUMS | sort)
+      - id: host
+        name: Upload release artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dist host --allow-dirty ${{ needs.plan.outputs.tag-flag }} --steps=upload --steps=release --output-format=json > dist-manifest.json
+          echo "manifest=$(jq -c '.' dist-manifest.json)" >> "$GITHUB_OUTPUT"
+      - name: Create GitHub Release from verified produced artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRERELEASE_FLAG: "${{ fromJson(steps.host.outputs.manifest).announcement_is_prerelease && '--prerelease' || '' }}"
+          ANNOUNCEMENT_TITLE: "${{ fromJson(steps.host.outputs.manifest).announcement_title }}"
+          ANNOUNCEMENT_BODY: "${{ fromJson(steps.host.outputs.manifest).announcement_github_body }}"
+          RELEASE_COMMIT: ${{ needs.quality-gates.outputs.target-sha }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$ANNOUNCEMENT_BODY" > "$RUNNER_TEMP/notes.txt"
+          gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" target/distrib/*
+          mapfile -t metadata_assets < <(find target/distrib -type f \( -name 'SHA256SUMS' -o -name '*.sbom.cdx.json' -o -name '*.provenance.json' -o -name '*.sigstore.json' \) | sort)
+          test "${#metadata_assets[@]}" -gt 0
+          gh release upload "${{ needs.plan.outputs.tag }}" --clobber "${metadata_assets[@]}"

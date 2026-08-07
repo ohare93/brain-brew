@@ -1,0 +1,13 @@
+deck:
+  id: deck.composable-csv-certification
+  name: Composable CSV Certification
+  description: Repository-owned UG-shaped certification fixture.
+  adapter_ids:
+    crowdanki:uuid: 11111111-1111-1111-1111-111111111111
+note_types: !include note-types.yaml
+notes: !csv
+  descriptor: sources/countries.yaml
+  parameters:
+    language: ''
+media: !include media.yaml
+tombstones: []

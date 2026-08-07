@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gates:
+    name: reusable quality and artifact gates
+    uses: ./.github/workflows/reusable-quality.yml
+    with:
+      # A PR's merge ref is mutable; test the immutable reviewed head instead.
+      target_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      # The interface is exercised on PRs without asking an untrusted fork for
+      # credentials or pretending that the checked-in UG fixture is a consumer.
+      require_representative_consumer: false

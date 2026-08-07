@@ -1,0 +1,440 @@
+{
+  "attribution": {
+    "coverage": {
+      "algorithm": "sha256-normalized-filename-owner-v1",
+      "ambiguous_file_count": 0,
+      "filename_normalization": "unicode-nfc-posix-basename-v1",
+      "hardcore_geography": {
+        "attributed_file_count": 56,
+        "flag_file_count": 39,
+        "map_file_count": 17,
+        "sources_csv_file_count": 56
+      },
+      "image_file_count": 604,
+      "media_file_count": 609,
+      "sha256": "13a1d5c1d04a8eacaae3dd3c1c952483128b8f089779dc622f2014055b72351d",
+      "ultimate_geography": {
+        "attributed_file_count": 553,
+        "flag_file_count": 227,
+        "license_notice_file_count": 5,
+        "map_file_count": 321,
+        "sources_csv_file_count": 548
+      },
+      "unattributed_file_count": 0
+    },
+    "supplements": {
+      "hardcore_geography": {
+        "algorithm": "sha256-path-length-content-v1",
+        "byte_count": 6126,
+        "file_count": 2,
+        "files": [
+          {
+            "algorithm": "sha256",
+            "byte_count": 42,
+            "path": "README.md",
+            "sha256": "ea7da97156e5688e36b8c32eaaf2f5dd805620edf5c3face9ff4d7508fdb7e07"
+          },
+          {
+            "algorithm": "sha256",
+            "byte_count": 6084,
+            "path": "sources.csv",
+            "sha256": "aa3d9a96a0ae9dd15f6e108891b9a667c70ad9a97f64036045c13a5f4ecf204c"
+          }
+        ],
+        "paths": [
+          "README.md",
+          "sources.csv"
+        ],
+        "provenance": {
+          "ref": "main",
+          "repository": "https://github.com/anki-geo/hardcore-geography.git",
+          "revision": "09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46"
+        },
+        "root": "ultimate-geography-attribution/hardcore-geography",
+        "sha256": "aada4219077e5fa77756701e537789c22b2baad29a961c456b3406f3e3629b06"
+      }
+    }
+  },
+  "expected": {
+    "accepted_from_source_sha256": "43645ea828c9295ba3984cf501d94e0ae7d045d9209798ed05cdbf3a12d73bb8",
+    "algorithm": "sha256-path-canonical-json-v1",
+    "canonical_byte_count": 10024776,
+    "file_count": 100,
+    "generated_by": {
+      "build": {
+        "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+        "cargo_command": "CARGO_INCREMENTAL=0 RUSTFLAGS='-C debuginfo=0 --remap-path-prefix=<source-root>=/brainbrew' cargo build --locked --offline --release -p brainbrew --bin brainbrew",
+        "cargo_lock_sha256": "ea2858def2a0528b781d992930a8f6067e71b4baa8ef6bf6b298f3b44a120cd1",
+        "features": [
+          "default",
+          "workbench-write-dev"
+        ],
+        "profile": "release",
+        "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+        "rustflags": [
+          "-C",
+          "debuginfo=0",
+          "--remap-path-prefix=<source-root>=/brainbrew"
+        ],
+        "target": "x86_64-unknown-linux-gnu"
+      },
+      "executable": {
+        "algorithm": "sha256",
+        "byte_count": 15777528,
+        "sha256": "0a4963db7bf3e2e8ae019902e5aa98fabd165ba93687811db5ed7cbdd064421f"
+      },
+      "identity": {
+        "algorithm": "sha256-canonical-json-v1",
+        "sha256": "f377b4d27dac34df9b09046cb139f00e1efba570f2592b9b635aa9694963ce9e"
+      },
+      "ref": "rust-brainbrew",
+      "repository": "https://github.com/jeprecated/brain-brew.git",
+      "revision": "68a828350de4bda46af85b5167bca807edd7d733",
+      "source": {
+        "algorithm": "sha256-generator-path-length-content-v1",
+        "byte_count": 2985380,
+        "file_count": 69,
+        "paths": [
+          "Cargo.lock",
+          "Cargo.toml",
+          "crates/brain-brew-core/Cargo.toml",
+          "crates/brain-brew-core/src",
+          "crates/brain-brew-formats/Cargo.toml",
+          "crates/brain-brew-formats/src",
+          "crates/brain-brew-cli/Cargo.toml",
+          "crates/brain-brew-cli/assets",
+          "crates/brain-brew-cli/src"
+        ],
+        "sha256": "53b7c7a31848035861115972881dfbd70e04ab27ddae11be88b945c7cabe7a27"
+      },
+      "version": "1.0.0-alpha.3"
+    },
+    "manifests": [
+      {
+        "path": "brainbrew.yaml",
+        "role": "main",
+        "target_count": 74,
+        "targets": [
+          "cs-experimental",
+          "cs-extended",
+          "cs-hardcore-extended",
+          "cs-hardcore-standard",
+          "cs-standard",
+          "da-experimental",
+          "da-extended",
+          "da-standard",
+          "de-experimental",
+          "de-extended",
+          "de-hardcore-extended",
+          "de-hardcore-standard",
+          "de-standard",
+          "en-experimental",
+          "en-extended",
+          "en-hardcore-extended",
+          "en-hardcore-standard",
+          "en-standard",
+          "es-experimental",
+          "es-extended",
+          "es-hardcore-extended",
+          "es-hardcore-standard",
+          "es-standard",
+          "fr-experimental",
+          "fr-extended",
+          "fr-hardcore-extended",
+          "fr-hardcore-standard",
+          "fr-standard",
+          "he-experimental",
+          "he-extended",
+          "he-standard",
+          "it-experimental",
+          "it-extended",
+          "it-hardcore-extended",
+          "it-hardcore-standard",
+          "it-standard",
+          "nb-experimental",
+          "nb-extended",
+          "nb-hardcore-extended",
+          "nb-hardcore-standard",
+          "nb-standard",
+          "nl-experimental",
+          "nl-extended",
+          "nl-hardcore-extended",
+          "nl-hardcore-standard",
+          "nl-standard",
+          "pl-experimental",
+          "pl-extended",
+          "pl-hardcore-extended",
+          "pl-hardcore-standard",
+          "pl-standard",
+          "pt-experimental",
+          "pt-extended",
+          "pt-hardcore-extended",
+          "pt-hardcore-standard",
+          "pt-standard",
+          "ru-experimental",
+          "ru-extended",
+          "ru-hardcore-extended",
+          "ru-hardcore-standard",
+          "ru-standard",
+          "sv-experimental",
+          "sv-extended",
+          "sv-hardcore-extended",
+          "sv-hardcore-standard",
+          "sv-standard",
+          "zh-experimental",
+          "zh-extended",
+          "zh-hardcore-extended",
+          "zh-hardcore-standard",
+          "zh-standard",
+          "zh-tw-experimental",
+          "zh-tw-extended",
+          "zh-tw-standard"
+        ]
+      },
+      {
+        "path": "brainbrew-hardcore.yaml",
+        "role": "companion",
+        "target_count": 26,
+        "targets": [
+          "cs-hardcore-companion-extended",
+          "cs-hardcore-companion-standard",
+          "de-hardcore-companion-extended",
+          "de-hardcore-companion-standard",
+          "en-hardcore-companion-extended",
+          "en-hardcore-companion-standard",
+          "es-hardcore-companion-extended",
+          "es-hardcore-companion-standard",
+          "fr-hardcore-companion-extended",
+          "fr-hardcore-companion-standard",
+          "it-hardcore-companion-extended",
+          "it-hardcore-companion-standard",
+          "nb-hardcore-companion-extended",
+          "nb-hardcore-companion-standard",
+          "nl-hardcore-companion-extended",
+          "nl-hardcore-companion-standard",
+          "pl-hardcore-companion-extended",
+          "pl-hardcore-companion-standard",
+          "pt-hardcore-companion-extended",
+          "pt-hardcore-companion-standard",
+          "ru-hardcore-companion-extended",
+          "ru-hardcore-companion-standard",
+          "sv-hardcore-companion-extended",
+          "sv-hardcore-companion-standard",
+          "zh-hardcore-companion-extended",
+          "zh-hardcore-companion-standard"
+        ]
+      }
+    ],
+    "root": "ultimate-geography-expected/crowdanki",
+    "sha256": "267a3459fcc94bcff126c5c496b2c31dac3e72bc85fa7483b3beac2d2f152d2d"
+  },
+  "provenance": {
+    "brain_brew": {
+      "ref": "rust-brainbrew",
+      "repository": "https://github.com/jeprecated/brain-brew.git",
+      "revision": "68a828350de4bda46af85b5167bca807edd7d733",
+      "version": "1.0.0-alpha.3"
+    },
+    "hardcore_geography": {
+      "ref": "main",
+      "repository": "https://github.com/anki-geo/hardcore-geography.git",
+      "revision": "09ce7c3ba665eac6b0794d089a4e0bbafbfc0f46"
+    },
+    "ultimate_geography": {
+      "ref": "brainbrew-migration",
+      "repository": "https://github.com/anki-geo/ultimate-geography.git",
+      "revision": "54b32544a84d1746403ac8efaa3af0e2250ad4c0"
+    }
+  },
+  "schema_version": 3,
+  "source": {
+    "algorithm": "sha256-path-length-content-v1",
+    "byte_count": 20033438,
+    "file_count": 739,
+    "goldens": {
+      "algorithm": "sha256-path-length-content-v1",
+      "byte_count": 1321860,
+      "file_count": 8,
+      "sha256": "6a2ec22f3a937e310e364d50eafb20a5fb73c17c27f6966ef07001c88d49704d"
+    },
+    "intentional_exclusions": [
+      {
+        "paths": [
+          ".git/",
+          ".gitignore",
+          ".jj/",
+          ".github/",
+          ".frontloop/",
+          ".agentleman/",
+          ".editorconfig",
+          ".pi-scratch.md",
+          "build/",
+          "scratch/"
+        ],
+        "reason": "VCS, CI, planning, cache, and generated-output state are not Brain Brew canonical inputs."
+      },
+      {
+        "paths": [
+          "CONTRIBUTING.md",
+          "README.md",
+          "doc/",
+          "docs/",
+          "scripts/",
+          "src/",
+          "*.xlsx"
+        ],
+        "reason": "Repository documentation, legacy/build tooling, and spreadsheet maintainer sources are not read by the pinned Brain Brew manifests; LICENSE.md and sources.csv are retained for asset licensing and attribution."
+      }
+    ],
+    "manifests": [
+      {
+        "path": "brainbrew.yaml",
+        "role": "main",
+        "target_count": 74,
+        "targets": [
+          "cs-experimental",
+          "cs-extended",
+          "cs-hardcore-extended",
+          "cs-hardcore-standard",
+          "cs-standard",
+          "da-experimental",
+          "da-extended",
+          "da-standard",
+          "de-experimental",
+          "de-extended",
+          "de-hardcore-extended",
+          "de-hardcore-standard",
+          "de-standard",
+          "en-experimental",
+          "en-extended",
+          "en-hardcore-extended",
+          "en-hardcore-standard",
+          "en-standard",
+          "es-experimental",
+          "es-extended",
+          "es-hardcore-extended",
+          "es-hardcore-standard",
+          "es-standard",
+          "fr-experimental",
+          "fr-extended",
+          "fr-hardcore-extended",
+          "fr-hardcore-standard",
+          "fr-standard",
+          "he-experimental",
+          "he-extended",
+          "he-standard",
+          "it-experimental",
+          "it-extended",
+          "it-hardcore-extended",
+          "it-hardcore-standard",
+          "it-standard",
+          "nb-experimental",
+          "nb-extended",
+          "nb-hardcore-extended",
+          "nb-hardcore-standard",
+          "nb-standard",
+          "nl-experimental",
+          "nl-extended",
+          "nl-hardcore-extended",
+          "nl-hardcore-standard",
+          "nl-standard",
+          "pl-experimental",
+          "pl-extended",
+          "pl-hardcore-extended",
+          "pl-hardcore-standard",
+          "pl-standard",
+          "pt-experimental",
+          "pt-extended",
+          "pt-hardcore-extended",
+          "pt-hardcore-standard",
+          "pt-standard",
+          "ru-experimental",
+          "ru-extended",
+          "ru-hardcore-extended",
+          "ru-hardcore-standard",
+          "ru-standard",
+          "sv-experimental",
+          "sv-extended",
+          "sv-hardcore-extended",
+          "sv-hardcore-standard",
+          "sv-standard",
+          "zh-experimental",
+          "zh-extended",
+          "zh-hardcore-extended",
+          "zh-hardcore-standard",
+          "zh-standard",
+          "zh-tw-experimental",
+          "zh-tw-extended",
+          "zh-tw-standard"
+        ]
+      },
+      {
+        "path": "brainbrew-hardcore.yaml",
+        "role": "companion",
+        "target_count": 26,
+        "targets": [
+          "cs-hardcore-companion-extended",
+          "cs-hardcore-companion-standard",
+          "de-hardcore-companion-extended",
+          "de-hardcore-companion-standard",
+          "en-hardcore-companion-extended",
+          "en-hardcore-companion-standard",
+          "es-hardcore-companion-extended",
+          "es-hardcore-companion-standard",
+          "fr-hardcore-companion-extended",
+          "fr-hardcore-companion-standard",
+          "it-hardcore-companion-extended",
+          "it-hardcore-companion-standard",
+          "nb-hardcore-companion-extended",
+          "nb-hardcore-companion-standard",
+          "nl-hardcore-companion-extended",
+          "nl-hardcore-companion-standard",
+          "pl-hardcore-companion-extended",
+          "pl-hardcore-companion-standard",
+          "pt-hardcore-companion-extended",
+          "pt-hardcore-companion-standard",
+          "ru-hardcore-companion-extended",
+          "ru-hardcore-companion-standard",
+          "sv-hardcore-companion-extended",
+          "sv-hardcore-companion-standard",
+          "zh-hardcore-companion-extended",
+          "zh-hardcore-companion-standard"
+        ]
+      }
+    ],
+    "media": {
+      "algorithm": "sha256-path-length-content-v1",
+      "byte_count": 17579868,
+      "file_count": 609,
+      "sha256": "ad8bd371b4837d639d76f3a56a11fd7437d0ca0d31022ff5022fe5d5ce03e761"
+    },
+    "root": "ultimate-geography",
+    "sha256": "43645ea828c9295ba3984cf501d94e0ae7d045d9209798ed05cdbf3a12d73bb8",
+    "third_party_attribution": {
+      "algorithm": "sha256-path-length-content-v1",
+      "byte_count": 58618,
+      "file_count": 2,
+      "paths": [
+        "LICENSE.md",
+        "sources.csv"
+      ],
+      "sha256": "0f1d0c3c7b9d9465a7d0279050f54460ed4a31d5fa2703a140abe3da6e522151"
+    },
+    "whitelist": [
+      "LICENSE.md",
+      "brainbrew-hardcore.yaml",
+      "brainbrew.yaml",
+      "deck-hardcore.yaml",
+      "deck.yaml",
+      "descriptions",
+      "goldens",
+      "media",
+      "media.yaml",
+      "note-types.yaml",
+      "overlays",
+      "sources.csv",
+      "styles",
+      "templates"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+base: deck.yaml
+overlays:
+  overlay.extension.population:
+    file: extension-population.yaml
+    kind: extension
+  overlay.patch.netherlands-capital:
+    file: patch-netherlands-capital.yaml
+    kind: patch
+  overlay.patch.remove-australia:
+    file: tombstone-australia.yaml
+    kind: patch
+  overlay.personal.finland-hint:
+    file: personal-finland-hint.yaml
+    kind: personal
+  overlay.translation.es:
+    file: translation-es.yaml
+    kind: translation
+  overlay.translation.sv:
+    file: translation-sv.yaml
+    kind: translation
+targets:
+  full-demo:
+    overlays:
+      - overlay.translation.es
+      - overlay.translation.sv
+      - overlay.extension.population
+      - overlay.patch.netherlands-capital
+      - overlay.personal.finland-hint
+      - overlay.patch.remove-australia

@@ -1,0 +1,19 @@
+[package]
+name = "brain-brew-workbench-e2e"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Browser E2E tests for the Brain Brew Deck Workbench"
+publish = false
+
+[dependencies]
+anyhow = "1"
+tempfile = "3"
+thirtyfour = "0.37"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+
+[lints]
+workspace = true

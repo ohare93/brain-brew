@@ -1,0 +1,22 @@
+id: overlay.translation.de
+kind: translation
+translations:
+  from_csv:
+    - descriptor: sources/descriptor.yaml
+      parameters:
+        language: de
+      exclude:
+        source_texts:
+          - Capital
+        note_ids:
+          - note.france
+        paths: []
+  require_complete: true
+  direct:
+    Capital: Hauptstadt
+  no_change:
+    - Basic
+    - Fixture
+  adapter_ids:
+    crowdanki:
+      guid-france: guid-france-de

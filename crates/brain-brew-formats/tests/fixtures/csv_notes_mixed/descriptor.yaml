@@ -1,0 +1,23 @@
+version: 1
+primary_table: main
+tables:
+  main:
+    path: data/notes.csv
+parameters: {}
+joins: []
+note:
+  id: main.stable_id
+  note_type_id: note-type.basic
+  fields:
+    field.front:
+      column: main.front
+      type: scalar
+    field.back:
+      column: main.back
+      type: scalar
+  tags:
+    column: main.tags
+    delimiter: '|'
+  adapter_ids:
+    crowdanki:
+      column: main.guid

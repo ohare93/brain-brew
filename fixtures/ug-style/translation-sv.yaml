@@ -1,0 +1,228 @@
+id: overlay.translation.sv
+kind: translation
+notes:
+  note.australia:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Canberra (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Australia (SV)'
+  note.austria:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Vienna (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Austria (SV)'
+  note.belgium:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Brussels (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Belgium (SV)'
+  note.canada:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Ottawa (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Canada (SV)'
+  note.czechia:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Prague (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Czechia (SV)'
+  note.denmark:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Copenhagen (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Denmark (SV)'
+  note.estonia:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Tallinn (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Estonia (SV)'
+  note.finland:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Helsinki (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Finland (SV)'
+  note.france:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Paris (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'France (SV)'
+  note.germany:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Berlin (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Germany (SV)'
+  note.iceland:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Reykjavik (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Iceland (SV)'
+  note.ireland:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Dublin (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Ireland (SV)'
+  note.italy:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Rome (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Italy (SV)'
+  note.japan:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Tokyo (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Japan (SV)'
+  note.latvia:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Riga (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Latvia (SV)'
+  note.lithuania:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Vilnius (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Lithuania (SV)'
+  note.mexico:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Mexico City (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Mexico (SV)'
+  note.netherlands:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Amsterdam (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Netherlands (SV)'
+  note.norway:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Oslo (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Norway (SV)'
+  note.poland:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Warsaw (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Poland (SV)'
+  note.portugal:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Lisbon (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Portugal (SV)'
+  note.spain:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Madrid (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Spain (SV)'
+  note.sweden:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Stockholm (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Sweden (SV)'
+  note.switzerland:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'Bern (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'Switzerland (SV)'
+  note.united-kingdom:
+    intent: merge
+    fields:
+      field.capital-sv:
+        intent: merge
+        value: 'London (SV)'
+      field.country-sv:
+        intent: merge
+        value: 'United Kingdom (SV)'

@@ -1,0 +1,8 @@
+version: 1
+
+workspace:
+  id: brain-brew
+  name: Brain Brew
+
+discover:
+  - .sd/tasks.yaml

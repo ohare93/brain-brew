@@ -1,0 +1,27 @@
+version: 1
+primary_table: main
+tables:
+  main:
+    path: data/notes.csv
+parameters: {}
+joins: []
+note:
+  id: main.stable_id
+  note_type_id: note-type.country
+  fields:
+    field.country:
+      column: main.country
+      type: scalar
+    field.legacy-image:
+      column: main.legacy_image
+      type: scalar
+    field.flag:
+      column: main.flag
+      type: image
+    field.map:
+      column: main.map
+      type: image
+  tags:
+    column: main.tags
+    delimiter: '|'
+  adapter_ids: {}

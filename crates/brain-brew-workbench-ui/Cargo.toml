@@ -1,0 +1,27 @@
+[package]
+name = "brain-brew-workbench-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Leptos/WASM frontend for the Brain Brew Deck Workbench"
+publish = false
+
+[[bin]]
+name = "brain_brew_workbench_ui"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1"
+gloo-net = { version = "0.6", features = ["http"] }
+leptos = { version = "0.8", features = ["csr"] }
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["Document", "Element", "Event", "EventTarget", "HtmlInputElement", "HtmlSelectElement", "Node", "NodeList", "Storage", "Window"] }
+
+[lints]
+workspace = true

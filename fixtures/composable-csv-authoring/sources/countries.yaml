@@ -1,0 +1,63 @@
+version: 1
+primary_table: main
+tables:
+  main:
+    path: data/main.csv
+  country:
+    path: data/countries.csv
+  hint:
+    path: data/hints.csv
+  guid:
+    path: data/guids.csv
+parameters:
+  language:
+    type: localized_column
+    default: ''
+    separator: ':'
+joins:
+  - left: main.iso
+    right: country.iso
+    required: true
+  - left: main.iso
+    right: hint.iso
+    required: false
+  - left: main.iso
+    right: guid.iso
+    required: true
+note:
+  id: main.stable_id
+  note_type_id: note-type.country
+  fields:
+    field.country:
+      column: country.country
+      localized_by: language
+      type: scalar
+    field.capital:
+      column: country.capital
+      localized_by: language
+      type: scalar
+    field.continent:
+      column: country.continent
+      localized_by: language
+      type: scalar
+    field.shared:
+      column: country.shared
+      localized_by: language
+      type: scalar
+    field.hint:
+      column: hint.hint
+      localized_by: language
+      type: scalar
+    field.flag:
+      column: main.flag
+      type: image
+    field.map:
+      column: main.map
+      type: image
+  tags:
+    column: main.tags
+    delimiter: '|'
+  adapter_ids:
+    crowdanki:
+      column: guid.guid
+      localized_by: language

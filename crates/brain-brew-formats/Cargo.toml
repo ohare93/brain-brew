@@ -1,0 +1,32 @@
+[package]
+name = "brain-brew-formats"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+readme = "README.md"
+authors.workspace = true
+repository.workspace = true
+description = "Implementation package: YAML and CrowdAnki codecs for Brain Brew; no public Rust API commitment"
+homepage = "https://github.com/jeprecated/brain-brew"
+# These integration tests intentionally exercise repository-root fixtures. The
+# fixtures stay in source archives/CI, not the crates.io implementation package.
+exclude = [
+    "tests/crowdanki_import_plan.rs",
+    "tests/ultimate_geography_fixture.rs",
+]
+
+[dependencies]
+base64 = "0.22"
+brain-brew-core.workspace = true
+csv = "1"
+semver.workspace = true
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_path_to_error = "0.1"
+serde_yaml = "0.9"
+sha2 = "0.10"
+unicode-normalization.workspace = true
+
+[lints]
+workspace = true

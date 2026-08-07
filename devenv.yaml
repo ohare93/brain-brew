@@ -1,0 +1,5 @@
+inputs:
+  nixpkgs:
+    url: github:NixOS/nixpkgs/nixos-unstable
+  nixpkgs-cargo-dist:
+    url: github:NixOS/nixpkgs/01fbdeef22b76df85ea168fbfe1bfd9e63681b30

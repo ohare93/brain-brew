@@ -1,0 +1,64 @@
+version: 1
+
+project:
+  id: brain-brew
+  name: Brain Brew
+  aliases:
+    - brainbrew
+  workArea: Deck federation
+  visibility: public-code / CLI workspace
+  dir: .
+
+tasks:
+  check:
+    desc: Run the standard Brain Brew validation gate
+    run: devenv shell ci
+
+  build/debug:
+    desc: Build the brainbrew CLI debug binary
+    run: devenv shell cargo build -p brainbrew
+
+  build/release:
+    desc: Build the brainbrew CLI release binary
+    run: devenv shell cargo build -p brainbrew --release
+
+  run/help:
+    desc: Run the brainbrew CLI help through cargo
+    run: devenv shell brainbrew --help
+
+  run/ug/targets:
+    desc: List Ultimate Geography manifest targets
+    run: devenv shell brainbrew targets --manifest fixtures/ultimate-geography/brainbrew.yaml
+
+  run/ug/compose/en-standard:
+    desc: Compose the Ultimate Geography en-standard target to target/sd/ug-en-standard.yaml
+    run: |
+      set -euo pipefail
+      mkdir -p target/sd
+      devenv shell brainbrew compose --manifest fixtures/ultimate-geography/brainbrew.yaml --target en-standard --out target/sd/ug-en-standard.yaml
+
+  run/ug/export/en-standard:
+    desc: Export the hashless structural fixture (not release or byte-integrity evidence) to target/sd/crowdanki/en-standard
+    run: devenv shell brainbrew export crowdanki --manifest fixtures/ultimate-geography/brainbrew.yaml --target en-standard --out target/sd/crowdanki/en-standard --media-mode reference-only
+
+  run/ug/verify/all:
+    desc: Verify every target in the hashless structural fixture (not release or byte-integrity evidence)
+    run: devenv shell brainbrew verify --manifest fixtures/ultimate-geography/brainbrew.yaml --all-targets --media-mode reference-only
+
+  workbench/ug:
+    desc: Build Workbench dev assets and serve a write-capable Ultimate Geography Workbench; pass -- --no-open or -- --port <port> as needed
+    run: |
+      set -euo pipefail
+      if [ "${1:-}" = "--" ]; then
+        shift
+      fi
+      devenv shell workbench-ui-build
+      devenv shell brainbrew workbench serve --manifest fixtures/ultimate-geography/brainbrew.yaml --dev-assets target/workbench-ui --enable-write "$@"
+
+passthrough:
+  cargo:
+    desc: Run cargo in the Brain Brew workspace
+    run: cargo "$@"
+  devenv:
+    desc: Run devenv in the Brain Brew workspace
+    run: devenv "$@"
