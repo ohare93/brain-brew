@@ -9,6 +9,105 @@ use serde_yaml::Value;
 
 use crate::{note_type_map, strict_yaml, yaml_scalar};
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum IncludeFragment {
+    Question,
+    Answer,
+}
+
+pub(crate) fn parse_include_target(
+    target: &str,
+) -> Result<(&str, Option<IncludeFragment>), String> {
+    let Some((path, fragment)) = target.rsplit_once('#') else {
+        return Ok((target, None));
+    };
+    if path.is_empty() || path.contains('#') {
+        return Err(format!(
+            "invalid !include fragment in {target:?}; expected <safe-path>#question or <safe-path>#answer"
+        ));
+    }
+    let fragment = match fragment {
+        "question" => IncludeFragment::Question,
+        "answer" => IncludeFragment::Answer,
+        _ => {
+            return Err(format!(
+                "unsupported !include fragment #{fragment}; only #question and #answer are supported"
+            ));
+        }
+    };
+    Ok((path, Some(fragment)))
+}
+
+pub(crate) fn select_include_fragment(
+    content: &str,
+    fragment: IncludeFragment,
+) -> Result<String, String> {
+    let range = include_fragment_range(content, fragment)?;
+    Ok(content[range].to_owned())
+}
+
+pub(crate) fn replace_include_fragment(
+    content: &str,
+    fragment: IncludeFragment,
+    replacement: &str,
+) -> Result<String, String> {
+    let range = include_fragment_range(content, fragment)?;
+    let mut updated = content.to_owned();
+    updated.replace_range(range, replacement);
+    Ok(updated)
+}
+
+fn include_fragment_range(
+    content: &str,
+    fragment: IncludeFragment,
+) -> Result<std::ops::Range<usize>, String> {
+    let mut delimiters = Vec::new();
+    let mut offset = 0;
+    for line in content.split_inclusive('\n') {
+        let body = line.strip_suffix('\n').unwrap_or(line);
+        let body = body.strip_suffix('\r').unwrap_or(body);
+        if body == "--" {
+            delimiters.push((offset, offset + line.len()));
+        }
+        offset += line.len();
+    }
+    let (start, end) = match delimiters.as_slice() {
+        [] => {
+            return Err(
+                "combined template include is missing the required `--` delimiter line".to_owned(),
+            );
+        }
+        [_, _, ..] => {
+            return Err(format!(
+                "combined template include has {} `--` delimiter lines; expected exactly one",
+                delimiters.len()
+            ));
+        }
+        &[(start, end)] => (start, end),
+    };
+
+    let question_end = if content[..start].ends_with("\r\n\r\n") {
+        start - 4
+    } else if content[..start].ends_with("\n\n") || content[..start].ends_with("\r\n") {
+        start - 2
+    } else if content[..start].ends_with('\n') {
+        start - 1
+    } else {
+        start
+    };
+    let answer_start = if content[end..].starts_with("\r\n") {
+        end + 2
+    } else if content[end..].starts_with('\n') {
+        end + 1
+    } else {
+        end
+    };
+    Ok(match fragment {
+        IncludeFragment::Question => 0..question_end,
+        IncludeFragment::Answer => answer_start..content.len(),
+    })
+}
+
 /// Resolve `!include path` tagged scalar authoring conveniences in a Canonical Deck or overlay YAML file.
 ///
 /// Include paths use canonical portable safe-relative syntax and are interpreted relative to
@@ -422,6 +521,7 @@ enum IncludeErrorKind {
         chain: Vec<String>,
     },
     InvalidNestedDirective(String),
+    InvalidFragment(String),
     StructuralIncludeRootNotMapping {
         structural_kind: &'static str,
         resolved_path: PathBuf,
@@ -512,6 +612,11 @@ impl fmt::Display for IncludeError {
             IncludeErrorKind::InvalidNestedDirective(message) => write!(
                 f,
                 "{location}: invalid nested include directive in {}: {message}",
+                self.include_path
+            ),
+            IncludeErrorKind::InvalidFragment(message) => write!(
+                f,
+                "{location}: invalid fragment include {}: {message}",
                 self.include_path
             ),
             IncludeErrorKind::StructuralIncludeRootNotMapping {
@@ -800,7 +905,15 @@ impl IncludeResolver {
         yaml_path: &[String],
         include_stack: &mut Vec<IncludeStackEntry>,
     ) -> Result<String, IncludeError> {
-        let resolved = self.resolve_include_path(include_path, yaml_path)?;
+        let (path, fragment) = parse_include_target(include_path).map_err(|message| {
+            IncludeError::new(
+                &self.source_path,
+                yaml_path,
+                include_path,
+                IncludeErrorKind::InvalidFragment(message),
+            )
+        })?;
+        let resolved = self.resolve_include_path(path, yaml_path)?;
         if let Some(cycle_start) = include_stack
             .iter()
             .position(|entry| entry.resolved_path == resolved)
@@ -829,6 +942,18 @@ impl IncludeResolver {
                 },
             )
         })?;
+        let content = fragment
+            .map(|fragment| select_include_fragment(&content, fragment))
+            .transpose()
+            .map_err(|message| {
+                IncludeError::new(
+                    &self.source_path,
+                    yaml_path,
+                    include_path,
+                    IncludeErrorKind::InvalidFragment(message),
+                )
+            })?
+            .unwrap_or(content);
 
         if let Some(nested_path) = nested_include_directive(&content).map_err(|message| {
             IncludeError::new(
@@ -1047,4 +1172,61 @@ fn yaml_path_display(path: &[String]) -> String {
         }
     }
     display
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn combined_template_fragments_preserve_each_authored_side() {
+        for (combined, question, answer) in [
+            ("question\n\n--\n\nanswer\n", "question", "answer\n"),
+            (
+                "question\r\n\r\n--\r\n\r\nanswer\r\n",
+                "question",
+                "answer\r\n",
+            ),
+        ] {
+            assert_eq!(
+                select_include_fragment(combined, IncludeFragment::Question).unwrap(),
+                question
+            );
+            assert_eq!(
+                select_include_fragment(combined, IncludeFragment::Answer).unwrap(),
+                answer
+            );
+        }
+    }
+
+    #[test]
+    fn combined_template_fragments_reject_unknown_selectors_and_bad_delimiters() {
+        assert!(
+            parse_include_target("card.html#front")
+                .unwrap_err()
+                .contains("only")
+        );
+        assert!(parse_include_target("card.html#question#answer").is_err());
+        assert!(
+            select_include_fragment("question\nanswer", IncludeFragment::Question)
+                .unwrap_err()
+                .contains("missing")
+        );
+        assert!(
+            select_include_fragment("question\n--\nanswer\n--\n", IncludeFragment::Answer)
+                .unwrap_err()
+                .contains("exactly one")
+        );
+    }
+
+    #[test]
+    fn fragment_replacement_keeps_the_other_side_and_separator() {
+        let combined = "question\n\n--\n\nanswer\n";
+        let updated = replace_include_fragment(combined, IncludeFragment::Question, "new").unwrap();
+        assert_eq!(updated, "new\n\n--\n\nanswer\n");
+        assert_eq!(
+            select_include_fragment(&updated, IncludeFragment::Answer).unwrap(),
+            "answer\n"
+        );
+    }
 }

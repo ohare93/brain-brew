@@ -237,6 +237,78 @@ fn fmt_canonicalizes_standalone_note_type_map_and_preserves_deck_marker() {
     );
 }
 
+#[test]
+fn combined_template_fragments_format_and_compose_like_separate_files() {
+    let dir = temp_dir("combined-template-fragments");
+    fs::create_dir_all(dir.join("schema")).unwrap();
+    fs::create_dir_all(dir.join("templates")).unwrap();
+    fs::create_dir_all(dir.join("styles")).unwrap();
+    fs::write(dir.join("brainbrew.yaml"), MANIFEST).unwrap();
+    fs::write(
+        dir.join("schema/note-types.yaml"),
+        NOTE_TYPES
+            .replace(
+                "!include templates/question.html",
+                "!include templates/card.html#question",
+            )
+            .replace(
+                "!include templates/answer.html",
+                "!include templates/card.html#answer",
+            ),
+    )
+    .unwrap();
+    fs::write(
+        dir.join("templates/card.html"),
+        "<b>{{Front}}</b>\n\n--\n\n{{FrontSide}}<hr id=answer>{{Back}}",
+    )
+    .unwrap();
+    fs::write(dir.join("styles/card.css"), ".card { color: navy; }").unwrap();
+    fs::write(dir.join("deck.yaml"), INCLUDED_DECK).unwrap();
+
+    for path in [dir.join("schema/note-types.yaml"), dir.join("deck.yaml")] {
+        let formatted = run_in_dir(["fmt", path.to_str().unwrap()], &dir);
+        assert!(formatted.status.success(), "stderr: {}", stderr(&formatted));
+    }
+    let note_types = fs::read_to_string(dir.join("schema/note-types.yaml")).unwrap();
+    assert!(note_types.contains("question_format: !include 'templates/card.html#question'\n"));
+    assert!(note_types.contains("answer_format: !include 'templates/card.html#answer'\n"));
+
+    let compose = run_in_dir(
+        [
+            "compose",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "base",
+            "--out",
+            "resolved.yaml",
+        ],
+        &dir,
+    );
+    assert!(compose.status.success(), "stderr: {}", stderr(&compose));
+    let resolved =
+        canonical_yaml::from_str(&fs::read_to_string(dir.join("resolved.yaml")).unwrap()).unwrap();
+    assert_eq!(resolved, canonical_yaml::from_str(INLINE_DECK).unwrap());
+
+    fs::write(
+        dir.join("schema/note-types.yaml"),
+        note_types.replace("templates/card.html#question", "../outside.html#question"),
+    )
+    .unwrap();
+    let unsafe_include = run_in_dir(
+        [
+            "validate",
+            "--manifest",
+            "brainbrew.yaml",
+            "--target",
+            "base",
+        ],
+        &dir,
+    );
+    assert!(!unsafe_include.status.success());
+    assert!(stderr(&unsafe_include).contains("parent-directory"));
+}
+
 fn run_in_dir<const N: usize>(args: [&str; N], cwd: &Path) -> Output {
     Command::new(env!("CARGO_BIN_EXE_brainbrew"))
         .args(args)

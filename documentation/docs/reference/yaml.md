@@ -337,6 +337,15 @@ note_types:
     styling: !include styles/cards.css
 ```
 
+Question and answer template text may share one included file:
+
+```yaml
+question_format: !include 'templates/country.html#question'
+answer_format: !include 'templates/country.html#answer'
+```
+
+The UTF-8 file must contain exactly one line whose complete content is `--`. Only the closed selectors `#question` and `#answer` are valid. LF and CRLF are accepted; one blank separator line on either side is removed, while every other byte on the selected side is retained. The selector is parsed before the remaining path is checked as safe-relative. Consequently `#` is reserved for this selector syntax in scalar include targets. Whole-file includes without a selector are unchanged.
+
 In overlays, include the value at the scalar property you are changing:
 
 ```yaml

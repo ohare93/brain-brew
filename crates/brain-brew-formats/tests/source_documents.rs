@@ -117,6 +117,73 @@ fn canonical_document_preserves_and_routes_base_note_type_structural_include() {
 }
 
 #[test]
+fn canonical_document_selects_question_and_answer_from_one_template_include() {
+    let root = deck_source().replace(
+        "question_format: !include templates/front.html\n        answer_format: '{{Front}}'",
+        "question_format: !include templates/card.html#question\n        answer_format: !include templates/card.html#answer",
+    );
+    let mut document =
+        CanonicalSourceDocument::parse_with_includes(source("deck.yaml", root), |request| {
+            match request.target() {
+                "templates/card.html" => Ok(source(
+                    "templates/card.html",
+                    "<b>{{Front}}</b>\n\n--\n\n{{Front}}<hr>\n",
+                )),
+                other => Ok(load_include(other)),
+            }
+        })
+        .expect("combined question/answer include parses");
+
+    let template = &document.resolved_deck().note_types[&sid("note-type.basic")].card_templates[0];
+    assert_eq!(template.question_format, "<b>{{Front}}</b>");
+    assert_eq!(template.answer_format, "{{Front}}<hr>\n");
+
+    let emitted = document.emit().expect("fragment includes emit");
+    assert!(
+        emitted
+            .root()
+            .text()
+            .contains("question_format: !include 'templates/card.html#question'\n")
+    );
+    assert!(
+        emitted
+            .root()
+            .text()
+            .contains("answer_format: !include 'templates/card.html#answer'\n")
+    );
+
+    document
+        .set_scalar(
+            CanonicalScalarTarget::CardTemplateQuestion {
+                note_type_id: sid("note-type.basic"),
+                template_id: sid("template.basic"),
+            },
+            "<b>{{Front}}</b>",
+            "New question",
+        )
+        .unwrap();
+    document
+        .set_scalar(
+            CanonicalScalarTarget::CardTemplateAnswer {
+                note_type_id: sid("note-type.basic"),
+                template_id: sid("template.basic"),
+            },
+            "{{Front}}<hr>\n",
+            "New answer\n",
+        )
+        .unwrap();
+    assert_eq!(
+        document
+            .emit()
+            .unwrap()
+            .included_source("templates/card.html")
+            .unwrap()
+            .text(),
+        "New question\n\n--\n\nNew answer\n"
+    );
+}
+
+#[test]
 fn canonical_document_materialization_ignores_structural_markers_in_included_scalars() {
     let root = deck_source().replace(
         "note_types:\n  note-type.basic:\n    name: Basic\n    field_order:\n      - field.front\n      - field.image\n    fields:\n      field.front:\n        name: Front\n      field.image:\n        name: Image\n    card_template_order:\n      - template.basic\n    card_templates:\n      template.basic:\n        name: Card\n        question_format: !include templates/front.html\n        answer_format: '{{Front}}'\n        adapter_ids: {}\n    styling: ''\n    adapter_ids: {}\n",

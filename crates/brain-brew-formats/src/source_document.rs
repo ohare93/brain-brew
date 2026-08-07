@@ -265,7 +265,15 @@ struct ScalarInclude {
     sentinel: String,
     directive: String,
     source: SourceFile,
+    value: String,
+    fragment: Option<crate::source_includes::IncludeFragment>,
     dirty: bool,
+}
+
+struct LoadedScalarInclude {
+    source: SourceFile,
+    value: String,
+    fragment: Option<crate::source_includes::IncludeFragment>,
 }
 
 #[derive(Clone)]
@@ -396,24 +404,53 @@ impl IncludeState {
         replacement: &str,
         root: &SourceProvenance,
     ) -> Result<Option<EditLocation>, SourceDocumentError> {
-        let Some(include) = self.scalar.get_mut(path) else {
+        let Some(include) = self.scalar.get(path) else {
             return Ok(None);
         };
-        if include.source.text != expected {
+        if include.value != expected {
             return Err(SourceDocumentError::at(
                 root,
                 path,
                 format!(
                     "expected included scalar value {expected:?}, found {:?} in {}",
-                    include.source.text, include.source.provenance
+                    include.value, include.source.provenance
                 ),
             ));
         }
-        include.source.text = replacement.to_owned();
-        include.dirty = true;
-        Ok(Some(EditLocation::Included(
-            include.source.provenance.clone(),
-        )))
+        let provenance = include.source.provenance.clone();
+        let updated_source = match include.fragment {
+            Some(fragment) => crate::source_includes::replace_include_fragment(
+                &include.source.text,
+                fragment,
+                replacement,
+            )
+            .map_err(|message| SourceDocumentError::at(root, path, message))?,
+            None => replacement.to_owned(),
+        };
+        let updated_values = self
+            .scalar
+            .iter()
+            .filter(|(_, include)| include.source.provenance == provenance)
+            .map(|(schema_path, include)| {
+                let value = include
+                    .fragment
+                    .map(|fragment| {
+                        crate::source_includes::select_include_fragment(&updated_source, fragment)
+                    })
+                    .transpose()
+                    .map_err(|message| SourceDocumentError::at(root, schema_path, message))?
+                    .unwrap_or_else(|| updated_source.clone());
+                Ok((schema_path.clone(), value))
+            })
+            .collect::<Result<BTreeMap<_, _>, SourceDocumentError>>()?;
+        for (schema_path, include) in &mut self.scalar {
+            if include.source.provenance == provenance {
+                include.source.text = updated_source.clone();
+                include.value = updated_values[schema_path].clone();
+                include.dirty = true;
+            }
+        }
+        Ok(Some(EditLocation::Included(provenance)))
     }
 
     pub(crate) fn restore_directives(
@@ -594,7 +631,7 @@ fn materialize_scalar_includes(value: &mut Value, includes: &IncludeState) {
                 .values()
                 .find(|include| include.sentinel == *text)
             {
-                *text = include.source.text.clone();
+                *text = include.value.clone();
             }
         }
         Value::Tagged(tagged) => materialize_scalar_includes(&mut tagged.value, includes),
@@ -788,7 +825,9 @@ fn prepare_value(
                 ScalarInclude {
                     sentinel: sentinel.clone(),
                     directive: format!("!include {}", yaml_scalar::scalar(&target)),
-                    source: loaded,
+                    source: loaded.source,
+                    value: loaded.value,
+                    fragment: loaded.fragment,
                     dirty: false,
                 },
             );
@@ -846,7 +885,17 @@ fn load_scalar_include(
     loader: &mut impl FnMut(&IncludeRequest) -> Result<SourceFile, String>,
     stack: &mut Vec<String>,
     loaded_sources: &mut BTreeSet<IncludedSource>,
-) -> Result<SourceFile, SourceDocumentError> {
+) -> Result<LoadedScalarInclude, SourceDocumentError> {
+    let original_target = request.target.clone();
+    let (target, fragment) = crate::source_includes::parse_include_target(&original_target)
+        .map_err(|message| {
+            SourceDocumentError::at(&request.referring_source, &request.schema_path, message)
+        })?;
+    let request = IncludeRequest {
+        referring_source: request.referring_source,
+        schema_path: request.schema_path,
+        target: target.to_owned(),
+    };
     let cycle_key = format!("{} -> {}", request.referring_source, request.target);
     if stack.contains(&cycle_key) {
         return Err(SourceDocumentError::at(
@@ -863,7 +912,7 @@ fn load_scalar_include(
         SourceDocumentError::at(
             &request.referring_source,
             &request.schema_path,
-            format!("could not load !include {:?}: {message}", request.target),
+            format!("could not load !include {original_target:?}: {message}"),
         )
     })?;
     loaded_sources.insert(IncludedSource {
@@ -872,7 +921,14 @@ fn load_scalar_include(
         },
         provenance: loaded.provenance.clone(),
     });
-    let nested = nested_include_target(&loaded.text).map_err(|message| {
+    let value = fragment
+        .map(|fragment| crate::source_includes::select_include_fragment(&loaded.text, fragment))
+        .transpose()
+        .map_err(|message| {
+            SourceDocumentError::at(&loaded.provenance, &request.schema_path, message)
+        })?
+        .unwrap_or_else(|| loaded.text.clone());
+    let nested = nested_include_target(&value).map_err(|message| {
         SourceDocumentError::at(&loaded.provenance, &request.schema_path, message)
     })?;
     let result = if let Some(target) = nested {
@@ -887,7 +943,11 @@ fn load_scalar_include(
             loaded_sources,
         )
     } else {
-        Ok(loaded)
+        Ok(LoadedScalarInclude {
+            source: loaded,
+            value,
+            fragment,
+        })
     };
     stack.pop();
     result

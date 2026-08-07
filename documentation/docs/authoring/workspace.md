@@ -45,7 +45,14 @@ note_types:
     styling: !include styles/cards.css
 ```
 
-`!include` paths are resolved relative to the package root (the directory containing `brainbrew.yaml`) and the composed/resolved deck contains the final inlined text.
+`!include` paths are resolved relative to the package root (the directory containing `brainbrew.yaml`) and the composed/resolved deck contains the final inlined text. A card template may keep both sides in one file separated by exactly one line containing only `--`:
+
+```yaml
+question_format: !include 'templates/country.html#question'
+answer_format: !include 'templates/country.html#answer'
+```
+
+Only `#question` and `#answer` are supported. The selector is removed before path authorization, and formatting preserves it. In the conventional `question\n\n--\n\nanswer` layout, the blank separator lines are not part of either resolved side.
 
 A base deck may also move its complete note-type ID mapping into one structural include:
 
