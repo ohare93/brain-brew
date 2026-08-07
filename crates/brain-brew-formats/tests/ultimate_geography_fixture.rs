@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use brain_brew_formats::canonical_source_document::CanonicalSourceDocument;
 use brain_brew_formats::core::{
@@ -1456,11 +1457,10 @@ fn ug_regression_note_type_changes_flow_to_crowdanki_for_every_target() {
 
 #[test]
 fn ug_regression_field_definition_changes_flow_to_crowdanki_for_every_target() {
-    let root = fixture_root();
-    let manifest = read_manifest(&root);
-    for target in manifest.targets.keys() {
-        let deck = compose_target(&root, &manifest, target);
-        let note_type = ug_note_type(&deck);
+    let cache = &*UG_REGRESSION_CACHE;
+    for (target, baseline) in &cache.targets {
+        let deck = &baseline.deck;
+        let note_type = ug_note_type(deck);
         let field_id = sid("field.capital");
         let mut note_type_change = empty_note_type_change();
         note_type_change.fields.insert(
@@ -1488,8 +1488,8 @@ fn ug_regression_field_definition_changes_flow_to_crowdanki_for_every_target() {
         overlay
             .note_type_changes
             .insert(note_type.id.clone(), note_type_change);
-        let report = deck
-            .compose(&[overlay])
+        let report = cache
+            .compose_with_extra(target, overlay)
             .expect_err("renaming an Anki field without its template references fails safely");
         assert!(
             report
@@ -2144,25 +2144,119 @@ struct ExpectedJsonValue {
     value: Option<serde_json::Value>,
 }
 
+static UG_REGRESSION_CACHE: LazyLock<UgRegressionCache> = LazyLock::new(UgRegressionCache::load);
+
+struct UgRegressionTarget {
+    overlay_ids: Vec<String>,
+    deck: CanonicalDeck,
+    json: serde_json::Value,
+}
+
+struct UgRegressionCache {
+    base: CanonicalDeck,
+    overlays: BTreeMap<String, Overlay>,
+    targets: BTreeMap<String, UgRegressionTarget>,
+}
+
+impl UgRegressionCache {
+    fn load() -> Self {
+        let root = fixture_root();
+        let manifest = read_manifest(&root);
+        let base_path = root.join(&manifest.base);
+        let base = read_canonical_deck_file(&root, &base_path)
+            .unwrap_or_else(|error| panic!("{} parses: {error}", manifest.base));
+        let plans = manifest
+            .targets
+            .keys()
+            .map(|target| {
+                let overlay_ids = manifest
+                    .expand_target(target)
+                    .unwrap_or_else(|error| panic!("{target} expands: {error}"))
+                    .overlays
+                    .into_iter()
+                    .map(|overlay| overlay.id)
+                    .collect::<Vec<_>>();
+                (target.clone(), overlay_ids)
+            })
+            .collect::<BTreeMap<_, _>>();
+        let used_overlay_ids = plans.values().flatten().cloned().collect::<BTreeSet<_>>();
+        let overlays = used_overlay_ids
+            .into_iter()
+            .map(|id| {
+                let entry = manifest
+                    .overlays
+                    .get(&id)
+                    .unwrap_or_else(|| panic!("expanded overlay {id} exists in manifest"));
+                let path = root.join(&entry.file);
+                let overlay = read_overlay_file(&root, &path)
+                    .unwrap_or_else(|error| panic!("{} parses: {error}", entry.file));
+                (id, overlay)
+            })
+            .collect::<BTreeMap<_, _>>();
+        let targets = plans
+            .into_iter()
+            .map(|(target, overlay_ids)| {
+                let stack = overlay_ids
+                    .iter()
+                    .map(|id| overlays.get(id).unwrap().clone())
+                    .collect::<Vec<_>>();
+                let deck = base
+                    .compose(&stack)
+                    .unwrap_or_else(|error| panic!("{target} composes: {error}"));
+                let json = exported_json(&deck);
+                (
+                    target,
+                    UgRegressionTarget {
+                        overlay_ids,
+                        deck,
+                        json,
+                    },
+                )
+            })
+            .collect();
+        Self {
+            base,
+            overlays,
+            targets,
+        }
+    }
+
+    fn compose_with_extra(
+        &self,
+        target: &str,
+        extra: Overlay,
+    ) -> Result<CanonicalDeck, brain_brew_formats::core::ComposeReport> {
+        let target = self
+            .targets
+            .get(target)
+            .unwrap_or_else(|| panic!("cached target {target} exists"));
+        let mut stack = target
+            .overlay_ids
+            .iter()
+            .map(|id| self.overlays.get(id).unwrap().clone())
+            .collect::<Vec<_>>();
+        stack.push(extra);
+        self.base.compose(&stack)
+    }
+}
+
 fn assert_all_targets_export_exact_diffs(
     case_name: &str,
     build: impl Fn(&str, &CanonicalDeck, &serde_json::Value) -> MutationExpectation,
 ) {
-    let root = fixture_root();
-    let manifest = read_manifest(&root);
-    for target in manifest.targets.keys() {
-        let baseline_deck = compose_target(&root, &manifest, target);
-        let baseline_json = exported_json(&baseline_deck);
-        let expectation = build(target, &baseline_deck, &baseline_json);
+    let cache = &*UG_REGRESSION_CACHE;
+    for (target, baseline) in &cache.targets {
+        let expectation = build(target, &baseline.deck, &baseline.json);
         assert!(
             !expectation.expected.is_empty(),
             "{case_name} for {target} must expect at least one CrowdAnki difference"
         );
 
-        let changed_deck =
-            compose_target_with_extra_overlay(&root, &manifest, target, Some(expectation.overlay));
+        let changed_deck = cache
+            .compose_with_extra(target, expectation.overlay)
+            .unwrap_or_else(|error| panic!("{case_name} for {target} composes: {error}"));
         let changed_json = exported_json(&changed_deck);
-        let actual_paths = json_diff_paths(&baseline_json, &changed_json);
+        let actual_paths = json_diff_paths(&baseline.json, &changed_json);
         let expected_paths = expectation
             .expected
             .iter()
