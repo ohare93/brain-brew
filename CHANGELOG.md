@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-The next preview is `1.0.0-alpha.6`; it is pending the documented release gates and manual crates.io publication.
+The next preview is `1.0.0-alpha.7`; it is pending the documented release gates and manual crates.io publication.
 
 - CSV translation descriptors now own a validated subset of resolved note-type fields, allowing one shared translation source across Standard and extension-added fields while ordinary CSV note sources remain complete.
 - Typed CSV image fields may split one cell into an ordered structured-image sequence with an exact descriptor delimiter.
