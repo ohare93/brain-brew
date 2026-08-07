@@ -10,8 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PUBLISHABLE = {"brain-brew-core", "brain-brew-formats", "brainbrew"}
 INTERNAL = {"brain-brew-core", "brain-brew-formats"}
-CURRENT = "1.0.0-alpha.7"
-STALE = "1.0.0-alpha.6"
+CURRENT = "1.0.0-alpha.8"
+STALE = "1.0.0-alpha.7"
 CURRENT_DOCS = [
     Path("README.md"),
     Path("documentation/docs/getting-started/install.md"),

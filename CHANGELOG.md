@@ -2,8 +2,10 @@
 
 ## Unreleased
 
-The next preview is `1.0.0-alpha.7`; it is pending the documented release gates and manual crates.io publication.
+The next preview is `1.0.0-alpha.8`; it is pending the documented release gates and manual crates.io publication.
 
+- Card templates can select `#question` and `#answer` fragments from one combined include file.
+- Media declarations can separate package-relative source locations from CrowdAnki output names while retaining authored SHA-256 integrity checks and hash-refresh tooling.
 - CSV translation descriptors now own a validated subset of resolved note-type fields, allowing one shared translation source across Standard and extension-added fields while ordinary CSV note sources remain complete.
 - Typed CSV image fields may split one cell into an ordered structured-image sequence with an exact descriptor delimiter.
 - Canonical field definitions now preserve CrowdAnki right-to-left direction through YAML, overlays, composition, fingerprints, import, and export; omitted `rtl` remains `false`.
