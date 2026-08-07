@@ -22,6 +22,30 @@ notes:
 
 Media declaration paths use portable safe-relative syntax. Absolute, drive, UNC, backslash, `.`/`..`, empty components, controls/NUL, URL-scheme colons, bidi/zero-width format controls, trailing dots/spaces, and Windows device names fail before asset I/O. Spaces, Unicode, quotes, ampersands, `#`, `?`, and literal `%` are valid filename characters and are encoded safely when rendered. Asset reads and export destinations also require canonical containment, including when an existing parent is a symlink.
 
+## Separate package source and exported path
+
+When package layout differs from the flat filename referenced by Anki templates, add a package-relative `source` while retaining the committed hash:
+
+```yaml
+media:
+  media.interactive-map-init-js:
+    path: _ug-interactive_map_init.js
+    source: src/media/experimental_assets/_ug-interactive_map_init.js
+    sha256: fa70e8fa2a501f1360a83652157befa28b1de8a20a9a660f35e520d3c19c6ad2
+```
+
+`path` remains the adapter-facing name used in rendered content, CrowdAnki `media_files`, and export output. `source` is only the authoritative package-root-relative byte location. It is authoring provenance, so it is omitted from composed Canonical Deck artifacts and does not alter canonical media fingerprints; the declared `sha256` still verifies the bytes and participates normally in fingerprints and semantic comparison.
+
+Source-backed declarations work inline in base decks and overlays. They require manifest-target commands so package ownership remains available; standalone media-map includes continue to contain ordinary `path`/`sha256` declarations. Source files are registered plan inputs for explain output, package locks, and Workbench freshness. Missing, unsafe, unreadable, or escaping source paths fail during planning.
+
+Refresh both ordinary and source-backed hashes with the same command:
+
+```bash
+brainbrew media hash --manifest brainbrew.yaml --all-targets --media-root media/
+```
+
+`--media-root` remains necessary for any selected ordinary declaration. It may be omitted when every selected declaration has `source`. The command reads source-backed bytes from their package locations, preserves `source`, and updates only `sha256` in mutable root-workspace deck or overlay YAML.
+
 ## Hoisting large media maps
 
 Deck files may keep the top-level media declaration in a separate media-map file:
@@ -61,7 +85,7 @@ brainbrew verify --manifest brainbrew.yaml --target combined \
   --media-root anki-geo.ultimate-geography=/srv/ug-media
 ```
 
-Relative directories are resolved from the root manifest workspace. A qualified mapping takes its package identity from the registry; unknown packages, duplicate mappings (including both unqualified and qualified mappings for the root package), and missing mappings for a declaration owner fail before asset reads. Verify, export, and Workbench authorize each declaration path beneath only that selected owner root.
+Relative directories are resolved from the root manifest workspace. A qualified mapping takes its package identity from the registry; unknown packages, duplicate mappings (including both unqualified and qualified mappings for the root package), and missing mappings for a declaration owner fail before asset reads. Verify, export, and Workbench authorize each ordinary declaration path beneath only that selected owner root. A declaration with `source` instead reads beneath its owning package root and needs no media-root mapping.
 
 Media mutation is intentionally narrower: `media hash` and `media images-to-refs` may write only root-workspace Canonical Deck/Overlay sources. Explicit includes, package-root dependencies, and locked/cache packages are read-only. If a requested operation would change one, the entire operation fails before the transaction writes anything; locked package tree hashes are checked around mutation and caches are never repaired silently.
 

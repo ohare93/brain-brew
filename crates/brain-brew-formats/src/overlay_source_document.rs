@@ -196,6 +196,20 @@ impl OverlaySourceDocument {
             canonical_yaml::overlay_from_str(&resolved_yaml).map_err(|error| {
                 SourceDocumentError::source(prepared.root.provenance(), error.to_string())
             })?;
+        for id in prepared.includes.media_asset_sources().keys() {
+            if overlay
+                .media_changes
+                .get(id)
+                .and_then(|change| change.media.as_ref())
+                .is_none()
+            {
+                return Err(SourceDocumentError::at(
+                    prepared.root.provenance(),
+                    format!("media.{id}.source"),
+                    "media source requires a complete path and sha256 declaration",
+                ));
+            }
+        }
         let sparse_source_deck = match materialization {
             CsvMaterialization::Inventory => None,
             CsvMaterialization::SparseFields(deck)
@@ -270,6 +284,11 @@ impl OverlaySourceDocument {
     /// Every scalar source loaded by this document.
     pub fn included_sources(&self) -> Vec<IncludedSource> {
         self.includes.source_provenance()
+    }
+
+    /// Package-relative asset locations for source-backed media declarations.
+    pub fn media_asset_sources(&self) -> &BTreeMap<StableId, String> {
+        self.includes.media_asset_sources()
     }
 
     pub fn csv_translation_sources(&self) -> &[CsvTranslationSourceDeclaration] {

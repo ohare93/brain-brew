@@ -313,6 +313,15 @@ impl CanonicalSourceDocument {
         if let Some(media) = prepared.includes.media() {
             deck.media = media.clone();
         }
+        for id in prepared.includes.media_asset_sources().keys() {
+            if !deck.media.contains_key(id) {
+                return Err(SourceDocumentError::at(
+                    prepared.root.provenance(),
+                    format!("media.{id}.source"),
+                    "media source requires a complete path and sha256 declaration",
+                ));
+            }
+        }
         let materialized_yaml = yaml_with_included_structures_for_validation(
             &prepared.materialized_yaml,
             prepared.includes.resolved_note_types(),
@@ -402,6 +411,11 @@ impl CanonicalSourceDocument {
     /// Every scalar or structural media source loaded by this document.
     pub fn included_sources(&self) -> Vec<IncludedSource> {
         self.includes.source_provenance()
+    }
+
+    /// Package-relative asset locations for source-backed media declarations.
+    pub fn media_asset_sources(&self) -> &BTreeMap<StableId, String> {
+        self.includes.media_asset_sources()
     }
 
     /// Read-only validated domain view. Mutation remains behind typed methods.

@@ -262,6 +262,7 @@ fn verify_plan_source_formats(plan: &TargetPlan) -> Result<(), String> {
             }
             PlanSourceKind::Base
             | PlanSourceKind::ScalarInclude { .. }
+            | PlanSourceKind::MediaAsset { .. }
             | PlanSourceKind::CsvDescriptor
             | PlanSourceKind::CsvTable { .. } => {}
         }

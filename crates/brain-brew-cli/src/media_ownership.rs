@@ -90,7 +90,11 @@ impl MediaRootSelections {
         if !self.supplied {
             return Ok(());
         }
-        for declaration in plan.media_declarations.values() {
+        for declaration in plan
+            .media_declarations
+            .values()
+            .filter(|declaration| declaration.asset_source.is_none())
+        {
             self.require_for_declaration(&plan.qualified_name, declaration)?;
         }
         Ok(())

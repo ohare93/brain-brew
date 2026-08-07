@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use brain_brew_core::{CanonicalDeck, ChangeIntent, FieldValue, Overlay, OverlayKind};
+use brain_brew_core::{CanonicalDeck, ChangeIntent, FieldValue, Overlay, OverlayKind, StableId};
 use brain_brew_formats::canonical_source_document::NoteAuthoringProvenance;
 use brain_brew_formats::csv_note_source::CsvTranslationAuthoringProvenance;
 use brain_brew_formats::manifest::{self, FederatedDeckManifest};
@@ -65,6 +65,7 @@ pub(crate) enum PlanSourceKind {
     Overlay { kind: OverlayKind },
     ScalarInclude { schema_path: String },
     MediaInclude,
+    MediaAsset { media_id: String },
     NoteTypesInclude,
     CsvDescriptor,
     CsvTable { alias: String },
@@ -130,6 +131,7 @@ pub(crate) struct MediaDeclarationProvenance {
     pub(crate) id: String,
     pub(crate) path: String,
     pub(crate) sha256: String,
+    pub(crate) asset_source: Option<String>,
     pub(crate) package: Option<PackageIdentity>,
     pub(crate) package_root: PathBuf,
     pub(crate) source_kind: RegistrySourceKind,
@@ -415,11 +417,16 @@ impl ManifestRegistry {
             let base_path = authorize_manifest_path(loaded, "base", &loaded.manifest.base)?;
             let base_document =
                 canonical_document_from_package(&base_path, &loaded.root, &loaded.include_roots)?;
-            let source = source_provenance(loaded, base_path, PlanSourceKind::Base)?;
+            let source = source_provenance(loaded, base_path.clone(), PlanSourceKind::Base)?;
             sources.insert(source.path.clone(), source);
             for include in included_provenance(loaded, base_document.included_sources())?
                 .into_iter()
                 .chain(csv_source_provenance(loaded, base_document.csv_sources())?)
+                .chain(media_asset_source_provenance(
+                    loaded,
+                    &base_path,
+                    base_document.media_asset_sources(),
+                )?)
             {
                 sources.insert(include.path.clone(), include);
             }
@@ -433,11 +440,17 @@ impl ManifestRegistry {
                     overlay_document_from_package(&file, &loaded.root, &loaded.include_roots)?;
                 let overlay = document.resolved_overlay();
                 let kind = overlay.kind;
-                let source = source_provenance(loaded, file, PlanSourceKind::Overlay { kind })?;
+                let source =
+                    source_provenance(loaded, file.clone(), PlanSourceKind::Overlay { kind })?;
                 sources.insert(source.path.clone(), source);
                 for include in included_provenance(loaded, document.included_sources())?
                     .into_iter()
                     .chain(csv_source_provenance(loaded, document.csv_sources())?)
+                    .chain(media_asset_source_provenance(
+                        loaded,
+                        &file,
+                        document.media_asset_sources(),
+                    )?)
                 {
                     sources.insert(include.path.clone(), include);
                 }
@@ -489,11 +502,17 @@ impl ManifestRegistry {
         )?;
         let base = base_document.resolved_deck().clone();
         let base_note_authoring_provenance = base_document.authoring_provenance().clone();
-        let base_source = source_provenance(base_loaded, base_path, PlanSourceKind::Base)?;
+        let base_media_asset_sources = base_document.media_asset_sources().clone();
+        let base_source = source_provenance(base_loaded, base_path.clone(), PlanSourceKind::Base)?;
         let mut base_includes = included_provenance(base_loaded, base_document.included_sources())?;
         base_includes.extend(csv_source_provenance(
             base_loaded,
             base_document.csv_sources(),
+        )?);
+        base_includes.extend(media_asset_source_provenance(
+            base_loaded,
+            &base_path,
+            base_document.media_asset_sources(),
         )?);
 
         let mut inventory = Vec::new();
@@ -550,6 +569,7 @@ impl ManifestRegistry {
                         media_declaration_source,
                         &base_source.path,
                         media,
+                        base_media_asset_sources.get(&media.id),
                     ),
                 )
             })
@@ -582,6 +602,11 @@ impl ManifestRegistry {
             let source = source_provenance(loaded, file.clone(), PlanSourceKind::Overlay { kind })?;
             let mut includes = included_provenance(loaded, document.included_sources())?;
             includes.extend(csv_source_provenance(loaded, document.csv_sources())?);
+            includes.extend(media_asset_source_provenance(
+                loaded,
+                &file,
+                document.media_asset_sources(),
+            )?);
             for (id, change) in &overlay.media_changes {
                 match change.intent {
                     ChangeIntent::Remove => {
@@ -607,7 +632,13 @@ impl ManifestRegistry {
                             }
                             media_declarations.insert(
                                 id.to_string(),
-                                media_owner(loaded, &source.path, &source.path, media),
+                                media_owner(
+                                    loaded,
+                                    &source.path,
+                                    &source.path,
+                                    media,
+                                    document.media_asset_sources().get(id),
+                                ),
                             );
                         }
                     }
@@ -1078,6 +1109,30 @@ fn included_provenance(
         .collect()
 }
 
+fn media_asset_source_provenance(
+    loaded: &RegistryManifest,
+    document_path: &Path,
+    sources: &BTreeMap<StableId, String>,
+) -> Result<Vec<SourceProvenance>, String> {
+    let authorizer = PathAuthorizer::new("package", &loaded.root)?;
+    sources
+        .iter()
+        .map(|(media_id, source)| {
+            let path = authorizer
+                .authorize_read(document_path, format!("media.{media_id}.source"), source)
+                .map_err(|error| error.to_string())?
+                .into_path_buf();
+            source_provenance(
+                loaded,
+                path,
+                PlanSourceKind::MediaAsset {
+                    media_id: media_id.to_string(),
+                },
+            )
+        })
+        .collect()
+}
+
 fn csv_source_provenance(
     loaded: &RegistryManifest,
     sources: &[(
@@ -1125,11 +1180,13 @@ fn media_owner(
     source: &Path,
     document_source: &Path,
     media: &brain_brew_core::MediaReference,
+    asset_source: Option<&String>,
 ) -> MediaDeclarationProvenance {
     MediaDeclarationProvenance {
         id: media.id.to_string(),
         path: media.path.clone(),
         sha256: media.sha256.clone(),
+        asset_source: asset_source.cloned(),
         package: loaded.identity.clone(),
         package_root: loaded.root.clone(),
         source_kind: loaded.discovery,

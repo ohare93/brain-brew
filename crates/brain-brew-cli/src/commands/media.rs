@@ -74,17 +74,25 @@ fn run_hash(args: &[String]) -> Result<(), String> {
 
     let mut updates = BTreeMap::<PathBuf, Vec<(MediaDeclarationProvenance, String)>>::new();
     for declaration in declarations.into_values() {
-        let root = roots.require_for_declaration("media-hash mutation", &declaration)?;
+        let (root, field, path) = if let Some(source) = &declaration.asset_source {
+            (
+                declaration.package_root.as_path(),
+                format!("media.{}.source", declaration.id),
+                source.as_str(),
+            )
+        } else {
+            (
+                roots.require_for_declaration("media-hash mutation", &declaration)?,
+                format!("media.{}.path", declaration.id),
+                declaration.path.as_str(),
+            )
+        };
         let authorizer = PathAuthorizer::new(
             format!("media for package {}", declaration.package_label()),
             root,
         )?;
         let asset = authorizer
-            .authorize_read(
-                &declaration.source,
-                format!("media.{}.path", declaration.id),
-                &declaration.path,
-            )
+            .authorize_read(&declaration.source, field, path)
             .map_err(|error| mutation_asset_error(&declaration, root, &error.to_string()))?
             .into_path_buf();
         let bytes = fs::read(&asset)
@@ -332,9 +340,6 @@ fn parse_media_args(args: &[String], require_roots: bool) -> Result<MediaArgs, S
             "media command requires exactly one of --all-targets or --target <target>".to_owned(),
         );
     }
-    if require_roots && parsed.media_roots.is_empty() {
-        return Err("media hash requires --media-root".to_owned());
-    }
     if !require_roots && !parsed.media_roots.is_empty() {
         return Err("media images-to-refs does not use --media-root".to_owned());
     }
@@ -513,6 +518,7 @@ impl SourceKindName for SourceProvenance {
             PlanSourceKind::Overlay { .. } => "overlay",
             PlanSourceKind::ScalarInclude { .. } => "scalar include",
             PlanSourceKind::MediaInclude => "media include",
+            PlanSourceKind::MediaAsset { .. } => "media asset",
             PlanSourceKind::NoteTypesInclude => "note-types include",
             PlanSourceKind::CsvDescriptor => "CSV descriptor",
             PlanSourceKind::CsvTable { .. } => "CSV table",

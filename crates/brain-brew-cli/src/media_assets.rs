@@ -101,14 +101,13 @@ fn collect_owned_media_assets(
     ensure_plan_matches_deck(plan, deck)?;
     let mut assets = BTreeMap::new();
     for declaration in plan.media_declarations.values() {
-        let root = roots.require_for_declaration(&plan.qualified_name, declaration)?;
-        let (bytes, actual) =
-            read_owned_asset(&plan.qualified_name, declaration, root, retain_assets)?;
+        let (bytes, actual, root) =
+            read_owned_asset(&plan.qualified_name, declaration, roots, retain_assets)?;
         if declaration.sha256.is_empty() {
             return Err(owned_error(
                 &plan.qualified_name,
                 declaration,
-                root,
+                &root,
                 "media entry has empty sha256",
             ));
         }
@@ -116,7 +115,7 @@ fn collect_owned_media_assets(
             return Err(owned_error(
                 &plan.qualified_name,
                 declaration,
-                root,
+                &root,
                 &format!(
                     "sha256 mismatch: expected {}, actual {actual}",
                     declaration.sha256
@@ -208,19 +207,19 @@ fn ensure_plan_matches_deck(plan: &TargetPlan, deck: &CanonicalDeck) -> Result<(
 fn read_owned_asset(
     target: &str,
     declaration: &MediaDeclarationProvenance,
-    root: &Path,
+    roots: &MediaRootSelections,
     retain_bytes: bool,
-) -> Result<(Option<Vec<u8>>, String), String> {
-    let path = owned_asset_path(target, declaration, root)?;
+) -> Result<(Option<Vec<u8>>, String, PathBuf), String> {
+    let (path, root) = owned_asset_path(target, declaration, roots)?;
     let mut file = File::open(&path)
-        .map_err(|error| owned_error(target, declaration, root, &error.to_string()))?;
+        .map_err(|error| owned_error(target, declaration, &root, &error.to_string()))?;
     let mut bytes = Vec::new();
     let mut hasher = Sha256::new();
     let mut chunk = [0_u8; 64 * 1024];
     loop {
         let count = file
             .read(&mut chunk)
-            .map_err(|error| owned_error(target, declaration, root, &error.to_string()))?;
+            .map_err(|error| owned_error(target, declaration, &root, &error.to_string()))?;
         if count == 0 {
             break;
         }
@@ -232,25 +231,36 @@ fn read_owned_asset(
     Ok((
         retain_bytes.then_some(bytes),
         format!("{:x}", hasher.finalize()),
+        root,
     ))
 }
 
 fn owned_asset_path(
     target: &str,
     declaration: &MediaDeclarationProvenance,
-    root: &Path,
-) -> Result<std::path::PathBuf, String> {
-    PathAuthorizer::new(
+    roots: &MediaRootSelections,
+) -> Result<(PathBuf, PathBuf), String> {
+    let (root, field, path) = if let Some(source) = &declaration.asset_source {
+        (
+            declaration.package_root.as_path(),
+            format!("media.{}.source", declaration.id),
+            source.as_str(),
+        )
+    } else {
+        (
+            roots.require_for_declaration(target, declaration)?,
+            format!("media.{}.path", declaration.id),
+            declaration.path.as_str(),
+        )
+    };
+    let authorized = PathAuthorizer::new(
         format!("media for package {}", declaration.package_label()),
         root,
     )?
-    .authorize_read(
-        &declaration.source,
-        format!("media.{}.path", declaration.id),
-        &declaration.path,
-    )
+    .authorize_read(&declaration.source, field, path)
     .map(|path| path.into_path_buf())
-    .map_err(|error| owned_error(target, declaration, root, &error.to_string()))
+    .map_err(|error| owned_error(target, declaration, root, &error.to_string()))?;
+    Ok((authorized, root.to_path_buf()))
 }
 
 fn owned_error(

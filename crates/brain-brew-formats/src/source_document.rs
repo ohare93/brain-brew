@@ -257,6 +257,7 @@ pub(crate) struct IncludeState {
     scalar: BTreeMap<String, ScalarInclude>,
     media: Option<MediaInclude>,
     note_types: Option<NoteTypesInclude>,
+    media_asset_sources: BTreeMap<StableId, String>,
     loaded_sources: BTreeSet<IncludedSource>,
 }
 
@@ -322,6 +323,10 @@ impl IncludeState {
 
     pub(crate) fn media(&self) -> Option<&BTreeMap<StableId, MediaReference>> {
         self.media.as_ref().map(|include| &include.media)
+    }
+
+    pub(crate) fn media_asset_sources(&self) -> &BTreeMap<StableId, String> {
+        &self.media_asset_sources
     }
 
     pub(crate) fn note_types(&self) -> Option<&BTreeMap<StableId, NoteType>> {
@@ -457,6 +462,7 @@ impl IncludeState {
         &self,
         mut canonical: String,
     ) -> Result<String, SourceDocumentError> {
+        canonical = self.restore_media_asset_sources(canonical)?;
         for (path, include) in &self.scalar {
             let count = canonical.matches(&include.sentinel).count();
             if count != 1 {
@@ -510,6 +516,64 @@ impl IncludeState {
             };
             let end = start + relative_end;
             canonical.replace_range(start..end, &format!("{}\n", include.directive));
+        }
+        Ok(canonical)
+    }
+
+    fn restore_media_asset_sources(
+        &self,
+        mut canonical: String,
+    ) -> Result<String, SourceDocumentError> {
+        let Some(media_start) = strict_yaml::top_level_mapping_key_offset(&canonical, "media")
+        else {
+            if self.media_asset_sources.is_empty() {
+                return Ok(canonical);
+            }
+            return Err(SourceDocumentError::source(
+                &self
+                    .scalar
+                    .values()
+                    .next()
+                    .map(|include| include.source.provenance.clone())
+                    .unwrap_or_else(|| SourceProvenance::new("<source>")),
+                "canonical emission omitted media declarations with source paths",
+            ));
+        };
+        for (id, source) in &self.media_asset_sources {
+            let marker = format!("  {id}:\n");
+            let relative_start = canonical[media_start..].find(&marker).ok_or_else(|| {
+                SourceDocumentError::new(
+                    SourceProvenance::new("<source>"),
+                    Some(format!("media.{id}.source")),
+                    "canonical emission omitted the source-backed media declaration",
+                )
+            })?;
+            let declaration_start = media_start + relative_start;
+            let body_start = declaration_start + marker.len();
+            let mut declaration_end = canonical.len();
+            let mut offset = 0;
+            for line in canonical[body_start..].split_inclusive('\n') {
+                if (!line.starts_with(' ') && !line.trim().is_empty())
+                    || (line.starts_with("  ") && !line.starts_with("    "))
+                {
+                    declaration_end = body_start + offset;
+                    break;
+                }
+                offset += line.len();
+            }
+            let hash_offset = canonical[declaration_start..declaration_end]
+                .find("    sha256:")
+                .ok_or_else(|| {
+                    SourceDocumentError::new(
+                        SourceProvenance::new("<source>"),
+                        Some(format!("media.{id}.source")),
+                        "source-backed media declaration has no emitted sha256",
+                    )
+                })?;
+            canonical.insert_str(
+                declaration_start + hash_offset,
+                &format!("    source: {}\n", yaml_scalar::scalar(source)),
+            );
         }
         Ok(canonical)
     }
@@ -844,6 +908,9 @@ fn prepare_value(
             stack,
         )?,
         Value::Mapping(mapping) => {
+            if path.as_slice() == ["media"] {
+                take_media_asset_sources(mapping, root, includes)?;
+            }
             for (key, item) in mapping {
                 path.push(path_segment(key));
                 prepare_value(
@@ -876,6 +943,40 @@ fn prepare_value(
             }
         }
         Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
+    Ok(())
+}
+
+fn take_media_asset_sources(
+    media: &mut Mapping,
+    root: &SourceProvenance,
+    includes: &mut IncludeState,
+) -> Result<(), SourceDocumentError> {
+    let source_key = Value::String("source".to_owned());
+    for (id, declaration) in media {
+        let Some(id) = id.as_str() else {
+            continue;
+        };
+        let Some(declaration) = declaration.as_mapping_mut() else {
+            continue;
+        };
+        let Some(source) = declaration.remove(&source_key) else {
+            continue;
+        };
+        let Value::String(source) = source else {
+            return Err(SourceDocumentError::at(
+                root,
+                format!("media.{id}.source"),
+                "media source must be a scalar package-relative path",
+            ));
+        };
+        crate::safe_relative_path::SafeRelativePath::new(&source).map_err(|error| {
+            SourceDocumentError::at(root, format!("media.{id}.source"), error.to_string())
+        })?;
+        let id = StableId::new(id).map_err(|error| {
+            SourceDocumentError::at(root, format!("media.{id}.source"), error.to_string())
+        })?;
+        includes.media_asset_sources.insert(id, source);
     }
     Ok(())
 }

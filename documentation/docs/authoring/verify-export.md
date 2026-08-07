@@ -60,7 +60,7 @@ Prefer fixing the source when possible; the flag skips only this HTML/CSS struct
 brainbrew verify --manifest brainbrew.yaml --all-targets --media-root media/
 ```
 
-Referenced-but-undeclared media is an error and declared-but-unreferenced media is a warning. For a target with media, omitting a root is also an error: strict mode never silently degrades. Every declaration must have a canonical 64-character lowercase hexadecimal SHA-256 matching the file. In a federation, unqualified `--media-root media/` maps only the root package. Repeat the option as `--media-root <package-id>=<directory>` for every dependency that owns a final declaration; duplicate, unknown, and missing package mappings fail before reads. Refresh hashes after intentional root-workspace media edits with:
+Referenced-but-undeclared media is an error and declared-but-unreferenced media is a warning. Every declaration must have a canonical 64-character lowercase hexadecimal SHA-256 matching the file. Ordinary declarations require an owning package media root; declarations with a package-relative `source` read from that package and do not require a root. Strict mode never silently degrades when an ordinary declaration lacks its root. In a federation, unqualified `--media-root media/` maps only the root package. Repeat the option as `--media-root <package-id>=<directory>` for every dependency that owns a final declaration; duplicate, unknown, and missing package mappings fail before reads. Refresh hashes after intentional root-workspace media edits with:
 
 ```bash
 brainbrew media hash --manifest brainbrew.yaml --all-targets --media-root media/
@@ -96,7 +96,7 @@ brainbrew export crowdanki \
   --out build/crowdanki/de-standard
 ```
 
-Export copies the declared media set itself, so release scripts do not need a separate `cp media/*` step. Files present under a media root but not declared are not exported. Each declaration is read only from its final declaring package's authorized root; a same-named file under the root package cannot satisfy a dependency declaration. A development export without bytes requires `--media-mode reference-only`; it still rejects undeclared references and collisions before staging and reports that the artifact is not release-ready.
+Export copies the declared media set itself, so release scripts do not need a separate `cp media/*` step. Files present under a media root but not declared are not exported. Each ordinary declaration is read only from its final declaring package's authorized media root; a declaration with `source` is read beneath that owning package root. A same-named file under the root package cannot satisfy a dependency declaration. A development export without bytes requires `--media-mode reference-only`; it still rejects undeclared references and collisions before staging and reports that the artifact is not release-ready.
 
 Export refuses an existing output directory by default. To rerun intentionally, pass `--force`: Brain Brew validates and stages the complete new tree, moves the old complete tree to a recovery backup, and publishes the stage as one clean directory replacement. This removes stale files without ever copying into the live output tree.
 

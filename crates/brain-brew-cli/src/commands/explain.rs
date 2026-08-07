@@ -191,6 +191,7 @@ fn source_kind_name(kind: &PlanSourceKind) -> &'static str {
         PlanSourceKind::Overlay { .. } => "overlay",
         PlanSourceKind::ScalarInclude { .. } => "scalar_include",
         PlanSourceKind::MediaInclude => "media_include",
+        PlanSourceKind::MediaAsset { .. } => "media_asset",
         PlanSourceKind::NoteTypesInclude => "note_types_include",
         PlanSourceKind::CsvDescriptor => "csv_descriptor",
         PlanSourceKind::CsvTable { .. } => "csv_table",

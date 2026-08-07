@@ -1360,21 +1360,34 @@ impl WorkspaceMetadata {
         let declaration = self.media_declaration(&requested_path)?.ok_or_else(|| {
             WorkbenchError::not_found(format!("unknown media asset {requested_path:?}"))
         })?;
-        let root = if let Some(root) = self.media_roots.explicit_for_declaration(&declaration) {
-            root.to_path_buf()
-        } else if self.media_roots.supplied() {
-            self.media_roots
-                .require_for_declaration("Workbench media catalog", &declaration)?
-                .to_path_buf()
+        let (root, field, asset_path) = if let Some(source) = &declaration.asset_source {
+            (
+                declaration.package_root.clone(),
+                format!("media.{}.source", declaration.id),
+                source.clone(),
+            )
         } else {
-            // Compatibility fallback is owner-derived, never target-root-derived:
-            // package_root/media wins when present, otherwise package_root.
-            let conventional = declaration.package_root.join("media");
-            if conventional.is_dir() {
-                conventional
+            let root = if let Some(root) = self.media_roots.explicit_for_declaration(&declaration) {
+                root.to_path_buf()
+            } else if self.media_roots.supplied() {
+                self.media_roots
+                    .require_for_declaration("Workbench media catalog", &declaration)?
+                    .to_path_buf()
             } else {
-                declaration.package_root.clone()
-            }
+                // Compatibility fallback is owner-derived, never target-root-derived:
+                // package_root/media wins when present, otherwise package_root.
+                let conventional = declaration.package_root.join("media");
+                if conventional.is_dir() {
+                    conventional
+                } else {
+                    declaration.package_root.clone()
+                }
+            };
+            (
+                root,
+                format!("media.{}.path", declaration.id),
+                requested_path.clone(),
+            )
         };
         let authorizer = PathAuthorizer::new(
             format!(
@@ -1383,11 +1396,7 @@ impl WorkspaceMetadata {
             ),
             &root,
         )?;
-        match authorizer.authorize_read(
-            &declaration.source,
-            format!("media.{}.path", declaration.id),
-            &requested_path,
-        ) {
+        match authorizer.authorize_read(&declaration.source, field, &asset_path) {
             Ok(path) => {
                 let path = path.into_path_buf();
                 let bytes =
@@ -1400,7 +1409,7 @@ impl WorkspaceMetadata {
                         WorkbenchError::internal(format!("failed to build media response: {error}"))
                     })
             }
-            Err(_error) if !root.join(&requested_path).exists() => {
+            Err(_error) if !root.join(&asset_path).exists() => {
                 let placeholder = missing_media_placeholder_svg(&requested_path);
                 Response::builder()
                     .status(StatusCode::OK)
@@ -4533,6 +4542,7 @@ fn ensure_root_source_mutable(
                     crate::planner::PlanSourceKind::Overlay { .. } => "overlay",
                     crate::planner::PlanSourceKind::ScalarInclude { .. } => "scalar include",
                     crate::planner::PlanSourceKind::MediaInclude => "media include",
+                    crate::planner::PlanSourceKind::MediaAsset { .. } => "media asset",
                     crate::planner::PlanSourceKind::NoteTypesInclude => "note-types include",
                     crate::planner::PlanSourceKind::CsvDescriptor => "CSV descriptor",
                     crate::planner::PlanSourceKind::CsvTable { .. } => "CSV table",

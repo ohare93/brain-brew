@@ -5,6 +5,8 @@
 **Deciders**: Project Lead
 
 > **Amendment:** ADR-018 supersedes this ADR's parallel-map core representation. The `!image` syntax, stable media-ID references, lowering, verification, import, and include decisions remain active.
+>
+> **Amendment:** An inline base or overlay media declaration may add a package-root-relative `source` beside its adapter-facing `path` and committed `sha256`. The source locator remains authoring provenance outside `MediaReference`; planning, verification, export, Workbench, and `media hash` read those package-owned bytes while canonical fingerprints continue to cover stable ID, output path, and hash.
 
 ## Context
 

@@ -103,7 +103,7 @@ brainbrew export crowdanki --manifest brainbrew.yaml --target en-standard --medi
 brainbrew export crowdanki --manifest brainbrew.yaml --target en-standard --media-root media/ --force --json
 ```
 
-Exports a CrowdAnki folder. Media targets are strict by default and require all package owner roots, canonical hashes, and matching bytes. `--media-mode reference-only` is the explicit development-only path for producing `deck.json` without byte copy; it still validates all references/collisions and reports `NOT RELEASE-READY`. A missing root never selects it. `--json` returns structured `media.mode`, `media.release_ready`, copy counts, and warnings. Without `--out`, manifest-target exports default to `build/crowdanki/<target>` unless the target configures `exports.crowdanki.out`. Existing output is refused unless `--force` is explicit. Brain Brew validates everything before it stages the complete clean tree privately and publishes it by directory rename. Forced replacement first renames the old complete tree to a recovery backup; ordinary failure restores it, and interruption leaves a sibling recovery journal rather than a mixed tree.
+Exports a CrowdAnki folder. Media targets are strict by default and require canonical hashes and matching bytes. Ordinary declarations require all package owner roots; declarations with package-relative `source` paths read from their owning packages without a media-root mapping. `--media-mode reference-only` is the explicit development-only path for producing `deck.json` without byte copy; it still validates all references/collisions and reports `NOT RELEASE-READY`. A missing root never selects it. `--json` returns structured `media.mode`, `media.release_ready`, copy counts, and warnings. Without `--out`, manifest-target exports default to `build/crowdanki/<target>` unless the target configures `exports.crowdanki.out`. Existing output is refused unless `--force` is explicit. Brain Brew validates everything before it stages the complete clean tree privately and publishes it by directory rename. Forced replacement first renames the old complete tree to a recovery backup; ordinary failure restores it, and interruption leaves a sibling recovery journal rather than a mixed tree.
 
 ## `media hash`
 
@@ -112,7 +112,7 @@ brainbrew media hash --manifest brainbrew.yaml --all-targets --media-root media/
 brainbrew media hash --manifest brainbrew.yaml --target en-standard --media-root media/
 ```
 
-Computes SHA-256 values for declared media files and writes missing/stale hashes back to deck or overlay source YAML with include-preserving canonical formatting. If a deck uses `media: !include media.yaml`, the command follows the include and writes updated hashes to the included media-map file.
+Computes SHA-256 values for declared media files and writes missing/stale hashes back to deck or overlay source YAML with include-preserving canonical formatting. Source-backed declarations read their package-relative `source` and preserve it; ordinary declarations read `path` beneath the selected media root. `--media-root` may be omitted only when every selected declaration has `source`. If a deck uses `media: !include media.yaml`, the command follows the include and writes updated hashes to the included media-map file.
 
 ## `import crowdanki`
 

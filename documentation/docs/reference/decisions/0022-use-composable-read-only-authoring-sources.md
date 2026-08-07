@@ -255,6 +255,8 @@ Descriptors and every referenced CSV file are registered source inputs for their
 
 Formatting preserves `!csv`, tagged source sequences, `translations.from_csv`, and sparse CSV declarations instead of expanding rows. Descriptor YAML is canonically formattable. CSV bytes are read but never rewritten.
 
+Media declarations may likewise retain a package-relative `source` as authoring provenance when their repository location differs from adapter-facing `path`. The source locator remains outside the filesystem-independent core `MediaReference`; its bytes are registered plan inputs, while the committed `sha256` materializes unchanged into the core model. This is a byte source for an explicitly declared media entity, not a general folder importer or scalar `!include`.
+
 ### Delivery and Ultimate Geography gate
 
 Every implementation slice uses Red-Green-Refactor:

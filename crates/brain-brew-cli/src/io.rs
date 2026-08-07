@@ -173,8 +173,11 @@ pub(crate) fn canonical_document_from_package(
 
 fn read_deck_with_context(path: &Path, context: &SourceContext) -> Result<CanonicalDeck, String> {
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    parse_canonical_source(source_file(path, &input, context)?, context)
-        .map(|document| document.resolved_deck().clone())
+    let document = parse_canonical_source(source_file(path, &input, context)?, context)?;
+    if !document.media_asset_sources().is_empty() {
+        return Err("source-backed media requires a manifest target so package ownership and asset provenance remain available".to_owned());
+    }
+    Ok(document.resolved_deck().clone())
 }
 
 pub(crate) fn overlay_document_from_package(
@@ -264,8 +267,8 @@ fn read_overlay_with_sparse_fields_context(
         |request| load_source_include(request, context),
         |request| load_csv_source(request, context),
     )
-    .map(|document| document.resolved_overlay().clone())
     .map_err(|error| error.to_string())
+    .and_then(resolved_ad_hoc_overlay)
 }
 
 fn read_overlay_with_context(
@@ -280,8 +283,8 @@ fn read_overlay_with_context(
         |request| load_source_include(request, context),
         |request| load_csv_source(request, context),
     )
-    .map(|document| document.resolved_overlay().clone())
     .map_err(|error| error.to_string())
+    .and_then(resolved_ad_hoc_overlay)
 }
 
 pub(crate) fn overlay_from_source_text(path: &Path, input: &str) -> Result<Overlay, String> {
@@ -308,7 +311,14 @@ fn overlay_from_source_text_with_context(
     context: &SourceContext,
 ) -> Result<Overlay, String> {
     overlay_inventory_document_from_source_text_with_context(path, input, context)
-        .map(|document| document.resolved_overlay().clone())
+        .and_then(resolved_ad_hoc_overlay)
+}
+
+fn resolved_ad_hoc_overlay(document: OverlaySourceDocument) -> Result<Overlay, String> {
+    if !document.media_asset_sources().is_empty() {
+        return Err("source-backed media requires a manifest target so package ownership and asset provenance remain available".to_owned());
+    }
+    Ok(document.resolved_overlay().clone())
 }
 
 pub(crate) fn read_manifest(path: &Path) -> Result<manifest::FederatedDeckManifest, String> {
@@ -351,6 +361,12 @@ pub(crate) fn read_deck_and_overlays(
             ))
         })
         .collect::<Result<Vec<_>, String>>()?;
+    if inventory
+        .iter()
+        .any(|(_, document)| !document.media_asset_sources().is_empty())
+    {
+        return Err("source-backed media requires a manifest target so package ownership and asset provenance remain available".to_owned());
+    }
     let has_csv_sparse_fields = inventory
         .iter()
         .any(|(_, document)| !document.csv_sparse_field_sources().is_empty());

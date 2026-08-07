@@ -207,6 +207,61 @@ fn verify_and_export_require_each_owner_root_and_never_substitute_root_bytes() {
 }
 
 #[test]
+fn dependency_source_backed_media_uses_its_package_source_without_a_media_root() {
+    let temp = tempfile::tempdir().unwrap();
+    let dep = temp.path().join("dep");
+    let root = temp.path().join("root");
+    let dep_manifest = write_package(
+        &dep,
+        "example.dep",
+        "media.runtime",
+        "runtime.js",
+        b"dependency runtime",
+        "<script src=\"runtime.js\"></script>",
+    );
+    fs::create_dir_all(dep.join("src/media")).unwrap();
+    fs::rename(dep.join("runtime.js"), dep.join("src/media/runtime.js")).unwrap();
+    let deck = fs::read_to_string(dep.join("deck.yaml")).unwrap().replace(
+        "    path: runtime.js\n    sha256:",
+        "    path: runtime.js\n    source: src/media/runtime.js\n    sha256:",
+    );
+    fs::write(dep.join("deck.yaml"), deck).unwrap();
+    let formatted = run(&["fmt", dep.join("deck.yaml").to_str().unwrap()]);
+    assert!(formatted.status.success(), "{}", stderr(&formatted));
+    let root_manifest = write_consumer(&root, "id: overlay.media\nkind: extension\n");
+
+    let verify = run(&[
+        "verify",
+        "--manifest",
+        root_manifest.to_str().unwrap(),
+        "--include",
+        dep_manifest.to_str().unwrap(),
+        "--target",
+        "combined",
+    ]);
+    assert!(verify.status.success(), "{}", stderr(&verify));
+
+    let output = temp.path().join("source-backed-dependency-export");
+    let export = run(&[
+        "export",
+        "crowdanki",
+        "--manifest",
+        root_manifest.to_str().unwrap(),
+        "--include",
+        dep_manifest.to_str().unwrap(),
+        "--target",
+        "combined",
+        "--out",
+        output.to_str().unwrap(),
+    ]);
+    assert!(export.status.success(), "{}", stderr(&export));
+    assert_eq!(
+        fs::read(output.join("media/runtime.js")).unwrap(),
+        b"dependency runtime"
+    );
+}
+
+#[test]
 fn cross_package_path_collisions_and_ambiguous_ownership_transitions_fail() {
     let temp = tempfile::tempdir().unwrap();
     let dep = temp.path().join("dep");
@@ -308,6 +363,13 @@ fn media_mutation_rejects_locked_declarations_without_changing_cache_or_source()
         b"dependency-bytes",
         "<img src=\"shared.png\" />",
     );
+    let deck = fs::read_to_string(dep.join("deck.yaml")).unwrap().replace(
+        "    path: shared.png\n    sha256:",
+        "    path: shared.png\n    source: shared.png\n    sha256:",
+    );
+    fs::write(dep.join("deck.yaml"), deck).unwrap();
+    let formatted = run(&["fmt", dep.join("deck.yaml").to_str().unwrap()]);
+    assert!(formatted.status.success(), "{}", stderr(&formatted));
     let root_manifest = write_consumer(&root, "id: overlay.media\nkind: extension\n");
     let cache = temp.path().join("cache");
     let lock = root.join("brainbrew.lock");

@@ -117,6 +117,38 @@ fn canonical_document_preserves_and_routes_base_note_type_structural_include() {
 }
 
 #[test]
+fn canonical_document_preserves_package_media_sources_outside_the_core_model() {
+    let root = deck_source().replace(
+        "media: !include media.yaml",
+        "media:\n  media.flag:\n    path: flag.svg\n    source: src/media/flag.svg\n    sha256: old-hash",
+    );
+    let mut document =
+        CanonicalSourceDocument::parse_with_includes(source("deck.yaml", root), |request| {
+            Ok(load_include(request.target()))
+        })
+        .expect("source-backed media parses");
+
+    assert_eq!(
+        document.media_asset_sources()[&sid("media.flag")],
+        "src/media/flag.svg"
+    );
+    assert_eq!(
+        document.resolved_deck().media[&sid("media.flag")].sha256,
+        "old-hash"
+    );
+    document
+        .set_media_hash(&sid("media.flag"), "flag.svg", "new-hash")
+        .unwrap();
+    let emitted = document.emit().unwrap();
+    assert!(
+        emitted
+            .root()
+            .text()
+            .contains("    path: flag.svg\n    source: src/media/flag.svg\n    sha256: new-hash\n")
+    );
+}
+
+#[test]
 fn canonical_document_selects_question_and_answer_from_one_template_include() {
     let root = deck_source().replace(
         "question_format: !include templates/front.html\n        answer_format: '{{Front}}'",

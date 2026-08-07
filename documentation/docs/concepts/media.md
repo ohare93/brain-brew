@@ -28,6 +28,18 @@ note_types:
       @import url("css/maps.css");
 ```
 
+When repository layout and exported filename differ, keep the adapter-facing name in `path` and add a package-relative byte location:
+
+```yaml
+media:
+  media.runtime:
+    path: _runtime.js
+    source: src/media/runtime/_runtime.js
+    sha256: 7b2b...
+```
+
+The source path is authoring provenance rather than Canonical Deck semantics. Manifest planning reads it from the declaration's owning package, while fingerprints and exported decks continue to use the stable ID, `path`, and `sha256`.
+
 ## Verify media
 
 Targets without media verify normally. For any target with declared or referenced media, `verify` is release-strict by default: referenced-but-undeclared media fails, unused declarations warn, every owning package needs an explicit `--media-root`, hashes must be canonical 64-character lowercase SHA-256, and every file must exist and match.
@@ -53,7 +65,7 @@ After intentionally editing a media file, update source state with:
 brainbrew media hash --manifest brainbrew.yaml --all-targets --media-root media/
 ```
 
-The command writes missing or stale SHA-256 values into deck or overlay source YAML through the include-preserving formatter, so `!include`-bearing sources keep their include structure.
+The command writes missing or stale SHA-256 values into deck or overlay source YAML through the include-preserving formatter, so `!include`-bearing sources keep their include structure and media `source` paths remain unchanged. A source-backed declaration is hashed from its package-relative source; ordinary declarations are hashed from their selected media roots.
 
 ## CrowdAnki import
 
